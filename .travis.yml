@@ -1,1 +1,8 @@
 language: python
+
+install:
+  - pip install -r requirements.test.txt
+
+script:
+  - make html
+  - nosetests
