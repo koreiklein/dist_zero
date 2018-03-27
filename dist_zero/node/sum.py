@@ -1,6 +1,9 @@
 from dist_zero import messages
 
 class SumNode(object):
+  '''
+  An internal node for summing in a tree
+  '''
   def __init__(self, senders, receivers, controller):
     self._senders = senders
     self._receivers = receivers

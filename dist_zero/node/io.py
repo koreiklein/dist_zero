@@ -3,6 +3,9 @@ import uuid
 from dist_zero import messages
 
 class InputLeafNode(object):
+  '''
+  A leaf input node
+  '''
   def __init__(self, controller):
     self._controller = controller
     self.id = uuid.uuid4()
@@ -21,6 +24,7 @@ class InputLeafNode(object):
     pass
 
 class OutputLeafNode(object):
+  '''A leaf output node'''
   def __init__(self, controller):
     self._controller = controller
     self.id = uuid.uuid4()
@@ -37,7 +41,7 @@ class OutputLeafNode(object):
 
 class InputNode(object):
   '''
-  Represents a 
+  Represents a tree of inputs
   '''
   def __init__(self, controller):
     self._controller = controller
@@ -58,6 +62,9 @@ class InputNode(object):
         on_machine=machine_controller_handle)
 
 class OutputNode(object):
+  '''
+  Represents a tree of outputs
+  '''
   def __init__(self, controller):
     self._controller = controller
     self.id = uuid.uuid4()

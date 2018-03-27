@@ -16,6 +16,7 @@ Welcome to DistZero's documentation!
    doc/machine
    doc/simulator
    doc/messages
+   doc/nodes
 
 
 Indices and tables
