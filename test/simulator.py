@@ -98,17 +98,29 @@ class SimulatedHardware(object):
     stop_time_ms = self._elapsed_time_ms + ms
 
     while stop_time_ms > self._elapsed_time_ms:
+      # The amount of time to simulate in this iteration of the loop
       step_time_ms = min(stop_time_ms - self._elapsed_time_ms, SimulatedHardware.MAX_STEP_TIME_MS)
+      # The value of self._elapsed_time at the end of this iteration of the loop
       new_elapsed_time_ms = step_time_ms + self._elapsed_time_ms
 
+      # Simulate every event in the queue
       while self._pending_receives and self._pending_receives[0][0] <= new_elapsed_time_ms:
         received_at, to_receive = heapq.heappop(self._pending_receives)
+        # Simulate the time before this event
         for controller in self._controller_by_id.values():
           controller.elapse(received_at - self._elapsed_time_ms)
-        
+
+        # Simulate the event
         receiving_controller = self._controller_by_id[to_receive['receiving_node']['controller_id']]
         receiving_node = receiving_controller.get_node(to_receive['receiving_node'])
         receiving_node.receive(message=to_receive['message'], sender=to_receive['sending_node'])
+
+        self._elapsed_time_ms = received_at
+
+      # Simulate the rest of step_time_ms not simulated in the above loop over events
+      if self._elapsed_time_ms < new_elapsed_time_ms:
+        for controller in self._controller_by_id.values():
+          controller.elapse(new_elapsed_time_ms - self._elapsed_time_ms)
 
       self._elapsed_time_ms = new_elapsed_time_ms
 

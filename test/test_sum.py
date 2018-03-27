@@ -23,6 +23,7 @@ class SumTest(unittest.TestCase):
     machine_c_controller = self.new_machine_controller()
 
     # Configure the starting network topology
+    # FIXME(KK): Use start_node and configs to do this so they're hooked up properly.
     root_input_node = InputNode(controller=machine_a_controller)
     root_output_node = OutputNode(controller=machine_a_controller)
     sum_node = SumNode(
