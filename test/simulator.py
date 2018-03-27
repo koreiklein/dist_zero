@@ -12,10 +12,12 @@ class SimulatedMachineController(machine.MachineController):
   def __init__(self, name, hardware):
     '''
     name -- The name of this node.
-    hardware -- The SimulatedHardware instance on which this simulated machine runs.
+    hardware -- The `SimulatedHardware` instance on which this simulated machine runs.
     '''
     self.name = name
+    '''The name of the simulated machine'''
     self.hardware = hardware
+    '''The `SimulatedHardware` instance on which this machine is running'''
 
     self._node_by_id = {}
     self.id = uuid.uuid4()

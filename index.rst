@@ -10,6 +10,12 @@ Welcome to DistZero's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   doc/handle
+   doc/message
+
+   doc/machine
+   doc/simulator
+   doc/messages
 
 
 Indices and tables

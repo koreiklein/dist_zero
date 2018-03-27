@@ -2,8 +2,8 @@ from .node import io
 
 def node_from_config(node_config, controller):
   '''
-  node_config -- A node config message
-  return -- The node specified in that config.
+  :param json node_config: A node config message
+  :return: The node specified in that config.
   '''
   if node_config['type'] == 'input_leaf':
     return io.InputLeafNode.from_config(node_config, controller)
@@ -23,10 +23,13 @@ class MachineController(object):
     '''
     Send a message to a node either managed by self, or linked to self.
 
-    node_handle -- The handle of a node
-    message -- A message for that node
-    sending_node_handle -- If the message is user input, the None.  Otherwise the handle of the sending
-      node.
+    :param handle node_handle: The handle of a node
+    :type node_handle: :ref:`handle`
+    :param message message: A message for that node
+    :type message: :ref:`message`
+    :param sending_node_handle: If the message is user input, then `None`.
+        Otherwise the handle of the sending node.
+    :type sending_node_handle: :ref:`handle`
     '''
     raise RuntimeError("Abstract Superclass")
 
@@ -34,15 +37,21 @@ class MachineController(object):
     '''
     Start creating a new node on a linked machine.
 
-    node_config -- A JSON serializable message that describes how to run the node.
-    on_machine -- The handle of a machine_controller.
-    return -- The handle of the newly created node.
+    :param json node_config: A JSON serializable message that describes how to run the node.
+    :param on_machine: The handle of a :any:`MachineController`.
+    :type on_machine: :ref:`handle`
+    :return: The handle of the newly created node.
+    :rtype: :ref:`handle`
     '''
     raise RuntimeError("Abstract Superclass")
 
   def get_node(self, handle):
     '''
     Get a node running on self by its handle
+
+    :param handle: The handle of a node running on self
+    :type handle: :ref:`handle`
+    :return: The Node
     '''
     raise RuntimeError("Abstract Superclass")
 
