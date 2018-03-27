@@ -1,13 +1,20 @@
+import uuid
+
 from dist_zero import messages
 
 class SumNode(object):
   '''
-  An internal node for summing in a tree
+  An internal node for summing all increments from its senders and forwarding the total to its receivers.
   '''
   def __init__(self, senders, receivers, controller):
+    '''
+    :param list senders: A list of :ref:`handle`s of the nodes sending increments
+    :param list receivers: A list of :ref:`handle`s of the nodes to receive increments
+    '''
     self._senders = senders
     self._receivers = receivers
     self._controller = controller
+    self.id = uuid.uuid4()
 
     # Invariants:
     #   At certain points in time, a increment message is sent to every receiver.
@@ -19,6 +26,10 @@ class SumNode(object):
     self._sent_total = 0
     self._unsent_total = 0
     self._unsent_time_ms = 0
+
+  @staticmethod
+  def from_config(node_config, controller):
+    return SumNode(senders=node_config['senders'], receivers=node_config['receivers'], controller=controller)
 
   def receive(self, sender, message):
     if message['type'] == 'increment':

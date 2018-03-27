@@ -53,8 +53,15 @@ class InputNode(object):
     self._controller = controller
     self.id = uuid.uuid4()
 
+  @staticmethod
+  def from_config(node_config, controller):
+    return InputNode(controller=controller)
+
   def handle(self):
     return { 'type': 'InputNode', 'id': self.id, 'controller_id': self._controller.id }
+
+  def elapse(self, ms):
+    pass
 
   def add_kid(self, machine_controller_handle):
     '''
@@ -74,6 +81,13 @@ class OutputNode(object):
   def __init__(self, controller):
     self._controller = controller
     self.id = uuid.uuid4()
+
+  @staticmethod
+  def from_config(node_config, controller):
+    return OutputNode(controller=controller)
+
+  def elapse(self, ms):
+    pass
 
   def handle(self):
     return { 'type': 'OutputNode', 'id': self.id, 'controller_id': self._controller.id }

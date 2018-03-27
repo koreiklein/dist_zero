@@ -1,4 +1,5 @@
 from .node import io
+from .node.sum import SumNode
 
 def node_from_config(node_config, controller):
   '''
@@ -9,6 +10,12 @@ def node_from_config(node_config, controller):
     return io.InputLeafNode.from_config(node_config, controller)
   elif node_config['type'] == 'output_leaf':
     return io.OutputLeafNode.from_config(node_config, controller)
+  elif node_config['type'] == 'start_input':
+    return io.InputNode.from_config(node_config, controller)
+  elif node_config['type'] == 'start_output':
+    return io.OutputNode.from_config(node_config, controller)
+  elif node_config['type'] == 'sum':
+    return SumNode.from_config(node_config, controller)
   else:
     raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 
