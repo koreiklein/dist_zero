@@ -69,9 +69,8 @@ class SimulatedHardware(object):
     self._controller_by_id = {}
     self._elapsed_time_ms = None  # None if unstarted, otherwise the number of ms simulated so far
 
-    # A dictionary taking the id of each controller to
     # a heap (as in heapq) of tuples (ms_at_which_receipt_takes place, message_to_receive)
-    self._pending_receives = defaultdict([])
+    self._pending_receives = []
     self._random = random.Random(random_seed)
 
   def _random_ms_for_send(self):
@@ -101,12 +100,15 @@ class SimulatedHardware(object):
     while stop_time_ms > self._elapsed_time_ms:
       step_time_ms = min(stop_time_ms - self._elapsed_time_ms, SimulatedHardware.MAX_STEP_TIME_MS)
       new_elapsed_time_ms = step_time_ms + self._elapsed_time_ms
-      while len(self._pending_sends) > 0 and self._pending_sends[0][0] <= new_elapsed_time_ms:
-        receive_time, send = heapq.heappop(self._pending_sends)
 
-
-      for controller in self._controller_by_id.values():
-        controller.elapse(step_time_ms)
+      while self._pending_receives and self._pending_receives[0][0] <= new_elapsed_time_ms:
+        received_at, to_receive = heapq.heappop(self._pending_receives)
+        for controller in self._controller_by_id.values():
+          controller.elapse(received_at - self._elapsed_time_ms)
+        
+        receiving_controller = self._controller_by_id[to_receive['receiving_node']['controller_id']]
+        receiving_node = receiving_controller.get_node(to_receive['receiving_node'])
+        receiving_node.receive(message=to_receive['message'], sender=to_receive['sending_node'])
 
       self._elapsed_time_ms = new_elapsed_time_ms
 
@@ -139,9 +141,9 @@ class SimulatedHardware(object):
       raise RuntimeError('The hardware simulation must be started before it can send messages.')
 
     time = self._elapsed_time_ms + self._random_ms_for_send()
-    heapq.heappush(self._pending_receives[to_controller_id], (time, {
-      'from_id': from_id,
-      'to_id': to_id,
+    heapq.heappush(self._pending_receives, (time, {
+      'sending_node': sending_node,
+      'receiving_node': receiving_node,
       'message': message,
     }))
 

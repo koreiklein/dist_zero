@@ -20,15 +20,15 @@ class SumNode(object):
     self._unsent_total = 0
     self._unsent_time_ms = 0
 
-  def receive(self, sender, msg):
-    if msg['type'] == 'increment':
-      self._unsent_total += msg['amount']
-    elif msg['type'] == 'add_sender':
-      self._senders.append(msg['sender'])
-    elif msg['type'] == 'add_receiver':
-      self._receivers.append(msg['receiver'])
+  def receive(self, sender, message):
+    if message['type'] == 'increment':
+      self._unsent_total += message['amount']
+    elif message['type'] == 'add_sender':
+      self._senders.append(message['sender'])
+    elif message['type'] == 'add_receiver':
+      self._receivers.append(message['receiver'])
     else:
-      raise RuntimeError("Unrecognized message {}".format(msg))
+      raise RuntimeError("Unrecognized message {}".format(message))
 
   def elapse(self, ms):
     self._unsent_time_ms += ms
@@ -37,8 +37,8 @@ class SumNode(object):
 
   def _send_to_all(self):
     for receiver in self._receivers:
-      msg = messages.increment(self._unsent_total)
-      self._controller.send(receiver, msg)
+      message = messages.increment(self._unsent_total)
+      self._controller.send(receiver, message)
     self._unsent_time_ms = 0
     self._sent_total += self._unsent_total
     self._unsent_total = 0

@@ -10,6 +10,9 @@ class InputLeafNode(object):
     self._controller = controller
     self.id = uuid.uuid4()
 
+  def receive(self, message, sender):
+    pass
+
   def id(self):
     return self.id
 
@@ -28,6 +31,9 @@ class OutputLeafNode(object):
   def __init__(self, controller):
     self._controller = controller
     self.id = uuid.uuid4()
+
+  def get_state(self):
+    return 0
 
   @staticmethod
   def from_config(node_config, controller):
