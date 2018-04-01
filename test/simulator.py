@@ -1,8 +1,27 @@
 import heapq
+import json
+import logging
 import random
+import sys
 import uuid
 
-from dist_zero import machine
+from dist_zero import machine, errors
+
+logger = logging.getLogger(__name__)
+
+class _Heapitem(object):
+  def __init__(self, t, value):
+    self.t = t
+    self.value = value
+
+  def __lt__(self, other):
+    if self.t != other.t:
+      return self.t < other.t
+    else:
+      return json.dumps(self.value) < json.dumps(other.value)
+
+  def tuple(self):
+    return (self.t, self.value)
 
 class SimulatedMachineController(machine.MachineController):
   '''
@@ -11,8 +30,8 @@ class SimulatedMachineController(machine.MachineController):
   '''
   def __init__(self, name, hardware):
     '''
-    name -- The name of this node.
-    hardware -- The `SimulatedHardware` instance on which this simulated machine runs.
+    :param str name: The name of this node.
+    :param `SimulatedHardware` hardware: The simulated hardware instance on which this simulated machine runs.
     '''
     self.name = name
     '''The name of the simulated machine'''
@@ -20,7 +39,7 @@ class SimulatedMachineController(machine.MachineController):
     '''The `SimulatedHardware` instance on which this machine is running'''
 
     self._node_by_id = {}
-    self.id = uuid.uuid4()
+    self.id = str(uuid.uuid4())
 
     self._requests = []
 
@@ -73,6 +92,10 @@ class SimulatedHardware(object):
     self._pending_receives = []
     self._random = random.Random(random_seed)
 
+    # A log of all the items pushed onto the heap in the order they were pushed.
+    # This log is useful for debugging.
+    self._log = []
+
   def _random_ms_for_send(self):
     return int(self._random.gauss(
       mu=SimulatedHardware.AVERAGE_SEND_TIME_MS,
@@ -86,11 +109,48 @@ class SimulatedHardware(object):
 
     self._elapsed_time_ms = 0
 
+  def _format_node(self, node_handle):
+    '''
+    Format a node handle as a human readable string to look nice in logs.
+    :param node_handle: None, or a node handle.
+    :type node_handle: :ref:`handle`
+
+    :return: A human readable string represending that node handle.
+    :rtype: str
+    '''
+    if node_handle is None:
+      return "null"
+    else:
+      return "{}.{}".format(node_handle['type'], str(node_handle['id'])[-5:])
+
+  def _format_log(self, log_message):
+    ms, msg = log_message
+    return "{} --{}--> {}".format(
+        self._format_node(msg['sending_node']),
+        msg['message']['type'],
+        self._format_node(msg['receiving_node']),
+        )
+
   def run_for(self, ms):
     '''
-    Run the simulation for a number of milliseconds
+    Run the simulation for a number of milliseconds.
+    Wrap exceptions thrown by the underlying nodes in a `SimulationError`.
 
-    ms -- The number of milliseconds to run for
+    :param int ms: The number of milliseconds to run for
+    '''
+    try:
+      self._run_for_throwing_inner_exns(ms)
+    except RuntimeError:
+      raise errors.SimulationError(
+        log_lines=[self._format_log(x) for x in self._log],
+        exc_info=sys.exc_info())
+
+  def _run_for_throwing_inner_exns(self, ms):
+    '''
+    Run the simulation for a number of milliseconds.  Raise any
+    exception thrown by the underlying nodes directly.
+
+    :param int ms: The number of milliseconds to run for
     '''
     if self._elapsed_time_ms is None:
       raise RuntimeError("Cannot run a simulate that is not yet started.  Please call .start() first")
@@ -104,8 +164,8 @@ class SimulatedHardware(object):
       new_elapsed_time_ms = step_time_ms + self._elapsed_time_ms
 
       # Simulate every event in the queue
-      while self._pending_receives and self._pending_receives[0][0] <= new_elapsed_time_ms:
-        received_at, to_receive = heapq.heappop(self._pending_receives)
+      while self._pending_receives and self._pending_receives[0].t <= new_elapsed_time_ms:
+        received_at, to_receive = heapq.heappop(self._pending_receives).tuple()
         # Simulate the time before this event
         for controller in self._controller_by_id.values():
           controller.elapse(received_at - self._elapsed_time_ms)
@@ -126,8 +186,10 @@ class SimulatedHardware(object):
 
   def get_machine_controller(self, handle):
     '''
-    handle -- The handle of a MachineController being simulated by this hardware simulator.
-    return -- The associated SimulatedMachineController instance.
+    :param handle: The handle of a MachineController being simulated by this hardware simulator.
+    :type handle: :ref:`handle`
+
+    :return: The associated SimulatedMachineController instance.
     '''
     return self._controller_by_id[handle['id']]
 
@@ -135,12 +197,22 @@ class SimulatedHardware(object):
     '''
     Create and return a new machine.MachineController instance to run Nodes in a test.
 
-    name -- A string to use as the name of the new machine controller>
-    return -- A machine.MachineController instance suitable for running tests.
+    :param str name: The name to use for of the new machine controller.
+    :return: A machine controller suitable for running tests.
+    :rtype: `MachineController`
     '''
     result = SimulatedMachineController(name=name, hardware=self)
     self._controller_by_id[result.id] = result
     return result
+
+  def _add_to_heap(self, heapitem):
+    '''
+    Add a new item to the heap.
+
+    :param tuple heapitem: A pair (ms_at_which_receipt_takes place, message_to_receive)
+    '''
+    self._log.append(heapitem)
+    heapq.heappush(self._pending_receives, _Heapitem(*heapitem))
 
   def _simulate_send(self, sending_node, receiving_node, message):
     '''
@@ -153,7 +225,8 @@ class SimulatedHardware(object):
       raise RuntimeError('The hardware simulation must be started before it can send messages.')
 
     time = self._elapsed_time_ms + self._random_ms_for_send()
-    heapq.heappush(self._pending_receives, (time, {
+
+    self._add_to_heap((time, {
       'sending_node': sending_node,
       'receiving_node': receiving_node,
       'message': message,

@@ -6,9 +6,9 @@ def node_from_config(node_config, controller):
   :param json node_config: A node config message
   :return: The node specified in that config.
   '''
-  if node_config['type'] == 'input_leaf':
+  if node_config['type'] == 'add_input_leaf':
     return io.InputLeafNode.from_config(node_config, controller)
-  elif node_config['type'] == 'output_leaf':
+  elif node_config['type'] == 'add_output_leaf':
     return io.OutputLeafNode.from_config(node_config, controller)
   elif node_config['type'] == 'start_input':
     return io.InputNode.from_config(node_config, controller)
@@ -66,7 +66,8 @@ class MachineController(object):
     '''
     Start running a node on this machine.
 
-    node_config -- A JSON serializeable message that describes how to run the node.
-    return -- The newly created node.
+    :param node_config: A :ref:`message` that describes how to run the node.
+    :type node_config: :ref:`message`
+    :return: The newly created node.
     '''
     raise RuntimeError("Abstract Superclass")

@@ -3,6 +3,8 @@ import uuid
 from dist_zero import messages
 
 class SumNode(object):
+  SEND_INTERVAL_MS = 30 # Number of ms between sends to receivers.
+
   '''
   An internal node for summing all increments from its senders and forwarding the total to its receivers.
   '''
@@ -14,7 +16,7 @@ class SumNode(object):
     self._senders = senders
     self._receivers = receivers
     self._controller = controller
-    self.id = uuid.uuid4()
+    self.id = str(uuid.uuid4())
 
     # Invariants:
     #   At certain points in time, a increment message is sent to every receiver.
@@ -26,6 +28,9 @@ class SumNode(object):
     self._sent_total = 0
     self._unsent_total = 0
     self._unsent_time_ms = 0
+
+  def handle(self):
+    return { 'type': 'SumNode', 'id': self.id, 'controller_id': self._controller.id }
 
   @staticmethod
   def from_config(node_config, controller):
@@ -43,13 +48,13 @@ class SumNode(object):
 
   def elapse(self, ms):
     self._unsent_time_ms += ms
-    if self._unsent_total > 0 and self._unsent_time_ms > SumNode.SEND_INTERVAL:
+    if self._unsent_total > 0 and self._unsent_time_ms > SumNode.SEND_INTERVAL_MS:
       self._send_to_all()
 
   def _send_to_all(self):
     for receiver in self._receivers:
       message = messages.increment(self._unsent_total)
-      self._controller.send(receiver, message)
+      self._controller.send(receiver, message, self.handle())
     self._unsent_time_ms = 0
     self._sent_total += self._unsent_total
     self._unsent_total = 0

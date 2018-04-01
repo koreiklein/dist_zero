@@ -26,9 +26,11 @@ class SumTest(unittest.TestCase):
     root_input_node = machine_a_controller.start_node(messages.input_node_config())
     root_output_node = machine_a_controller.start_node(messages.output_node_config())
     sum_node = machine_a_controller.start_node(messages.sum_node_config(
-      senders=[root_input_node.handle()],
-      receivers=[root_output_node.handle()],
+      senders=[root_input_node.handle(), root_output_node.handle()],
+      receivers=[],
     ))
+    root_input_node.send_to(sum_node.handle())
+    root_output_node.receive_from(sum_node.handle())
 
     # Run the simulation
     self.simulated_hardware.start()
