@@ -3,7 +3,7 @@ import unittest
 from dist_zero import messages
 from dist_zero.node.sum import SumNode
 from dist_zero.node.io import InputNode, OutputNode
-from .simulator import SimulatedHardware
+from dist_zero.runners.simulator import SimulatedHardware
 
 class SumTest(unittest.TestCase):
   def setUp(self):
