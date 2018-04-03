@@ -26,15 +26,16 @@ def sum_node_config(senders, receivers):
   '''
   return {'type': 'sum', 'senders': senders, 'receivers': receivers}
 
-def add_input_leaf(parent, receivers):
+def add_input_leaf(parent, receivers, recorded_user_json):
   '''
   Add a new leaf node to an InputNode list.
 
   :param parent: The handle of the parent node.
-  :param list receivers: The list of handles of receiver nodes the new node should send to.
   :type parent: :ref:`handle`
+  :param list receivers: The list of handles of receiver nodes the new node should send to.
+  :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
   '''
-  return {'type': 'add_input_leaf', 'parent': parent, 'receivers': receivers}
+  return {'type': 'add_input_leaf', 'parent': parent, 'receivers': receivers, 'recorded_user_json': recorded_user_json}
 
 def add_output_leaf(parent, senders):
   '''

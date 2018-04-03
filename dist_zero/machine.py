@@ -3,7 +3,7 @@ from .node.sum import SumNode
 
 def node_from_config(node_config, controller):
   '''
-  :param json node_config: A node config message
+  :param JSON node_config: A node config message
   :return: The node specified in that config.
   '''
   if node_config['type'] == 'add_input_leaf':
