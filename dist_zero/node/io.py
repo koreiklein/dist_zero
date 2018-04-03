@@ -1,6 +1,6 @@
 import uuid
 
-from dist_zero import environment, messages, errors, recorded
+from dist_zero import settings, messages, errors, recorded
 
 class InputLeafNode(object):
   '''
@@ -112,8 +112,10 @@ class InputNode(object):
     :return: Serialized json to use for this recorded user.
     '''
     if recorded_user is not None:
-      if not environment.TESTING:
-        raise errors.DistZeroError("recorded_users are only allowed when in testing mode")
+      if not settings.TESTING:
+        raise errors.DistZeroError(
+            "recorded_users are only allowed when in testing mode.  Current mode is {}".format(
+              settings.DIST_ZERO_ENV))
       else:
         return recorded_user.to_json()
     else:
