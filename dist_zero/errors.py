@@ -1,6 +1,15 @@
 import traceback
 
 class DistZeroError(Exception):
+  '''
+  Base class for all errors known to DistZero.
+  '''
+  pass
+
+class InternalError(DistZeroError):
+  '''
+  For errors internal to dist zero.
+  '''
   pass
 
 class SimulationError(DistZeroError):

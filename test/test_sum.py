@@ -1,9 +1,10 @@
 import unittest
 
-from dist_zero import messages
+from dist_zero import messages, errors
 from dist_zero.node.sum import SumNode
 from dist_zero.node.io import InputNode, OutputNode
 from dist_zero.runners.simulator import SimulatedHardware
+from dist_zero.recorded import RecordedUser
 
 class SumTest(unittest.TestCase):
   def setUp(self):
@@ -14,49 +15,107 @@ class SumTest(unittest.TestCase):
     result = self.simulated_hardware.new_simulated_machine_controller(
         name='Node {}'.format(self.nodes))
     self.nodes += 1
+
     return result
 
-  def test_sum_of_two(self):
+  def test_times_must_be_in_order(self):
+    with self.assertRaises(errors.InternalError):
+      RecordedUser('user b', [
+        (80, messages.increment(2)),
+        (60, messages.increment(1)),
+        ])
+
+  def test_user_simulator_sum_of_two(self):
+    self._initialize_simple_sum_topology()
+
+    # Start the simulation
+    self.simulated_hardware.start()
+    self.simulated_hardware.run_for(ms=30)
+
+    # Create kid nodes with pre-recorded users.
+    user_b_input_handle = self.root_input_node.add_kid(
+        self.machine_b_controller.handle(),
+        recorded_user=RecordedUser('user b', [
+          (30, messages.increment(2)),
+          (60, messages.increment(1)),
+        ]))
+    user_c_input_handle = self.root_input_node.add_kid(
+        self.machine_c_controller.handle(),
+        recorded_user=RecordedUser('user c', [
+          (33, messages.increment(1)),
+          (43, messages.increment(1)),
+          (73, messages.increment(1)),
+        ]))
+
+    user_b_input = self.machine_b_controller.get_node(user_b_input_handle)
+    user_c_input = self.machine_c_controller.get_node(user_c_input_handle)
+
+    user_b_output_handle = self.root_output_node.add_kid(self.machine_b_controller.handle())
+    user_c_output_handle = self.root_output_node.add_kid(self.machine_c_controller.handle())
+
+    self.simulated_hardware.run_for(ms=30)
+
+    user_b_output = self.machine_b_controller.get_node(user_b_output_handle)
+    user_c_output = self.machine_c_controller.get_node(user_c_output_handle)
+
+    self.assertEqual(0, user_b_output.get_state())
+    self.assertEqual(0, user_c_output.get_state())
+
+    self.simulated_hardware.run_for(ms=500)
+
+    self.assertEqual(6, user_b_output.get_state())
+    self.assertEqual(6, user_c_output.get_state())
+
+
+  def _initialize_simple_sum_topology(self):
+    '''
+    Initialize controllers and nodes forming a simple topology for an network
+    in which input nodes generate increments, and output nodes aggregated the sum
+    of increments.
+    '''
     # Create node controllers (each simulates the behavior of a separate machine.
-    machine_a_controller = self.new_machine_controller()
-    machine_b_controller = self.new_machine_controller()
-    machine_c_controller = self.new_machine_controller()
+    self.machine_a_controller = self.new_machine_controller()
+    self.machine_b_controller = self.new_machine_controller()
+    self.machine_c_controller = self.new_machine_controller()
 
     # Configure the starting network topology
-    root_input_node = machine_a_controller.start_node(messages.input_node_config())
-    root_output_node = machine_a_controller.start_node(messages.output_node_config())
-    sum_node = machine_a_controller.start_node(messages.sum_node_config(
-      senders=[root_input_node.handle(), root_output_node.handle()],
+    self.root_input_node = self.machine_a_controller.start_node(messages.input_node_config())
+    self.root_output_node = self.machine_a_controller.start_node(messages.output_node_config())
+    self.sum_node = self.machine_a_controller.start_node(messages.sum_node_config(
+      senders=[self.root_input_node.handle(), self.root_output_node.handle()],
       receivers=[],
     ))
-    root_input_node.send_to(sum_node.handle())
-    root_output_node.receive_from(sum_node.handle())
+    self.root_input_node.send_to(self.sum_node.handle())
+    self.root_output_node.receive_from(self.sum_node.handle())
 
+  def test_sum_of_two(self):
+    self._initialize_simple_sum_topology()
     # Run the simulation
     self.simulated_hardware.start()
     self.simulated_hardware.run_for(ms=30)
 
-    user_b_input_handle = root_input_node.add_kid(machine_b_controller.handle())
-    user_c_input_handle = root_input_node.add_kid(machine_c_controller.handle())
+    user_b_input_handle = self.root_input_node.add_kid(self.machine_b_controller.handle())
+    user_c_input_handle = self.root_input_node.add_kid(self.machine_c_controller.handle())
 
-    user_b_input = machine_b_controller.get_node(user_b_input_handle)
-    user_c_input = machine_c_controller.get_node(user_c_input_handle)
+    user_b_input = self.machine_b_controller.get_node(user_b_input_handle)
+    user_c_input = self.machine_c_controller.get_node(user_c_input_handle)
 
-    user_b_output_handle = root_output_node.add_kid(machine_b_controller.handle())
-    user_c_output_handle = root_output_node.add_kid(machine_c_controller.handle())
+    user_b_output_handle = self.root_output_node.add_kid(self.machine_b_controller.handle())
+    user_c_output_handle = self.root_output_node.add_kid(self.machine_c_controller.handle())
 
     self.simulated_hardware.run_for(ms=30)
 
-    machine_b_controller.send(user_b_input.handle(), messages.increment(2))
+    self.machine_b_controller.send(user_b_input.handle(), messages.increment(2))
     self.simulated_hardware.run_for(ms=30)
-    machine_b_controller.send(user_b_input.handle(), messages.increment(1))
+    self.machine_b_controller.send(user_b_input.handle(), messages.increment(1))
     self.simulated_hardware.run_for(ms=50)
-    machine_c_controller.send(user_c_input.handle(), messages.increment(1))
+    self.machine_c_controller.send(user_c_input.handle(), messages.increment(1))
 
     self.simulated_hardware.run_for(ms=500)
 
-    user_b_output = machine_b_controller.get_node(user_b_output_handle)
-    user_c_output = machine_c_controller.get_node(user_c_output_handle)
+    user_b_output = self.machine_b_controller.get_node(user_b_output_handle)
+    user_c_output = self.machine_c_controller.get_node(user_c_output_handle)
+
 
     self.assertIsNotNone(user_b_output)
     self.assertIsNotNone(user_c_output)
