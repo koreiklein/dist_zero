@@ -1,12 +1,16 @@
 import unittest
+import time
 
-from dist_zero import messages, errors
+from nose.plugins.attrib import attr
+
+from dist_zero import messages, errors, runners
 from dist_zero.node.sum import SumNode
 from dist_zero.node.io import InputNode, OutputNode
 from dist_zero.runners.simulator import SimulatedHardware
 from dist_zero.runners.docker import DockerSimulatedHardware
 from dist_zero.recorded import RecordedUser
 
+@attr(mode=runners.MODE_VIRTUAL)
 class VirtualizedSumTest(unittest.TestCase):
   def setUp(self):
     self.virtual_hardware = DockerSimulatedHardware()
@@ -15,12 +19,17 @@ class VirtualizedSumTest(unittest.TestCase):
     if self.virtual_hardware.started:
       self.virtual_hardware.clean_all()
 
-  def test_sum_of_two_virtual(self):
+  def test_sum_one_virtual(self):
     self.virtual_hardware.start()
     container_a_handle = self.virtual_hardware.new_container()
-    container_b_handle = self.virtual_hardware.new_container()
-    container_c_handle = self.virtual_hardware.new_container()
+    self.assertEqual(container_a_handle['type'], 'OsMachineController')
 
+    time.sleep(0.4)  # Any value less than 0.3 has been observed to be too short for broken nodes to actually fail.
+    self.assertEqual(1, len(self.virtual_hardware.get_running_containers()))
+    self.assertEqual(1, len(self.virtual_hardware.all_spawned_containers()))
+
+
+@attr(mode=runners.MODE_SIMULATED)
 class SimulatedSumTest(unittest.TestCase):
   def setUp(self):
     self.simulated_hardware = SimulatedHardware()

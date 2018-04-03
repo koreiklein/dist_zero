@@ -2,6 +2,10 @@
 Functions to build standard messages.
 '''
 
+# Handles
+def os_machine_controller_handle(machine_id):
+  return {'type': 'OsMachineController', 'id': machine_id}
+
 # Node configs
 
 def input_node_config():

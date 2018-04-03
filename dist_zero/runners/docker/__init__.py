@@ -4,7 +4,7 @@ import logging
 
 import docker
 
-from dist_zero import settings, errors
+from dist_zero import settings, errors, messages
 
 logger = logging.getLogger(__file__)
 
@@ -22,7 +22,8 @@ class DockerSimulatedHardware(object):
 
   LABEL_DOCKER_SIMULATED_HARDWARE = 'DockerSimulatedHarware'
   LABEL_TRUE = 'true'
-  LABEL_INSTANCE = 'DockerSimulatedHarware_instance'
+  LABEL_INSTANCE = '{}_instance'.format(LABEL_DOCKER_SIMULATED_HARDWARE)
+  LABEL_CONTAINER_UUID = '{}_container_uuid'.format(LABEL_DOCKER_SIMULATED_HARDWARE)
 
   CONTAINER_STATUS_RUNNING = 'running'
 
@@ -36,6 +37,7 @@ class DockerSimulatedHardware(object):
 
     self._image = None
     self._build_logs = None
+    self._handle_by_id = {}
 
   def start(self):
     if self._started:
@@ -76,17 +78,20 @@ class DockerSimulatedHardware(object):
 
   def new_container(self):
     image = self.image
+    machine_controller_id = str(uuid.uuid4())
     container = self._docker.containers.run(
         image=self.image,
         command=[
           'python',
           '-m',
           'dist_zero.os_machine_controller',
+          machine_controller_id,
           ],
         detach=True,
         labels={
           DockerSimulatedHardware.LABEL_DOCKER_SIMULATED_HARDWARE: DockerSimulatedHardware.LABEL_TRUE,
           DockerSimulatedHardware.LABEL_INSTANCE: self.id,
+          DockerSimulatedHardware.LABEL_CONTAINER_UUID: machine_controller_id,
           },
         auto_remove=False,
         volumes={
@@ -94,9 +99,54 @@ class DockerSimulatedHardware(object):
           },
         )
 
+    handle = messages.os_machine_controller_handle(machine_controller_id)
+    self._handle_by_id[machine_controller_id] = handle
+    return handle
+
+  def _get_containers_from_docker(self):
+    '''
+    Get all containers associated with this instance from the docker daemon.
+
+    :return: The list of all docker container objects associated with
+      this particular instance of `DockerSimulatedHardware`
+    '''
+    labels_query = "{}={}".format(DockerSimulatedHardware.LABEL_INSTANCE, self.id)
+    return self._docker.containers.list(all=True, filters={'label': labels_query})
+
+  def get_running_containers(self):
+    '''
+    Get the list of this `DockerSimulatedHardware` instance's running containers from the docker daemon.
+
+    :return: A list of container handles for all running containers spawned by this `DockerSimulatedHardware`
+    '''
+    return [
+        self._handle_by_id[container.labels[DockerSimulatedHardware.LABEL_CONTAINER_UUID]]
+        for container in self._get_containers_from_docker()
+        if container.status == DockerSimulatedHardware.CONTAINER_STATUS_RUNNING
+      ]
+
+  def get_stopped_containers(self):
+    '''
+    Get the list of this `DockerSimulatedHardware` instance's non-running containers from the docker daemon.
+
+    :return: A list of container handles for all running containers spawned by this `DockerSimulatedHardware`
+    '''
+    return [
+        self._handle_by_id[container.labels[DockerSimulatedHardware.LABEL_CONTAINER_UUID]]
+        for container in self._get_containers_from_docker()
+        if container.status == DockerSimulatedHardware.CONTAINER_STATUS_RUNNING
+      ]
+
+  def all_spawned_containers(self):
+    '''
+    :return: The list of all container handles for containers this `DockerSimulatedHardware` has ever spawned.
+    '''
+    return list(self._handle_by_id.values())
+
   def clean_all(self):
     '''
-    Remove all the docker resources associated with this instance
+    Remove all the docker resources associated with any instance of `DockerSimulatedHardware`
+    (not just the current instance).
     '''
     labels_query = "{}={}".format(
         DockerSimulatedHardware.LABEL_DOCKER_SIMULATED_HARDWARE,
@@ -106,6 +156,6 @@ class DockerSimulatedHardware(object):
     logger.debug("Removing containers {}".format(containers), extra={'n_containers_to_remove': len(containers)})
     for container in containers:
       if container.status == DockerSimulatedHardware.CONTAINER_STATUS_RUNNING:
-        container.stop(timeout=2)
+        container.kill()
       container.remove()
 
