@@ -4,9 +4,24 @@ from dist_zero import messages, errors
 from dist_zero.node.sum import SumNode
 from dist_zero.node.io import InputNode, OutputNode
 from dist_zero.runners.simulator import SimulatedHardware
+from dist_zero.runners.docker import DockerSimulatedHardware
 from dist_zero.recorded import RecordedUser
 
-class SumTest(unittest.TestCase):
+class VirtualizedSumTest(unittest.TestCase):
+  def setUp(self):
+    self.virtual_hardware = DockerSimulatedHardware()
+
+  def tearDown(self):
+    if self.virtual_hardware.started:
+      self.virtual_hardware.clean_all()
+
+  def test_sum_of_two_virtual(self):
+    self.virtual_hardware.start()
+    container_a_handle = self.virtual_hardware.new_container()
+    container_b_handle = self.virtual_hardware.new_container()
+    container_c_handle = self.virtual_hardware.new_container()
+
+class SimulatedSumTest(unittest.TestCase):
   def setUp(self):
     self.simulated_hardware = SimulatedHardware()
     self.nodes = 0
