@@ -22,6 +22,10 @@ its own OS, but is in fact running in a VM or container.
 In this mode, nodes are passed `OsMachineController`s just as in virtual mode.  Each `OsMachineController` controls
 its own machine in the cloud.
 
+## Logging
+
+In virtual mode, logs are cleared when the system starts up, and aggregated locally in real time in .tmp/container
+You can print them all out for viewing with `./scripts/tail_container_logs`
 
 ## Testing
 Tests are given nose labels based on the mode that they test.  Naturally, "virtual" and "cloud" tests tend to

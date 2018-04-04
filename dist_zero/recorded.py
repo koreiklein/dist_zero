@@ -1,4 +1,8 @@
+import logging
+
 from dist_zero import errors
+
+logger = logging.getLogger(__name__)
 
 class RecordedUser(object):
   '''
@@ -37,7 +41,7 @@ class RecordedUser(object):
   def elapse_and_get_messages(self, ms):
     '''
     :param int ms: The number of milliseconds to elapse.
-    :yield: pairs (ms, msg) where ms is the amount of elapsed time, and msg is a :ref:`message`s generated at that time.
+    :yield: pairs (ms, msg) where ms is the amount of elapsed time, and msg is a :ref:`message` generated at that time.
     '''
     if not self._started:
       raise errors.InternalError("Can't elapse time until the RecordedUser has been started.")

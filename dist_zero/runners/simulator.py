@@ -6,6 +6,7 @@ import sys
 import uuid
 
 from dist_zero import machine, errors
+from dist_zero.node import io
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +42,21 @@ class SimulatedMachineController(machine.MachineController):
     self._node_by_id = {}
     self.id = str(uuid.uuid4())
 
+    self._output_node_state_by_id = {}  # dict from output node to its current state
+
     self._requests = []
+
+  def get_output_state(self, node_id):
+    return self._output_node_state_by_id[node_id]
 
   def get_node(self, handle):
     return self._node_by_id[handle['id']]
+
+  def ip_host(self):
+    return 'localhost'
+
+  def set_transport(self, sender, receiver, transport):
+    pass
 
   def send(self, node_handle, message, sending_node_handle=None):
     self.hardware._simulate_send(
@@ -52,10 +64,22 @@ class SimulatedMachineController(machine.MachineController):
         sending_node=sending_node_handle,
         message=message)
 
+  def _update_output_node_state(self, node_id, f):
+    new_state = f(self._output_node_state_by_id[node_id])
+    self._output_node_state_by_id[node_id] = new_state
+
   def start_node(self, node_config):
-    node = machine.node_from_config(node_config, controller=self)
+    if node_config['type'] == 'output_leaf':
+      self._output_node_state_by_id[node_config['id']] = node_config['initial_state']
+      node = io.OutputLeafNode.from_config(
+          node_config=node_config,
+          controller=self,
+          update_state=lambda f: self._update_output_node_state(node_config['id'], f))
+    else:
+      node = machine.node_from_config(node_config, controller=self)
 
     self._node_by_id[node.id] = node
+    node.initialize()
     return node
 
   def spawn_node(self, node_config, on_machine):
@@ -81,7 +105,7 @@ class SimulatedHardware(object):
 
   # The number of milliseconds to simulate at a time
   MAX_STEP_TIME_MS = 5
-  AVERAGE_SEND_TIME_MS = 20
+  AVERAGE_SEND_TIME_MS = 10
   SEND_TIME_STDDEV_MS = 3
 
   def __init__(self, random_seed='random_seed'):
@@ -97,9 +121,9 @@ class SimulatedHardware(object):
     self._log = []
 
   def _random_ms_for_send(self):
-    return int(self._random.gauss(
+    return max(1, int(self._random.gauss(
       mu=SimulatedHardware.AVERAGE_SEND_TIME_MS,
-      sigma=SimulatedHardware.SEND_TIME_STDDEV_MS))
+      sigma=SimulatedHardware.SEND_TIME_STDDEV_MS)))
 
 
   def start(self):
@@ -162,6 +186,10 @@ class SimulatedHardware(object):
       step_time_ms = min(stop_time_ms - self._elapsed_time_ms, SimulatedHardware.MAX_STEP_TIME_MS)
       # The value of self._elapsed_time at the end of this iteration of the loop
       new_elapsed_time_ms = step_time_ms + self._elapsed_time_ms
+      logger.debug("Simulating from %s ms to %s ms", self._elapsed_time_ms, new_elapsed_time_ms, extra={
+        'start_time': self._elapsed_time_ms,
+        'end_time': new_elapsed_time_ms,
+      })
 
       # Simulate every event in the queue
       while self._pending_receives and self._pending_receives[0].t <= new_elapsed_time_ms:

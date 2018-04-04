@@ -14,9 +14,13 @@ Welcome to DistZero's documentation!
    doc/message
 
    doc/machine
-   doc/simulator
+
+   doc/runners
+
    doc/messages
    doc/nodes
+   doc/errors
+   doc/recorded
 
 
 Indices and tables

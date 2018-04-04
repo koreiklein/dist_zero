@@ -1,14 +1,17 @@
-import uuid
+import logging
 
 from dist_zero import messages
+from .node import Node
 
-class SumNode(object):
+logger = logging.getLogger(__name__)
+
+class SumNode(Node):
   SEND_INTERVAL_MS = 30 # Number of ms between sends to receivers.
 
   '''
   An internal node for summing all increments from its senders and forwarding the total to its receivers.
   '''
-  def __init__(self, senders, receivers, controller):
+  def __init__(self, node_id, senders, receivers, controller):
     '''
     :param list senders: A list of :ref:`handle`s of the nodes sending increments
     :param list receivers: A list of :ref:`handle`s of the nodes to receive increments
@@ -16,7 +19,7 @@ class SumNode(object):
     self._senders = senders
     self._receivers = receivers
     self._controller = controller
-    self.id = str(uuid.uuid4())
+    self.id = node_id
 
     # Invariants:
     #   At certain points in time, a increment message is sent to every receiver.
@@ -34,17 +37,31 @@ class SumNode(object):
 
   @staticmethod
   def from_config(node_config, controller):
-    return SumNode(senders=node_config['senders'], receivers=node_config['receivers'], controller=controller)
+    return SumNode(
+        node_id=node_config['id'],
+        senders=node_config['senders'],
+        receivers=node_config['receivers'],
+        controller=controller)
 
   def receive(self, sender, message):
     if message['type'] == 'increment':
       self._unsent_total += message['amount']
-    elif message['type'] == 'add_sender':
-      self._senders.append(message['sender'])
-    elif message['type'] == 'add_receiver':
-      self._receivers.append(message['receiver'])
+    elif message['type'] == 'add_link':
+      node = message['node']
+      direction = message['direction']
+      transport = message['transport']
+
+      if direction == 'sender':
+        self._senders.append(node)
+      elif direction == 'receiver':
+        self._receivers.append(node)
+      else:
+        raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
+
+      self.set_transport(node, transport)
+      self.send(node, messages.added_link(self.new_transport_for(node['id'])))
     else:
-      raise RuntimeError("Unrecognized message {}".format(message))
+      raise errors.InternalError("Unrecognized message {}".format(message))
 
   def elapse(self, ms):
     self._unsent_time_ms += ms
@@ -52,9 +69,10 @@ class SumNode(object):
       self._send_to_all()
 
   def _send_to_all(self):
+    logger.debug("Sending new increment of %s to all receivers", self._unsent_total)
     for receiver in self._receivers:
       message = messages.increment(self._unsent_total)
-      self._controller.send(receiver, message, self.handle())
+      self.send(receiver, message)
     self._unsent_time_ms = 0
     self._sent_total += self._unsent_total
     self._unsent_total = 0
