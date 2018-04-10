@@ -81,9 +81,8 @@ def output_leaf_config(node_id, name, initial_state, parent, parent_transport, s
 
   :param object parent_transport: A transport for talking to the parent.
 
-
   :param list senders: The list of handles of senders nodes the new node should receive from.
-  :type parent: A list of :ref:`handle`
+  :type senders: A list of :ref:`handle`
   '''
   return {
       'type': 'output_leaf',
