@@ -4,6 +4,7 @@ from dist_zero import errors
 
 logger = logging.getLogger(__name__)
 
+
 class RecordedUser(object):
   '''
   In tests, it can be helpful to generate recordings of user interactions
@@ -12,12 +13,13 @@ class RecordedUser(object):
   Instances of this class represent the recorded user.
   '''
   MAX_STEP_TIME_MS = 3
+
   def __init__(self, name, time_action_pairs=None):
     self.name = name
     self._time_action_pairs = [] if time_action_pairs is None else time_action_pairs
     self._started = False
     for i in range(1, len(self._time_action_pairs)):
-      if self._time_action_pairs[i-1][0] > self._time_action_pairs[i][0]:
+      if self._time_action_pairs[i - 1][0] > self._time_action_pairs[i][0]:
         raise errors.InternalError('Times are not in order.')
 
   def start(self):
@@ -29,14 +31,14 @@ class RecordedUser(object):
     return {
         'name': self.name,
         'time_action_pairs': self._time_action_pairs,
-      }
+    }
 
   @staticmethod
   def from_json(recorded_user_json):
     return RecordedUser(
         name=recorded_user_json['name'],
         time_action_pairs=recorded_user_json['time_action_pairs'],
-      )
+    )
 
   def elapse_and_get_messages(self, ms):
     '''
@@ -66,5 +68,3 @@ class RecordedUser(object):
         if self._time_action_pairs[-1][0] > tm[0]:
           raise errors.InternalError('Times are not in order.')
       self._time_action_pairs.append(tm)
-
-

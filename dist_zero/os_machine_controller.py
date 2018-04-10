@@ -15,8 +15,9 @@ from dist_zero.runners import docker
 
 logger = logging.getLogger(__name__)
 
+
 class OsMachineController(machine.MachineController):
-  STEP_LENGTH_MS = 5  # Target number of milliseconds per iteration of the run loop.
+  STEP_LENGTH_MS = 5 # Target number of milliseconds per iteration of the run loop.
 
   def __init__(self, id, name):
     '''
@@ -27,7 +28,7 @@ class OsMachineController(machine.MachineController):
 
     self._node_by_id = {}
 
-    self._output_node_state_by_id = {}  # dict from output node id to it's current state
+    self._output_node_state_by_id = {} # dict from output node id to it's current state
 
     self._udp_port = settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT
     self._udp_dst = ('', self._udp_port)
@@ -98,33 +99,39 @@ class OsMachineController(machine.MachineController):
           "API is creating kid config %s for output node %s",
           message['new_node_name'],
           message['internal_node_id'],
-          extra={'node_name': message['new_node_name'], 'internal_node_id': message['internal_node_id']})
+          extra={
+              'node_name': message['new_node_name'],
+              'internal_node_id': message['internal_node_id']
+          })
       return {
           'status': 'ok',
-          'data': node.create_kid_config(message['new_node_name'], message['machine_controller_handle']) ,
-        }
+          'data': node.create_kid_config(message['new_node_name'], message['machine_controller_handle']),
+      }
     elif message['type'] == 'api_new_transport':
       node = self._node_by_id[message['receiver']['id']]
       logger.info(
           "API getting new transport for sending from node %s to node %s",
           message['sender']['id'],
           message['receiver']['id'],
-          extra={'sender': message['sender'], 'receiver': message['receiver']})
+          extra={
+              'sender': message['sender'],
+              'receiver': message['receiver']
+          })
       return {
           'status': 'ok',
           'data': node.new_transport_for(message['sender']['id']),
-        }
+      }
     elif message['type'] == 'api_get_output_state':
       return {
           'status': 'ok',
           'data': self._output_node_state_by_id[message['node']['id']],
-        }
+      }
     else:
       logger.error("Unrecognized API message type %s", message['type'], extra={'type': message['type']})
       return {
           'status': 'failure',
           'reason': 'Unrecognized message type {}'.format(message['type']),
-        }
+      }
 
   def _handle_message(self, message):
     '''
@@ -137,10 +144,14 @@ class OsMachineController(machine.MachineController):
       self.start_node(message['node_config'])
     elif message['type'] == 'machine_deliver_to_node':
       node_handle = message['node']
-      logger.info("Delivering message of type %s to node %s", message['message']['type'], node_handle['id'], extra={
-        'message_type': message['message']['type'],
-        'to_node': node_handle,
-        })
+      logger.info(
+          "Delivering message of type %s to node %s",
+          message['message']['type'],
+          node_handle['id'],
+          extra={
+              'message_type': message['message']['type'],
+              'to_node': node_handle,
+          })
       node = self._get_node_by_handle(node_handle)
       node.receive(message=message['message'], sender=message['sending_node'])
     else:
@@ -161,10 +172,14 @@ class OsMachineController(machine.MachineController):
     self._tcp_socket = sock
 
   def runloop(self):
-    logger.info("Starting run loop for machine %s: %s", self.name, self.id, extra={
-      'machine_id': self.id,
-      'machine_name': self.name,
-    })
+    logger.info(
+        "Starting run loop for machine %s: %s",
+        self.name,
+        self.id,
+        extra={
+            'machine_id': self.id,
+            'machine_name': self.name,
+        })
     self._bind_udp()
     self._bind_and_listen_tcp()
 
@@ -175,7 +190,7 @@ class OsMachineController(machine.MachineController):
         e_type, e_value, e_tb = sys.exc_info()
         #tb_lines = traceback.format_tb(e_tb)
         exn_lines = traceback.format_exception(e_type, e_value, e_tb)
-        logger.error("Exception in run loop: %s", ''.join(exn_lines), extra={ 'e_type': str(e_type) })
+        logger.error("Exception in run loop: %s", ''.join(exn_lines), extra={'e_type': str(e_type)})
         # log the exception and go on.  These exceptions should not stop the run loop.
         continue
 
@@ -211,7 +226,7 @@ class OsMachineController(machine.MachineController):
         [],
         [],
         max_s,
-      )
+    )
     for sock in readers:
       if sock == self._udp_socket:
         self._read_udp()
@@ -252,6 +267,4 @@ class OsMachineController(machine.MachineController):
     Configure logging for a `MachineController`
     '''
     logging.basicConfig(
-        level=logging.DEBUG,
-        filename=os.path.join(docker.DockerSimulatedHardware.CONTAINER_LOGS_DIR, 'output.log'))
-
+        level=logging.DEBUG, filename=os.path.join(docker.DockerSimulatedHardware.CONTAINER_LOGS_DIR, 'output.log'))

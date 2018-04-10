@@ -8,4 +8,3 @@ if __name__ == '__main__':
   machine_controller = OsMachineController(machine_id, machine_name)
   machine_controller.configure_logging()
   machine_controller.runloop()
-

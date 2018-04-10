@@ -8,14 +8,18 @@ The encoding to use for messages.
 This should be a string understood by the python internals that operate on encodings.
 '''
 
+
 def ip_transport(host):
   return {'type': 'ip_transport', 'host': host}
+
 
 # Handles
 def os_machine_controller_handle(machine_id):
   return {'type': 'OsMachineController', 'id': machine_id}
 
+
 # Node configs
+
 
 def input_node_config(node_id):
   '''
@@ -25,6 +29,7 @@ def input_node_config(node_id):
   '''
   return {'type': 'start_input', 'id': node_id}
 
+
 def output_node_config(node_id, initial_state):
   '''
   A node config for creating a node to manage a new list of outputs.
@@ -33,6 +38,7 @@ def output_node_config(node_id, initial_state):
   :param object initial_state: The initial state to use for new nodes.
   '''
   return {'type': 'start_output', 'id': node_id, 'initial_state': initial_state}
+
 
 def sum_node_config(node_id, senders, receivers):
   '''
@@ -44,6 +50,7 @@ def sum_node_config(node_id, senders, receivers):
   :param list receivers: A list of :ref:`handle` for receiving nodes.
   '''
   return {'type': 'sum', 'id': node_id, 'senders': senders, 'receivers': receivers}
+
 
 def input_leaf_config(node_id, name, parent, parent_transport, receivers, recorded_user_json=None):
   '''
@@ -64,7 +71,8 @@ def input_leaf_config(node_id, name, parent, parent_transport, receivers, record
       'parent_transport': parent_transport,
       'receivers': receivers,
       'recorded_user_json': recorded_user_json,
-    }
+  }
+
 
 def output_leaf_config(node_id, name, initial_state, parent, parent_transport, senders):
   '''
@@ -92,7 +100,8 @@ def output_leaf_config(node_id, name, initial_state, parent, parent_transport, s
       'parent': parent,
       'parent_transport': parent_transport,
       'senders': senders,
-    }
+  }
+
 
 def added_leaf(kid, transport):
   '''
@@ -105,6 +114,7 @@ def added_leaf(kid, transport):
   :param object transport: A transport that the recipient can use to send messages to the new leaf.
   '''
   return {'type': 'added_leaf', 'kid': kid, 'transport': transport}
+
 
 def add_link(node, direction, transport):
   '''
@@ -119,6 +129,7 @@ def add_link(node, direction, transport):
   '''
   return {'type': 'add_link', 'node': node, 'direction': direction, 'transport': transport}
 
+
 def added_link(transport):
   '''
   Inform a node that it has been successfully linked, and give a transport back to the sender.
@@ -128,7 +139,9 @@ def added_link(transport):
   '''
   return {'type': 'added_link', 'transport': transport}
 
+
 # Actions
+
 
 def increment(amount):
   '''
@@ -148,6 +161,7 @@ def start_sending_to(new_receiver, transport):
   '''
   return {'type': 'start_sending_to', 'node': new_receiver, 'transport': transport}
 
+
 def start_receiving_from(new_sender, transport):
   '''
   A message informing a node to start receiving messages from a new sender.
@@ -159,6 +173,7 @@ def start_receiving_from(new_sender, transport):
   '''
   return {'type': 'start_receiving_from', 'node': new_sender, 'transport': transport}
 
+
 def machine_start_node(node_config):
   '''
   A message to a machine indicating that it should start a new node based on a config.
@@ -169,6 +184,7 @@ def machine_start_node(node_config):
   :param str node_id: The uuid to use for this node.
   '''
   return {'type': 'machine_start_node', 'node_config': node_config}
+
 
 def machine_deliver_to_node(node, message, sending_node):
   '''
@@ -183,6 +199,7 @@ def machine_deliver_to_node(node, message, sending_node):
   '''
   return {'type': 'machine_deliver_to_node', 'message': message, 'node': node, 'sending_node': sending_node}
 
+
 # API messages
 def api_new_transport(sender, receiver):
   '''
@@ -194,6 +211,7 @@ def api_new_transport(sender, receiver):
   '''
   return {'type': 'api_new_transport', 'sender': sender, 'receiver': receiver}
 
+
 def api_get_output_state(node):
   '''
   Get and return the current output state for an output node.
@@ -203,6 +221,7 @@ def api_get_output_state(node):
   :rtype: object
   '''
   return {'type': 'api_get_output_state', 'node': node}
+
 
 def api_create_kid_config(internal_node, new_node_name, machine_controller_handle):
   '''
@@ -222,5 +241,4 @@ def api_create_kid_config(internal_node, new_node_name, machine_controller_handl
       'internal_node_id': internal_node['id'],
       'new_node_name': new_node_name,
       'machine_controller_handle': machine_controller_handle,
-    }
-
+  }

@@ -1,4 +1,4 @@
-'''
+''' 
 For transporting messages across the network.
 '''
 
@@ -6,6 +6,7 @@ import socket
 import json
 
 from dist_zero import messages
+
 
 def send_udp(message, dst):
   '''
