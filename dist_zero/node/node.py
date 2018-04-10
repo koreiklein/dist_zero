@@ -14,7 +14,7 @@ class Node(object):
     '''
     self._controller.set_transport(self.handle(), other, transport)
 
-  def _convert_transport_for(self, other, transport):
+  def convert_transport_for(self, other, transport):
     '''
     Given a transport that self can use to link to kid,
     create a new transport that the other node can use to link to kid.

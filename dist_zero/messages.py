@@ -145,7 +145,7 @@ def start_sending_to(new_receiver, transport):
   :param new_receiver: The receiver to start sending to.
   :type new_receiver: A node :ref:`handle`
   :param transport: A transport allowing to send to new_receiver.
-  :type transport: ref:`transport`
+  :type transport: :ref:`transport`
   '''
   return {'type': 'start_sending_to', 'node': new_receiver, 'transport': transport}
 
@@ -156,7 +156,7 @@ def start_receiving_from(new_sender, transport):
   :param new_sender: The sender to start receiving from
   :type new_sender: A node :ref:`handle`
   :param transport: A transport allowing to send to new_sender.
-  :type transport: ref:`transport`
+  :type transport: :ref:`transport`
   '''
   return {'type': 'start_receiving_from', 'node': new_sender, 'transport': transport}
 

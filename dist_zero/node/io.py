@@ -287,7 +287,7 @@ class InputNode(Node):
             messages.add_link(
               kid,
               direction='sender',
-              transport=self._convert_transport_for(receiver, transport)))
+              transport=self.convert_transport_for(receiver, transport)))
 
 class OutputNode(Node):
   '''
@@ -374,5 +374,5 @@ class OutputNode(Node):
             messages.add_link(
               kid,
               direction='receiver',
-              transport=self._convert_transport_for(sender, transport)))
+              transport=self.convert_transport_for(sender, transport)))
 

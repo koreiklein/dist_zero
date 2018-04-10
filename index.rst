@@ -12,6 +12,7 @@ Welcome to DistZero's documentation!
 
    doc/handle
    doc/message
+   doc/transport
 
    doc/machine
 
