@@ -34,6 +34,8 @@ class DockerSimulatedHardware(object):
 
   CONTAINER_STATUS_RUNNING = 'running'
 
+  STD_DOCKER_IMAGE_TAG = 'dist_zero_std_docker_image'
+
   def __init__(self):
     self._started = False
     self._docker_client = None
@@ -45,6 +47,7 @@ class DockerSimulatedHardware(object):
     self._network = None
 
     self._image = None
+    self._image_tag = DockerSimulatedHardware.STD_DOCKER_IMAGE_TAG
     self._build_logs = None
     self._handle_by_id = {}
     self._container_by_id = {}
@@ -233,21 +236,32 @@ class DockerSimulatedHardware(object):
 
     return self._docker_client
 
+  def _build_image(self):
+    logger.info('building docker image with context %s', self._root_dir)
+    image, build_logs = self._docker.images.build(
+        path=self._root_dir,
+        tag=self._image_tag,
+        dockerfile=DockerSimulatedHardware.DOCKERFILE,
+        rm=True, # Remove intermediate containers
+        labels={
+            DockerSimulatedHardware.LABEL_DOCKER_SIMULATED_HARDWARE: DockerSimulatedHardware.LABEL_TRUE,
+            DockerSimulatedHardware.LABEL_INSTANCE: self.id,
+        },
+    )
+    self._image = image
+    self._build_logs = build_logs
+
   @property
   def image(self):
     if self._image is None:
-      logger.info('building docker image with context %s', self._root_dir)
-      image, build_logs = self._docker.images.build(
-          path=self._root_dir,
-          dockerfile=DockerSimulatedHardware.DOCKERFILE,
-          rm=True, # Remove intermediate containers
-          labels={
-              DockerSimulatedHardware.LABEL_DOCKER_SIMULATED_HARDWARE: DockerSimulatedHardware.LABEL_TRUE,
-              DockerSimulatedHardware.LABEL_INSTANCE: self.id,
-          },
-      )
-      self._image = image
-      self._build_logs = build_logs
+      if settings.ALWAYS_REBUILD_DOCKER_IMAGES:
+        self._build_image()
+      else:
+        try:
+          self._image = self._docker.images.get(self._image_tag)
+          logger.warning("Reusing existing docker image '%s' without performing a new build", self._image_tag)
+        except docker.errors.ImageNotFound:
+          self._build_image()
 
     return self._image
 
