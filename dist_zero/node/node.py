@@ -1,7 +1,9 @@
 from dist_zero import messages
 
+
 class Node(object):
   '''Abstract base class for nodes'''
+
   def send(self, receiver, message):
     self._controller.send(receiver, message, self.handle())
 
@@ -44,4 +46,3 @@ class Node(object):
   def initialize(self):
     '''Called exactly once, when a node starts to run.'''
     pass
-

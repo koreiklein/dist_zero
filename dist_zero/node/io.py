@@ -6,10 +6,12 @@ from .node import Node
 
 logger = logging.getLogger(__name__)
 
+
 class InputLeafNode(Node):
   '''
   A leaf input node
   '''
+
   def __init__(self, node_id, parent, parent_transport, controller, receivers, recorded_user=None):
     '''
     :param `MachineController` controller: the controller for this node's machine.
@@ -95,7 +97,7 @@ class InputLeafNode(Node):
         recorded_user=InputLeafNode._init_recorded_user_from_config(node_config['recorded_user_json']))
 
   def handle(self):
-    return { 'type': 'InputLeafNode', 'id': self.id, 'controller_id': self._controller.id }
+    return {'type': 'InputLeafNode', 'id': self.id, 'controller_id': self._controller.id}
 
   def initialize(self):
     logger.info("Input leaf node sending 'added_leaf' message to parent")
@@ -108,8 +110,10 @@ class InputLeafNode(Node):
         logger.info("Simulated user generated a message %s", msg, extra={'recorded_message': msg})
         self.receive(msg, sender=None)
 
+
 class OutputLeafNode(Node):
   '''A leaf output node'''
+
   def __init__(self, node_id, parent, parent_transport, controller, senders, update_state):
     '''
     :param str node_id: The id of this  node.
@@ -183,10 +187,10 @@ class OutputLeafNode(Node):
         controller=controller,
         senders=node_config['senders'],
         update_state=update_state,
-        )
+    )
 
   def handle(self):
-    return { 'type': 'OutputLeafNode', 'id': self.id, 'controller_id': self._controller.id }
+    return {'type': 'OutputLeafNode', 'id': self.id, 'controller_id': self._controller.id}
 
   def elapse(self, ms):
     pass
@@ -196,14 +200,16 @@ class OutputLeafNode(Node):
     self.set_transport(self.parent, self._parent_transport)
     self.send(self.parent, messages.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
 
+
 class InputNode(Node):
   '''
   Represents a tree of inputs
   '''
+
   def __init__(self, node_id, controller, receivers=None):
     self._controller = controller
     self.id = node_id
-    self._kids = {}  # A map from kid node id to either 'pending' or 'active'
+    self._kids = {} # A map from kid node id to either 'pending' or 'active'
     self._receivers = [] if receivers is None else receivers
 
   def receive(self, message, sender):
@@ -223,7 +229,7 @@ class InputNode(Node):
     return InputNode(node_id=node_config['id'], controller=controller)
 
   def handle(self):
-    return { 'type': 'InputNode', 'id': self.id, 'controller_id': self._controller.id }
+    return {'type': 'InputNode', 'id': self.id, 'controller_id': self._controller.id}
 
   def elapse(self, ms):
     pass
@@ -237,9 +243,8 @@ class InputNode(Node):
     '''
     if recorded_user is not None:
       if not settings.TESTING:
-        raise errors.DistZeroError(
-            "recorded_users are only allowed when in testing mode.  Current mode is {}".format(
-              settings.DIST_ZERO_ENV))
+        raise errors.DistZeroError("recorded_users are only allowed when in testing mode.  Current mode is {}".format(
+            settings.DIST_ZERO_ENV))
       else:
         return recorded_user.to_json()
     else:
@@ -257,8 +262,14 @@ class InputNode(Node):
     :rtype: :ref:`message`
     '''
     node_id = str(uuid.uuid4())
-    logger.info("Registering a new leaf input node config for '%s' with an internal node", name,
-        extra={'internal_node': self.handle(), 'leaf_node_id': node_id, 'node_name': name})
+    logger.info(
+        "Registering a new leaf input node config for '%s' with an internal node",
+        name,
+        extra={
+            'internal_node': self.handle(),
+            'leaf_node_id': node_id,
+            'node_name': name
+        })
     self._kids[node_id] = 'pending'
     return messages.input_leaf_config(
         node_id=node_id,
@@ -266,7 +277,7 @@ class InputNode(Node):
         parent=self.handle(),
         parent_transport=self.new_transport_for(node_id),
         receivers=self._receivers,
-      )
+    )
 
   def added_leaf(self, kid, transport):
     '''
@@ -275,24 +286,21 @@ class InputNode(Node):
     '''
     if kid['id'] not in self._kids:
       logger.error(
-          "added_leaf: Could not find node matching id %s", kid['id'],
-          extra={'missing_child_node_id': kid['id']})
+          "added_leaf: Could not find node matching id %s", kid['id'], extra={'missing_child_node_id': kid['id']})
     else:
       self._kids[kid['id']] = 'active'
       self.set_transport(kid, transport)
 
       for receiver in self._receivers:
-        self.send(
-            receiver,
-            messages.add_link(
-              kid,
-              direction='sender',
-              transport=self.convert_transport_for(receiver, transport)))
+        self.send(receiver,
+                  messages.add_link(kid, direction='sender', transport=self.convert_transport_for(receiver, transport)))
+
 
 class OutputNode(Node):
   '''
   Represents a tree of outputs
   '''
+
   def __init__(self, node_id, controller, initial_state, senders=None):
     '''
     :param str node_id: The id to use for this node
@@ -307,7 +315,7 @@ class OutputNode(Node):
 
     self._senders = [] if senders is None else senders
 
-    self._kids = {}  # A map from kid node id to either 'pending' or 'active'
+    self._kids = {} # A map from kid node id to either 'pending' or 'active'
 
   def receive(self, message, sender):
     if message['type'] == 'start_receiving_from':
@@ -329,7 +337,7 @@ class OutputNode(Node):
     pass
 
   def handle(self):
-    return { 'type': 'OutputNode', 'id': self.id, 'controller_id': self._controller.id }
+    return {'type': 'OutputNode', 'id': self.id, 'controller_id': self._controller.id}
 
   def create_kid_config(self, name, machine_controller_handle):
     '''
@@ -343,8 +351,14 @@ class OutputNode(Node):
     :rtype: :ref:`message`
     '''
     node_id = str(uuid.uuid4())
-    logger.info("Registering a new leaf output node config for '%s' with an internal node", name,
-        extra={'internal_node': self.handle(), 'leaf_node_id': node_id, 'node_name': name})
+    logger.info(
+        "Registering a new leaf output node config for '%s' with an internal node",
+        name,
+        extra={
+            'internal_node': self.handle(),
+            'leaf_node_id': node_id,
+            'node_name': name
+        })
     self._kids[node_id] = 'pending'
     return messages.output_leaf_config(
         node_id=node_id,
@@ -353,7 +367,7 @@ class OutputNode(Node):
         parent=self.handle(),
         parent_transport=self.new_transport_for(node_id),
         senders=self._senders,
-      )
+    )
 
   def added_leaf(self, kid, transport):
     '''
@@ -362,17 +376,11 @@ class OutputNode(Node):
     '''
     if kid['id'] not in self._kids:
       logger.error(
-          "added_leaf: Could not find node matching id %s", kid['id'],
-          extra={'missing_child_node_id': kid['id']})
+          "added_leaf: Could not find node matching id %s", kid['id'], extra={'missing_child_node_id': kid['id']})
     else:
       self._kids[kid['id']] = 'active'
       self.set_transport(kid, transport)
 
       for sender in self._senders:
-        self.send(
-            sender,
-            messages.add_link(
-              kid,
-              direction='receiver',
-              transport=self.convert_transport_for(sender, transport)))
-
+        self.send(sender,
+                  messages.add_link(kid, direction='receiver', transport=self.convert_transport_for(sender, transport)))

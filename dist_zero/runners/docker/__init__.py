@@ -10,6 +10,7 @@ from dist_zero import machine, settings, errors, messages
 
 logger = logging.getLogger(__name__)
 
+
 class DockerSimulatedHardware(object):
   '''
   A class for simulating new hardware by spinning up docker containers on a host and
@@ -21,7 +22,7 @@ class DockerSimulatedHardware(object):
   '''
 
   DOCKERFILE = 'dist_zero/runners/docker/Dockerfile'
-  CONTAINER_WORKING_DIR = '/machine'  # Must match the working directory in DOCKERFILE
+  CONTAINER_WORKING_DIR = '/machine' # Must match the working directory in DOCKERFILE
 
   CONTAINER_MESSAGE_DIR = '/messages'
   CONTAINER_LOGS_DIR = '/logs'
@@ -69,9 +70,7 @@ class DockerSimulatedHardware(object):
     '''
     machine_handle = self._node_id_to_machine_handle[output_node['id']]
     return self._virtual_send_machine(
-        machine=machine_handle,
-        message=messages.api_get_output_state(node=output_node),
-        sock_type='tcp')
+        machine=machine_handle, message=messages.api_get_output_state(node=output_node), sock_type='tcp')
 
   def create_kid_config(self, internal_node, new_node_name, machine_controller_handle):
     '''
@@ -88,9 +87,9 @@ class DockerSimulatedHardware(object):
     return self._virtual_send_machine(
         machine=machine_handle,
         message=messages.api_create_kid_config(
-          internal_node=internal_node,
-          new_node_name=new_node_name,
-          machine_controller_handle=machine_controller_handle,
+            internal_node=internal_node,
+            new_node_name=new_node_name,
+            machine_controller_handle=machine_controller_handle,
         ),
         sock_type='tcp')
 
@@ -112,13 +111,12 @@ class DockerSimulatedHardware(object):
         sock_type='tcp',
         message=messages.api_new_transport(sender, receiver))
 
-
   def create_kid(self, parent_node, new_node_name, machine_controller_handle, recorded_user=None):
     node_config = self.create_kid_config(
         internal_node=parent_node,
         new_node_name=new_node_name,
         machine_controller_handle=machine_controller_handle,
-        )
+    )
     if recorded_user is not None:
       node_config['recorded_user_json'] = recorded_user.to_json()
     return self.virtual_spawn_node(on_machine=machine_controller_handle, node_config=node_config)
@@ -166,8 +164,12 @@ class DockerSimulatedHardware(object):
       json.dump(message, f)
 
     exit_code, output = self._container_by_id[machine['id']].exec_run([
-      'python', '-m', 'dist_zero.runners.docker.send_local_msg_from_file', filename, sock_type,
-      ])
+        'python',
+        '-m',
+        'dist_zero.runners.docker.send_local_msg_from_file',
+        filename,
+        sock_type,
+    ])
 
     if exit_code != 0:
       msg = "docker exec of send_local_msg_from_file on container failed with code {}. output: {}".format(
@@ -182,7 +184,8 @@ class DockerSimulatedHardware(object):
       if msg['status'] == 'ok':
         return msg['data']
       else:
-        raise errors.InternalError("Failed to communicate over TCP api to MachineController. reason: {}".format(msg.get('reason', '')))
+        raise errors.InternalError("Failed to communicate over TCP api to MachineController. reason: {}".format(
+            msg.get('reason', '')))
     else:
       return None
 
@@ -200,7 +203,8 @@ class DockerSimulatedHardware(object):
     :type sending_node_handle: :ref:`handle`
     '''
     machine_handle = self._node_handle_to_machine_handle(node_handle)
-    machine_message = messages.machine_deliver_to_node(node=node_handle, message=message, sending_node=sending_node_handle)
+    machine_message = messages.machine_deliver_to_node(
+        node=node_handle, message=message, sending_node=sending_node_handle)
     self._virtual_send_machine(machine=machine_handle, message=machine_message)
 
   def _clean_msg_directories(self):
@@ -236,12 +240,12 @@ class DockerSimulatedHardware(object):
       image, build_logs = self._docker.images.build(
           path=self._root_dir,
           dockerfile=DockerSimulatedHardware.DOCKERFILE,
-          rm=True,  # Remove intermediate containers
+          rm=True, # Remove intermediate containers
           labels={
-            DockerSimulatedHardware.LABEL_DOCKER_SIMULATED_HARDWARE: DockerSimulatedHardware.LABEL_TRUE,
-            DockerSimulatedHardware.LABEL_INSTANCE: self.id,
-            },
-          )
+              DockerSimulatedHardware.LABEL_DOCKER_SIMULATED_HARDWARE: DockerSimulatedHardware.LABEL_TRUE,
+              DockerSimulatedHardware.LABEL_INSTANCE: self.id,
+          },
+      )
       self._image = image
       self._build_logs = build_logs
 
@@ -251,7 +255,6 @@ class DockerSimulatedHardware(object):
   def started(self):
     '''True iff this simulation has started running'''
     return self._started
-
 
   def _container_msg_dir_on_host(self, machine_controller_id):
     '''
@@ -279,34 +282,34 @@ class DockerSimulatedHardware(object):
     container = self._docker.containers.run(
         image=self.image,
         command=[
-          'python',
-          '-m',
-          'dist_zero.machine_init',
-          machine_controller_id,
-          machine_name,
-          ],
+            'python',
+            '-m',
+            'dist_zero.machine_init',
+            machine_controller_id,
+            machine_name,
+        ],
         detach=True,
         labels={
-          DockerSimulatedHardware.LABEL_DOCKER_SIMULATED_HARDWARE: DockerSimulatedHardware.LABEL_TRUE,
-          DockerSimulatedHardware.LABEL_INSTANCE: self.id,
-          DockerSimulatedHardware.LABEL_CONTAINER_UUID: machine_controller_id,
-          },
+            DockerSimulatedHardware.LABEL_DOCKER_SIMULATED_HARDWARE: DockerSimulatedHardware.LABEL_TRUE,
+            DockerSimulatedHardware.LABEL_INSTANCE: self.id,
+            DockerSimulatedHardware.LABEL_CONTAINER_UUID: machine_controller_id,
+        },
         auto_remove=False,
         volumes={
-          self._root_dir: {
-            'bind': DockerSimulatedHardware.CONTAINER_WORKING_DIR,
-            'mode': 'ro',
-          },
-          host_msg_dir: {
-            'bind': DockerSimulatedHardware.CONTAINER_MESSAGE_DIR,
-            'mode': 'ro',
-          },
-          log_dir: {
-            'bind': DockerSimulatedHardware.CONTAINER_LOGS_DIR,
-            'mode': 'rw',
-          },
+            self._root_dir: {
+                'bind': DockerSimulatedHardware.CONTAINER_WORKING_DIR,
+                'mode': 'ro',
+            },
+            host_msg_dir: {
+                'bind': DockerSimulatedHardware.CONTAINER_MESSAGE_DIR,
+                'mode': 'ro',
+            },
+            log_dir: {
+                'bind': DockerSimulatedHardware.CONTAINER_LOGS_DIR,
+                'mode': 'rw',
+            },
         },
-      )
+    )
     self._network.connect(container)
 
     handle = messages.os_machine_controller_handle(machine_controller_id)
@@ -334,7 +337,7 @@ class DockerSimulatedHardware(object):
         self._handle_by_id[container.labels[DockerSimulatedHardware.LABEL_CONTAINER_UUID]]
         for container in self._get_containers_from_docker()
         if container.status == DockerSimulatedHardware.CONTAINER_STATUS_RUNNING
-      ]
+    ]
 
   def get_stopped_containers(self):
     '''
@@ -346,7 +349,7 @@ class DockerSimulatedHardware(object):
         self._handle_by_id[container.labels[DockerSimulatedHardware.LABEL_CONTAINER_UUID]]
         for container in self._get_containers_from_docker()
         if container.status == DockerSimulatedHardware.CONTAINER_STATUS_RUNNING
-      ]
+    ]
 
   def all_spawned_containers(self):
     '''
@@ -359,9 +362,8 @@ class DockerSimulatedHardware(object):
     Remove all the docker resources associated with any instance of `DockerSimulatedHardware`
     (not just the current instance).
     '''
-    labels_query = "{}={}".format(
-        DockerSimulatedHardware.LABEL_DOCKER_SIMULATED_HARDWARE,
-        DockerSimulatedHardware.LABEL_TRUE)
+    labels_query = "{}={}".format(DockerSimulatedHardware.LABEL_DOCKER_SIMULATED_HARDWARE,
+                                  DockerSimulatedHardware.LABEL_TRUE)
 
     containers = self._docker.containers.list(all=True, filters={'label': labels_query})
     logger.debug("Removing containers {}".format(containers), extra={'n_containers_to_remove': len(containers)})
@@ -374,4 +376,3 @@ class DockerSimulatedHardware(object):
       container.remove()
     if self._network is not None:
       self._network.remove()
-

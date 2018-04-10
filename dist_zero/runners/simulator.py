@@ -10,6 +10,7 @@ from dist_zero.node import io
 
 logger = logging.getLogger(__name__)
 
+
 class _Heapitem(object):
   def __init__(self, t, value):
     self.t = t
@@ -24,11 +25,13 @@ class _Heapitem(object):
   def tuple(self):
     return (self.t, self.value)
 
+
 class SimulatedMachineController(machine.MachineController):
   '''
   A MachineController for use in tests.  It does not actually control a machine
   but it implements the same interface and simulates what a MachineController would do.
   '''
+
   def __init__(self, name, hardware):
     '''
     :param str name: The name of this node.
@@ -42,7 +45,7 @@ class SimulatedMachineController(machine.MachineController):
     self._node_by_id = {}
     self.id = str(uuid.uuid4())
 
-    self._output_node_state_by_id = {}  # dict from output node to its current state
+    self._output_node_state_by_id = {} # dict from output node to its current state
 
     self._requests = []
 
@@ -59,10 +62,7 @@ class SimulatedMachineController(machine.MachineController):
     pass
 
   def send(self, node_handle, message, sending_node_handle=None):
-    self.hardware._simulate_send(
-        receiving_node=node_handle,
-        sending_node=sending_node_handle,
-        message=message)
+    self.hardware._simulate_send(receiving_node=node_handle, sending_node=sending_node_handle, message=message)
 
   def _update_output_node_state(self, node_id, f):
     new_state = f(self._output_node_state_by_id[node_id])
@@ -88,11 +88,12 @@ class SimulatedMachineController(machine.MachineController):
     return node.handle()
 
   def handle(self):
-    return { 'type': 'SimulatedMachineController', 'id': self.id }
+    return {'type': 'SimulatedMachineController', 'id': self.id}
 
   def elapse(self, ms):
     for node in self._node_by_id.values():
       node.elapse(ms)
+
 
 class SimulatedHardware(object):
   '''
@@ -110,7 +111,7 @@ class SimulatedHardware(object):
 
   def __init__(self, random_seed='random_seed'):
     self._controller_by_id = {}
-    self._elapsed_time_ms = None  # None if unstarted, otherwise the number of ms simulated so far
+    self._elapsed_time_ms = None # None if unstarted, otherwise the number of ms simulated so far
 
     # a heap (as in heapq) of tuples (ms_at_which_receipt_takes place, message_to_receive)
     self._pending_receives = []
@@ -121,10 +122,10 @@ class SimulatedHardware(object):
     self._log = []
 
   def _random_ms_for_send(self):
-    return max(1, int(self._random.gauss(
-      mu=SimulatedHardware.AVERAGE_SEND_TIME_MS,
-      sigma=SimulatedHardware.SEND_TIME_STDDEV_MS)))
-
+    return max(1,
+               int(
+                   self._random.gauss(
+                       mu=SimulatedHardware.AVERAGE_SEND_TIME_MS, sigma=SimulatedHardware.SEND_TIME_STDDEV_MS)))
 
   def start(self):
     '''Begin the simulation'''
@@ -153,7 +154,7 @@ class SimulatedHardware(object):
         self._format_node(msg['sending_node']),
         msg['message']['type'],
         self._format_node(msg['receiving_node']),
-        )
+    )
 
   def run_for(self, ms):
     '''
@@ -165,9 +166,7 @@ class SimulatedHardware(object):
     try:
       self._run_for_throwing_inner_exns(ms)
     except RuntimeError:
-      raise errors.SimulationError(
-        log_lines=[self._format_log(x) for x in self._log],
-        exc_info=sys.exc_info())
+      raise errors.SimulationError(log_lines=[self._format_log(x) for x in self._log], exc_info=sys.exc_info())
 
   def _run_for_throwing_inner_exns(self, ms):
     '''
@@ -186,10 +185,14 @@ class SimulatedHardware(object):
       step_time_ms = min(stop_time_ms - self._elapsed_time_ms, SimulatedHardware.MAX_STEP_TIME_MS)
       # The value of self._elapsed_time at the end of this iteration of the loop
       new_elapsed_time_ms = step_time_ms + self._elapsed_time_ms
-      logger.debug("Simulating from %s ms to %s ms", self._elapsed_time_ms, new_elapsed_time_ms, extra={
-        'start_time': self._elapsed_time_ms,
-        'end_time': new_elapsed_time_ms,
-      })
+      logger.debug(
+          "Simulating from %s ms to %s ms",
+          self._elapsed_time_ms,
+          new_elapsed_time_ms,
+          extra={
+              'start_time': self._elapsed_time_ms,
+              'end_time': new_elapsed_time_ms,
+          })
 
       # Simulate every event in the queue
       while self._pending_receives and self._pending_receives[0].t <= new_elapsed_time_ms:
@@ -255,8 +258,7 @@ class SimulatedHardware(object):
     time = self._elapsed_time_ms + self._random_ms_for_send()
 
     self._add_to_heap((time, {
-      'sending_node': sending_node,
-      'receiving_node': receiving_node,
-      'message': message,
+        'sending_node': sending_node,
+        'receiving_node': receiving_node,
+        'message': message,
     }))
-

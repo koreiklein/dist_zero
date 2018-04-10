@@ -50,11 +50,7 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
-  def send(self,
-           node_handle,
-           message,
-           sending_node_handle=None,
-           transport=None):
+  def send(self, node_handle, message, sending_node_handle=None, transport=None):
     '''
     Send a message to a node either managed by self, or linked to self.
 

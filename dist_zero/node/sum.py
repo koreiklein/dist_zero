@@ -5,12 +5,13 @@ from .node import Node
 
 logger = logging.getLogger(__name__)
 
+
 class SumNode(Node):
   SEND_INTERVAL_MS = 30 # Number of ms between sends to receivers.
-
   '''
   An internal node for summing all increments from its senders and forwarding the total to its receivers.
   '''
+
   def __init__(self, node_id, senders, receivers, controller):
     '''
     :param list senders: A list of :ref:`handle`s of the nodes sending increments
@@ -33,7 +34,7 @@ class SumNode(Node):
     self._unsent_time_ms = 0
 
   def handle(self):
-    return { 'type': 'SumNode', 'id': self.id, 'controller_id': self._controller.id }
+    return {'type': 'SumNode', 'id': self.id, 'controller_id': self._controller.id}
 
   @staticmethod
   def from_config(node_config, controller):
@@ -76,5 +77,3 @@ class SumNode(Node):
     self._unsent_time_ms = 0
     self._sent_total += self._unsent_total
     self._unsent_total = 0
-
-

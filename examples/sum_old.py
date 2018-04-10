@@ -2,12 +2,15 @@
 
 
 def increment(amount):
-  return { 'type': 'increment', 'amount': amount }
+  return {'type': 'increment', 'amount': amount}
+
 
 # Nodes
 
+
 class NodeManager(object):
   '''The class that Nodes dispatch all their requests to send messages or schedule things.'''
+
   def send(receiver, msg):
     raise RuntimeError("Not Yet Implemented")
 
@@ -19,6 +22,7 @@ class TestNodeManager(NodeManager):
 
 class TestManager(object):
   '''For creating NodeManager instances to use in a local test'''
+
   def new_node_manager(self):
     return TestNodeManager(test_manager=self)
 
@@ -38,6 +42,7 @@ class Monitor(object):
   def receive(self, msg):
     raise RuntimeError("Abstract Superclass")
 
+
 class RateMonitorHelper(object):
   NEW_BUCKET_INTERVAL = 1000 # Number of seconds covered by each finished bucket
   LIMIT_PER_INTERVAL = 50 # Once this many counts arrive in a single bucket, it's time to split
@@ -56,7 +61,7 @@ class RateMonitorHelper(object):
     self._new_bucket()
 
   def _new_bucket(self):
-    self._buckets.append({ 'time': 0, 'count': 0})
+    self._buckets.append({'time': 0, 'count': 0})
 
   def send(self, receiver, msg):
     pass
@@ -78,6 +83,7 @@ class RateMonitorHelper(object):
       if count_per_bucket_interval > RateMonitorHelper.LIMIT_PER_INTERVAL:
         self._manager.migrate(self._migration)
 
+
 class ReceiveRateMonitor(Monitor):
   def __init__(self, migration, manager):
     self._helper = RateMonitorHelper(migration=migration, manager=manager)
@@ -90,6 +96,7 @@ class ReceiveRateMonitor(Monitor):
 
   def elapse(self, ms):
     self._helper.elapse(ms)
+
 
 class SendRateMonitor(Monitor):
   def __init__(self, migration, manager):
@@ -106,7 +113,7 @@ class SendRateMonitor(Monitor):
 
 
 class SumNode(NodeInternal):
-  SEND_INTERVAL_MS = 30 # Number of ms between sends to receivers. 
+  SEND_INTERVAL_MS = 30 # Number of ms between sends to receivers.
 
   def __init__(self, senders, receivers, manager, monitors):
     self._senders = senders
@@ -154,6 +161,7 @@ class SumNode(NodeInternal):
     self._sent_total += self._unsent_total
     self._unsent_total = 0
 
+
 def run():
   manager = TestManager()
   users_root_node = UsersNode(kids=[])
@@ -165,8 +173,7 @@ def run():
       receivers=[users_root_node],
       manager=sum_node_manager,
       monitors=[
-        SendRateMonitor(migration=split_sum_migration, manager=sum_node_manager),
-        ReceiveRateMonitor(migration=split_sum_migration, manager=sum_node_manager),
-        ],
-      )
-
+          SendRateMonitor(migration=split_sum_migration, manager=sum_node_manager),
+          ReceiveRateMonitor(migration=split_sum_migration, manager=sum_node_manager),
+      ],
+  )

@@ -9,6 +9,7 @@ from dist_zero.runners import docker
 
 logger = logging.getLogger(__name__)
 
+
 def _send_tcp(message):
   host = 'localhost'
   dst = (host, settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT)
@@ -21,6 +22,7 @@ def _send_tcp(message):
     logger.info("received API response message from localhost")
     response_message = json.loads(response.decode(messages.ENCODING))
     return response_message
+
 
 def _run():
   if len(sys.argv) != 3:
@@ -44,6 +46,7 @@ def _run():
     json.dump(response, sys.stdout, indent=2)
   else:
     logger.error("Unrecognized socket type %s should be 'udp' or 'tcp'", sock_type)
+
 
 if __name__ == '__main__':
   _run()
