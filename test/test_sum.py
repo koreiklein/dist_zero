@@ -60,23 +60,24 @@ class VirtualizedSumTest(unittest.TestCase):
                                            transport=self.virtual_hardware.virtual_new_transport_for(
                                                sender=root_output_node_handle, receiver=sum_node_handle),
                                        ))
+    time.sleep(0.5)
 
     user_b_input_handle = self.virtual_hardware.create_kid(
         parent_node=root_input_node_handle,
         new_node_name='input_b',
         machine_controller_handle=container_b_handle,
         recorded_user=RecordedUser('user b', [
-            (2030, messages.increment(2)),
-            (2060, messages.increment(1)),
+            (3030, messages.increment(2)),
+            (3060, messages.increment(1)),
         ]))
     user_c_input_handle = self.virtual_hardware.create_kid(
         parent_node=root_input_node_handle,
         new_node_name='input_c',
         machine_controller_handle=container_c_handle,
         recorded_user=RecordedUser('user c', [
-            (2033, messages.increment(1)),
-            (2043, messages.increment(1)),
-            (2073, messages.increment(1)),
+            (3033, messages.increment(1)),
+            (3043, messages.increment(1)),
+            (3073, messages.increment(1)),
         ]))
 
     user_b_output_handle = self.virtual_hardware.create_kid(
@@ -84,7 +85,7 @@ class VirtualizedSumTest(unittest.TestCase):
     user_c_output_handle = self.virtual_hardware.create_kid(
         parent_node=root_output_node_handle, new_node_name='output_c', machine_controller_handle=container_c_handle)
 
-    time.sleep(5)
+    time.sleep(4)
     user_b_state = self.virtual_hardware.virtual_get_state(user_b_output_handle)
     user_c_state = self.virtual_hardware.virtual_get_state(user_c_output_handle)
     self.assertEqual(6, user_b_state)
