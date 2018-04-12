@@ -35,6 +35,8 @@ class InputLeafNode(Node):
     # Messages received before becoming active.
     self._pre_active_messages = []
 
+    super(InputLeafNode, self).__init__(logger)
+
   def _all_receivers_are_active(self):
     return all(state == 'active' for state in self._receiver_state.values())
 
@@ -48,13 +50,13 @@ class InputLeafNode(Node):
     self.set_transport(sender, transport)
     self._receiver_state[sender['id']] = 'active'
     if self._all_receivers_are_active():
-      logger.info("Activating Input Leaf Node %s", self.id, extra={'node_id': self.id})
+      self.logger.info("Activating Input Leaf Node {node_id}", extra={'node_id': self.id})
       self._active = True
       # Process all the postponed messages now
       for m in self._pre_active_messages:
         self._receive_ordinary_message(m)
     else:
-      logger.debug("Received added_link message from %s", sender['id'], extra={'sender': sender})
+      self.logger.debug("Received added_link message from {sender}", extra={'sender': sender})
 
   def receive(self, message, sender):
     if sender is not None and message['type'] == 'added_link':
@@ -65,7 +67,7 @@ class InputLeafNode(Node):
   def _receive_ordinary_message(self, message):
     if self._active:
       for receiver in self._receivers:
-        logger.debug("Forwarding input message to receiver %s", receiver['id'], extra={'receiver': receiver})
+        self.logger.debug("Forwarding input message to receiver {receiver}", extra={'receiver': receiver})
         self.send(receiver, message)
     else:
       # Postpone message till later
@@ -100,14 +102,14 @@ class InputLeafNode(Node):
     return {'type': 'InputLeafNode', 'id': self.id, 'controller_id': self._controller.id}
 
   def initialize(self):
-    logger.info("Input leaf node sending 'added_leaf' message to parent")
+    self.logger.info("Input leaf node sending 'added_leaf' message to parent")
     self.set_transport(self.parent, self._parent_transport)
     self.send(self.parent, messages.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
 
   def elapse(self, ms):
     if self._recorded_user is not None:
       for t, msg in self._recorded_user.elapse_and_get_messages(ms):
-        logger.info("Simulated user generated a message %s", msg, extra={'recorded_message': msg})
+        self.logger.info("Simulated user generated a message", extra={'recorded_message': msg})
         self.receive(msg, sender=None)
 
 
@@ -140,6 +142,8 @@ class OutputLeafNode(Node):
     # Messages received before becoming active.
     self._pre_active_messages = []
 
+    super(OutputLeafNode, self).__init__(logger)
+
   def _all_senders_are_active(self):
     return all(state == 'active' for state in self._sender_state.values())
 
@@ -147,7 +151,7 @@ class OutputLeafNode(Node):
     if self._active:
       if message['type'] == 'increment':
         increment = message['amount']
-        logger.debug("Output incrementing state by %s", increment)
+        self.logger.debug("Output incrementing state by {increment}", extra={'increment': increment})
         self._update_state(lambda amount: amount + increment)
       else:
         raise RuntimeError("Unrecognized type {}".format(message['type']))
@@ -164,13 +168,13 @@ class OutputLeafNode(Node):
     self.set_transport(receiver, transport)
     self._sender_state[receiver['id']] = 'active'
     if self._all_senders_are_active():
-      logger.info("Activating Output Leaf Node %s", self.id, extra={'node_id': self.id})
+      self.logger.info("Activating Output Leaf Node {node_id}", extra={'node_id': self.id})
       self._active = True
       # Process all the postponed messages now
       for m in self._pre_active_messages:
         self._receive_ordinary_message(m)
     else:
-      logger.debug("Received added_link message from %s", receiver['id'], extra={'receiver': receiver})
+      self.logger.debug("Received added_link message from {receiver}", extra={'receiver': receiver})
 
   def receive(self, message, sender):
     if sender is not None and message['type'] == 'added_link':
@@ -196,7 +200,7 @@ class OutputLeafNode(Node):
     pass
 
   def initialize(self):
-    logger.info("Output leaf node sending 'added_leaf' message to parent")
+    self.logger.info("Output leaf node sending 'added_leaf' message to parent")
     self.set_transport(self.parent, self._parent_transport)
     self.send(self.parent, messages.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
 
@@ -211,6 +215,7 @@ class InputNode(Node):
     self.id = node_id
     self._kids = {} # A map from kid node id to either 'pending' or 'active'
     self._receivers = [] if receivers is None else receivers
+    super(InputNode, self).__init__(logger)
 
   def receive(self, message, sender):
     if message['type'] == 'start_sending_to':
@@ -218,7 +223,7 @@ class InputNode(Node):
     elif message['type'] == 'added_leaf':
       self.added_leaf(message['kid'], message['transport'])
     else:
-      logger.error("Unrecognized message %s", message, extra={'message_type': message['type'], 'message': message})
+      self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
   def start_sending_to(self, node_handle, transport):
     self.set_transport(node_handle, transport)
@@ -262,9 +267,8 @@ class InputNode(Node):
     :rtype: :ref:`message`
     '''
     node_id = str(uuid.uuid4())
-    logger.info(
-        "Registering a new leaf input node config for '%s' with an internal node",
-        name,
+    self.logger.info(
+        "Registering a new leaf input node config for an internal node. name='{node_name}'",
         extra={
             'internal_node': self.handle(),
             'leaf_node_id': node_id,
@@ -285,8 +289,9 @@ class InputNode(Node):
     :type kid: :ref:`handle`
     '''
     if kid['id'] not in self._kids:
-      logger.error(
-          "added_leaf: Could not find node matching id %s", kid['id'], extra={'missing_child_node_id': kid['id']})
+      self.logger.error(
+          "added_leaf: Could not find node matching id {missing_child_node_id}",
+          extra={'missing_child_node_id': kid['id']})
     else:
       self._kids[kid['id']] = 'active'
       self.set_transport(kid, transport)
@@ -316,6 +321,7 @@ class OutputNode(Node):
     self._senders = [] if senders is None else senders
 
     self._kids = {} # A map from kid node id to either 'pending' or 'active'
+    super(OutputNode, self).__init__(logger)
 
   def receive(self, message, sender):
     if message['type'] == 'start_receiving_from':
@@ -323,7 +329,7 @@ class OutputNode(Node):
     elif message['type'] == 'added_leaf':
       self.added_leaf(message['kid'], message['transport'])
     else:
-      logger.error("Unrecognized message %s", message, extra={'message_type': message['type'], 'message': message})
+      self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
   def receive_from(self, node_handle, transport):
     self.set_transport(node_handle, transport)
@@ -351,9 +357,8 @@ class OutputNode(Node):
     :rtype: :ref:`message`
     '''
     node_id = str(uuid.uuid4())
-    logger.info(
-        "Registering a new leaf output node config for '%s' with an internal node",
-        name,
+    self.logger.info(
+        "Registering a new leaf output node config with an internal node. name='{node_name}'",
         extra={
             'internal_node': self.handle(),
             'leaf_node_id': node_id,
@@ -375,8 +380,9 @@ class OutputNode(Node):
     :type kid: :ref:`handle`
     '''
     if kid['id'] not in self._kids:
-      logger.error(
-          "added_leaf: Could not find node matching id %s", kid['id'], extra={'missing_child_node_id': kid['id']})
+      self.logger.error(
+          "added_leaf: Could not find node matching id {missing_child_node_id}",
+          extra={'missing_child_node_id': kid['id']})
     else:
       self._kids[kid['id']] = 'active'
       self.set_transport(kid, transport)

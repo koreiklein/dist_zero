@@ -1,8 +1,13 @@
+import dist_zero.logging
+
 from dist_zero import messages
 
 
 class Node(object):
   '''Abstract base class for nodes'''
+
+  def __init__(self, logger):
+    self.logger = dist_zero.logging.LoggerAdapter(logger, extra={'cur_node_id': self.id})
 
   def send(self, receiver, message):
     self._controller.send(receiver, message, self.handle())
