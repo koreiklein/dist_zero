@@ -7,7 +7,7 @@ import sys
 import uuid
 
 import dist_zero.logging
-from dist_zero import machine, errors, settings
+from dist_zero import machine, errors, settings, runners
 from dist_zero.node import io
 
 logger = logging.getLogger(__name__)
@@ -131,7 +131,7 @@ class SimulatedHardware(object):
     str_format_filter = dist_zero.logging.StrFormatFilter()
     context_filter = dist_zero.logging.ContextFilter({
         'env': settings.DIST_ZERO_ENV,
-        'mode': 'simulated',
+        'mode': runners.MODE_SIMULATED,
         'runner': True,
         'simulator_id': self.id,
         'start_at': self._start_datetime,
