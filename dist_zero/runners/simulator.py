@@ -6,6 +6,8 @@ import random
 import sys
 import uuid
 
+from logstash_async.handler import AsynchronousLogstashHandler
+
 import dist_zero.logging
 from dist_zero import machine, errors, settings, runners
 from dist_zero.node import io
@@ -145,19 +147,28 @@ class SimulatedHardware(object):
     stdout_handler = logging.StreamHandler(sys.stdout)
     human_file_handler = logging.FileHandler('./.tmp/simulator.log')
     json_file_handler = logging.FileHandler('./.tmp/simulator.json.log')
+    logstash_handler = AsynchronousLogstashHandler(
+        settings.LOGSTASH_HOST,
+        settings.LOGSTASH_PORT,
+        database_path='./.tmp/logstash.db',
+    )
 
     stdout_handler.setLevel(logging.ERROR)
     human_file_handler.setLevel(logging.DEBUG)
     json_file_handler.setLevel(logging.DEBUG)
+    logstash_handler.setLevel(logging.DEBUG)
 
     stdout_handler.setFormatter(human_formatter)
     human_file_handler.setFormatter(human_formatter)
     json_file_handler.setFormatter(json_formatter)
+    logstash_handler.setFormatter(json_formatter)
 
     stdout_handler.addFilter(str_format_filter)
     human_file_handler.addFilter(str_format_filter)
     json_file_handler.addFilter(str_format_filter)
     json_file_handler.addFilter(context_filter)
+    logstash_handler.addFilter(str_format_filter)
+    logstash_handler.addFilter(context_filter)
 
     # Loggers
     dist_zero_logger = logging.getLogger('dist_zero')
@@ -166,6 +177,7 @@ class SimulatedHardware(object):
     dist_zero.logging.set_handlers(root_logger, [
         json_file_handler,
         human_file_handler,
+        logstash_handler,
         stdout_handler,
     ])
 
