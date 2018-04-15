@@ -6,7 +6,7 @@ import uuid
 import docker
 import docker.errors
 
-from dist_zero import machine, settings, errors, messages
+from dist_zero import machine, settings, errors, messages, runners
 
 logger = logging.getLogger(__name__)
 
@@ -301,6 +301,7 @@ class DockerSimulatedHardware(object):
             'dist_zero.machine_init',
             machine_controller_id,
             machine_name,
+            runners.MODE_VIRTUAL,
         ],
         detach=True,
         labels={

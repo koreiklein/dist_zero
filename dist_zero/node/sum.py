@@ -1,6 +1,6 @@
 import logging
 
-from dist_zero import messages
+from dist_zero import messages, errors
 from .node import Node
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,8 @@ class SumNode(Node):
     self._unsent_total = 0
     self._unsent_time_ms = 0
 
+    super(SumNode, self).__init__(logger)
+
   def handle(self):
     return {'type': 'SumNode', 'id': self.id, 'controller_id': self._controller.id}
 
@@ -62,7 +64,7 @@ class SumNode(Node):
       self.set_transport(node, transport)
       self.send(node, messages.added_link(self.new_transport_for(node['id'])))
     else:
-      raise errors.InternalError("Unrecognized message {}".format(message))
+      self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
   def elapse(self, ms):
     self._unsent_time_ms += ms
@@ -70,7 +72,7 @@ class SumNode(Node):
       self._send_to_all()
 
   def _send_to_all(self):
-    logger.debug("Sending new increment of %s to all receivers", self._unsent_total)
+    self.logger.debug("Sending new increment of %s to all receivers", self._unsent_total)
     for receiver in self._receivers:
       message = messages.increment(self._unsent_total)
       self.send(receiver, message)

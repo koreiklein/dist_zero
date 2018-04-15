@@ -24,8 +24,32 @@ its own machine in the cloud.
 
 ## Logging
 
-In virtual mode, logs are cleared when the system starts up, and aggregated locally in real time in .tmp/container
-You can print them all out for viewing with `./scripts/tail_container_logs`
+In virtual and simulated mode, logs are written to the .tmp subdirectory.
+You can find logs for the runners that coordinate spinning up the system and running tests.
+Also, under .tmp there are directories created for each container, each with their logs.
+You can print them all out for viewing with `./scripts/tail_container_logs`.
+
+For clound/production logging, all DistZero MachineController instances will also log to a logstash endpoint
+configured via the environment variables `LOGSTASH_HOST` and `LOGSTASH_PORT`.
+
+### Log analysis tools
+
+For convenience, the ./elk/ subdirectory contains
+a complete [elk stack](https://www.elastic.co/elk-stack) for log analysis during development,
+and docker-compose.yml defines how to run it with docker-compose.
+You can build the stack with `docker-compose build` and run it with `docker-compospe up -d`.
+
+To send simulated logs there during development, set `LOGSTASH_HOST=localhost` and `LOGSTASH_PORT=5533` (or whatever
+port you're using to run the logstash instance).
+
+To send logs there from virtualized machines running on the same host, you'll need the hostname of the host from
+containers.  When using docker-for-mac, this is `host.docker.internal`
+[see the notes](https://docs.docker.com/docker-for-mac/release-notes/#docker-community-edition-17060-ce-mac18-2017-06-28-stable)
+
+The elk stack contains a [LogTrail](https://github.com/sivasamyk/logtrail) configuration for the kibana logtrail plugin
+for browsing logs across all the machines involved.
+To use it, visit the kibana container at [http://localhost:5601](http://localhost:5601) and navigate to the logtrail
+plugin.
 
 ## Testing
 Tests are given nose labels based on the mode that they test.  Naturally, "virtual" and "cloud" tests tend to

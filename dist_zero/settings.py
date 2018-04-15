@@ -22,4 +22,10 @@ MACHINE_CONTROLLER_DEFAULT_TCP_PORT = 9877
 
 MSG_BUFSIZE = 2048
 
+# Logging settings
+LOGSTASH_HOST = os.environ['LOGSTASH_HOST']
+LOGSTASH_PORT = int(os.environ['LOGSTASH_PORT'])
+
+LOGZ_IO_TOKEN = os.environ.get('LOGZ_IO_TOKEN', '')
+
 TESTING = DIST_ZERO_ENV == "test"
