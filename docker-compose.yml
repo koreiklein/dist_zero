@@ -34,6 +34,7 @@ services:
       context: ./elk/kibana/
     volumes:
       - ./elk/kibana/config/:/usr/share/kibana/config:ro
+      - ./elk/kibana/plugins/logtrail/logtrail.json:/usr/share/kibana/plugins/logtrail/logtrail.json
     ports:
       - "5601:5601"
     networks:

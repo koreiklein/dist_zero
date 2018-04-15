@@ -131,13 +131,16 @@ class SimulatedHardware(object):
 
     # Filters
     str_format_filter = dist_zero.logging.StrFormatFilter()
-    context_filter = dist_zero.logging.ContextFilter({
+    context = {
         'env': settings.DIST_ZERO_ENV,
         'mode': runners.MODE_SIMULATED,
         'runner': True,
         'simulator_id': self.id,
         'start_at': self._start_datetime,
-    })
+    }
+    if settings.LOGZ_IO_TOKEN:
+      context['token'] = settings.LOGZ_IO_TOKEN
+    context_filter = dist_zero.logging.ContextFilter(context)
 
     # Formatters
     human_formatter = dist_zero.logging.HUMAN_FORMATTER

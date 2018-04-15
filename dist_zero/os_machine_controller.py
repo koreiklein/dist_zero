@@ -8,7 +8,10 @@ import time
 import traceback
 import uuid
 
+from logstash_async.handler import AsynchronousLogstashHandler
+
 import dist_zero.transport
+import dist_zero.logging
 from dist_zero import machine, messages, settings
 from dist_zero.node import io
 from dist_zero.runners import docker
@@ -19,12 +22,15 @@ logger = logging.getLogger(__name__)
 class OsMachineController(machine.MachineController):
   STEP_LENGTH_MS = 5 # Target number of milliseconds per iteration of the run loop.
 
-  def __init__(self, id, name):
+  def __init__(self, id, name, mode):
     '''
     :param str id: The unique identity to use for this `OsMachineController`
+    :param str name: A nice human readable name for this `OsMachineController`
+    :param str mode: A mode (from `dist_zero.runners`) (simulated, virtual, or cloud)
     '''
     self.id = id
     self.name = name
+    self.mode = mode
 
     self._node_by_id = {}
 
@@ -266,5 +272,60 @@ class OsMachineController(machine.MachineController):
     '''
     Configure logging for a `MachineController`
     '''
-    logging.basicConfig(
-        level=logging.DEBUG, filename=os.path.join(docker.DockerSimulatedHardware.CONTAINER_LOGS_DIR, 'output.log'))
+    # Filters
+    str_format_filter = dist_zero.logging.StrFormatFilter()
+    context = {
+        'env': settings.DIST_ZERO_ENV,
+        'mode': self.mode,
+        'runner': False,
+        'machine_id': self.id,
+        'machine_name': self.name,
+    }
+    if settings.LOGZ_IO_TOKEN:
+      context['token'] = settings.LOGZ_IO_TOKEN
+    context_filter = dist_zero.logging.ContextFilter(context)
+
+    # Formatters
+    human_formatter = dist_zero.logging.HUMAN_FORMATTER
+    json_formatter = dist_zero.logging.JsonFormatter('(asctime) (levelname) (name) (message)')
+
+    # Handlers
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    human_file_handler = logging.FileHandler(
+        os.path.join(docker.DockerSimulatedHardware.CONTAINER_LOGS_DIR, 'output.log'))
+    json_file_handler = logging.FileHandler(
+        os.path.join(docker.DockerSimulatedHardware.CONTAINER_LOGS_DIR, 'output.json.log'))
+    logstash_handler = AsynchronousLogstashHandler(
+        settings.LOGSTASH_HOST,
+        settings.LOGSTASH_PORT,
+        database_path='/.logstash.db',
+    )
+
+    stdout_handler.setLevel(logging.ERROR)
+    human_file_handler.setLevel(logging.DEBUG)
+    json_file_handler.setLevel(logging.DEBUG)
+    logstash_handler.setLevel(logging.DEBUG)
+
+    stdout_handler.setFormatter(human_formatter)
+    human_file_handler.setFormatter(human_formatter)
+    json_file_handler.setFormatter(json_formatter)
+    logstash_handler.setFormatter(json_formatter)
+
+    stdout_handler.addFilter(str_format_filter)
+    human_file_handler.addFilter(str_format_filter)
+    json_file_handler.addFilter(str_format_filter)
+    json_file_handler.addFilter(context_filter)
+    logstash_handler.addFilter(str_format_filter)
+    logstash_handler.addFilter(context_filter)
+
+    # Loggers
+    dist_zero_logger = logging.getLogger('dist_zero')
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+
+    dist_zero.logging.set_handlers(root_logger, [
+        json_file_handler,
+        human_file_handler,
+        logstash_handler,
+        stdout_handler,
+    ])
