@@ -179,8 +179,6 @@ class Ec2Spawner(spawner.Spawner):
     handle = messages.os_machine_controller_handle(machine_controller_id)
     self._handle_by_id[machine_controller_id] = handle
     self._aws_instance_by_id[machine_controller_id] = instance
-    import ipdb
-    ipdb.set_trace()
     return handle
 
   def _instance_status_is_reachable(self, status):
