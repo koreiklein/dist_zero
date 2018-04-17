@@ -5,43 +5,48 @@ import uuid
 
 from nose.plugins.attrib import attr
 
-from dist_zero import messages, errors, runners
+from dist_zero import messages, errors, spawners
 from dist_zero.node.sum import SumNode
 from dist_zero.node.io import InputNode, OutputNode
-from dist_zero.runners.simulator import SimulatedHardware
-from dist_zero.runners.docker import DockerSimulatedHardware
+from dist_zero.spawners.simulator import SimulatedHardware
+from dist_zero.spawners.docker import DockerSpawner
+from dist_zero.system_controller import SystemController
 from dist_zero.recorded import RecordedUser
 
 logger = logging.getLogger(__name__)
 
 
-@attr(mode=runners.MODE_VIRTUAL)
+@attr(mode=spawners.MODE_VIRTUAL)
 class VirtualizedSumTest(unittest.TestCase):
   def setUp(self):
-    self.virtual_hardware = DockerSimulatedHardware()
+    self.virtual_spawner = DockerSpawner()
+    self.system = SystemController(self.virtual_spawner)
 
   def tearDown(self):
-    if self.virtual_hardware.started:
-      self.virtual_hardware.clean_all()
+    if self.virtual_spawner.started:
+      self.virtual_spawner.clean_all()
 
   def test_sum_one_virtual(self):
-    self.virtual_hardware.start()
-    container_a_handle = self.virtual_hardware.new_container('container a')
-    container_b_handle = self.virtual_hardware.new_container('container b')
-    container_c_handle = self.virtual_hardware.new_container('container c')
+    self.virtual_spawner.start()
+    container_a_handle = self.system.create_machine(
+        messages.machine_config(machine_name='container a', machine_controller_id=str(uuid.uuid4())))
+    container_b_handle = self.system.create_machine(
+        messages.machine_config(machine_name='container b', machine_controller_id=str(uuid.uuid4())))
+    container_c_handle = self.system.create_machine(
+        messages.machine_config(machine_name='container c', machine_controller_id=str(uuid.uuid4())))
     self.assertEqual(container_a_handle['type'], 'OsMachineController')
 
     # Low values for time to sleep have been observed to be too short for broken nodes to actually fail.
     time.sleep(0.4)
-    self.assertEqual(3, len(self.virtual_hardware.get_running_containers()))
-    self.assertEqual(3, len(self.virtual_hardware.all_spawned_containers()))
+    self.assertEqual(3, len(self.virtual_spawner.get_running_containers()))
+    self.assertEqual(3, len(self.virtual_spawner.all_spawned_containers()))
 
     # Configure the starting network topology
-    root_input_node_handle = self.virtual_hardware.virtual_spawn_node(
+    root_input_node_handle = self.system.spawn_node(
         on_machine=container_a_handle, node_config=messages.input_node_config(str(uuid.uuid4())))
-    root_output_node_handle = self.virtual_hardware.virtual_spawn_node(
+    root_output_node_handle = self.system.spawn_node(
         on_machine=container_a_handle, node_config=messages.output_node_config(str(uuid.uuid4()), initial_state=0))
-    sum_node_handle = self.virtual_hardware.virtual_spawn_node(
+    sum_node_handle = self.system.spawn_node(
         on_machine=container_a_handle,
         node_config=messages.sum_node_config(
             node_id=str(uuid.uuid4()),
@@ -49,20 +54,20 @@ class VirtualizedSumTest(unittest.TestCase):
             receivers=[],
         ))
 
-    self.virtual_hardware.virtual_send(root_input_node_handle,
-                                       messages.start_sending_to(
-                                           new_receiver=sum_node_handle,
-                                           transport=self.virtual_hardware.virtual_new_transport_for(
-                                               sender=root_input_node_handle, receiver=sum_node_handle)))
-    self.virtual_hardware.virtual_send(root_output_node_handle,
-                                       messages.start_receiving_from(
-                                           new_sender=sum_node_handle,
-                                           transport=self.virtual_hardware.virtual_new_transport_for(
-                                               sender=root_output_node_handle, receiver=sum_node_handle),
-                                       ))
+    self.system.send_to_node(root_input_node_handle,
+                             messages.start_sending_to(
+                                 new_receiver=sum_node_handle,
+                                 transport=self.system.create_transport_for(
+                                     sender=root_input_node_handle, receiver=sum_node_handle)))
+    self.system.send_to_node(root_output_node_handle,
+                             messages.start_receiving_from(
+                                 new_sender=sum_node_handle,
+                                 transport=self.system.create_transport_for(
+                                     sender=root_output_node_handle, receiver=sum_node_handle),
+                             ))
     time.sleep(0.5)
 
-    user_b_input_handle = self.virtual_hardware.create_kid(
+    user_b_input_handle = self.system.create_kid(
         parent_node=root_input_node_handle,
         new_node_name='input_b',
         machine_controller_handle=container_b_handle,
@@ -70,7 +75,7 @@ class VirtualizedSumTest(unittest.TestCase):
             (3030, messages.increment(2)),
             (3060, messages.increment(1)),
         ]))
-    user_c_input_handle = self.virtual_hardware.create_kid(
+    user_c_input_handle = self.system.create_kid(
         parent_node=root_input_node_handle,
         new_node_name='input_c',
         machine_controller_handle=container_c_handle,
@@ -80,19 +85,19 @@ class VirtualizedSumTest(unittest.TestCase):
             (3073, messages.increment(1)),
         ]))
 
-    user_b_output_handle = self.virtual_hardware.create_kid(
+    user_b_output_handle = self.system.create_kid(
         parent_node=root_output_node_handle, new_node_name='output_b', machine_controller_handle=container_b_handle)
-    user_c_output_handle = self.virtual_hardware.create_kid(
+    user_c_output_handle = self.system.create_kid(
         parent_node=root_output_node_handle, new_node_name='output_c', machine_controller_handle=container_c_handle)
 
     time.sleep(4)
-    user_b_state = self.virtual_hardware.virtual_get_state(user_b_output_handle)
-    user_c_state = self.virtual_hardware.virtual_get_state(user_c_output_handle)
+    user_b_state = self.system.get_output_state(user_b_output_handle)
+    user_c_state = self.system.get_output_state(user_c_output_handle)
     self.assertEqual(6, user_b_state)
     self.assertEqual(6, user_c_state)
 
 
-@attr(mode=runners.MODE_SIMULATED)
+@attr(mode=spawners.MODE_SIMULATED)
 class SimulatedSumTest(unittest.TestCase):
   def setUp(self):
     self.simulated_hardware = SimulatedHardware()

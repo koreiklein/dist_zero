@@ -5,7 +5,7 @@ import socket
 import sys
 
 from dist_zero import errors, messages, settings, transport
-from dist_zero.runners import docker
+from dist_zero.spawners import docker
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def _run():
   filename = sys.argv[1]
   sock_type = sys.argv[2]
 
-  full_path = os.path.join(docker.DockerSimulatedHardware.CONTAINER_MESSAGE_DIR, filename)
+  full_path = os.path.join(docker.DockerSpawner.CONTAINER_MESSAGE_DIR, filename)
 
   logger.info("reading message from file {} and forwarding to localhost".format(full_path), extra={'path': full_path})
   with open(full_path, 'r') as f:

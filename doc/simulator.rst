@@ -1,8 +1,8 @@
-Simulated Runner
+Simulated Spawner
 ====================================
 
-A simulator runner will run a simulation of a distributed system
+A simulator spawner will run a simulation of a distributed system
 entirely within the parent python process.
 
-.. automodule:: dist_zero.runners.simulator
+.. automodule:: dist_zero.spawners.simulator
    :members: SimulatedHardware, SimulatedMachineController

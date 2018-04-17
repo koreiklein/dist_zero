@@ -18,6 +18,19 @@ def os_machine_controller_handle(machine_id):
   return {'type': 'OsMachineController', 'id': machine_id}
 
 
+# Machine configs
+
+
+def machine_config(machine_controller_id, machine_name):
+  '''
+  A machine config
+
+  :param str machine_controller_id: The unique id for the new machine.
+  :param str machine_name: A human readable name for the new machine.
+  '''
+  return {'type': 'machine_config', 'machine_name': machine_name, 'id': machine_controller_id}
+
+
 # Node configs
 
 

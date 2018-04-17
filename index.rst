@@ -16,7 +16,7 @@ Welcome to DistZero's documentation!
 
    doc/machine
 
-   doc/runners
+   doc/spawners
 
    doc/messages
    doc/nodes

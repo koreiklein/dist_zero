@@ -25,7 +25,7 @@ its own machine in the cloud.
 ## Logging
 
 In virtual and simulated mode, logs are written to the .tmp subdirectory.
-You can find logs for the runners that coordinate spinning up the system and running tests.
+You can find logs for the spawners that coordinate spinning up the system and running tests.
 Also, under .tmp there are directories created for each container, each with their logs.
 You can print them all out for viewing with `./scripts/tail_container_logs`.
 

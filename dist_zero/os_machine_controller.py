@@ -14,7 +14,7 @@ import dist_zero.transport
 import dist_zero.logging
 from dist_zero import machine, messages, settings
 from dist_zero.node import io
-from dist_zero.runners import docker
+from dist_zero.spawners import docker
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class OsMachineController(machine.MachineController):
     '''
     :param str id: The unique identity to use for this `OsMachineController`
     :param str name: A nice human readable name for this `OsMachineController`
-    :param str mode: A mode (from `dist_zero.runners`) (simulated, virtual, or cloud)
+    :param str mode: A mode (from `dist_zero.spawners`) (simulated, virtual, or cloud)
     '''
     self.id = id
     self.name = name
@@ -291,10 +291,8 @@ class OsMachineController(machine.MachineController):
 
     # Handlers
     stdout_handler = logging.StreamHandler(sys.stdout)
-    human_file_handler = logging.FileHandler(
-        os.path.join(docker.DockerSimulatedHardware.CONTAINER_LOGS_DIR, 'output.log'))
-    json_file_handler = logging.FileHandler(
-        os.path.join(docker.DockerSimulatedHardware.CONTAINER_LOGS_DIR, 'output.json.log'))
+    human_file_handler = logging.FileHandler(os.path.join(docker.DockerSpawner.CONTAINER_LOGS_DIR, 'output.log'))
+    json_file_handler = logging.FileHandler(os.path.join(docker.DockerSpawner.CONTAINER_LOGS_DIR, 'output.json.log'))
     logstash_handler = AsynchronousLogstashHandler(
         settings.LOGSTASH_HOST,
         settings.LOGSTASH_PORT,
