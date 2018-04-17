@@ -61,6 +61,9 @@ class DockerSpawner(spawner.Spawner):
     The total number of messages sent to all `MachineController`s.
     '''
 
+  def mode(self):
+    return spawners.MODE_VIRTUAL
+
   def send_to_machine(self, machine, message, sock_type='udp'):
     host_msg_dir = self._container_msg_dir_on_host(machine['id'])
     filename = "message_{}.json".format(self._n_sent_messages)

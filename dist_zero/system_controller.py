@@ -1,3 +1,11 @@
+import logging
+import sys
+import uuid
+
+from logstash_async.handler import AsynchronousLogstashHandler
+
+import dist_zero.logging
+
 from dist_zero import machine, settings, errors, messages
 
 
@@ -16,6 +24,7 @@ class SystemController(object):
     :type spawner: `Spawner`
     '''
     self._spawner = spawner
+    self.id = str(uuid.uuid4())
 
     self._node_id_to_machine_handle = {}
     '''For nodes spawned by this instance, map the node id to the handle of the machine it was spawned on.'''
@@ -96,6 +105,17 @@ class SystemController(object):
     '''
     return self._spawner.create_machine(machine_config)
 
+  def create_machines(self, machine_configs):
+    '''
+    Start up a new machine and run a `MachineController` instance on it.
+
+    :param list machine_configs: A list of machine configuration objects.
+
+    :return: The list of :ref:`handle` of the new `MachineController` in the same order as the matching 
+    :rtype: list[:ref:`handle`]
+    '''
+    return self._spawner.create_machines(machine_configs)
+
   def get_output_state(self, output_node):
     '''
     Get the state associated with an output node.
@@ -129,3 +149,70 @@ class SystemController(object):
 
   def _node_handle_to_machine_handle(self, node_handle):
     return self._node_id_to_machine_handle[node_handle['id']]
+
+  def configure_logging(self):
+
+    # Filters
+    str_format_filter = dist_zero.logging.StrFormatFilter()
+    context = {
+        'env': settings.DIST_ZERO_ENV,
+        'mode': self._spawner.mode(),
+        'runner': True,
+        'system_controller_id': self.id,
+    }
+    if settings.LOGZ_IO_TOKEN:
+      context['token'] = settings.LOGZ_IO_TOKEN
+    context_filter = dist_zero.logging.ContextFilter(context)
+
+    # Formatters
+    human_formatter = dist_zero.logging.HUMAN_FORMATTER
+    json_formatter = dist_zero.logging.JsonFormatter('(asctime) (levelname) (name) (message)')
+
+    # Handlers
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    human_file_handler = logging.FileHandler('./.tmp/system.log')
+    json_file_handler = logging.FileHandler('./.tmp/system.json.log')
+    logstash_handler = AsynchronousLogstashHandler(
+        settings.LOGSTASH_HOST,
+        settings.LOGSTASH_PORT,
+        database_path='./.tmp/logstash.db',
+    )
+
+    stdout_handler.setLevel(logging.ERROR)
+    human_file_handler.setLevel(logging.DEBUG)
+    json_file_handler.setLevel(logging.DEBUG)
+    logstash_handler.setLevel(logging.DEBUG)
+
+    stdout_handler.setFormatter(human_formatter)
+    human_file_handler.setFormatter(human_formatter)
+    json_file_handler.setFormatter(json_formatter)
+    logstash_handler.setFormatter(json_formatter)
+
+    stdout_handler.addFilter(str_format_filter)
+    human_file_handler.addFilter(str_format_filter)
+    json_file_handler.addFilter(str_format_filter)
+    json_file_handler.addFilter(context_filter)
+    logstash_handler.addFilter(str_format_filter)
+    logstash_handler.addFilter(context_filter)
+
+    # Loggers
+    for noisy_logger_name in ['botocore', 'boto3', 'paramiko.transport']:
+      noisy_logger = logging.getLogger(noisy_logger_name)
+      noisy_logger.propagate = False
+      noisy_logger.setLevel(logging.INFO)
+      dist_zero.logging.set_handlers(noisy_logger, [
+          json_file_handler,
+          human_file_handler,
+          logstash_handler,
+          stdout_handler,
+      ])
+
+    dist_zero_logger = logging.getLogger('dist_zero')
+    root_logger = logging.getLogger()
+
+    dist_zero.logging.set_handlers(root_logger, [
+        json_file_handler,
+        human_file_handler,
+        logstash_handler,
+        stdout_handler,
+    ])

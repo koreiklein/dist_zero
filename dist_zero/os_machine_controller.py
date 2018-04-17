@@ -296,7 +296,7 @@ class OsMachineController(machine.MachineController):
     logstash_handler = AsynchronousLogstashHandler(
         settings.LOGSTASH_HOST,
         settings.LOGSTASH_PORT,
-        database_path='/.logstash.db',
+        database_path='/logs/.logstash.db',
     )
 
     stdout_handler.setLevel(logging.ERROR)

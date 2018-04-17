@@ -5,6 +5,15 @@ class Spawner(object):
   with them once they have started running.
   '''
 
+  def mode(self):
+    '''
+    This spawner's mode.
+
+    :return: The mode in which this spawner runs.
+    :rtype: str
+    '''
+    raise RuntimeError("Abstract Superclass")
+
   def create_machine(self, machine_config):
     '''
     Start up a new machine and run a `MachineController` instance on it.

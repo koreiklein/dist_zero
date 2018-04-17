@@ -6,8 +6,6 @@ import random
 import sys
 import uuid
 
-from logstash_async.handler import AsynchronousLogstashHandler
-
 import dist_zero.logging
 from dist_zero import machine, errors, settings, spawners
 from dist_zero.node import io
@@ -127,62 +125,8 @@ class SimulatedHardware(object):
     # This log is useful for debugging.
     self._log = []
 
-  def configure_logging(self):
-
-    # Filters
-    str_format_filter = dist_zero.logging.StrFormatFilter()
-    context = {
-        'env': settings.DIST_ZERO_ENV,
-        'mode': spawners.MODE_SIMULATED,
-        'runner': True,
-        'simulator_id': self.id,
-        'start_at': self._start_datetime,
-    }
-    if settings.LOGZ_IO_TOKEN:
-      context['token'] = settings.LOGZ_IO_TOKEN
-    context_filter = dist_zero.logging.ContextFilter(context)
-
-    # Formatters
-    human_formatter = dist_zero.logging.HUMAN_FORMATTER
-    json_formatter = dist_zero.logging.JsonFormatter('(asctime) (levelname) (name) (message)')
-
-    # Handlers
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    human_file_handler = logging.FileHandler('./.tmp/simulator.log')
-    json_file_handler = logging.FileHandler('./.tmp/simulator.json.log')
-    logstash_handler = AsynchronousLogstashHandler(
-        settings.LOGSTASH_HOST,
-        settings.LOGSTASH_PORT,
-        database_path='./.tmp/logstash.db',
-    )
-
-    stdout_handler.setLevel(logging.ERROR)
-    human_file_handler.setLevel(logging.DEBUG)
-    json_file_handler.setLevel(logging.DEBUG)
-    logstash_handler.setLevel(logging.DEBUG)
-
-    stdout_handler.setFormatter(human_formatter)
-    human_file_handler.setFormatter(human_formatter)
-    json_file_handler.setFormatter(json_formatter)
-    logstash_handler.setFormatter(json_formatter)
-
-    stdout_handler.addFilter(str_format_filter)
-    human_file_handler.addFilter(str_format_filter)
-    json_file_handler.addFilter(str_format_filter)
-    json_file_handler.addFilter(context_filter)
-    logstash_handler.addFilter(str_format_filter)
-    logstash_handler.addFilter(context_filter)
-
-    # Loggers
-    dist_zero_logger = logging.getLogger('dist_zero')
-    root_logger = logging.getLogger()
-
-    dist_zero.logging.set_handlers(root_logger, [
-        json_file_handler,
-        human_file_handler,
-        logstash_handler,
-        stdout_handler,
-    ])
+  def mode(self):
+    return spawners.MODE_SIMULATED
 
   def _random_ms_for_send(self):
     return max(1,
@@ -196,7 +140,6 @@ class SimulatedHardware(object):
       raise RuntimeError("Can't start the same simulation twice")
 
     self._elapsed_time_ms = 0
-    self.configure_logging()
     logger.info("=================================================")
     logger.info("========== STARTING SIMULATOR LOGGING  ==========")
     logger.info("=================================================")
