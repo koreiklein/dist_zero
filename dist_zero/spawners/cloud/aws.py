@@ -20,7 +20,11 @@ class Ec2Spawner(spawner.Spawner):
   and starting a long-running `dist_zero.machine_init` process on it.
   '''
 
-  def __init__(self, aws_region=settings.DEFAULT_AWS_REGION):
+  def __init__(self,
+               aws_region=settings.DEFAULT_AWS_REGION,
+               base_ami=settings.AWS_BASE_AMI,
+               security_group=settings.DEFAULT_AWS_SECURITY_GROUP,
+               instance_type=settings.DEFAULT_AWS_INSTANCE_TYPE):
     '''
     :param str aws_region: The aws region in which to spawn the new ec2 instances.
     '''
@@ -28,9 +32,18 @@ class Ec2Spawner(spawner.Spawner):
     self._aws_instance_by_id = {} # id to the boto instance object
 
     self._aws_region = aws_region
+    self._base_ami = base_ami
+    self._security_group = security_group
+    self._instance_type = instance_type
 
     if not aws_region:
       raise RuntimeError("Missing aws region parameter")
+    if not base_ami:
+      raise RuntimeError("Missing base_ami parameter")
+    if not security_group:
+      raise RuntimeError("Missing security_group parameter")
+    if not instance_type:
+      raise RuntimeError("Missing instance_type parameter")
 
     self._ec2 = boto3.client(
         'ec2',
@@ -104,13 +117,13 @@ class Ec2Spawner(spawner.Spawner):
     instances = self._ec2_resource.create_instances(
         #BlockDeviceMappings=self._instance_block_device_mappings(),
         #Placement=self._instance_placement(),
-        ImageId='ami-20335f58',
+        ImageId=self._base_ami,
         KeyName='dist_zero',
         MaxCount=n_new_machines,
         MinCount=n_new_machines,
-        InstanceType='t1.micro',
+        InstanceType=self._instance_type,
         Monitoring={'Enabled': False},
-        SecurityGroupIds=['sg-ebd74d95'],
+        SecurityGroupIds=[self._security_group],
         InstanceInitiatedShutdownBehavior='stop',
         TagSpecifications=self._instance_tag_specifications(),
     )
@@ -227,11 +240,12 @@ class Ec2Spawner(spawner.Spawner):
 
   def _retry_loop(self, on_wait, on_fail, wait_time_sec=4, retries=10):
     def _result(loop_iteration):
+      remaining = retries
       while True:
         if loop_iteration():
           return
-        retries -= 1
-        if retries >= 0:
+        remaining -= 1
+        if remaining >= 0:
           on_wait()
           time.sleep(wait_time_sec)
         else:
@@ -276,7 +290,7 @@ class Ec2Spawner(spawner.Spawner):
       logger.error("Instances did not become running.", extra={'instance_ids': instance_ids})
       raise RuntimeError("Instances did not become running.")
 
-    @self.retry_loop(on_wait=on_wait, on_fail=on_fail)
+    @self._retry_loop(on_wait=on_wait, on_fail=on_fail)
     def _loop():
       for instance in instances:
         instance.load()
