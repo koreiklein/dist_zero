@@ -15,7 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 class Ec2Spawner(spawner.Spawner):
+  '''
+  A 'Spawner` subclass that creates each new `MachineController` instance by spinning up an aws ec2 instance
+  and starting a long-running `dist_zero.machine_init` process on it.
+  '''
+
   def __init__(self, aws_region=settings.DEFAULT_AWS_REGION):
+    '''
+    :param str aws_region: The aws region in which to spawn the new ec2 instances.
+    '''
     self._handle_by_id = {} # id to machine controller handle
     self._aws_instance_by_id = {} # id to the boto instance object
 
