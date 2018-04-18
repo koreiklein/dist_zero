@@ -151,7 +151,6 @@ class SystemController(object):
     return self._node_id_to_machine_handle[node_handle['id']]
 
   def configure_logging(self):
-
     # Filters
     str_format_filter = dist_zero.logging.StrFormatFilter()
     context = {
@@ -195,24 +194,22 @@ class SystemController(object):
     logstash_handler.addFilter(str_format_filter)
     logstash_handler.addFilter(context_filter)
 
+    main_handlers = [
+        json_file_handler,
+        human_file_handler,
+        stdout_handler,
+    ]
+    if settings.LOGSTASH_HOST:
+      main_handlers.append(logstash_handler)
+
     # Loggers
     for noisy_logger_name in ['botocore', 'boto3', 'paramiko.transport']:
       noisy_logger = logging.getLogger(noisy_logger_name)
       noisy_logger.propagate = False
       noisy_logger.setLevel(logging.INFO)
-      dist_zero.logging.set_handlers(noisy_logger, [
-          json_file_handler,
-          human_file_handler,
-          logstash_handler,
-          stdout_handler,
-      ])
+      dist_zero.logging.set_handlers(noisy_logger, main_handlers)
 
     dist_zero_logger = logging.getLogger('dist_zero')
     root_logger = logging.getLogger()
 
-    dist_zero.logging.set_handlers(root_logger, [
-        json_file_handler,
-        human_file_handler,
-        logstash_handler,
-        stdout_handler,
-    ])
+    dist_zero.logging.set_handlers(root_logger, main_handlers)

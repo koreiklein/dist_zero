@@ -26,6 +26,8 @@ MSG_BUFSIZE = 2048
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
 AWS_SECRET_ACCESS_KEY_ID = os.environ.get('AWS_SECRET_ACCESS_KEY_ID', '')
 
+DEFAULT_AWS_REGION = os.environ.get('DEFAULT_AWS_REGION', '')
+
 # Logging settings
 LOGSTASH_HOST = os.environ['LOGSTASH_HOST']
 LOGSTASH_PORT = int(os.environ['LOGSTASH_PORT'])

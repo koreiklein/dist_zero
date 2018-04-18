@@ -91,12 +91,7 @@ class DockerSpawner(spawner.Spawner):
       logger.info("send_local_msg_from_file successfully exec'd on docker container")
 
     if sock_type == 'tcp':
-      msg = json.loads(output)
-      if msg['status'] == 'ok':
-        return msg['data']
-      else:
-        raise errors.InternalError("Failed to communicate over TCP api to MachineController. reason: {}".format(
-            msg.get('reason', '')))
+      return json.loads(output)
     else:
       return None
 

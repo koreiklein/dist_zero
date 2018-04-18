@@ -8,25 +8,30 @@ import boto3
 import paramiko
 import paramiko.ssh_exception
 
-from dist_zero import settings, messages, spawners
+from dist_zero import settings, messages, spawners, transport
 from .. import spawner
 
 logger = logging.getLogger(__name__)
 
 
 class Ec2Spawner(spawner.Spawner):
-  def __init__(self):
+  def __init__(self, aws_region=settings.DEFAULT_AWS_REGION):
     self._handle_by_id = {} # id to machine controller handle
     self._aws_instance_by_id = {} # id to the boto instance object
 
+    self._aws_region = aws_region
+
+    if not aws_region:
+      raise RuntimeError("Missing aws region parameter")
+
     self._ec2 = boto3.client(
         'ec2',
-        region_name='us-west-2',
+        region_name=self._aws_region,
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
     self._ec2_resource = boto3.resource(
         'ec2',
-        region_name='us-west-2',
+        region_name=self._aws_region,
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
 
@@ -42,7 +47,7 @@ class Ec2Spawner(spawner.Spawner):
 
   def _instance_placement(self):
     return {
-        'AvailabilityZone': 'us-west-2',
+        'AvailabilityZone': self._aws_region,
         #'Affinity': 'string',
         #'GroupName': 'string',
         'HostId': 'string',
@@ -228,4 +233,14 @@ class Ec2Spawner(spawner.Spawner):
       time.sleep(4)
 
   def send_to_machine(self, machine, message, sock_type='udp'):
-    pass
+    instance = self._aws_instance_by_id[machine['id']]
+    instance.load()
+
+    if sock_type == 'udp':
+      dst = (instance.public_ip_address, settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
+      return transport.send_udp(message, dst)
+    elif sock_type == 'tcp':
+      dst = (instance.public_ip_address, settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT)
+      return transport.send_tcp(message, dst)
+    else:
+      raise RuntimeError("Unrecognized sock_type {}".format(sock_type))
