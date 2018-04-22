@@ -27,7 +27,7 @@ class Spawner(object):
 
   def send_to_machine(self, machine, message, sock_type='udp'):
     '''
-    Send a message from the current process to a `MachineController' listening
+    Send a message from the current process to a `MachineController` listening
     on a port on a spawned machine.
 
     :param machine: The :ref:`handle` of the `MachineController` for one of the managed machines.

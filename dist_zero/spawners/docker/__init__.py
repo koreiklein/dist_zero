@@ -16,10 +16,6 @@ class DockerSpawner(spawner.Spawner):
   '''
   A class for simulating new hardware by spinning up docker containers on a host and
   running a 'production' `OsMachineController` on each.
-
-  Tests should typically create a single instance of this factory, and use it to generate
-  all their `machine.MachineController` instances.  User input in such tests
-  will tend to come from `RecordedUser` instances running in each container.
   '''
 
   DOCKERFILE = 'dist_zero/spawners/docker/Dockerfile'
