@@ -196,12 +196,14 @@ class SimulatedHardware(object):
       step_time_ms = min(stop_time_ms - self._elapsed_time_ms, SimulatedHardware.MAX_STEP_TIME_MS)
       # The value of self._elapsed_time at the end of this iteration of the loop
       new_elapsed_time_ms = step_time_ms + self._elapsed_time_ms
-      logger.debug(
-          "Simulating from {start_time} ms to {end_time} ms",
-          extra={
-              'start_time': self._elapsed_time_ms,
-              'end_time': new_elapsed_time_ms,
-          })
+
+      # Even for debug logs, the below logging statement is overly verbose.
+      #logger.debug(
+      #    "Simulating from {start_time} ms to {end_time} ms",
+      #    extra={
+      #        'start_time': self._elapsed_time_ms,
+      #        'end_time': new_elapsed_time_ms,
+      #    })
 
       # Simulate every event in the queue
       while self._pending_receives and self._pending_receives[0].t <= new_elapsed_time_ms:

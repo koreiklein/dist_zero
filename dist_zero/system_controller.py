@@ -18,13 +18,14 @@ class SystemController(object):
   # The current plan is that in production, these kind of features will
   # be available on authorized MachineController instances.
 
-  def __init__(self, spawner):
+  def __init__(self, system_id, spawner):
     '''
+    :param str system_id: The id to use for this running system.
     :param spawner: The underlying Spawner subclass that spawns new machines.
     :type spawner: `Spawner`
     '''
+    self.id = system_id
     self._spawner = spawner
-    self.id = str(uuid.uuid4())
 
     self._node_id_to_machine_handle = {}
     '''For nodes spawned by this instance, map the node id to the handle of the machine it was spawned on.'''
@@ -157,7 +158,7 @@ class SystemController(object):
         'env': settings.DIST_ZERO_ENV,
         'mode': self._spawner.mode(),
         'runner': True,
-        'system_controller_id': self.id,
+        'system_id': self.id,
     }
     if settings.LOGZ_IO_TOKEN:
       context['token'] = settings.LOGZ_IO_TOKEN

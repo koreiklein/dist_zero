@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import uuid
 
 from collections import defaultdict
 
@@ -21,13 +22,20 @@ class Ec2Spawner(spawner.Spawner):
   '''
 
   def __init__(self,
+               system_id,
                aws_region=settings.DEFAULT_AWS_REGION,
                base_ami=settings.AWS_BASE_AMI,
                security_group=settings.DEFAULT_AWS_SECURITY_GROUP,
                instance_type=settings.DEFAULT_AWS_INSTANCE_TYPE):
     '''
+    :param str system_id: The id of  the overall distributed system
     :param str aws_region: The aws region in which to spawn the new ec2 instances.
+    :param str base_ami: A base aws ami image to use when spawning new ec2 instances.
+    :param str security_group: A security group to add to all new ec2 instances.  It must open the appropriate ports.
+      Ports for communication with running instances are defined in `dist_zero.settings`
+    :param str instance_type: The aws instance type (e.g. 't2.micro')
     '''
+    self._system_id = system_id
     self._handle_by_id = {} # id to machine controller handle
     self._aws_instance_by_id = {} # id to the boto instance object
 
@@ -97,16 +105,16 @@ class Ec2Spawner(spawner.Spawner):
     return [{
         'ResourceType':
         'instance',
-        'Tags': [
-            {
-                'Key': 'Application',
-                'Value': 'dist_zero'
-            },
-            {
-                'Key': 'dist_zero_type',
-                'Value': 'std_instance'
-            },
-        ],
+        'Tags': [{
+            'Key': 'Application',
+            'Value': 'dist_zero'
+        }, {
+            'Key': 'dist_zero_type',
+            'Value': 'std_instance'
+        }, {
+            'Key': 'System ID',
+            'Value': self._system_id,
+        }],
     }]
 
   def create_machines(self, machine_configs):
@@ -188,13 +196,21 @@ class Ec2Spawner(spawner.Spawner):
       ssh.exec_command(command)
 
     logger.info("Rsyncing dist_zero files to aws instance {aws_instance_id}", extra=extra)
-    # Do the rsync
-    for precommand in [
-        'rsync -avz -e "ssh -oStrictHostKeyChecking=no -i {keyfile}" dist_zero {user}@{instance}:/dist_zero/',
-        'rsync -avz -e "ssh -oStrictHostKeyChecking=no -i {keyfile}" requirements.txt {user}@{instance}:/dist_zero/requirements.txt',
-    ]:
 
-      command = precommand.format(keyfile='.keys/dist_zero.pem', user='ec2-user', instance=instance.public_dns_name)
+    # Do the rsync
+    rsync_ssh_params = 'ssh -oStrictHostKeyChecking=no -i {keyfile}'
+    rsync_excludes = '--exclude "*.pyc" --exclude "*__pycache__*"'
+    for precommand in [
+        'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} dist_zero {user}@{instance}:/dist_zero/ >> {outfile}',
+        'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} requirements.txt {user}@{instance}:/dist_zero/requirements.txt >> {outfile}',
+    ]:
+      command = precommand.format(
+          rsync_ssh_params=rsync_ssh_params.format(keyfile='.keys/dist_zero.pem'),
+          rsync_excludes=rsync_excludes,
+          user='ec2-user',
+          instance=instance.public_dns_name,
+          outfile='.rsync.output.log',
+      )
       logger.debug(
           "Running rsync command",
           extra={

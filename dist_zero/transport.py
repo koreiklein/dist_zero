@@ -6,7 +6,7 @@ import socket
 import json
 import logging
 
-from dist_zero import messages
+from dist_zero import messages, settings
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def send_tcp(message, dst):
   with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
     sock.connect(dst)
     sock.send(binary)
-    logger.debug("message sent to MachineControllre tcp API on {dst_host}", extra={'dst_host': dst[0]})
+    logger.debug("message sent to MachineController tcp API on {dst_host}", extra={'dst_host': dst[0]})
     response = sock.recv(settings.MSG_BUFSIZE)
     logger.debug("received MachineController API response message from {dst_host}", extra={'dst_host': dst[0]})
     msg = json.loads(response.decode(messages.ENCODING))
