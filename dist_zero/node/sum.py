@@ -14,8 +14,8 @@ class SumNode(Node):
 
   def __init__(self, node_id, senders, receivers, controller):
     '''
-    :param list senders: A list of :ref:`handle`s of the nodes sending increments
-    :param list receivers: A list of :ref:`handle`s of the nodes to receive increments
+    :param list senders: A list of :ref:`handle` of the nodes sending increments
+    :param list receivers: A list of :ref:`handle` of the nodes to receive increments
     '''
     self._senders = senders
     self._receivers = receivers

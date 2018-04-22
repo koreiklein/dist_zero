@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class Ec2Spawner(spawner.Spawner):
   '''
-  A 'Spawner` subclass that creates each new `MachineController` instance by spinning up an aws ec2 instance
+  A `Spawner` subclass that creates each new `MachineController` instance by spinning up an aws ec2 instance
   and starting a long-running `dist_zero.machine_init` process on it.
   '''
 

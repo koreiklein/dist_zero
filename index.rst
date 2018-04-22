@@ -8,7 +8,9 @@ Welcome to DistZero's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Table of Contents:
+
+   doc/settings
 
    doc/handle
    doc/message

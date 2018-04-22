@@ -1,5 +1,8 @@
 ''' 
 Environment configuration.
+
+All environment variables used to configure DistZero should be accessed by only this module
+and stored in python variables for use by other modules.
 '''
 
 import os
