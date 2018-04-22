@@ -15,7 +15,7 @@ class InputLeafNode(Node):
   def __init__(self, node_id, parent, parent_transport, controller, receivers, recorded_user=None):
     '''
     :param `MachineController` controller: the controller for this node's machine.
-    :param list receivers: A list of :ref:`handle`s for the nodes that should receive from this input.
+    :param list receivers: A list of :ref:`handle` for the nodes that should receive from this input.
     :param parent: The :ref:`handle` of the parent `InputNode` of this node.
     :type parent: :ref:`handle`
     :param `RecordedUser` recorded_user: In tests, this parameter may be not null to indicate that this input

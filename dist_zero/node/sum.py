@@ -14,8 +14,8 @@ class SumNode(Node):
 
   def __init__(self, node_id, senders, receivers, controller):
     '''
-    :param list senders: A list of :ref:`handle`s of the nodes sending increments
-    :param list receivers: A list of :ref:`handle`s of the nodes to receive increments
+    :param list senders: A list of :ref:`handle` of the nodes sending increments
+    :param list receivers: A list of :ref:`handle` of the nodes to receive increments
     '''
     self._senders = senders
     self._receivers = receivers
@@ -72,7 +72,8 @@ class SumNode(Node):
       self._send_to_all()
 
   def _send_to_all(self):
-    self.logger.debug("Sending new increment of %s to all receivers", self._unsent_total)
+    self.logger.debug(
+        "Sending new increment of {unsent_total} to all receivers", extra={'unsent_total': self._unsent_total})
     for receiver in self._receivers:
       message = messages.increment(self._unsent_total)
       self.send(receiver, message)

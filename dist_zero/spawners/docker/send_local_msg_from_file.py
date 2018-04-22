@@ -5,23 +5,9 @@ import socket
 import sys
 
 from dist_zero import errors, messages, settings, transport
-from dist_zero.runners import docker
+from dist_zero.spawners import docker
 
 logger = logging.getLogger(__name__)
-
-
-def _send_tcp(message):
-  host = 'localhost'
-  dst = (host, settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT)
-  binary = bytes(json.dumps(message), messages.ENCODING)
-  with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-    sock.connect(dst)
-    sock.send(binary)
-    logger.info("local file message sent to localhost API")
-    response = sock.recv(settings.MSG_BUFSIZE)
-    logger.info("received API response message from localhost")
-    response_message = json.loads(response.decode(messages.ENCODING))
-    return response_message
 
 
 def _run():
@@ -30,7 +16,7 @@ def _run():
   filename = sys.argv[1]
   sock_type = sys.argv[2]
 
-  full_path = os.path.join(docker.DockerSimulatedHardware.CONTAINER_MESSAGE_DIR, filename)
+  full_path = os.path.join(docker.DockerSpawner.CONTAINER_MESSAGE_DIR, filename)
 
   logger.info("reading message from file {} and forwarding to localhost".format(full_path), extra={'path': full_path})
   with open(full_path, 'r') as f:
@@ -42,10 +28,14 @@ def _run():
     transport.send_udp(message, dst)
     logger.info("local file message sent to localhost")
   elif sock_type == 'tcp':
-    response = _send_tcp(message)
+    host = 'localhost'
+    dst = (host, settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT)
+    response = transport.send_tcp(message, dst)
     json.dump(response, sys.stdout, indent=2)
   else:
-    logger.error("Unrecognized socket type %s should be 'udp' or 'tcp'", sock_type)
+    logger.error(
+        "Unrecognized socket type {unrecognized_sock_type} should be 'udp' or 'tcp'",
+        extra={'unrecognized_sock_type': sock_type})
 
 
 if __name__ == '__main__':
