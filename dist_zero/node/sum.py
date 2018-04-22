@@ -72,7 +72,8 @@ class SumNode(Node):
       self._send_to_all()
 
   def _send_to_all(self):
-    self.logger.debug("Sending new increment of %s to all receivers", self._unsent_total)
+    self.logger.debug(
+        "Sending new increment of {unsent_total} to all receivers", extra={'unsent_total': self._unsent_total})
     for receiver in self._receivers:
       message = messages.increment(self._unsent_total)
       self.send(receiver, message)

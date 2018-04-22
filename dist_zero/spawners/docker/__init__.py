@@ -37,9 +37,11 @@ class DockerSpawner(spawner.Spawner):
 
   STD_DOCKER_IMAGE_TAG = 'dist_zero_std_docker_image'
 
-  def __init__(self):
+  def __init__(self, system_id):
     self._started = False
     self._docker_client = None
+    self._system_id = system_id
+
     self.id = str(uuid.uuid4())
 
     self._dir = os.path.dirname(os.path.realpath(__file__))
@@ -122,7 +124,7 @@ class DockerSpawner(spawner.Spawner):
     return self._docker_client
 
   def _build_image(self):
-    logger.info('building docker image with context %s', self._root_dir)
+    logger.info('building docker image with context {docker_root_dir}', extra={'docker_root_dir': self._root_dir})
     image, build_logs = self._docker.images.build(
         path=self._root_dir,
         tag=self._image_tag,
@@ -144,7 +146,9 @@ class DockerSpawner(spawner.Spawner):
       else:
         try:
           self._image = self._docker.images.get(self._image_tag)
-          logger.warning("Reusing existing docker image '%s' without performing a new build", self._image_tag)
+          logger.warning(
+              "Reusing existing docker image '{docker_image_tag}' without performing a new build",
+              extra={'docker_image_tag': self._image_tag})
         except docker.errors.ImageNotFound:
           self._build_image()
 
@@ -180,6 +184,7 @@ class DockerSpawner(spawner.Spawner):
             machine_controller_id,
             machine_name,
             spawners.MODE_VIRTUAL,
+            self._system_id,
         ],
         detach=True,
         labels={

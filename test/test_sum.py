@@ -40,8 +40,6 @@ class CloudSumTest(unittest.TestCase):
 
     # Low values for time to sleep have been observed to be too short for broken nodes to actually fail.
     time.sleep(0.4)
-    #self.assertEqual(3, len(self.virtual_spawner.get_running_containers()))
-    #self.assertEqual(3, len(self.virtual_spawner.all_spawned_containers()))
 
     # Configure the starting network topology
     root_input_node_handle = self.system.spawn_node(
@@ -102,8 +100,8 @@ class CloudSumTest(unittest.TestCase):
 @attr(mode=spawners.MODE_VIRTUAL)
 class VirtualizedSumTest(unittest.TestCase):
   def setUp(self):
-    self.virtual_spawner = DockerSpawner()
     system_id = str(uuid.uuid4())
+    self.virtual_spawner = DockerSpawner(system_id=system_id)
     self.system = SystemController(system_id=system_id, spawner=self.virtual_spawner)
     self.system.configure_logging()
 

@@ -22,15 +22,18 @@ logger = logging.getLogger(__name__)
 class OsMachineController(machine.MachineController):
   STEP_LENGTH_MS = 5 # Target number of milliseconds per iteration of the run loop.
 
-  def __init__(self, id, name, mode):
+  def __init__(self, id, name, mode, system_id):
     '''
     :param str id: The unique identity to use for this `OsMachineController`
     :param str name: A nice human readable name for this `OsMachineController`
     :param str mode: A mode (from `dist_zero.spawners`) (simulated, virtual, or cloud)
+    :param str system_id: The id of the overall distributed system
     '''
     self.id = id
     self.name = name
     self.mode = mode
+
+    self.system_id = system_id
 
     self._node_by_id = {}
 
@@ -57,7 +60,7 @@ class OsMachineController(machine.MachineController):
     self._output_node_state_by_id[node_id] = new_state
 
   def start_node(self, node_config):
-    logger.info("Starting new '%s' node", node_config['type'], extra={'node_type': node_config['type']})
+    logger.info("Starting new '{node_type}' node", extra={'node_type': node_config['type']})
     if node_config['type'] == 'output_leaf':
       self._output_node_state_by_id[node_config['id']] = node_config['initial_state']
       node = io.OutputLeafNode.from_config(
@@ -98,13 +101,11 @@ class OsMachineController(machine.MachineController):
     :return: The API response to the message
     :rtype: object
     '''
-    logger.info("API Message of type %s", message['type'], extra={'type': message['type']})
+    logger.info("API Message of type {message_type}", extra={'message_type': message['type']})
     if message['type'] == 'api_create_kid_config':
       node = self._node_by_id[message['internal_node_id']]
       logger.debug(
-          "API is creating kid config %s for output node %s",
-          message['new_node_name'],
-          message['internal_node_id'],
+          "API is creating kid config {node_name} for output node {internal_node_id}",
           extra={
               'node_name': message['new_node_name'],
               'internal_node_id': message['internal_node_id']
@@ -116,12 +117,12 @@ class OsMachineController(machine.MachineController):
     elif message['type'] == 'api_new_transport':
       node = self._node_by_id[message['receiver']['id']]
       logger.info(
-          "API getting new transport for sending from node %s to node %s",
-          message['sender']['id'],
-          message['receiver']['id'],
+          "API getting new transport for sending from node {sender_id} node {receiver_id}",
           extra={
               'sender': message['sender'],
-              'receiver': message['receiver']
+              'sender_id': message['sender']['id'],
+              'receiver': message['receiver'],
+              'receiver_id': message['receiver']['id'],
           })
       return {
           'status': 'ok',
@@ -133,7 +134,7 @@ class OsMachineController(machine.MachineController):
           'data': self._output_node_state_by_id[message['node']['id']],
       }
     else:
-      logger.error("Unrecognized API message type %s", message['type'], extra={'type': message['type']})
+      logger.error("Unrecognized API message type {message_type}", extra={'message_type': message['type']})
       return {
           'status': 'failure',
           'reason': 'Unrecognized message type {}'.format(message['type']),
@@ -151,9 +152,7 @@ class OsMachineController(machine.MachineController):
     elif message['type'] == 'machine_deliver_to_node':
       node_handle = message['node']
       logger.info(
-          "Delivering message of type %s to node %s",
-          message['message']['type'],
-          node_handle['id'],
+          "Delivering message of type {message_type} to node {to_node}",
           extra={
               'message_type': message['message']['type'],
               'to_node': node_handle,
@@ -161,7 +160,7 @@ class OsMachineController(machine.MachineController):
       node = self._get_node_by_handle(node_handle)
       node.receive(message=message['message'], sender=message['sending_node'])
     else:
-      logger.error("Unrecognized message type %s", message['type'], extra={'unrecognized_type': message['type']})
+      logger.error("Unrecognized message type {unrecognized_type}", extra={'unrecognized_type': message['type']})
 
   def _bind_udp(self):
     logger.info("OsMachineController binding UDP port {}".format(self._udp_port), extra={'port': self._udp_port})
@@ -179,9 +178,7 @@ class OsMachineController(machine.MachineController):
 
   def runloop(self):
     logger.info(
-        "Starting run loop for machine %s: %s",
-        self.name,
-        self.id,
+        "Starting run loop for machine {machine_name}: {machine_id}",
         extra={
             'machine_id': self.id,
             'machine_name': self.name,
@@ -196,7 +193,7 @@ class OsMachineController(machine.MachineController):
         e_type, e_value, e_tb = sys.exc_info()
         #tb_lines = traceback.format_tb(e_tb)
         exn_lines = traceback.format_exception(e_type, e_value, e_tb)
-        logger.error("Exception in run loop: %s", ''.join(exn_lines), extra={'e_type': str(e_type)})
+        logger.error("Exception in run loop: {e_lines}", extra={'e_type': str(e_type), 'e_lines': ''.join(exn_lines)})
         # log the exception and go on.  These exceptions should not stop the run loop.
         continue
 
@@ -239,7 +236,8 @@ class OsMachineController(machine.MachineController):
       elif sock == self._tcp_socket:
         self._accept_tcp()
       else:
-        logger.error("Impossible! Unrecognized socket returned by select() %s", sock)
+        logger.error(
+            "Impossible! Unrecognized socket returned by select() {bad_socket}", extra={'bad_socket': str(sock)})
 
   def _elapse_network(self, remaining_ms):
     while remaining_ms > 0:
@@ -280,6 +278,7 @@ class OsMachineController(machine.MachineController):
         'runner': False,
         'machine_id': self.id,
         'machine_name': self.name,
+        'system_id': self.system_id,
     }
     if settings.LOGZ_IO_TOKEN:
       context['token'] = settings.LOGZ_IO_TOKEN

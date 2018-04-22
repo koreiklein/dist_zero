@@ -217,6 +217,8 @@ class Ec2Spawner(spawner.Spawner):
               'aws_instance_id': instance.id,
               'provisioning_aws_instance': True,
               'command': command,
+              'machine_name': machine_name,
+              'machine_controller_id': machine_controller_id,
           })
       os.system(command)
 
@@ -227,8 +229,13 @@ class Ec2Spawner(spawner.Spawner):
     ssh.exec_command('''cat << EOF > /dist_zero/.env\n\n{}\nEOF\n'''.format('\n'.join(
         "{}='{}'".format(variable, getattr(settings, variable)) for variable in settings.CLOUD_ENV_VARS)))
 
-    command = "cd /dist_zero; nohup python3 -m dist_zero.machine_init '{machine_controller_id}' '{machine_name}' '{mode}' &".format(
-        machine_controller_id=machine_controller_id, machine_name=machine_name, mode=spawners.MODE_CLOUD)
+    command = ("cd /dist_zero; "
+               "nohup python3 -m "
+               "dist_zero.machine_init '{machine_controller_id}' '{machine_name}' '{mode}' '{system_id}' &").format(
+                   machine_controller_id=machine_controller_id,
+                   machine_name=machine_name,
+                   mode=spawners.MODE_CLOUD,
+                   system_id=self._system_id)
     logger.info("Starting a MachineController process on an aws instance", extra=extra)
     ssh.exec_command(command)
 

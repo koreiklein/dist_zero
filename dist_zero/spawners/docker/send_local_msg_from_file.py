@@ -33,7 +33,9 @@ def _run():
     response = transport.send_tcp(message, dst)
     json.dump(response, sys.stdout, indent=2)
   else:
-    logger.error("Unrecognized socket type %s should be 'udp' or 'tcp'", sock_type)
+    logger.error(
+        "Unrecognized socket type {unrecognized_sock_type} should be 'udp' or 'tcp'",
+        extra={'unrecognized_sock_type': sock_type})
 
 
 if __name__ == '__main__':
