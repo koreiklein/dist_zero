@@ -208,12 +208,16 @@ class SimulatedSumTest(unittest.TestCase):
     return self.system.create_machine(
         messages.machine_config(machine_name=name, machine_controller_id=dist_zero.ids.new_id()))
 
-  def _initialize_simple_sum_topology(self):
-    '''
-    Initialize controllers and nodes forming a simple topology for an network
-    in which input nodes generate increments, and output nodes aggregated the sum
-    of increments.
-    '''
+  def test_send_no_transport(self):
+    machine_handle = self.new_machine_controller()
+    machine = self.simulated_spawner.get_machine_controller(machine_handle)
+
+    node_a = machine.start_node(messages.input_node_config(dist_zero.ids.new_id()))
+    node_b = machine.start_node(messages.output_node_config(dist_zero.ids.new_id(), initial_state=0))
+    with self.assertRaises(errors.NoTransportError):
+      machine.send(node_handle=node_b.handle(), message=messages.increment(3), sending_node_handle=node_a.handle())
+
+  def test_sum_of_two(self):
     # Create node controllers (each simulates the behavior of a separate machine.
     self.machine_a_handle = self.new_machine_controller()
     self.machine_b_handle = self.new_machine_controller()
@@ -246,8 +250,6 @@ class SimulatedSumTest(unittest.TestCase):
                                      sender=self.root_output_node_handle, receiver=sum_node_handle),
                              ))
 
-  def test_sum_of_two(self):
-    self._initialize_simple_sum_topology()
     # Run the simulation
     self.simulated_spawner.run_for(ms=30)
 

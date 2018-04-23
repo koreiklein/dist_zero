@@ -100,5 +100,6 @@ class MachineController(object):
     :type node_config: :ref:`message`
     :param str node_id: An optional id to use for the new node.
     :return: The newly created node.
+    :rtype: `Node`
     '''
     raise RuntimeError("Abstract Superclass")
