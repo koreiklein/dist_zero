@@ -25,6 +25,17 @@ class Spawner(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
+  def create_machines(self, machine_configs):
+    '''
+    Start up new machines and run `MachineController` instances on them.
+
+    :param list machine_configs: A list of machine configuration objects.
+
+    :return: The list of :ref:`handle` of the new `MachineController` in the same order as the matching 
+    :rtype: list[:ref:`handle`]
+    '''
+    raise RuntimeError("Abstract Superclass")
+
   def send_to_machine(self, machine, message, sock_type='udp'):
     '''
     Send a message from the current process to a `MachineController` listening

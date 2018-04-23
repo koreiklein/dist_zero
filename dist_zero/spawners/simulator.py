@@ -10,22 +10,9 @@ import dist_zero.logging
 from dist_zero import machine, errors, settings, spawners
 from dist_zero.node import io
 
+from . import spawner
+
 logger = logging.getLogger(__name__)
-
-
-class _Heapitem(object):
-  def __init__(self, t, value):
-    self.t = t
-    self.value = value
-
-  def __lt__(self, other):
-    if self.t != other.t:
-      return self.t < other.t
-    else:
-      return json.dumps(self.value) < json.dumps(other.value)
-
-  def tuple(self):
-    return (self.t, self.value)
 
 
 class SimulatedMachineController(machine.MachineController):
@@ -34,15 +21,18 @@ class SimulatedMachineController(machine.MachineController):
   but it implements the same interface and simulates what a MachineController would do.
   '''
 
-  def __init__(self, name, hardware):
+  def __init__(self, name, machine_id, simulated_spawner):
     '''
     :param str name: The name of this node.
-    :param `SimulatedHardware` hardware: The simulated hardware instance on which this simulated machine runs.
+    :param simulated_spawner: The simulated spawner instance on which this simulated machine runs.
+    :type simulated_spawner: `SimulatedSpawner`
     '''
     self.name = name
     '''The name of the simulated machine'''
-    self.hardware = hardware
-    '''The `SimulatedHardware` instance on which this machine is running'''
+    self.id = machine_id
+    '''The id of the simulated machine'''
+    self.simulated_spawner = simulated_spawner
+    '''The `SimulatedSpawner` instance on which this machine is running'''
 
     self._node_by_id = {}
     self.id = str(uuid.uuid4())
@@ -50,6 +40,75 @@ class SimulatedMachineController(machine.MachineController):
     self._output_node_state_by_id = {} # dict from output node to its current state
 
     self._requests = []
+
+  def _handle_api_message(self, message):
+    '''
+    :param object message: A json message for the API
+    :return: The API response to the message
+    :rtype: object
+    '''
+    logger.info("API Message of type {message_type}", extra={'message_type': message['type']})
+    if message['type'] == 'api_create_kid_config':
+      node = self._node_by_id[message['internal_node_id']]
+      logger.debug(
+          "API is creating kid config {node_name} for output node {internal_node_id}",
+          extra={
+              'node_name': message['new_node_name'],
+              'internal_node_id': message['internal_node_id']
+          })
+      return {
+          'status': 'ok',
+          'data': node.create_kid_config(message['new_node_name'], message['machine_controller_handle']),
+      }
+    elif message['type'] == 'api_new_transport':
+      node = self._node_by_id[message['receiver']['id']]
+      logger.info(
+          "API getting new transport for sending from node {sender_id} node {receiver_id}",
+          extra={
+              'sender': message['sender'],
+              'sender_id': message['sender']['id'],
+              'receiver': message['receiver'],
+              'receiver_id': message['receiver']['id'],
+          })
+      return {
+          'status': 'ok',
+          'data': node.new_transport_for(message['sender']['id']),
+      }
+    elif message['type'] == 'api_get_output_state':
+      return {
+          'status': 'ok',
+          'data': self._output_node_state_by_id[message['node']['id']],
+      }
+    else:
+      logger.error("Unrecognized API message type {message_type}", extra={'message_type': message['type']})
+      return {
+          'status': 'failure',
+          'reason': 'Unrecognized message type {}'.format(message['type']),
+      }
+
+  def _handle_message(self, message):
+    if message['type'] == 'machine_start_node':
+      self.start_node(message['node_config'])
+    elif message['type'] == 'machine_deliver_to_node':
+      node_handle = message['node']
+      logger.info(
+          "Delivering message of type {message_type} to node {to_node}",
+          extra={
+              'message_type': message['message']['type'],
+              'to_node': node_handle,
+          })
+      node = self._get_node_by_handle(node_handle)
+      node.receive(message=message['message'], sender=message['sending_node'])
+    else:
+      logger.error("Unrecognized message type {unrecognized_type}", extra={'unrecognized_type': message['type']})
+
+  def _get_node_by_handle(self, node_handle):
+    '''
+    :param node_handle: The handle of a node managed by self.
+    :type node_handle: :ref:`handle`
+    :return: The node instance itself.
+    '''
+    return self._node_by_id[node_handle['id']]
 
   def get_output_state(self, node_id):
     return self._output_node_state_by_id[node_id]
@@ -64,7 +123,7 @@ class SimulatedMachineController(machine.MachineController):
     pass
 
   def send(self, node_handle, message, sending_node_handle=None):
-    self.hardware._simulate_send(receiving_node=node_handle, sending_node=sending_node_handle, message=message)
+    self.simulated_spawner._simulate_send(receiving_node=node_handle, sending_node=sending_node_handle, message=message)
 
   def _update_output_node_state(self, node_id, f):
     new_state = f(self._output_node_state_by_id[node_id])
@@ -85,7 +144,7 @@ class SimulatedMachineController(machine.MachineController):
     return node
 
   def spawn_node(self, node_config, on_machine):
-    machine_controller = self.hardware.get_machine_controller(on_machine)
+    machine_controller = self.simulated_spawner.get_machine_controller(on_machine)
     node = machine_controller.start_node(node_config)
     return node.handle()
 
@@ -97,12 +156,12 @@ class SimulatedMachineController(machine.MachineController):
       node.elapse(ms)
 
 
-class SimulatedHardware(object):
+class SimulatedSpawner(spawner.Spawner):
   '''
-  A class for creating SimulatedMachineControllers to simulate distinct machines in tests.
+  A class for creating instances of `SimulatedMachineController` to simulate distinct machines in tests.
 
   Tests should typically create a single instance of this factory, and use it to generate
-  all their machine.MachineController instances.
+  all their `MachineController` instances.
   Then, this factory class will simulate the behavior of a real-life network during the test.
   '''
 
@@ -111,8 +170,14 @@ class SimulatedHardware(object):
   AVERAGE_SEND_TIME_MS = 10
   SEND_TIME_STDDEV_MS = 3
 
-  def __init__(self, random_seed='random_seed'):
+  def __init__(self, system_id, random_seed='random_seed'):
+    '''
+    :param str system_id: The id of the overall simulated distributed system.
+    :param str random_seed: A random seed for all randomness employed by this class.
+    '''
+
     self.id = str(uuid.uuid4())
+    self._system_id = system_id
     self._start_datetime = datetime.datetime.now()
     self._controller_by_id = {}
     self._elapsed_time_ms = None # None if unstarted, otherwise the number of ms simulated so far
@@ -132,7 +197,7 @@ class SimulatedHardware(object):
     return max(1,
                int(
                    self._random.gauss(
-                       mu=SimulatedHardware.AVERAGE_SEND_TIME_MS, sigma=SimulatedHardware.SEND_TIME_STDDEV_MS)))
+                       mu=SimulatedSpawner.AVERAGE_SEND_TIME_MS, sigma=SimulatedSpawner.SEND_TIME_STDDEV_MS)))
 
   def start(self):
     '''Begin the simulation'''
@@ -193,7 +258,7 @@ class SimulatedHardware(object):
 
     while stop_time_ms > self._elapsed_time_ms:
       # The amount of time to simulate in this iteration of the loop
-      step_time_ms = min(stop_time_ms - self._elapsed_time_ms, SimulatedHardware.MAX_STEP_TIME_MS)
+      step_time_ms = min(stop_time_ms - self._elapsed_time_ms, SimulatedSpawner.MAX_STEP_TIME_MS)
       # The value of self._elapsed_time at the end of this iteration of the loop
       new_elapsed_time_ms = step_time_ms + self._elapsed_time_ms
 
@@ -213,9 +278,15 @@ class SimulatedHardware(object):
           controller.elapse(received_at - self._elapsed_time_ms)
 
         # Simulate the event
-        receiving_controller = self._controller_by_id[to_receive['receiving_node']['controller_id']]
-        receiving_node = receiving_controller.get_node(to_receive['receiving_node'])
-        receiving_node.receive(message=to_receive['message'], sender=to_receive['sending_node'])
+        if to_receive['type'] == 'to_node':
+          receiving_controller = self._controller_by_id[to_receive['receiving_node']['controller_id']]
+          receiving_node = receiving_controller.get_node(to_receive['receiving_node'])
+          receiving_node.receive(message=to_receive['message'], sender=to_receive['sending_node'])
+        elif to_receive['type'] == 'to_machine':
+          receiving_controller = self._controller_by_id[to_receive['machine']['id']]
+          receiving_controller._handle_message(message=to_receive['message'])
+        else:
+          raise RuntimeError("Unrecognized type {}".format(to_receive['type']))
 
         self._elapsed_time_ms = received_at
 
@@ -228,24 +299,24 @@ class SimulatedHardware(object):
 
   def get_machine_controller(self, handle):
     '''
-    :param handle: The handle of a MachineController being simulated by this hardware simulator.
+    :param handle: The handle of a MachineController being simulated by this simulator.
     :type handle: :ref:`handle`
 
     :return: The associated SimulatedMachineController instance.
     '''
     return self._controller_by_id[handle['id']]
 
-  def new_simulated_machine_controller(self, name):
-    '''
-    Create and return a new machine.MachineController instance to run Nodes in a test.
+  def create_machines(self, machine_configs):
+    return [self.create_machine(machine_config) for machine_config in machine_configs]
 
-    :param str name: The name to use for of the new machine controller.
-    :return: A machine controller suitable for running tests.
-    :rtype: `MachineController`
-    '''
-    result = SimulatedMachineController(name=name, hardware=self)
+  def create_machine(self, machine_config):
+    result = SimulatedMachineController(
+        name=machine_config['machine_name'],
+        machine_id=machine_config['id'],
+        simulated_spawner=self,
+    )
     self._controller_by_id[result.id] = result
-    return result
+    return result.handle()
 
   def _add_to_heap(self, heapitem):
     '''
@@ -254,7 +325,25 @@ class SimulatedHardware(object):
     :param tuple heapitem: A pair (ms_at_which_receipt_takes place, message_to_receive)
     '''
     self._log.append(heapitem)
-    heapq.heappush(self._pending_receives, _Heapitem(*heapitem))
+    heapq.heappush(self._pending_receives, _Event(*heapitem))
+
+  def send_to_machine(self, machine, message, sock_type='udp'):
+    time_ms = self._elapsed_time_ms + self._random_ms_for_send()
+
+    if sock_type == 'udp':
+      self._add_to_heap((time_ms, {
+          'type': 'to_machine',
+          'machine': machine,
+          'message': message,
+      }))
+    else:
+      self.run_for(ms=time_ms)
+      receiving_controller = self._controller_by_id[machine['id']]
+      response = receiving_controller._handle_api_message(message)
+      if response['status'] == 'ok':
+        return response['data']
+      else:
+        raise RuntimeError("Bad response from api: {}".format(response['reason']))
 
   def _simulate_send(self, sending_node, receiving_node, message):
     '''
@@ -264,12 +353,34 @@ class SimulatedHardware(object):
     message -- The message being sent.
     '''
     if self._elapsed_time_ms is None:
-      raise RuntimeError('The hardware simulation must be started before it can send messages.')
+      raise RuntimeError('The simulation must be started before it can send messages.')
 
     time = self._elapsed_time_ms + self._random_ms_for_send()
 
     self._add_to_heap((time, {
+        'type': 'to_node',
         'sending_node': sending_node,
         'receiving_node': receiving_node,
         'message': message,
     }))
+
+
+class _Event(object):
+  '''
+  Instances of _Event represent events in the simulation.
+  This class is here just to define the ordering on events.
+  '''
+
+  def __init__(self, t, value):
+    self.t = t
+    self.value = value
+
+  def __lt__(self, other):
+    if self.t != other.t:
+      return self.t < other.t
+    else:
+      # Return a consistent answer when comparing events that occur at the exact same time.
+      return json.dumps(self.value) < json.dumps(other.value)
+
+  def tuple(self):
+    return (self.t, self.value)

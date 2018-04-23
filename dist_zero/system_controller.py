@@ -108,7 +108,7 @@ class SystemController(object):
 
   def create_machines(self, machine_configs):
     '''
-    Start up a new machine and run a `MachineController` instance on it.
+    Start up new machines and run `MachineController` instances on them.
 
     :param list machine_configs: A list of machine configuration objects.
 
