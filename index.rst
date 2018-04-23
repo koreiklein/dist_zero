@@ -16,6 +16,8 @@ Welcome to DistZero's documentation!
    doc/message
    doc/transport
 
+   doc/ids
+
    doc/machine
 
    doc/spawners

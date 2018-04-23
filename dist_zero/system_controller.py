@@ -1,6 +1,5 @@
 import logging
 import sys
-import uuid
 
 from logstash_async.handler import AsynchronousLogstashHandler
 

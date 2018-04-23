@@ -1,6 +1,6 @@
 import logging
-import uuid
 
+import dist_zero.ids
 from dist_zero import settings, messages, errors, recorded
 from .node import Node
 
@@ -266,7 +266,7 @@ class InputNode(Node):
     :return: A config for the new child node.
     :rtype: :ref:`message`
     '''
-    node_id = str(uuid.uuid4())
+    node_id = dist_zero.ids.new_id()
     self.logger.info(
         "Registering a new leaf input node config for an internal node. name='{node_name}'",
         extra={
@@ -356,7 +356,7 @@ class OutputNode(Node):
     :return: A config for the new child node.
     :rtype: :ref:`message`
     '''
-    node_id = str(uuid.uuid4())
+    node_id = dist_zero.ids.new_id()
     self.logger.info(
         "Registering a new leaf output node config with an internal node. name='{node_name}'",
         extra={

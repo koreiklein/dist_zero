@@ -1,5 +1,3 @@
-import uuid
-
 from .node import io
 from .node.sum import SumNode
 

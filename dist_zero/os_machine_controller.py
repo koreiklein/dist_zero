@@ -6,7 +6,6 @@ import socket
 import sys
 import time
 import traceback
-import uuid
 
 from logstash_async.handler import AsynchronousLogstashHandler
 

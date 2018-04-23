@@ -4,9 +4,9 @@ import json
 import logging
 import random
 import sys
-import uuid
 
 import dist_zero.logging
+import dist_zero.ids
 from dist_zero import machine, errors, settings, spawners
 from dist_zero.node import io
 
@@ -35,7 +35,7 @@ class SimulatedMachineController(machine.MachineController):
     '''The `SimulatedSpawner` instance on which this machine is running'''
 
     self._node_by_id = {}
-    self.id = str(uuid.uuid4())
+    self.id = dist_zero.ids.new_id()
 
     self._output_node_state_by_id = {} # dict from output node to its current state
 
@@ -176,7 +176,7 @@ class SimulatedSpawner(spawner.Spawner):
     :param str random_seed: A random seed for all randomness employed by this class.
     '''
 
-    self.id = str(uuid.uuid4())
+    self.id = dist_zero.ids.new_id()
     self._system_id = system_id
     self._start_datetime = datetime.datetime.now()
     self._controller_by_id = {}

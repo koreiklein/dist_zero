@@ -194,7 +194,7 @@ def machine_start_node(node_config):
   :param node_config: A node config for a new node.
   :type node_config: :ref:`message`
 
-  :param str node_id: The uuid to use for this node.
+  :param str node_id: The unique id to use for this node.
   '''
   return {'type': 'machine_start_node', 'node_config': node_config}
 

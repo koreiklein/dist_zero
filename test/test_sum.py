@@ -1,10 +1,10 @@
 import time
 import logging
 import unittest
-import uuid
 
 from nose.plugins.attrib import attr
 
+import dist_zero.ids
 from dist_zero import messages, errors, spawners
 from dist_zero.node.sum import SumNode
 from dist_zero.node.io import InputNode, OutputNode
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 @attr(mode=spawners.MODE_CLOUD)
 class CloudSumTest(unittest.TestCase):
   def setUp(self):
-    system_id = str(uuid.uuid4())
+    system_id = dist_zero.ids.new_id()
     self.cloud_spawner = Ec2Spawner(system_id=system_id)
     self.system = SystemController(system_id=system_id, spawner=self.cloud_spawner)
     self.system.configure_logging()
@@ -31,9 +31,9 @@ class CloudSumTest(unittest.TestCase):
   # TODO(KK): Figure out whether there's a good way to share test code across different modes.
   def test_sum_one_cloud(self):
     machine_a_handle, machine_b_handle, machine_c_handle = self.system.create_machines([
-        messages.machine_config(machine_name='machine a', machine_controller_id=str(uuid.uuid4())),
-        messages.machine_config(machine_name='machine b', machine_controller_id=str(uuid.uuid4())),
-        messages.machine_config(machine_name='machine c', machine_controller_id=str(uuid.uuid4())),
+        messages.machine_config(machine_name='machine a', machine_controller_id=dist_zero.ids.new_id()),
+        messages.machine_config(machine_name='machine b', machine_controller_id=dist_zero.ids.new_id()),
+        messages.machine_config(machine_name='machine c', machine_controller_id=dist_zero.ids.new_id()),
     ])
 
     self.assertEqual(machine_a_handle['type'], 'OsMachineController')
@@ -43,13 +43,13 @@ class CloudSumTest(unittest.TestCase):
 
     # Configure the starting network topology
     root_input_node_handle = self.system.spawn_node(
-        on_machine=machine_a_handle, node_config=messages.input_node_config(str(uuid.uuid4())))
+        on_machine=machine_a_handle, node_config=messages.input_node_config(dist_zero.ids.new_id()))
     root_output_node_handle = self.system.spawn_node(
-        on_machine=machine_a_handle, node_config=messages.output_node_config(str(uuid.uuid4()), initial_state=0))
+        on_machine=machine_a_handle, node_config=messages.output_node_config(dist_zero.ids.new_id(), initial_state=0))
     sum_node_handle = self.system.spawn_node(
         on_machine=machine_a_handle,
         node_config=messages.sum_node_config(
-            node_id=str(uuid.uuid4()),
+            node_id=dist_zero.ids.new_id(),
             senders=[],
             receivers=[],
         ))
@@ -100,7 +100,7 @@ class CloudSumTest(unittest.TestCase):
 @attr(mode=spawners.MODE_VIRTUAL)
 class VirtualizedSumTest(unittest.TestCase):
   def setUp(self):
-    system_id = str(uuid.uuid4())
+    system_id = dist_zero.ids.new_id()
     self.virtual_spawner = DockerSpawner(system_id=system_id)
     self.system = SystemController(system_id=system_id, spawner=self.virtual_spawner)
     self.system.configure_logging()
@@ -112,11 +112,11 @@ class VirtualizedSumTest(unittest.TestCase):
   def test_sum_one_virtual(self):
     self.virtual_spawner.start()
     machine_a_handle = self.system.create_machine(
-        messages.machine_config(machine_name='machine a', machine_controller_id=str(uuid.uuid4())))
+        messages.machine_config(machine_name='machine a', machine_controller_id=dist_zero.ids.new_id()))
     machine_b_handle = self.system.create_machine(
-        messages.machine_config(machine_name='machine b', machine_controller_id=str(uuid.uuid4())))
+        messages.machine_config(machine_name='machine b', machine_controller_id=dist_zero.ids.new_id()))
     machine_c_handle = self.system.create_machine(
-        messages.machine_config(machine_name='machine c', machine_controller_id=str(uuid.uuid4())))
+        messages.machine_config(machine_name='machine c', machine_controller_id=dist_zero.ids.new_id()))
     self.assertEqual(machine_a_handle['type'], 'OsMachineController')
 
     # Low values for time to sleep have been observed to be too short for broken nodes to actually fail.
@@ -126,13 +126,13 @@ class VirtualizedSumTest(unittest.TestCase):
 
     # Configure the starting network topology
     root_input_node_handle = self.system.spawn_node(
-        on_machine=machine_a_handle, node_config=messages.input_node_config(str(uuid.uuid4())))
+        on_machine=machine_a_handle, node_config=messages.input_node_config(dist_zero.ids.new_id()))
     root_output_node_handle = self.system.spawn_node(
-        on_machine=machine_a_handle, node_config=messages.output_node_config(str(uuid.uuid4()), initial_state=0))
+        on_machine=machine_a_handle, node_config=messages.output_node_config(dist_zero.ids.new_id(), initial_state=0))
     sum_node_handle = self.system.spawn_node(
         on_machine=machine_a_handle,
         node_config=messages.sum_node_config(
-            node_id=str(uuid.uuid4()),
+            node_id=dist_zero.ids.new_id(),
             senders=[],
             receivers=[],
         ))
@@ -183,7 +183,7 @@ class VirtualizedSumTest(unittest.TestCase):
 @attr(mode=spawners.MODE_SIMULATED)
 class SimulatedSumTest(unittest.TestCase):
   def setUp(self):
-    system_id = str(uuid.uuid4())
+    system_id = dist_zero.ids.new_id()
     self.simulated_spawner = SimulatedSpawner(system_id=system_id, random_seed='SimulatedSumTest')
     self.system = SystemController(system_id=system_id, spawner=self.simulated_spawner)
     self.system.configure_logging()
@@ -206,7 +206,7 @@ class SimulatedSumTest(unittest.TestCase):
     name = 'machine {}'.format(self.nodes)
     self.nodes += 1
     return self.system.create_machine(
-        messages.machine_config(machine_name=name, machine_controller_id=str(uuid.uuid4())))
+        messages.machine_config(machine_name=name, machine_controller_id=dist_zero.ids.new_id()))
 
   def _initialize_simple_sum_topology(self):
     '''
@@ -221,14 +221,15 @@ class SimulatedSumTest(unittest.TestCase):
 
     # Configure the starting network topology
     self.root_input_node_handle = self.system.spawn_node(
-        on_machine=self.machine_a_handle, node_config=messages.input_node_config(str(uuid.uuid4())))
+        on_machine=self.machine_a_handle, node_config=messages.input_node_config(dist_zero.ids.new_id()))
     self.root_output_node_handle = self.system.spawn_node(
-        on_machine=self.machine_a_handle, node_config=messages.output_node_config(str(uuid.uuid4()), initial_state=0))
+        on_machine=self.machine_a_handle,
+        node_config=messages.output_node_config(dist_zero.ids.new_id(), initial_state=0))
 
     sum_node_handle = self.system.spawn_node(
         on_machine=self.machine_a_handle,
         node_config=messages.sum_node_config(
-            node_id=str(uuid.uuid4()),
+            node_id=dist_zero.ids.new_id(),
             senders=[],
             receivers=[],
         ))

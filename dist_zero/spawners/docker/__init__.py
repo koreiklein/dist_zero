@@ -1,11 +1,11 @@
 import json
 import logging
 import os
-import uuid
 
 import docker
 import docker.errors
 
+import dist_zero.ids
 from dist_zero import machine, settings, errors, messages, spawners
 from .. import spawner
 
@@ -38,7 +38,7 @@ class DockerSpawner(spawner.Spawner):
     self._docker_client = None
     self._system_id = system_id
 
-    self.id = str(uuid.uuid4())
+    self.id = dist_zero.ids.new_id()
 
     self._dir = os.path.dirname(os.path.realpath(__file__))
     self._root_dir = os.path.realpath(os.path.join(self._dir, '../../..'))
