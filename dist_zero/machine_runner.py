@@ -19,11 +19,12 @@ logger = logging.getLogger(__name__)
 
 
 class MachineRunner(object):
-  STEP_LENGTH_MS = 5 # Target number of milliseconds per iteration of the run loop.
   '''
-  For running A NodeManager on a machine inside a runloop.
+  For running A `NodeManager` on a machine inside a runloop.
   Real time is passed in, and messages are read from os sockets.
   '''
+
+  STEP_LENGTH_MS = 5 # Target number of milliseconds per iteration of the run loop.
 
   def __init__(self, machine_id, machine_name, mode, system_id):
 
@@ -36,13 +37,14 @@ class MachineRunner(object):
     self._udp_socket = None
     self._tcp_socket = None
 
-    self._node_manager = machine.NodeManager(
+    self.node_manager = machine.NodeManager(
         machine_id=machine_id,
         machine_name=machine_name,
         mode=mode,
         system_id=system_id,
         ip_host=socket.gethostname(),
         send_to_machine=self._send_to_machine)
+    '''The `NodeManager` underlying this `MachineRunner`'''
 
   def _send_to_machine(self, message, transport):
     dst = (transport['host'], settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
@@ -63,11 +65,17 @@ class MachineRunner(object):
     self._tcp_socket = sock
 
   def runloop(self):
+    '''
+    Enter a runloop for the contained `NodeManager`.
+
+    In each iteration of the loop, pass the real elapsed time to elapse_nodes on the `NodeManager` and
+    pass messages from sockets to the `NodeManager`.
+    '''
     logger.info(
         "Starting run loop for machine {machine_name}: {machine_id}",
         extra={
-            'machine_id': self._node_manager.id,
-            'machine_name': self._node_manager.name,
+            'machine_id': self.node_manager.id,
+            'machine_name': self.node_manager.name,
         })
     self._bind_udp()
     self._bind_and_listen_tcp()
@@ -93,7 +101,7 @@ class MachineRunner(object):
     remaining_ms = MachineRunner.STEP_LENGTH_MS
 
     # First, elapse the whole time interval on all the nodes.
-    self._node_manager.elapse_nodes(remaining_ms)
+    self.node_manager.elapse_nodes(remaining_ms)
     after_elapse_s = time.time()
     time_running_nodes_ms = (after_elapse_s - current_time_s) * 1000
 
@@ -104,6 +112,7 @@ class MachineRunner(object):
   def _elapse_zero_or_one_network_messages(self, max_s):
     '''
     Wait on the network for not more than max_ms milleseconds, and process 0 or 1 messages.
+
     :param number max_s: The maximum number of seconds to wait for.
     '''
     readers, writers, errs = select.select(
@@ -122,6 +131,7 @@ class MachineRunner(object):
             "Impossible! Unrecognized socket returned by select() {bad_socket}", extra={'bad_socket': str(sock)})
 
   def _elapse_network(self, remaining_ms):
+    '''read and process network messages for remaining_ms milliseconds of real time'''
     while remaining_ms > 0:
       before_network_s = time.time()
       self._elapse_zero_or_one_network_messages(remaining_ms / 1000)
@@ -137,7 +147,7 @@ class MachineRunner(object):
     buf = client_sock.recv(settings.MSG_BUFSIZE)
     logger.debug("Received {} bytes from TCP socket".format(len(buf)), extra={'bufsize': len(buf)})
     message = json.loads(buf.decode(messages.ENCODING))
-    response = self._node_manager.handle_api_message(message)
+    response = self.node_manager.handle_api_message(message)
     binary = bytes(json.dumps(response), messages.ENCODING)
     client_sock.send(binary)
     client_sock.close()
@@ -146,7 +156,7 @@ class MachineRunner(object):
     '''Call this method whenever there is a datagram ready to read on the UDP socket'''
     buf, sender_address = self._udp_socket.recvfrom(settings.MSG_BUFSIZE)
     message = json.loads(buf.decode(messages.ENCODING))
-    self._node_manager.handle_message(message)
+    self.node_manager.handle_message(message)
 
   def configure_logging(self):
     '''
@@ -156,11 +166,11 @@ class MachineRunner(object):
     str_format_filter = dist_zero.logging.StrFormatFilter()
     context = {
         'env': settings.DIST_ZERO_ENV,
-        'mode': self._node_manager.mode,
+        'mode': self.node_manager.mode,
         'runner': False,
-        'machine_id': self._node_manager.id,
-        'machine_name': self._node_manager.name,
-        'system_id': self._node_manager.system_id,
+        'machine_id': self.node_manager.id,
+        'machine_name': self.node_manager.name,
+        'system_id': self.node_manager.system_id,
     }
     if settings.LOGZ_IO_TOKEN:
       context['token'] = settings.LOGZ_IO_TOKEN

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class DockerSpawner(spawner.Spawner):
   '''
   A class for simulating new hardware by spinning up docker containers on a host and
-  running a 'production' `OsMachineController` on each.
+  running a 'production' `MachineRunner` on each.
   '''
 
   DOCKERFILE = 'dist_zero/spawners/docker/Dockerfile'
@@ -213,7 +213,7 @@ class DockerSpawner(spawner.Spawner):
     )
     self._network.connect(container)
 
-    handle = messages.os_machine_controller_handle(machine_controller_id)
+    handle = messages.machine_controller_handle(machine_controller_id)
     self._handle_by_id[machine_controller_id] = handle
     self._container_by_id[machine_controller_id] = container
     return handle

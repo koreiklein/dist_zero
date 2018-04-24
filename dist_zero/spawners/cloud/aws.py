@@ -238,7 +238,7 @@ class Ec2Spawner(spawner.Spawner):
     logger.info("Starting a MachineController process on an aws instance", extra=extra)
     ssh.exec_command(command)
 
-    handle = messages.os_machine_controller_handle(machine_controller_id)
+    handle = messages.machine_controller_handle(machine_controller_id)
     self._handle_by_id[machine_controller_id] = handle
     self._aws_instance_by_id[machine_controller_id] = instance
     return handle

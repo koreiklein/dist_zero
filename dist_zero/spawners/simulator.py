@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class SimulatedSpawner(spawner.Spawner):
   '''
-  A class for creating instances of `SimulatedMachineController` to simulate distinct machines in tests.
+  A class for creating instances of `MachineRunner` each in its own container to simulate distinct machines in tests.
 
   Tests should typically create a single instance of this factory, and use it to generate
   all their `MachineController` instances.
@@ -154,7 +154,7 @@ class SimulatedSpawner(spawner.Spawner):
     :param handle: The handle of a MachineController being simulated by this simulator.
     :type handle: :ref:`handle`
 
-    :return: The associated SimulatedMachineController instance.
+    :return: The associated `MachineController` instance.
     '''
     return self._controller_by_id[handle['id']]
 

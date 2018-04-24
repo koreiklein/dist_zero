@@ -36,7 +36,7 @@ class CloudSumTest(unittest.TestCase):
         messages.machine_config(machine_name='machine c', machine_controller_id=dist_zero.ids.new_id()),
     ])
 
-    self.assertEqual(machine_a_handle['type'], 'OsMachineController')
+    self.assertEqual(machine_a_handle['type'], 'MachineController')
 
     # Low values for time to sleep have been observed to be too short for broken nodes to actually fail.
     time.sleep(0.4)
@@ -117,7 +117,7 @@ class VirtualizedSumTest(unittest.TestCase):
         messages.machine_config(machine_name='machine b', machine_controller_id=dist_zero.ids.new_id()))
     machine_c_handle = self.system.create_machine(
         messages.machine_config(machine_name='machine c', machine_controller_id=dist_zero.ids.new_id()))
-    self.assertEqual(machine_a_handle['type'], 'OsMachineController')
+    self.assertEqual(machine_a_handle['type'], 'MachineController')
 
     # Low values for time to sleep have been observed to be too short for broken nodes to actually fail.
     time.sleep(0.4)

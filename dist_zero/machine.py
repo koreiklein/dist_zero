@@ -8,14 +8,6 @@ from .node.sum import SumNode
 logger = logging.getLogger(__name__)
 
 
-def node_output_file(node_id):
-  '''
-  :param str node_id: The id of an output leaf node
-  :return: The filename of the file to which we might write the output state of that node.
-  '''
-  return '{}.state.json'.format(node_id)
-
-
 def _node_from_config(node_config, controller):
   '''
   :param JSON node_config: A node config message
