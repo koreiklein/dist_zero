@@ -14,13 +14,6 @@ from . import spawner
 
 logger = logging.getLogger(__name__)
 
-# FIXME(KK): Remove this (once it's been copied to wherever else I need to copy it)
-#    self.simulated_spawner._simulate_send(receiving_node=node_handle, sending_node=sending_node_handle, message=message)
-#  def spawn_node(self, node_config, on_machine):
-#    machine_controller = self.simulated_spawner.get_machine_controller(on_machine)
-#    node = machine_controller.start_node(node_config)
-#    return node.handle()
-
 
 class SimulatedSpawner(spawner.Spawner):
   '''

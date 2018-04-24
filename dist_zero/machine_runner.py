@@ -11,32 +11,21 @@ from logstash_async.handler import AsynchronousLogstashHandler
 
 import dist_zero.transport
 import dist_zero.logging
-from dist_zero import machine, messages, settings
-from dist_zero.node import io
+
+from dist_zero import settings, machine, messages
 from dist_zero.spawners import docker
 
 logger = logging.getLogger(__name__)
 
 
-class OsMachineController(machine.MachineController):
+class MachineRunner(object):
   STEP_LENGTH_MS = 5 # Target number of milliseconds per iteration of the run loop.
+  '''
+  For running A NodeManager on a machine inside a runloop.
+  Real time is passed in, and messages are read from os sockets.
+  '''
 
-  def __init__(self, id, name, mode, system_id):
-    '''
-    :param str id: The unique identity to use for this `OsMachineController`
-    :param str name: A nice human readable name for this `OsMachineController`
-    :param str mode: A mode (from `dist_zero.spawners`) (simulated, virtual, or cloud)
-    :param str system_id: The id of the overall distributed system
-    '''
-    self.id = id
-    self.name = name
-    self.mode = mode
-
-    self.system_id = system_id
-
-    self._node_by_id = {}
-
-    self._output_node_state_by_id = {} # dict from output node id to it's current state
+  def __init__(self, machine_id, machine_name, mode, system_id):
 
     self._udp_port = settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT
     self._udp_dst = ('', self._udp_port)
@@ -47,61 +36,38 @@ class OsMachineController(machine.MachineController):
     self._udp_socket = None
     self._tcp_socket = None
 
-    # A dict taking a pair (sender_node_id, receiver_node_id) to the transport to be used to send
-    # from that sender to that receiver.
-    self._transports = {}
+    self._node_manager = machine.NodeManager(
+        machine_id=machine_id,
+        machine_name=machine_name,
+        mode=mode,
+        system_id=system_id,
+        ip_host=socket.gethostname(),
+        send_to_machine=self._send_to_machine)
 
-  def handle(self):
-    return messages.os_machine_controller_handle(self.id)
-
-  def start_node(self, node_config):
-    logger.info("Starting new '{node_type}' node", extra={'node_type': node_config['type']})
-    if node_config['type'] == 'output_leaf':
-      self._output_node_state_by_id[node_config['id']] = node_config['initial_state']
-      node = io.OutputLeafNode.from_config(
-          node_config=node_config,
-          controller=self,
-          update_state=lambda f: self._update_output_node_state(node_config['id'], f))
-    else:
-      node = machine.node_from_config(node_config, controller=self)
-
-    self._node_by_id[node.id] = node
-    node.initialize()
-    return node
-
-  def set_transport(self, sender, receiver, transport):
-    self._transports[(sender['id'], receiver['id'])] = transport
-
-  def send(self, node_handle, message, sending_node_handle):
-    transport = self._transports.get((sending_node_handle['id'], node_handle['id']), None)
-    if transport is None:
-      raise errors.NoTransportError(sender=sending_node_handle, receiver=node_handle)
-
+  def _send_to_machine(self, message, transport):
     dst = (transport['host'], settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
-    msg = messages.machine_deliver_to_node(node=node_handle, message=message, sending_node=sending_node_handle)
-
-    dist_zero.transport.send_udp(msg, dst)
+    dist_zero.transport.send_udp(message, dst)
 
   def _bind_udp(self):
-    logger.info("OsMachineController binding UDP port {}".format(self._udp_port), extra={'port': self._udp_port})
+    logger.info("MachineRunner binding UDP port {}".format(self._udp_port), extra={'port': self._udp_port})
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(self._udp_dst)
     self._udp_socket = sock
 
   def _bind_and_listen_tcp(self):
-    logger.info("OsMachineController binding TCP port {}".format(self._tcp_port), extra={'port': self._tcp_port})
+    logger.info("MachineRunner binding TCP port {}".format(self._tcp_port), extra={'port': self._tcp_port})
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(self._tcp_dst)
     sock.listen()
-    logger.info("OsMachineController listening on TCP port {}".format(self._tcp_port), extra={'port': self._tcp_port})
+    logger.info("MachineRunner listening on TCP port {}".format(self._tcp_port), extra={'port': self._tcp_port})
     self._tcp_socket = sock
 
   def runloop(self):
     logger.info(
         "Starting run loop for machine {machine_name}: {machine_id}",
         extra={
-            'machine_id': self.id,
-            'machine_name': self.name,
+            'machine_id': self._node_manager.id,
+            'machine_name': self._node_manager.name,
         })
     self._bind_udp()
     self._bind_and_listen_tcp()
@@ -124,10 +90,10 @@ class OsMachineController(machine.MachineController):
     '''Run a single iterator of the run loop, raising any errors that come up.'''
 
     current_time_s = time.time()
-    remaining_ms = OsMachineController.STEP_LENGTH_MS
+    remaining_ms = MachineRunner.STEP_LENGTH_MS
 
     # First, elapse the whole time interval on all the nodes.
-    self._elapse_nodes(remaining_ms)
+    self._node_manager.elapse_nodes(remaining_ms)
     after_elapse_s = time.time()
     time_running_nodes_ms = (after_elapse_s - current_time_s) * 1000
 
@@ -171,7 +137,7 @@ class OsMachineController(machine.MachineController):
     buf = client_sock.recv(settings.MSG_BUFSIZE)
     logger.debug("Received {} bytes from TCP socket".format(len(buf)), extra={'bufsize': len(buf)})
     message = json.loads(buf.decode(messages.ENCODING))
-    response = self._handle_api_message(message)
+    response = self._node_manager.handle_api_message(message)
     binary = bytes(json.dumps(response), messages.ENCODING)
     client_sock.send(binary)
     client_sock.close()
@@ -180,7 +146,7 @@ class OsMachineController(machine.MachineController):
     '''Call this method whenever there is a datagram ready to read on the UDP socket'''
     buf, sender_address = self._udp_socket.recvfrom(settings.MSG_BUFSIZE)
     message = json.loads(buf.decode(messages.ENCODING))
-    self._handle_message(message)
+    self._node_manager.handle_message(message)
 
   def configure_logging(self):
     '''
@@ -190,11 +156,11 @@ class OsMachineController(machine.MachineController):
     str_format_filter = dist_zero.logging.StrFormatFilter()
     context = {
         'env': settings.DIST_ZERO_ENV,
-        'mode': self.mode,
+        'mode': self._node_manager.mode,
         'runner': False,
-        'machine_id': self.id,
-        'machine_name': self.name,
-        'system_id': self.system_id,
+        'machine_id': self._node_manager.id,
+        'machine_name': self._node_manager.name,
+        'system_id': self._node_manager.system_id,
     }
     if settings.LOGZ_IO_TOKEN:
       context['token'] = settings.LOGZ_IO_TOKEN
