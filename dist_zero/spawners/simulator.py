@@ -124,11 +124,10 @@ class SimulatedMachineController(machine.MachineController):
   def set_transport(self, sender, receiver, transport):
     self._transports[(sender['id'], receiver['id'])] = transport
 
-  def send(self, node_handle, message, sending_node_handle=None):
-    if sending_node_handle:
-      transport = self._transports.get((sending_node_handle['id'], node_handle['id']), None)
-      if transport is None:
-        raise errors.NoTransportError(sender=sending_node_handle, receiver=node_handle)
+  def send(self, node_handle, message, sending_node_handle):
+    transport = self._transports.get((sending_node_handle['id'], node_handle['id']), None)
+    if transport is None:
+      raise errors.NoTransportError(sender=sending_node_handle, receiver=node_handle)
 
     self.simulated_spawner._simulate_send(receiving_node=node_handle, sending_node=sending_node_handle, message=message)
 

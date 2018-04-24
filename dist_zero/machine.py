@@ -48,7 +48,7 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
-  def send(self, node_handle, message, sending_node_handle=None, transport=None):
+  def send(self, node_handle, message, sending_node_handle, transport=None):
     '''
     Send a message to a node either managed by self, or linked to self.
 
@@ -56,8 +56,7 @@ class MachineController(object):
     :type node_handle: :ref:`handle`
     :param message message: A message for that node
     :type message: :ref:`message`
-    :param sending_node_handle: If the message is user input, then `None`.
-        Otherwise the handle of the sending node.
+    :param sending_node_handle: The handle of the sending node.
     :type sending_node_handle: :ref:`handle`
     :param object transport: If the receipient is already linked, transport should be `None`.
       Otherwise, it should give transport information for setting up a link to the recipient.
