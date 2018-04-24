@@ -20,6 +20,7 @@ Welcome to DistZero's documentation!
 
    doc/machine
 
+   doc/system_controller
    doc/spawners
 
    doc/messages

@@ -41,6 +41,8 @@ class SimulatedMachineController(machine.MachineController):
 
     self._requests = []
 
+    self._transports = {} # From pairs (sender_id, receiver_id) to the transport used to send between them.
+
   def _handle_api_message(self, message):
     '''
     :param object message: A json message for the API
@@ -120,9 +122,13 @@ class SimulatedMachineController(machine.MachineController):
     return 'localhost'
 
   def set_transport(self, sender, receiver, transport):
-    pass
+    self._transports[(sender['id'], receiver['id'])] = transport
 
-  def send(self, node_handle, message, sending_node_handle=None):
+  def send(self, node_handle, message, sending_node_handle):
+    transport = self._transports.get((sending_node_handle['id'], node_handle['id']), None)
+    if transport is None:
+      raise errors.NoTransportError(sender=sending_node_handle, receiver=node_handle)
+
     self.simulated_spawner._simulate_send(receiving_node=node_handle, sending_node=sending_node_handle, message=message)
 
   def _update_output_node_state(self, node_id, f):

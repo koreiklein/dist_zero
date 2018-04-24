@@ -76,8 +76,11 @@ class OsMachineController(machine.MachineController):
   def set_transport(self, sender, receiver, transport):
     self._transports[(sender['id'], receiver['id'])] = transport
 
-  def send(self, node_handle, message, sending_node_handle=None):
-    transport = self._transports[(sending_node_handle['id'], node_handle['id'])]
+  def send(self, node_handle, message, sending_node_handle):
+    transport = self._transports.get((sending_node_handle['id'], node_handle['id']), None)
+    if transport is None:
+      raise errors.NoTransportError(sender=sending_node_handle, receiver=node_handle)
+
     dst = (transport['host'], settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
     msg = messages.machine_deliver_to_node(node=node_handle, message=message, sending_node=sending_node_handle)
 

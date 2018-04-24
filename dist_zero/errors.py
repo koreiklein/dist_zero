@@ -15,6 +15,12 @@ class InternalError(DistZeroError):
   pass
 
 
+class NoTransportError(DistZeroError):
+  def __init__(self, sender, receiver):
+    msg = 'No transport has been initialized between sender {} and receiver {}'.format(sender, receiver)
+    super(NoTransportError, self).__init__(msg)
+
+
 class SimulationError(DistZeroError):
   def __init__(self, log_lines, exc_info):
     '''
