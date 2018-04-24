@@ -21,8 +21,10 @@ class DockerSpawner(spawner.Spawner):
   DOCKERFILE = 'dist_zero/spawners/docker/Dockerfile'
   CONTAINER_WORKING_DIR = '/machine' # Must match the working directory in DOCKERFILE
 
-  CONTAINER_MESSAGE_DIR = '/messages'
   CONTAINER_LOGS_DIR = '/logs'
+  CONTAINER_MESSAGE_DIR = '/messages'
+
+  CONTAINER_MESSAGE_RESPONSE_TEMPLATE = '{}.response.json'
 
   LABEL_DOCKER_SIMULATED_HARDWARE = 'DockerSimulatedHarware'
   LABEL_TRUE = 'true'
@@ -69,7 +71,8 @@ class DockerSpawner(spawner.Spawner):
 
     logger.info("attempting to exec send_local_msg_from_file on docker container")
 
-    with open(os.path.join(host_msg_dir, filename), 'w') as f:
+    full_path = os.path.join(host_msg_dir, filename)
+    with open(full_path, 'w') as f:
       json.dump(message, f)
 
     exit_code, output = self._container_by_id[machine['id']].exec_run([
@@ -89,7 +92,8 @@ class DockerSpawner(spawner.Spawner):
       logger.info("send_local_msg_from_file successfully exec'd on docker container")
 
     if sock_type == 'tcp':
-      return json.loads(output)
+      with open(DockerSpawner.CONTAINER_MESSAGE_RESPONSE_TEMPLATE.format(full_path), 'r') as f_out:
+        return json.load(f_out)
     else:
       return None
 
@@ -199,7 +203,7 @@ class DockerSpawner(spawner.Spawner):
             },
             host_msg_dir: {
                 'bind': DockerSpawner.CONTAINER_MESSAGE_DIR,
-                'mode': 'ro',
+                'mode': 'rw',
             },
             log_dir: {
                 'bind': DockerSpawner.CONTAINER_LOGS_DIR,

@@ -1,3 +1,10 @@
+'''
+This simple module will read a message from a local file, send it to a dist_zero.machine_init
+process running on the same host, and print the results to stdout.
+
+This behavior is useful for simulating a message send for a dist_zero.machine_init process when it's running
+in a container.
+'''
 import json
 import logging
 import os
@@ -31,7 +38,8 @@ def _run():
     host = 'localhost'
     dst = (host, settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT)
     response = transport.send_tcp(message, dst)
-    json.dump(response, sys.stdout, indent=2)
+    with open(docker.DockerSpawner.CONTAINER_MESSAGE_RESPONSE_TEMPLATE.format(full_path), 'w') as f_out:
+      json.dump(response, f_out, indent=2)
   else:
     logger.error(
         "Unrecognized socket type {unrecognized_sock_type} should be 'udp' or 'tcp'",
