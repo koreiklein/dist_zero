@@ -26,7 +26,7 @@ class DockerSpawner(spawner.Spawner):
 
   CONTAINER_MESSAGE_RESPONSE_TEMPLATE = '{}.response.json'
 
-  LABEL_DOCKER_SIMULATED_HARDWARE = 'DockerSimulatedHarware'
+  LABEL_DOCKER_SIMULATED_HARDWARE = 'DockerSimulatedHardware'
   LABEL_TRUE = 'true'
   LABEL_INSTANCE = '{}_instance'.format(LABEL_DOCKER_SIMULATED_HARDWARE)
   LABEL_CONTAINER_UUID = '{}_container_uuid'.format(LABEL_DOCKER_SIMULATED_HARDWARE)

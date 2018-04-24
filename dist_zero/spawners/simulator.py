@@ -161,19 +161,6 @@ class SimulatedSpawner(spawner.Spawner):
   def create_machines(self, machine_configs):
     return [self.create_machine(machine_config) for machine_config in machine_configs]
 
-  def _send_to_machine(self, message, transport):
-    if self._elapsed_time_ms is None:
-      raise RuntimeError('The simulation must be started before it can send messages.')
-
-    machine_id = transport['host']
-
-    time = self._elapsed_time_ms + self._random_ms_for_send()
-
-    self._add_to_heap((time, {
-        'machine_id': machine_id,
-        'message': message,
-    }))
-
   def create_machine(self, machine_config):
     result = machine.NodeManager(
         machine_id=machine_config['id'],
@@ -181,7 +168,7 @@ class SimulatedSpawner(spawner.Spawner):
         mode=self.mode(),
         system_id=self._system_id,
         ip_host=machine_config['id'],
-        send_to_machine=self._send_to_machine,
+        send_to_machine=self._node_manager_send_to_machine,
     )
     self._controller_by_id[result.id] = result
     return result.handle()
@@ -196,13 +183,16 @@ class SimulatedSpawner(spawner.Spawner):
     heapq.heappush(self._pending_receives, _Event(*heapitem))
 
   def send_to_machine(self, machine, message, sock_type='udp'):
+    if self._elapsed_time_ms is None:
+      raise RuntimeError('The simulation must be started before it can send messages.')
+
     time_ms = self._elapsed_time_ms + self._random_ms_for_send()
     if sock_type == 'udp':
       self._add_to_heap((time_ms, {
           'machine_id': machine['id'],
           'message': message,
       }))
-    else:
+    elif sock_type == 'tcp':
       self.run_for(ms=time_ms)
       receiving_controller = self._controller_by_id[machine['id']]
       response = receiving_controller.handle_api_message(message)
@@ -210,6 +200,21 @@ class SimulatedSpawner(spawner.Spawner):
         return response['data']
       else:
         raise RuntimeError("Bad response from api: {}".format(response['reason']))
+    else:
+      raise RuntimeError("Unrecognized socket type '{}'".format(sock_type))
+
+  def _node_manager_send_to_machine(self, message, transport):
+    if self._elapsed_time_ms is None:
+      raise RuntimeError('The simulation must be started before it can send messages.')
+
+    machine_id = transport['host']
+
+    time = self._elapsed_time_ms + self._random_ms_for_send()
+
+    self._add_to_heap((time, {
+        'machine_id': machine_id,
+        'message': message,
+    }))
 
 
 class _Event(object):

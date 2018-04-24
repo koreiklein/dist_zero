@@ -68,8 +68,8 @@ class MachineRunner(object):
     '''
     Enter a runloop for the contained `NodeManager`.
 
-    In each iteration of the loop, pass the real elapsed time to elapse_nodes on the `NodeManager` and
-    pass messages from sockets to the `NodeManager`.
+    In each iteration of the loop, pass the real elapsed time to `NodeManager.elapse_nodes` on the `NodeManager` and
+    pass messages from sockets to `NodeManager.handle_message` and `NodeManager.handle_api_message`.
     '''
     logger.info(
         "Starting run loop for machine {machine_name}: {machine_id}",

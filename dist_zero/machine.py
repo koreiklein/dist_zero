@@ -92,7 +92,8 @@ class NodeManager(MachineController):
   The second interface is to whatever is running the `NodeManager` .  In virtual and cloud modes,
   the `NodeManager` is probably managed by a `MachineRunner` runloop for the process responding to the passage of time
   and to events on a socket.  In simulated mode, the `NodeManager` is managed by a `SimulatedSpawner`
-  instance.  Whatever code manages the `NodeManager` is should deliver messages, api messages, and elapse time.
+  instance.  Either way, whatever manages the `NodeManager` must elapse time,
+  and deliver ordinary messages and api messages.
   '''
 
   def __init__(self, machine_id, machine_name, mode, system_id, ip_host, send_to_machine):
