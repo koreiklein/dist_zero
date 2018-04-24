@@ -46,7 +46,7 @@ class Node(object):
 
     :return: A transport that node can use to link to self.
     '''
-    return messages.ip_transport(self._controller.ip_host())
+    return self._controller.new_transport_for(self.id, node_id)
 
   def initialize(self):
     '''Called exactly once, when a node starts to run.'''

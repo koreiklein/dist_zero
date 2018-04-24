@@ -54,10 +54,6 @@ class OsMachineController(machine.MachineController):
   def handle(self):
     return messages.os_machine_controller_handle(self.id)
 
-  def _update_output_node_state(self, node_id, f):
-    new_state = f(self._output_node_state_by_id[node_id])
-    self._output_node_state_by_id[node_id] = new_state
-
   def start_node(self, node_config):
     logger.info("Starting new '{node_type}' node", extra={'node_type': node_config['type']})
     if node_config['type'] == 'output_leaf':
@@ -85,84 +81,6 @@ class OsMachineController(machine.MachineController):
     msg = messages.machine_deliver_to_node(node=node_handle, message=message, sending_node=sending_node_handle)
 
     dist_zero.transport.send_udp(msg, dst)
-
-  def _get_node_by_handle(self, node_handle):
-    '''
-    :param node_handle: The handle of a node managed by self.
-    :type node_handle: :ref:`handle`
-    :return: The node instance itself.
-    '''
-    return self._node_by_id[node_handle['id']]
-
-  def ip_host(self):
-    return socket.gethostname()
-
-  def _handle_api_message(self, message):
-    '''
-    :param object message: A json message for the API
-    :return: The API response to the message
-    :rtype: object
-    '''
-    logger.info("API Message of type {message_type}", extra={'message_type': message['type']})
-    if message['type'] == 'api_create_kid_config':
-      node = self._node_by_id[message['internal_node_id']]
-      logger.debug(
-          "API is creating kid config {node_name} for output node {internal_node_id}",
-          extra={
-              'node_name': message['new_node_name'],
-              'internal_node_id': message['internal_node_id']
-          })
-      return {
-          'status': 'ok',
-          'data': node.create_kid_config(message['new_node_name'], message['machine_controller_handle']),
-      }
-    elif message['type'] == 'api_new_transport':
-      node = self._node_by_id[message['receiver']['id']]
-      logger.info(
-          "API getting new transport for sending from node {sender_id} node {receiver_id}",
-          extra={
-              'sender': message['sender'],
-              'sender_id': message['sender']['id'],
-              'receiver': message['receiver'],
-              'receiver_id': message['receiver']['id'],
-          })
-      return {
-          'status': 'ok',
-          'data': node.new_transport_for(message['sender']['id']),
-      }
-    elif message['type'] == 'api_get_output_state':
-      return {
-          'status': 'ok',
-          'data': self._output_node_state_by_id[message['node']['id']],
-      }
-    else:
-      logger.error("Unrecognized API message type {message_type}", extra={'message_type': message['type']})
-      return {
-          'status': 'failure',
-          'reason': 'Unrecognized message type {}'.format(message['type']),
-      }
-
-  def _handle_message(self, message):
-    '''
-    Handle an arbitrary machine message for this `MachineController` instance.
-
-    :param message: A machine :ref:`message` for this `MachineController` instance.
-    :type message: :ref:`message`
-    '''
-    if message['type'] == 'machine_start_node':
-      self.start_node(message['node_config'])
-    elif message['type'] == 'machine_deliver_to_node':
-      node_handle = message['node']
-      logger.info(
-          "Delivering message of type {message_type} to node {to_node}",
-          extra={
-              'message_type': message['message']['type'],
-              'to_node': node_handle,
-          })
-      node = self._get_node_by_handle(node_handle)
-      node.receive(message=message['message'], sender=message['sending_node'])
-    else:
-      logger.error("Unrecognized message type {unrecognized_type}", extra={'unrecognized_type': message['type']})
 
   def _bind_udp(self):
     logger.info("OsMachineController binding UDP port {}".format(self._udp_port), extra={'port': self._udp_port})
@@ -216,10 +134,6 @@ class OsMachineController(machine.MachineController):
     # Then, spend the remaining time waiting on messages from the network
     network_ms = remaining_ms - time_running_nodes_ms
     self._elapse_network(network_ms)
-
-  def _elapse_nodes(self, ms):
-    for node in self._node_by_id.values():
-      node.elapse(ms)
 
   def _elapse_zero_or_one_network_messages(self, max_s):
     '''
