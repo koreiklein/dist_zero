@@ -15,11 +15,11 @@ In this mode, nodes are run in the main python process with `SimulatedMachineCon
 
 #### "virtual" Mode
 In this mode, nodes are run in virtual machines or containers on the same host as the main python process.
-The nodes are passed `OsMachineController`s.  Each `OsMachineController` is under the illusion that it controls
+The nodes are passed `MachineController`s.  Each `MachineController` is under the illusion that it controls
 its own OS, but is in fact running in a VM or container.
 
 #### "cloud" Mode
-In this mode, nodes are passed `OsMachineController`s just as in virtual mode.  Each `OsMachineController` controls
+In this mode, nodes are passed `MachineController`s just as in virtual mode.  Each `MachineController` controls
 its own machine in the cloud.
 
 ## Logging

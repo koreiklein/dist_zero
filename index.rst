@@ -18,6 +18,7 @@ Welcome to DistZero's documentation!
 
    doc/ids
 
+   doc/machine_runner
    doc/machine
 
    doc/system_controller

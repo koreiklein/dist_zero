@@ -14,8 +14,8 @@ def ip_transport(host):
 
 
 # Handles
-def os_machine_controller_handle(machine_id):
-  return {'type': 'OsMachineController', 'id': machine_id}
+def machine_controller_handle(machine_id):
+  return {'type': 'MachineController', 'id': machine_id}
 
 
 # Machine configs
