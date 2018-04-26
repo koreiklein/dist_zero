@@ -69,6 +69,11 @@ class SumNode(Node):
   def elapse(self, ms):
     self._unsent_time_ms += ms
     if self._unsent_total > 0 and self._unsent_time_ms > SumNode.SEND_INTERVAL_MS:
+      self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._senders)})
+
+      SENDER_LIMIT = 15
+      if len(self._senders) > SENDER_LIMIT:
+        self.logger.info("Hit sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
       self._send_to_all()
 
   def _send_to_all(self):

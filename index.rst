@@ -29,6 +29,7 @@ Welcome to DistZero's documentation!
    doc/errors
    doc/recorded
 
+   doc/demo
 
 Indices and tables
 ==================
