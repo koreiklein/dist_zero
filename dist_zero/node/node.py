@@ -51,3 +51,32 @@ class Node(object):
   def initialize(self):
     '''Called exactly once, when a node starts to run.'''
     pass
+
+  def handle(self):
+    '''
+    This node's handle.
+
+    :return: A :ref:`handle` for the current node.
+    :rtype: :ref:`handle`
+    '''
+    raise RuntimeError('Abstract Superclass')
+
+  def elapse(self, ms):
+    '''
+    Elapse ms of time on this node.
+
+    :param int ms: A number of milliseconds.
+    '''
+    raise RuntimeError('Abstract Superclass')
+
+  def receive(self, message, sender):
+    '''
+    Receive a message from some sender.
+
+    :param message: A :ref:`message` from one of the senders to this node.
+    :type message: :ref:`message`
+
+    :param sender: The :ref:`handle` of the node that sent the message.
+    :type sender: :ref:`handle`
+    '''
+    raise RuntimeError('Abstract Superclass')
