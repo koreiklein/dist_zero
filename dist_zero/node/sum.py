@@ -301,12 +301,6 @@ class SumNodeSenderSplitMigrator(object):
     for j, extra_sender in enumerate(self.node._senders[n_new_nodes * n_senders_per_node:]):
       self._partition[new_node_ids[j]].append(extra_sender)
 
-    for x in self._partition.values():
-      for y in x:
-        if y['type'] == 'SumNode':
-          import ipdb
-          ipdb.set_trace()
-
     return [
         messages.sum_node_config(
             node_id=node_id,
