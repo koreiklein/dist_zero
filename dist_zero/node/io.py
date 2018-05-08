@@ -31,7 +31,7 @@ class InputLeafNode(Node):
 
     # A map from receiver id to 'pending' or 'ready'
     self._receiver_state = {receiver['id']: 'pending' for receiver in self._receivers}
-    self._active = len(self._receivers) > 0
+    self._active = not self._receivers
     # Messages received before becoming active.
     self._pre_active_messages = []
 
@@ -71,6 +71,7 @@ class InputLeafNode(Node):
         self.send(receiver, message)
     else:
       # Postpone message till later
+      self.logger.debug("Input leaf is postponing a message send since not all receivers are active.")
       self._pre_active_messages.append(message)
 
   @staticmethod
