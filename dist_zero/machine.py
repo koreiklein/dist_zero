@@ -8,25 +8,6 @@ from .node.sum import SumNode
 logger = logging.getLogger(__name__)
 
 
-def _node_from_config(node_config, controller):
-  '''
-  :param JSON node_config: A node config message
-  :return: The node specified in that config.
-  '''
-  if node_config['type'] == 'input_leaf':
-    return io.InputLeafNode.from_config(node_config, controller=controller)
-  elif node_config['type'] == 'output_leaf':
-    return io.OutputLeafNode.from_config(node_config, controller=controller)
-  elif node_config['type'] == 'start_input':
-    return io.InputNode.from_config(node_config, controller=controller)
-  elif node_config['type'] == 'start_output':
-    return io.OutputNode.from_config(node_config, controller=controller)
-  elif node_config['type'] == 'sum':
-    return SumNode.from_config(node_config, controller=controller)
-  else:
-    raise RuntimeError("Unrecognized type {}".format(node_config['type']))
-
-
 class MachineController(object):
   '''
   The interface that `Node` instances will use to interact with the underlying hardware.
@@ -44,6 +25,23 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
+  def convert_transport_for(self, current_sender, new_sender, receiver):
+    '''
+    If there exists a transport that a node on self uses to talk to a receiver,
+    this method creates a new transport allowing a different node to talk to the same receiver.
+
+    :param current_sender: A node managed by self.
+    :type current_sender: :ref:`handle`
+    :param new_sender: Any node
+    :type new_sender: :ref:`handle`
+    :param receiver: Any node for which current_sender has a working transport.
+    :type receiver: :ref:`handle`
+
+    :return: A transport that new_sender can use to talk to receiver
+    :rtype: :ref:`transport`
+    '''
+    raise RuntimeError("Abstract Superclass")
+
   def send(self, node_handle, message, sending_node_handle):
     '''
     Send a message to a node either managed by self, or linked to self.
@@ -58,7 +56,7 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
-  def spawn_node(self, node_config, on_machine):
+  def spawn_node(self, node_config):
     '''
     Start creating a new node on a linked machine.
 
@@ -127,18 +125,32 @@ class NodeManager(MachineController):
   def set_transport(self, sender, receiver, transport):
     self._transports[(sender['id'], receiver['id'])] = transport
 
-  def send(self, node_handle, message, sending_node_handle):
-    transport = self._transports.get((sending_node_handle['id'], node_handle['id']), None)
-    if transport is None:
-      raise errors.NoTransportError(sender=sending_node_handle, receiver=node_handle)
+  def convert_transport_for(self, current_sender, new_sender, receiver):
+    old_transport = self._get_transport(current_sender, receiver)
 
+    # TODO(KK): Once we start to add security to transports, it will no longer be possible
+    #   to re-use the old transport as is.
+    new_transport = old_transport
+
+    return new_transport
+
+  def _get_transport(self, sender, receiver):
+    transport = self._transports.get((sender['id'], receiver['id']), None)
+
+    if transport is None:
+      raise errors.NoTransportError(sender=sender, receiver=receiver)
+    else:
+      return transport
+
+  def send(self, node_handle, message, sending_node_handle):
     self._send_to_machine(
         message=messages.machine_deliver_to_node(node=node_handle, message=message, sending_node=sending_node_handle),
-        transport=transport)
+        transport=self._get_transport(sending_node_handle, node_handle))
 
-  def spawn_node(self, node_config, on_machine):
-    # TODO(KK): Write tests for spawning a node and implement this method.
-    raise RuntimeError("Not Yet Implemented")
+  def spawn_node(self, node_config):
+    # TODO(KK): Rethink how the machine for each node is chosen.  Always running on the same machine
+    #   is easy, but an obviously flawed approach.
+    return self.start_node(node_config).handle()
 
   def new_transport_for(self, local_node_id, remote_node_id):
     return messages.ip_transport(self._ip_host)
@@ -152,14 +164,24 @@ class NodeManager(MachineController):
 
   def start_node(self, node_config):
     logger.info("Starting new '{node_type}' node", extra={'node_type': node_config['type']})
-    if node_config['type'] == 'output_leaf':
+    if node_config['type'] == 'OutputLeafNode':
       self._output_node_state_by_id[node_config['id']] = node_config['initial_state']
       node = io.OutputLeafNode.from_config(
           node_config=node_config,
           controller=self,
           update_state=lambda f: self._update_output_node_state(node_config['id'], f))
+    elif node_config['type'] == 'InputLeafNode':
+      node = io.InputLeafNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'OutputLeafNode':
+      node = io.OutputLeafNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'InputNode':
+      node = io.InputNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'OutputNode':
+      node = io.OutputNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'SumNode':
+      node = SumNode.from_config(node_config, controller=self)
     else:
-      node = _node_from_config(node_config, controller=self)
+      raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 
     self._node_by_id[node.id] = node
     node.initialize()
@@ -252,5 +274,7 @@ class NodeManager(MachineController):
 
     :param int ms: The number of milliseconds to elapse.
     '''
-    for node in self._node_by_id.values():
+    # Elapsing time on nodes can create new nodes, thus changing the list of nodes.
+    # Therefore, to avoid updating a dictionary while iterating over it, we make a copy
+    for node in list(self._node_by_id.values()):
       node.elapse(ms)

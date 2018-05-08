@@ -40,7 +40,7 @@ def input_node_config(node_id):
 
   :param str node_id: The id of the new node.
   '''
-  return {'type': 'start_input', 'id': node_id}
+  return {'type': 'InputNode', 'id': node_id}
 
 
 def output_node_config(node_id, initial_state):
@@ -50,10 +50,65 @@ def output_node_config(node_id, initial_state):
   :param str node_id: The id of the new node.
   :param object initial_state: The initial state to use for new nodes.
   '''
-  return {'type': 'start_output', 'id': node_id, 'initial_state': initial_state}
+  return {'type': 'OutputNode', 'id': node_id, 'initial_state': initial_state}
 
 
-def sum_node_config(node_id, senders, receivers):
+def sum_node_started(transport):
+  '''
+  For when a new sum node informs its parent that it has just started, and will now be sending messages.
+  '''
+  return {'type': 'sum_node_started', 'transport': transport}
+
+
+def middle_node_is_live():
+  '''
+  Indicates that a middle node is now fully synced up.
+  '''
+  return {'type': 'middle_node_is_live'}
+
+
+def middle_node_is_duplicated():
+  '''
+  Indicates that a middle node is now receiving from all the proper senders.
+  '''
+  return {'type': 'middle_node_is_duplicated'}
+
+
+def start_duplicating(receiver, transport):
+  '''
+  This message is sent to inform a node that it should duplicate its sends to a new receiver.
+
+  After receipt of this message, the node will send messages to the usual receivers just as before, but also
+  send duplicated messages to the newly added receiver.
+
+  :param receiver: The :ref:`handle` of the node to send the duplicates to.
+  :type receiver: :ref:`handle`
+
+  :param transport: A :ref:`transport` for talking to receiver.
+  :type transport: :ref:`transport`
+  '''
+  return {'type': 'start_duplicating', 'receiver': receiver, 'transport': transport}
+
+
+def finish_duplicating():
+  '''
+  This message is sent to a node that is duplicating its sends to inform it that it no longer need send messages
+  to the old receivers.
+  '''
+  return {'type': 'finish_duplicating'}
+
+
+def set_sum_total(total):
+  '''
+  For sum nodes that are the middle nodes in a migration and are currently migrating but not synced up,
+  the message informs them of their total.
+
+  :param int total: The total to start with.
+  '''
+  return {'type': 'set_sum_total', 'total': total}
+
+
+def sum_node_config(node_id, senders, receivers, parent=None, parent_transport=None):
   '''
   A node config for creating a node to accept increments from a set of senders, sum them
   together and pass all increments to every receiver.
@@ -61,8 +116,19 @@ def sum_node_config(node_id, senders, receivers):
   :param str node_id: The id of the new node.
   :param list senders: A list of :ref:`handle` for sending nodes.
   :param list receivers: A list of :ref:`handle` for receiving nodes.
+  :param parent: The :ref:`handle` of the parent `SumNode` of this node.
+  :type parent: :ref:`handle`
+  :param parent_transport: A :ref:`transport` for talking to this node's parent.
+  :type parent_transport: :ref:`transport`
   '''
-  return {'type': 'sum', 'id': node_id, 'senders': senders, 'receivers': receivers}
+  return {
+      'type': 'SumNode',
+      'id': node_id,
+      'senders': senders,
+      'receivers': receivers,
+      'parent': parent,
+      'parent_transport': parent_transport
+  }
 
 
 def input_leaf_config(node_id, name, parent, parent_transport, receivers, recorded_user_json=None):
@@ -77,7 +143,7 @@ def input_leaf_config(node_id, name, parent, parent_transport, receivers, record
   :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
   '''
   return {
-      'type': 'input_leaf',
+      'type': 'InputLeafNode',
       'id': node_id,
       'name': name,
       'parent': parent,
@@ -106,7 +172,7 @@ def output_leaf_config(node_id, name, initial_state, parent, parent_transport, s
   :type senders: A list of :ref:`handle`
   '''
   return {
-      'type': 'output_leaf',
+      'type': 'OutputLeafNode',
       'id': node_id,
       'name': name,
       'initial_state': initial_state,
