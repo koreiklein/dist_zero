@@ -34,6 +34,8 @@ DEFAULT_AWS_SECURITY_GROUP = os.environ.get('DEFAULT_AWS_SECURITY_GROUP', '')
 DEFAULT_AWS_INSTANCE_TYPE = 't2.micro'
 
 # Logging settings
+MIN_LOG_LEVEL = int(os.environ['MIN_LOG_LEVEL'])
+
 LOGSTASH_HOST = os.environ['LOGSTASH_HOST']
 LOGSTASH_PORT = int(os.environ['LOGSTASH_PORT'])
 
@@ -47,4 +49,5 @@ CLOUD_ENV_VARS = [
     'LOGSTASH_HOST',
     'LOGSTASH_PORT',
     'LOGZ_IO_TOKEN',
+    'MIN_LOG_LEVEL',
 ]
