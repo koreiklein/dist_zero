@@ -63,7 +63,8 @@ class StrFormatFilter(logging.Filter):
     return True
 
 
-HUMAN_FORMATTER = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+HUMAN_FORMATTER = logging.Formatter(
+    fmt='%(asctime)s.%(msecs)03d %(levelname)s %(name)-22s| %(message)s', datefmt='%M:%S')
 '''
 A formatter for human readable output.
 '''

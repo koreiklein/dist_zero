@@ -81,15 +81,19 @@ class SimulatedSpawner(spawner.Spawner):
     if node_handle is None:
       return "null"
     else:
-      return "{}.{}".format(node_handle['type'], str(node_handle['id'])[-5:])
+      return "{}.{}".format(node_handle['type'], str(node_handle['id'])[-4:])
 
   def _format_log(self, log_message):
     ms, msg = log_message
-    return "{} --{}--> {}".format(
-        self._format_node(msg['sending_node']),
-        msg['message']['type'],
-        self._format_node(msg['receiving_node']),
-    )
+    message = msg['message']
+    if message['type'] == 'machine_deliver_to_node':
+      return "{} --{}--> {}".format(
+          self._format_node(message.get('sending_node', None)),
+          msg['message']['type'],
+          self._format_node(message.get('node', None)),
+      )
+    else:
+      return "Control Message: {}".format(message['type'])
 
   def run_for(self, ms):
     '''
@@ -101,7 +105,8 @@ class SimulatedSpawner(spawner.Spawner):
     try:
       self._run_for_throwing_inner_exns(ms)
     except RuntimeError:
-      raise errors.SimulationError(log_lines=[self._format_log(x) for x in self._log], exc_info=sys.exc_info())
+      exc_info = sys.exc_info()
+      raise errors.SimulationError(log_lines=[self._format_log(x) for x in self._log], exc_info=exc_info)
 
   def _run_for_throwing_inner_exns(self, ms):
     '''
@@ -182,18 +187,25 @@ class SimulatedSpawner(spawner.Spawner):
     self._log.append(heapitem)
     heapq.heappush(self._pending_receives, _Event(*heapitem))
 
+  def now_ms(self):
+    return self._elapsed_time_ms
+
   def send_to_machine(self, machine, message, sock_type='udp'):
+    # Simulate the serializing and deserializing that happens in other Spawners.
+    # This behavior is important so that simulated tests don't accidentally share data.
+    message = json.loads(json.dumps(message))
+
     if self._elapsed_time_ms is None:
       raise RuntimeError('The simulation must be started before it can send messages.')
 
-    time_ms = self._elapsed_time_ms + self._random_ms_for_send()
+    sending_time_ms = self._random_ms_for_send()
     if sock_type == 'udp':
-      self._add_to_heap((time_ms, {
+      self._add_to_heap((self._elapsed_time_ms + sending_time_ms, {
           'machine_id': machine['id'],
           'message': message,
       }))
     elif sock_type == 'tcp':
-      self.run_for(ms=time_ms)
+      self.run_for(ms=sending_time_ms)
       receiving_controller = self._controller_by_id[machine['id']]
       response = receiving_controller.handle_api_message(message)
       if response['status'] == 'ok':
@@ -207,12 +219,8 @@ class SimulatedSpawner(spawner.Spawner):
     if self._elapsed_time_ms is None:
       raise RuntimeError('The simulation must be started before it can send messages.')
 
-    machine_id = transport['host']
-
-    time = self._elapsed_time_ms + self._random_ms_for_send()
-
-    self._add_to_heap((time, {
-        'machine_id': machine_id,
+    self._add_to_heap((self._elapsed_time_ms + self._random_ms_for_send(), {
+        'machine_id': transport['host'],
         'message': message,
     }))
 

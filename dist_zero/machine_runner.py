@@ -210,7 +210,7 @@ class MachineRunner(object):
     # Loggers
     dist_zero_logger = logging.getLogger('dist_zero')
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
+    root_logger.setLevel(max(settings.MIN_LOG_LEVEL, logging.DEBUG))
 
     dist_zero.logging.set_handlers(root_logger, [
         json_file_handler,

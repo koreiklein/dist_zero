@@ -3,7 +3,12 @@ python:
   - "3.6.1"
 
 install:
-  - pip install -r requirements.test.txt
+  - cp .env.template .env
+  - mkdir .tmp
+  - pip install -r requirements.dev.txt
 
 script:
-  - nosetests
+  - nosetests -a mode=simulated
+
+after_success:
+  - make html

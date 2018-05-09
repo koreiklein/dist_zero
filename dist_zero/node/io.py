@@ -18,6 +18,8 @@ class InputLeafNode(Node):
     :param list receivers: A list of :ref:`handle` for the nodes that should receive from this input.
     :param parent: The :ref:`handle` of the parent `InputNode` of this node.
     :type parent: :ref:`handle`
+    :param parent_transport: A :ref:`transport` for talking to this node's parent.
+    :type parent_transport: :ref:`transport`
     :param `RecordedUser` recorded_user: In tests, this parameter may be not null to indicate that this input
       node should playback the actions of an attached `RecordedUser` instance.
     '''
@@ -31,9 +33,11 @@ class InputLeafNode(Node):
 
     # A map from receiver id to 'pending' or 'ready'
     self._receiver_state = {receiver['id']: 'pending' for receiver in self._receivers}
-    self._active = len(self._receivers) > 0
+    self._active = not self._receivers
     # Messages received before becoming active.
     self._pre_active_messages = []
+
+    self._new_receivers = None # for when a node is migrating to new receivers.
 
     super(InputLeafNode, self).__init__(logger)
 
@@ -54,23 +58,45 @@ class InputLeafNode(Node):
       self._active = True
       # Process all the postponed messages now
       for m in self._pre_active_messages:
-        self._receive_ordinary_message(m)
+        self._receive_increment_message(m)
     else:
       self.logger.debug("Received added_link message from {sender}", extra={'sender': sender})
 
   def receive(self, message, sender):
     if sender is not None and message['type'] == 'added_link':
       self._receive_added_link(sender, message['transport'])
+    elif message['type'] == 'increment':
+      self._receive_increment_message(message)
+    elif message['type'] == 'start_duplicating':
+      new_receiver = message['receiver']
+      self.logger.info(
+          "Starting duplication phase for {cur_node_id} . {new_receiver_id} will now receive duplicates.",
+          extra={'new_receiver_id': new_receiver['id']})
+      self.set_transport(new_receiver, message['transport'])
+      self._receivers.append(new_receiver)
+      self._new_receivers = [new_receiver]
+      self.send(new_receiver, messages.added_link(self.new_transport_for(new_receiver['id'])))
+    elif message['type'] == 'finish_duplicating':
+      self.logger.info(
+          "Finishing duplication phase for {cur_node_id} ."
+          "  Cutting back number of receivers from {n_old_receivers} to {n_new_receivers}",
+          extra={
+              'n_old_receivers': len(self._receivers),
+              'n_new_receivers': len(self._new_receivers),
+          })
+      self._receivers = self._new_receivers
+      self.send(sender, messages.finished_duplicating())
     else:
-      self._receive_ordinary_message(message)
+      raise RuntimeError("Unrecognized message type {}".format(message['type']))
 
-  def _receive_ordinary_message(self, message):
+  def _receive_increment_message(self, message):
     if self._active:
       for receiver in self._receivers:
         self.logger.debug("Forwarding input message to receiver {receiver}", extra={'receiver': receiver})
         self.send(receiver, message)
     else:
       # Postpone message till later
+      self.logger.debug("Input leaf is postponing a message send since not all receivers are active.")
       self._pre_active_messages.append(message)
 
   @staticmethod
@@ -147,7 +173,7 @@ class OutputLeafNode(Node):
   def _all_senders_are_active(self):
     return all(state == 'active' for state in self._sender_state.values())
 
-  def _receive_ordinary_message(self, message):
+  def _receive_increment_message(self, message):
     if self._active:
       if message['type'] == 'increment':
         increment = message['amount']
@@ -172,15 +198,17 @@ class OutputLeafNode(Node):
       self._active = True
       # Process all the postponed messages now
       for m in self._pre_active_messages:
-        self._receive_ordinary_message(m)
+        self._receive_increment_message(m)
     else:
       self.logger.debug("Received added_link message from {receiver}", extra={'receiver': receiver})
 
   def receive(self, message, sender):
     if sender is not None and message['type'] == 'added_link':
       self._receive_added_link(sender, message['transport'])
+    elif message['type'] == 'increment':
+      self._receive_increment_message(message)
     else:
-      self._receive_ordinary_message(message)
+      raise RuntimeError("Unrecognized message type {}".format(message['type']))
 
   @staticmethod
   def from_config(node_config, controller, update_state):
@@ -298,7 +326,7 @@ class InputNode(Node):
 
       for receiver in self._receivers:
         self.send(receiver,
-                  messages.add_link(kid, direction='sender', transport=self.convert_transport_for(receiver, transport)))
+                  messages.add_link(kid, direction='sender', transport=self.convert_transport_for(receiver, kid)))
 
 
 class OutputNode(Node):
@@ -388,5 +416,5 @@ class OutputNode(Node):
       self.set_transport(kid, transport)
 
       for sender in self._senders:
-        self.send(sender,
-                  messages.add_link(kid, direction='receiver', transport=self.convert_transport_for(sender, transport)))
+        self.send(sender, messages.add_link(
+            kid, direction='receiver', transport=self.convert_transport_for(sender, kid)))
