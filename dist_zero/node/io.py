@@ -85,6 +85,7 @@ class InputLeafNode(Node):
               'n_new_receivers': len(self._new_receivers),
           })
       self._receivers = self._new_receivers
+      self.send(sender, messages.finished_duplicating())
     else:
       raise RuntimeError("Unrecognized message type {}".format(message['type']))
 

@@ -7,10 +7,12 @@ logger = logging.getLogger(__name__)
 
 
 class SumNode(Node):
-  SEND_INTERVAL_MS = 30 # Number of ms between sends to receivers.
   '''
   An internal node for summing all increments from its senders and forwarding the total to its receivers.
   '''
+
+  SEND_INTERVAL_MS = 30
+  '''The number of ms between sends to receivers.'''
 
   def __init__(self, node_id, senders, receivers, parent, parent_transport, controller):
     '''
@@ -87,6 +89,8 @@ class SumNode(Node):
   def receive(self, sender, message):
     if message['type'] == 'increment':
       self._unsent_total += message['amount']
+    elif message['type'] == 'finished_duplicating':
+      self.migrator.finished_duplicating(sender)
     elif message['type'] == 'add_link':
       node = message['node']
       direction = message['direction']
@@ -177,12 +181,35 @@ class SumNodeSenderSplitMigrator(object):
   '''
 
   STATE_NEW = 'NEW'
-  STATE_INITIALIZING_MIDDLE_NODES = 'INITIALIZING_MIDDLE_NODES'
+  '''The initial state of the migrator.'''
+
+  STATE_INITIALIZING_NEW_NODES = 'INITIALIZING_NEW_NODES'
+  '''In this state, the migrator is waiting for new nodes to start running.'''
+
   STATE_DUPLICATING_INPUTS = 'DUPLICATING_INPUTS'
-  STATE_SYNCING_MODELS = 'SYNCING_MODELS'
+  '''In this state, all the new nodes are confirmed to have started running,
+  and the migrator is waiting for the inputs to start duplicating to them.'''
+
+  STATE_SYNCING_NEW_NODES = 'SYNCING_NEW_NODES'
+  '''In this state, all the inputs have been confirmed to be duplicating their messages,
+  and the migrator is waiting for the new nodes to sync up with the current node they will be replacing.'''
+
+  # NOTE(KK): One might imagine including the state: SWAPPING_OUTPUTS for migrators that involve outputs.
+
+  STATE_TRIMMING_INPUTS = 'TRIMMING_INPUTS'
+  '''In this state, the entire downstream system is listening to the new models,
+  and the migrator is waiting for the inputs to stop sending their old messages and report that they
+  are sending only to the new models.'''
+
   STATE_FINISHED = 'FINISHED'
+  '''In this state, none of the inputs are sending their original messages, and send only to the new nodes.
+  The migrator's job is finished.'''
 
   def __init__(self, sum_node):
+    '''
+    :param sum_node: The underlying sum node
+    :type sum_node: `SumNode`
+    '''
     self.node = sum_node
     self._state = SumNodeSenderSplitMigrator.STATE_NEW
 
@@ -194,6 +221,9 @@ class SumNodeSenderSplitMigrator(object):
 
     self._partition = {}
     '''A map from middle node id to a list of its leftmost senders' ids'''
+    self._duplicating_input_ids = set()
+    '''The set of ids of input nodes that have been told to duplicate, and have not yet confirmed that they
+    are done duplicating.'''
 
     self._middle_node_states = {}
     '''
@@ -205,6 +235,7 @@ class SumNodeSenderSplitMigrator(object):
     '''
 
   def _transition_state(self, from_state, to_state):
+    '''Move from one state to another.'''
     if self._state != from_state:
       raise RuntimeError("Must be in state {} to transition".format(from_state))
     self.logger.info(
@@ -216,21 +247,23 @@ class SumNodeSenderSplitMigrator(object):
     self._state = to_state
 
   def start(self):
+    '''Start the migration.'''
     self._transition_to_initializing_middle_nodes()
 
   def _transition_to_initializing_middle_nodes(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_NEW,
-                           SumNodeSenderSplitMigrator.STATE_INITIALIZING_MIDDLE_NODES)
+                           SumNodeSenderSplitMigrator.STATE_INITIALIZING_NEW_NODES)
 
     for node_config in self._new_sender_configs():
       self.controller.spawn_node(node_config=node_config)
 
   def _transition_to_duplicating(self):
-    self._transition_state(SumNodeSenderSplitMigrator.STATE_INITIALIZING_MIDDLE_NODES,
+    self._transition_state(SumNodeSenderSplitMigrator.STATE_INITIALIZING_NEW_NODES,
                            SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS)
 
     for middle_node in self._middle_nodes:
       for sender in self._partition[middle_node['id']]:
+        self._duplicating_input_ids.add(sender['id'])
         self.node.send(sender,
                        messages.start_duplicating(
                            receiver=middle_node,
@@ -238,39 +271,69 @@ class SumNodeSenderSplitMigrator(object):
 
   def _transition_to_syncing(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS,
-                           SumNodeSenderSplitMigrator.STATE_SYNCING_MODELS)
+                           SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES)
 
     for middle_node in self._middle_nodes:
       self.node.send(middle_node, messages.set_sum_total(self._totals[middle_node['id']]))
 
+  def _transition_to_trimming(self):
+    self._transition_state(SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES,
+                           SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS)
+
+    for senders in self._partition.values():
+      for sender in senders:
+        self.node.send(sender, messages.finish_duplicating())
+
   def _transition_to_finished(self):
-    self._transition_state(SumNodeSenderSplitMigrator.STATE_SYNCING_MODELS, SumNodeSenderSplitMigrator.STATE_FINISHED)
+    self._transition_state(SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS, SumNodeSenderSplitMigrator.STATE_FINISHED)
 
     self.node.migration_finished(set(self._partition.keys()))
 
   def middle_node_live(self, middle_node_handle):
+    '''Called when a middle node has been confirmed to be live.'''
     self.logger.info("Marking middle node as now being live", extra={'middle_node_id': middle_node_handle['id']})
     self._middle_node_states[middle_node_handle['id']] = 'live'
 
     if all(state == 'live' for state in self._middle_node_states.values()):
-      for sender in self._partition[middle_node_handle['id']]:
-        self.node.send(sender, messages.finish_duplicating())
+      self._transition_to_trimming()
 
-      self._transition_to_finished()
+  def middle_node_started(self, middle_node_handle):
+    '''
+    Called when a middle node is confirmed to be running.
+
+    :param middle_node_handle: The :ref:`handle` of the middle node.
+    :type middle_node_handle: :ref:`handle`
+    '''
+    self.logger.info("Marking middle node as having started", extra={'middle_node_id': middle_node_handle['id']})
+    self._middle_nodes.append(middle_node_handle)
+    self._middle_node_states[middle_node_handle['id']] = 'started'
+    if all(state == 'started' for state in self._middle_node_states.values()):
+      self._transition_to_duplicating()
 
   def middle_node_duplicated(self, middle_node_handle):
+    '''
+    Called when a middle node has confirmed that it is receiving all the proper duplicated inputs.
+
+    :param middle_node_handle: The :ref:`handle` of the middle node.
+    :type middle_node_handle: :ref:`handle`
+    '''
     self.logger.info("Marking middle node as now being duplicated", extra={'middle_node_id': middle_node_handle['id']})
     self._middle_node_states[middle_node_handle['id']] = 'duplicated'
 
     if all(state == 'duplicated' for state in self._middle_node_states.values()):
       self._transition_to_syncing()
 
-  def middle_node_started(self, middle_node_handle):
-    self.logger.info("Marking middle node as having started", extra={'middle_node_id': middle_node_handle['id']})
-    self._middle_nodes.append(middle_node_handle)
-    self._middle_node_states[middle_node_handle['id']] = 'started'
-    if all(state == 'started' for state in self._middle_node_states.values()):
-      self._transition_to_duplicating()
+  def finished_duplicating(self, input_node):
+    '''
+    Called when an input node is sending messages only according the structure at the end of migration, and not
+    the duplicate messages from the beginning of the migration.
+
+    :param input_node: The :ref:`handle` of the input node that has finished duplicating.
+    :type input_node: :ref:`handle`
+    '''
+    self._duplicating_input_ids.remove(input_node['id'])
+    if not self._duplicating_input_ids:
+      self._transition_to_finished()
 
   def _new_sender_configs(self):
     '''

@@ -98,6 +98,14 @@ def finish_duplicating():
   return {'type': 'finish_duplicating'}
 
 
+def finished_duplicating():
+  '''
+  This message is sent to inform a migrator that an input has stopped sending messages as it was before
+  the migration started, and is now only sending messages the new way.
+  '''
+  return {'type': 'finished_duplicating'}
+
+
 def set_sum_total(total):
   '''
   For sum nodes that are the middle nodes in a migration and are currently migrating but not synced up,
