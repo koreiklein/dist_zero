@@ -21,6 +21,6 @@ deploy:
   local-dir: doc/_build
   committer-from-gh: true
   on:
-    branch: feature/kk/gh-pages
+    branch: dev
 
 
