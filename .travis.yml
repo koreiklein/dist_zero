@@ -2,6 +2,9 @@ language: python
 python:
   - "3.6.1"
 
+env:
+  - DOCS_BRANCH=dev
+
 install:
   - cp .env.template .env
   - mkdir .tmp
@@ -12,15 +15,17 @@ script:
 
 after_success:
   - make html
+  on:
+    branch: $DOCS_BRANCH
 
 deploy:
   provider: pages
   skip-cleanup: true
   github-token: $GH_TOKEN
   keep-history: true
-  local-dir: doc/_build
+  local-dir: doc/_build/html
   committer-from-gh: true
   on:
-    branch: dev
+    branch: $DOCS_BRANCH
 
 
