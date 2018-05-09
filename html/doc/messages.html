@@ -1,0 +1,466 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Messages &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Nodes" href="nodes.html" />
+    <link rel="prev" title="Cloud Spawners" href="cloud.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-dist_zero.messages">
+<span id="messages"></span><h1>Messages<a class="headerlink" href="#module-dist_zero.messages" title="Permalink to this headline">¶</a></h1>
+<p>Functions to build standard messages.</p>
+<dl class="data">
+<dt id="dist_zero.messages.ENCODING">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">ENCODING</code><em class="property"> = 'utf-8'</em><a class="headerlink" href="#dist_zero.messages.ENCODING" title="Permalink to this definition">¶</a></dt>
+<dd><p>The encoding to use for messages.
+This should be a string understood by the python internals that operate on encodings.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.add_link">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">add_link</code><span class="sig-paren">(</span><em>node</em>, <em>direction</em>, <em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#add_link"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.add_link" title="Permalink to this definition">¶</a></dt>
+<dd><p>Inform a node that it is now linked to a new node.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of the new node</li>
+<li><strong>direction</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – ‘sender’ or ‘receiver’ depending respectively on whether the newly added node will
+send or receive from the node getting this message.</li>
+<li><strong>transport</strong> (<a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a>) – Transport data for communicating with node.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.added_leaf">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">added_leaf</code><span class="sig-paren">(</span><em>kid</em>, <em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#added_leaf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.added_leaf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Indicates that a pending LeafNode has successfull been added to the network, and is
+now ready to receive messages.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>kid</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the leaf node that was just added.</li>
+<li><strong>transport</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A transport that the recipient can use to send messages to the new leaf.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.added_link">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">added_link</code><span class="sig-paren">(</span><em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#added_link"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.added_link" title="Permalink to this definition">¶</a></dt>
+<dd><p>Inform a node that it has been successfully linked, and give a transport back to the sender.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>transport</strong> (<a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a>) – Transport data for communicating with node.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.api_create_kid_config">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">api_create_kid_config</code><span class="sig-paren">(</span><em>internal_node</em>, <em>new_node_name</em>, <em>machine_controller_handle</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#api_create_kid_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.api_create_kid_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a node_config for a new kid node of an internal io node.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>internal_node</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the parent internalnode.</li>
+<li><strong>new_node_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The name to use for the new node.</li>
+<li><strong>machine_controller_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the machine on which the new node will run.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A node_config for creating the new kid node.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.api_get_output_state">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">api_get_output_state</code><span class="sig-paren">(</span><em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#api_get_output_state"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.api_get_output_state" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get and return the current output state for an output node.
+:param node: The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of an output leaf node.
+:type node: <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>
+:return: The current output state of that node.
+:rtype: object</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.api_new_transport">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">api_new_transport</code><span class="sig-paren">(</span><em>sender</em>, <em>receiver</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#api_new_transport"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.api_new_transport" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get and return a transport that can be used to send from sender to receiver.
+:param sender: The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of a sending node.
+:type sender: <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>
+:param receiver: The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of a sending node.
+:type receiver: <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.finish_duplicating">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">finish_duplicating</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#finish_duplicating"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.finish_duplicating" title="Permalink to this definition">¶</a></dt>
+<dd><p>This message is sent to a node that is duplicating its sends to inform it that it no longer need send messages
+to the old receivers.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.finished_duplicating">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">finished_duplicating</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#finished_duplicating"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.finished_duplicating" title="Permalink to this definition">¶</a></dt>
+<dd><p>This message is sent to inform a migrator that an input has stopped sending messages as it was before
+the migration started, and is now only sending messages the new way.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.increment">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">increment</code><span class="sig-paren">(</span><em>amount</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#increment"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.increment" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>amount</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – An integer amount by which to increment.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.input_leaf_config">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">input_leaf_config</code><span class="sig-paren">(</span><em>node_id</em>, <em>name</em>, <em>parent</em>, <em>parent_transport</em>, <em>receivers</em>, <em>recorded_user_json=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#input_leaf_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.input_leaf_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a new leaf node to an InputNode list.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The name to use for the new node.</li>
+<li><strong>parent</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of the parent node.</li>
+<li><strong>parent_transport</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A transport for talking to the parent.</li>
+<li><strong>receivers</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)"><em>list</em></a>) – The list of handles of receiver nodes the new node should send to.</li>
+<li><strong>recorded_user_json</strong> (<em>json</em>) – json for a recorded user instance to initialize on the new node.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.input_node_config">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">input_node_config</code><span class="sig-paren">(</span><em>node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#input_node_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.input_node_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>A node config for creating a node to manage a new list of inputs.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the new node.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.machine_config">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">machine_config</code><span class="sig-paren">(</span><em>machine_controller_id</em>, <em>machine_name</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#machine_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.machine_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>A machine config</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>machine_controller_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The unique id for the new machine.</li>
+<li><strong>machine_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – A human readable name for the new machine.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.machine_deliver_to_node">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">machine_deliver_to_node</code><span class="sig-paren">(</span><em>node</em>, <em>message</em>, <em>sending_node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#machine_deliver_to_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.machine_deliver_to_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>A message to a machine telling it to deliver an embedded message to a node.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – A node to send to.</li>
+<li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – The message to deliver</li>
+<li><strong>sending_node</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The node that was sending, or <a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.6)"><code class="xref any docutils literal notranslate"><span class="pre">None</span></code></a> if the message was not sent by a node.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.machine_start_node">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">machine_start_node</code><span class="sig-paren">(</span><em>node_config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#machine_start_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.machine_start_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>A message to a machine indicating that it should start a new node based on a config.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node_config</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A node config for a new node.</li>
+<li><strong>node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The unique id to use for this node.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.middle_node_is_duplicated">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">middle_node_is_duplicated</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#middle_node_is_duplicated"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.middle_node_is_duplicated" title="Permalink to this definition">¶</a></dt>
+<dd><p>Indicates that a middle node is now receiving from all the proper senders.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.middle_node_is_live">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">middle_node_is_live</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#middle_node_is_live"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.middle_node_is_live" title="Permalink to this definition">¶</a></dt>
+<dd><p>Indicates that a middle node is now fully synced up.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.output_leaf_config">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">output_leaf_config</code><span class="sig-paren">(</span><em>node_id</em>, <em>name</em>, <em>initial_state</em>, <em>parent</em>, <em>parent_transport</em>, <em>senders</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#output_leaf_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.output_leaf_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a new leaf node to an OutputNode list.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the new node.</li>
+<li><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The name to use for the new node.</li>
+<li><strong>initial_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A json serializeable starting state for this node.</li>
+<li><strong>parent</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of the parent node.</li>
+<li><strong>parent_transport</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A transport for talking to the parent.</li>
+<li><strong>senders</strong> (A list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The list of handles of senders nodes the new node should receive from.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.output_node_config">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">output_node_config</code><span class="sig-paren">(</span><em>node_id</em>, <em>initial_state</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#output_node_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.output_node_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>A node config for creating a node to manage a new list of outputs.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the new node.</li>
+<li><strong>initial_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – The initial state to use for new nodes.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.set_sum_total">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">set_sum_total</code><span class="sig-paren">(</span><em>total</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#set_sum_total"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.set_sum_total" title="Permalink to this definition">¶</a></dt>
+<dd><p>For sum nodes that are the middle nodes in a migration and are currently migrating but not synced up,
+the message informs them of their total.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>total</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – The total to start with.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.start_duplicating">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">start_duplicating</code><span class="sig-paren">(</span><em>receiver</em>, <em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#start_duplicating"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.start_duplicating" title="Permalink to this definition">¶</a></dt>
+<dd><p>This message is sent to inform a node that it should duplicate its sends to a new receiver.</p>
+<p>After receipt of this message, the node will send messages to the usual receivers just as before, but also
+send duplicated messages to the newly added receiver.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the node to send the duplicates to.</li>
+<li><strong>transport</strong> (<a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a>) – A <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> for talking to receiver.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.start_receiving_from">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">start_receiving_from</code><span class="sig-paren">(</span><em>new_sender</em>, <em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#start_receiving_from"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.start_receiving_from" title="Permalink to this definition">¶</a></dt>
+<dd><p>A message informing a node to start receiving messages from a new sender.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>new_sender</strong> (A node <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The sender to start receiving from</li>
+<li><strong>transport</strong> (<a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a>) – A transport allowing to send to new_sender.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.start_sending_to">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">start_sending_to</code><span class="sig-paren">(</span><em>new_receiver</em>, <em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#start_sending_to"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.start_sending_to" title="Permalink to this definition">¶</a></dt>
+<dd><p>A message informing a node to start sending messages to a new receiver.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>new_receiver</strong> (A node <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The receiver to start sending to.</li>
+<li><strong>transport</strong> (<a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a>) – A transport allowing to send to new_receiver.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.sum_node_config">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">sum_node_config</code><span class="sig-paren">(</span><em>node_id</em>, <em>senders</em>, <em>receivers</em>, <em>parent=None</em>, <em>parent_transport=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#sum_node_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.sum_node_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>A node config for creating a node to accept increments from a set of senders, sum them
+together and pass all increments to every receiver.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the new node.</li>
+<li><strong>senders</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)"><em>list</em></a>) – A list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> for sending nodes.</li>
+<li><strong>receivers</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)"><em>list</em></a>) – A list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> for receiving nodes.</li>
+<li><strong>parent</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the parent <a class="reference internal" href="nodes.html#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a> of this node.</li>
+<li><strong>parent_transport</strong> (<a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a>) – A <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> for talking to this node’s parent.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="dist_zero.messages.sum_node_started">
+<code class="descclassname">dist_zero.messages.</code><code class="descname">sum_node_started</code><span class="sig-paren">(</span><em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/messages.html#sum_node_started"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.messages.sum_node_started" title="Permalink to this definition">¶</a></dt>
+<dd><p>For when a new sum node informs its parent that it has just started, and will now be sending messages.</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="cloud.html" title="previous chapter">Cloud Spawners</a></li>
+      <li>Next: <a href="nodes.html" title="next chapter">Nodes</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../_sources/doc/messages.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="../_sources/doc/messages.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

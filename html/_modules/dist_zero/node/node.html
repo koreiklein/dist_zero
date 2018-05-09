@@ -1,0 +1,159 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>dist_zero.node.node &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for dist_zero.node.node</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">dist_zero.logging</span>
+
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">messages</span>
+
+
+<div class="viewcode-block" id="Node"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node">[docs]</a><span class="k">class</span> <span class="nc">Node</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;Abstract base class for nodes&#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">LoggerAdapter</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;cur_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">})</span>
+
+  <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">())</span>
+
+<div class="viewcode-block" id="Node.set_transport"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.set_transport">[docs]</a>  <span class="k">def</span> <span class="nf">set_transport</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">transport</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Set the transport to use when this node sends messages to node.</span>
+
+<span class="sd">    :param node: The :ref:`handle` of a node.</span>
+<span class="sd">    :type node: :ref:`handle`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span> <span class="n">other</span><span class="p">,</span> <span class="n">transport</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Node.convert_transport_for"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.convert_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">convert_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="n">receiver</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Given a transport that self can use to link to kid,</span>
+<span class="sd">    create a new transport that the other node can use to link to kid.</span>
+
+<span class="sd">    :param sender: The :ref:`handle` of the node that will be sending.</span>
+<span class="sd">    :type sender: :ref:`handle`</span>
+
+<span class="sd">    :param receiver: The :ref:`handle` of the node that will be receiving.</span>
+<span class="sd">    :type receiver: :ref:`handle`</span>
+
+<span class="sd">    :return: A transport that other can use to talk to kid.</span>
+<span class="sd">    :rtype: :ref:`transport`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">convert_transport_for</span><span class="p">(</span><span class="n">current_sender</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span> <span class="n">new_sender</span><span class="o">=</span><span class="n">sender</span><span class="p">,</span> <span class="n">receiver</span><span class="o">=</span><span class="n">receiver</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Node.new_transport_for"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.new_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">new_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Create a transport that a node can use to link to self.</span>
+
+<span class="sd">    :param str node_id: The id of some node.</span>
+
+<span class="sd">    :return: A transport that node can use to link to self.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">new_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">node_id</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Node.initialize"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Called exactly once, when a node starts to run.&#39;&#39;&#39;</span>
+    <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="Node.handle"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.handle">[docs]</a>  <span class="k">def</span> <span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    This node&#39;s handle.</span>
+
+<span class="sd">    :return: A :ref:`handle` for the current node.</span>
+<span class="sd">    :rtype: :ref:`handle`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;Abstract Superclass&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Node.elapse"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Elapse ms of time on this node.</span>
+
+<span class="sd">    :param int ms: A number of milliseconds.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;Abstract Superclass&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Node.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Receive a message from some sender.</span>
+
+<span class="sd">    :param message: A :ref:`message` from one of the senders to this node.</span>
+<span class="sd">    :type message: :ref:`message`</span>
+
+<span class="sd">    :param sender: The :ref:`handle` of the node that sent the message.</span>
+<span class="sd">    :type sender: :ref:`handle`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;Abstract Superclass&#39;</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

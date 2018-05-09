@@ -1,0 +1,498 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>dist_zero.node.io &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for dist_zero.node.io</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">import</span> <span class="nn">dist_zero.ids</span>
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">settings</span><span class="p">,</span> <span class="n">messages</span><span class="p">,</span> <span class="n">errors</span><span class="p">,</span> <span class="n">recorded</span>
+<span class="kn">from</span> <span class="nn">.node</span> <span class="k">import</span> <span class="n">Node</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="InputLeafNode"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputLeafNode">[docs]</a><span class="k">class</span> <span class="nc">InputLeafNode</span><span class="p">(</span><span class="n">Node</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A leaf input node</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">parent</span><span class="p">,</span> <span class="n">parent_transport</span><span class="p">,</span> <span class="n">controller</span><span class="p">,</span> <span class="n">receivers</span><span class="p">,</span> <span class="n">recorded_user</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param `MachineController` controller: the controller for this node&#39;s machine.</span>
+<span class="sd">    :param list receivers: A list of :ref:`handle` for the nodes that should receive from this input.</span>
+<span class="sd">    :param parent: The :ref:`handle` of the parent `InputNode` of this node.</span>
+<span class="sd">    :type parent: :ref:`handle`</span>
+<span class="sd">    :param parent_transport: A :ref:`transport` for talking to this node&#39;s parent.</span>
+<span class="sd">    :type parent_transport: :ref:`transport`</span>
+<span class="sd">    :param `RecordedUser` recorded_user: In tests, this parameter may be not null to indicate that this input</span>
+<span class="sd">      node should playback the actions of an attached `RecordedUser` instance.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span> <span class="o">=</span> <span class="n">controller</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">node_id</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span> <span class="o">=</span> <span class="n">receivers</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_recorded_user</span> <span class="o">=</span> <span class="n">recorded_user</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">parent</span> <span class="o">=</span> <span class="n">parent</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_parent_transport</span> <span class="o">=</span> <span class="n">parent_transport</span>
+
+    <span class="c1"># A map from receiver id to &#39;pending&#39; or &#39;ready&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_receiver_state</span> <span class="o">=</span> <span class="p">{</span><span class="n">receiver</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]:</span> <span class="s1">&#39;pending&#39;</span> <span class="k">for</span> <span class="n">receiver</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span><span class="p">}</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_active</span> <span class="o">=</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span>
+    <span class="c1"># Messages received before becoming active.</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_pre_active_messages</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_new_receivers</span> <span class="o">=</span> <span class="kc">None</span> <span class="c1"># for when a node is migrating to new receivers.</span>
+
+    <span class="nb">super</span><span class="p">(</span><span class="n">InputLeafNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">_all_receivers_are_active</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">all</span><span class="p">(</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;active&#39;</span> <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_receiver_state</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+
+  <span class="k">def</span> <span class="nf">_receive_added_link</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Called when a new sender has been added.</span>
+
+<span class="sd">    :param sender: The :ref:`handle` of the sending node.</span>
+<span class="sd">    :type sender: :ref:`handle`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">transport</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_receiver_state</span><span class="p">[</span><span class="n">sender</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="s1">&#39;active&#39;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_all_receivers_are_active</span><span class="p">():</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Activating Input Leaf Node </span><span class="si">{node_id}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">})</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_active</span> <span class="o">=</span> <span class="kc">True</span>
+      <span class="c1"># Process all the postponed messages now</span>
+      <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pre_active_messages</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_receive_increment_message</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Received added_link message from </span><span class="si">{sender}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;sender&#39;</span><span class="p">:</span> <span class="n">sender</span><span class="p">})</span>
+
+<div class="viewcode-block" id="InputLeafNode.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputLeafNode.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">sender</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;added_link&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_receive_added_link</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;increment&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_receive_increment_message</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;start_duplicating&#39;</span><span class="p">:</span>
+      <span class="n">new_receiver</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;receiver&#39;</span><span class="p">]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+          <span class="s2">&quot;Starting duplication phase for </span><span class="si">{cur_node_id}</span><span class="s2"> . </span><span class="si">{new_receiver_id}</span><span class="s2"> will now receive duplicates.&quot;</span><span class="p">,</span>
+          <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;new_receiver_id&#39;</span><span class="p">:</span> <span class="n">new_receiver</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]})</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="n">new_receiver</span><span class="p">,</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">])</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_receiver</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_new_receivers</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_receiver</span><span class="p">]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">new_receiver</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">added_link</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">new_transport_for</span><span class="p">(</span><span class="n">new_receiver</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])))</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;finish_duplicating&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+          <span class="s2">&quot;Finishing duplication phase for </span><span class="si">{cur_node_id}</span><span class="s2"> .&quot;</span>
+          <span class="s2">&quot;  Cutting back number of receivers from </span><span class="si">{n_old_receivers}</span><span class="s2"> to </span><span class="si">{n_new_receivers}</span><span class="s2">&quot;</span><span class="p">,</span>
+          <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+              <span class="s1">&#39;n_old_receivers&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span><span class="p">),</span>
+              <span class="s1">&#39;n_new_receivers&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_new_receivers</span><span class="p">),</span>
+          <span class="p">})</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_receivers</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">finished_duplicating</span><span class="p">())</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unrecognized message type </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]))</span></div>
+
+  <span class="k">def</span> <span class="nf">_receive_increment_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_active</span><span class="p">:</span>
+      <span class="k">for</span> <span class="n">receiver</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Forwarding input message to receiver </span><span class="si">{receiver}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;receiver&#39;</span><span class="p">:</span> <span class="n">receiver</span><span class="p">})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="c1"># Postpone message till later</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Input leaf is postponing a message send since not all receivers are active.&quot;</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_pre_active_messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">_init_recorded_user_from_config</span><span class="p">(</span><span class="n">recorded_user_json</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Initialize a recorded_user instance from json.</span>
+
+<span class="sd">    :param recroded_user_json: None or a `RecordedUser` serialized to json.</span>
+<span class="sd">    :return: None or the deserialized and started `RecordedUser` instance.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">recorded_user_json</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="n">recorded_user</span> <span class="o">=</span> <span class="n">recorded</span><span class="o">.</span><span class="n">RecordedUser</span><span class="o">.</span><span class="n">from_json</span><span class="p">(</span><span class="n">recorded_user_json</span><span class="p">)</span>
+      <span class="n">recorded_user</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+      <span class="k">return</span> <span class="n">recorded_user</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">return</span> <span class="kc">None</span>
+
+  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">from_config</span><span class="p">(</span><span class="n">node_config</span><span class="p">,</span> <span class="n">controller</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">InputLeafNode</span><span class="p">(</span>
+        <span class="n">controller</span><span class="o">=</span><span class="n">controller</span><span class="p">,</span>
+        <span class="n">node_id</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+        <span class="n">parent</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;parent&#39;</span><span class="p">],</span>
+        <span class="n">parent_transport</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;parent_transport&#39;</span><span class="p">],</span>
+        <span class="n">receivers</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;receivers&#39;</span><span class="p">],</span>
+        <span class="n">recorded_user</span><span class="o">=</span><span class="n">InputLeafNode</span><span class="o">.</span><span class="n">_init_recorded_user_from_config</span><span class="p">(</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;recorded_user_json&#39;</span><span class="p">]))</span>
+
+<div class="viewcode-block" id="InputLeafNode.handle"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputLeafNode.handle">[docs]</a>  <span class="k">def</span> <span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;InputLeafNode&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">&#39;controller_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">id</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="InputLeafNode.initialize"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputLeafNode.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Input leaf node sending &#39;added_leaf&#39; message to parent&quot;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parent_transport</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">added_leaf</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span> <span class="n">transport</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">new_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])))</span></div>
+
+<div class="viewcode-block" id="InputLeafNode.elapse"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputLeafNode.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recorded_user</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">msg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recorded_user</span><span class="o">.</span><span class="n">elapse_and_get_messages</span><span class="p">(</span><span class="n">ms</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Simulated user generated a message&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;recorded_message&#39;</span><span class="p">:</span> <span class="n">msg</span><span class="p">})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">receive</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="OutputLeafNode"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputLeafNode">[docs]</a><span class="k">class</span> <span class="nc">OutputLeafNode</span><span class="p">(</span><span class="n">Node</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;A leaf output node&#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">parent</span><span class="p">,</span> <span class="n">parent_transport</span><span class="p">,</span> <span class="n">controller</span><span class="p">,</span> <span class="n">senders</span><span class="p">,</span> <span class="n">update_state</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param str node_id: The id of this  node.</span>
+<span class="sd">    :param parent: The :ref:`handle` of the parent node.</span>
+<span class="sd">    :type parent: :ref:`handle`</span>
+<span class="sd">    :param `MachineController` controller: The `MachineController` that manages this node.</span>
+<span class="sd">    :param list senders: A list of :ref:`handle` of nodes that send to this node.</span>
+<span class="sd">    :param func update_state: A function.</span>
+<span class="sd">      Call it with a function that takes the current state and returns a new state.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span> <span class="o">=</span> <span class="n">controller</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">node_id</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">parent</span> <span class="o">=</span> <span class="n">parent</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_parent_transport</span> <span class="o">=</span> <span class="n">parent_transport</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_senders</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_sender_state</span> <span class="o">=</span> <span class="p">{</span><span class="n">sender</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]:</span> <span class="s1">&#39;pending&#39;</span> <span class="k">for</span> <span class="n">sender</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_senders</span><span class="p">}</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_active</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_update_state</span> <span class="o">=</span> <span class="n">update_state</span>
+
+    <span class="c1"># Messages received before becoming active.</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_pre_active_messages</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="nb">super</span><span class="p">(</span><span class="n">OutputLeafNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">_all_senders_are_active</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">all</span><span class="p">(</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;active&#39;</span> <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sender_state</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+
+  <span class="k">def</span> <span class="nf">_receive_increment_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_active</span><span class="p">:</span>
+      <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;increment&#39;</span><span class="p">:</span>
+        <span class="n">increment</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;amount&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Output incrementing state by </span><span class="si">{increment}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;increment&#39;</span><span class="p">:</span> <span class="n">increment</span><span class="p">})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_update_state</span><span class="p">(</span><span class="k">lambda</span> <span class="n">amount</span><span class="p">:</span> <span class="n">amount</span> <span class="o">+</span> <span class="n">increment</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unrecognized type </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]))</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_pre_active_messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">_receive_added_link</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">receiver</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Called when a new receiver has been added.</span>
+
+<span class="sd">    :param receiver: The :ref:`handle` of the receiving node.</span>
+<span class="sd">    :type receiver: :ref:`handle`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="n">receiver</span><span class="p">,</span> <span class="n">transport</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_sender_state</span><span class="p">[</span><span class="n">receiver</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="s1">&#39;active&#39;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_all_senders_are_active</span><span class="p">():</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Activating Output Leaf Node </span><span class="si">{node_id}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">})</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_active</span> <span class="o">=</span> <span class="kc">True</span>
+      <span class="c1"># Process all the postponed messages now</span>
+      <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pre_active_messages</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_receive_increment_message</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Received added_link message from </span><span class="si">{receiver}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;receiver&#39;</span><span class="p">:</span> <span class="n">receiver</span><span class="p">})</span>
+
+<div class="viewcode-block" id="OutputLeafNode.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputLeafNode.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">sender</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;added_link&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_receive_added_link</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;increment&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_receive_increment_message</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unrecognized message type </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]))</span></div>
+
+  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">from_config</span><span class="p">(</span><span class="n">node_config</span><span class="p">,</span> <span class="n">controller</span><span class="p">,</span> <span class="n">update_state</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">OutputLeafNode</span><span class="p">(</span>
+        <span class="n">node_id</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+        <span class="n">parent</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;parent&#39;</span><span class="p">],</span>
+        <span class="n">parent_transport</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;parent_transport&#39;</span><span class="p">],</span>
+        <span class="n">controller</span><span class="o">=</span><span class="n">controller</span><span class="p">,</span>
+        <span class="n">senders</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;senders&#39;</span><span class="p">],</span>
+        <span class="n">update_state</span><span class="o">=</span><span class="n">update_state</span><span class="p">,</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="OutputLeafNode.handle"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputLeafNode.handle">[docs]</a>  <span class="k">def</span> <span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;OutputLeafNode&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">&#39;controller_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">id</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="OutputLeafNode.elapse"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputLeafNode.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="OutputLeafNode.initialize"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputLeafNode.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Output leaf node sending &#39;added_leaf&#39; message to parent&quot;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parent_transport</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">added_leaf</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span> <span class="n">transport</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">new_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])))</span></div></div>
+
+
+<div class="viewcode-block" id="InputNode"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputNode">[docs]</a><span class="k">class</span> <span class="nc">InputNode</span><span class="p">(</span><span class="n">Node</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Represents a tree of inputs</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">controller</span><span class="p">,</span> <span class="n">receivers</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span> <span class="o">=</span> <span class="n">controller</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">node_id</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span> <span class="o">=</span> <span class="p">{}</span> <span class="c1"># A map from kid node id to either &#39;pending&#39; or &#39;active&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span> <span class="o">=</span> <span class="p">[]</span> <span class="k">if</span> <span class="n">receivers</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">receivers</span>
+    <span class="nb">super</span><span class="p">(</span><span class="n">InputNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
+
+<div class="viewcode-block" id="InputNode.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputNode.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;start_sending_to&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">start_sending_to</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;node&#39;</span><span class="p">],</span> <span class="n">transport</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;added_leaf&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">added_leaf</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;kid&#39;</span><span class="p">],</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Unrecognized message </span><span class="si">{bad_msg}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;bad_msg&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">})</span></div>
+
+  <span class="k">def</span> <span class="nf">start_sending_to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="n">node_handle</span><span class="p">,</span> <span class="n">transport</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">node_handle</span><span class="p">)</span>
+
+  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">from_config</span><span class="p">(</span><span class="n">node_config</span><span class="p">,</span> <span class="n">controller</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">InputNode</span><span class="p">(</span><span class="n">node_id</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">controller</span><span class="o">=</span><span class="n">controller</span><span class="p">)</span>
+
+<div class="viewcode-block" id="InputNode.handle"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputNode.handle">[docs]</a>  <span class="k">def</span> <span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;InputNode&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">&#39;controller_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">id</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="InputNode.elapse"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputNode.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+  <span class="k">def</span> <span class="nf">_serialize_recorded_user</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">recorded_user</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Parse a recorded user object, throw appropriate errors, and return as json.</span>
+
+<span class="sd">    :param `RecordedUser` recorded_user: None, or a `RecordedUser`</span>
+<span class="sd">    :return: Serialized json to use for this recorded user.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">recorded_user</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="n">settings</span><span class="o">.</span><span class="n">TESTING</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">DistZeroError</span><span class="p">(</span><span class="s2">&quot;recorded_users are only allowed when in testing mode.  Current mode is </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">settings</span><span class="o">.</span><span class="n">DIST_ZERO_ENV</span><span class="p">))</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">recorded_user</span><span class="o">.</span><span class="n">to_json</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">return</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="InputNode.create_kid_config"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputNode.create_kid_config">[docs]</a>  <span class="k">def</span> <span class="nf">create_kid_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">machine_controller_handle</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Generate a config for a new child leaf node, and mark it as pending.</span>
+
+<span class="sd">    :param str name: The name to use for the new node.</span>
+
+<span class="sd">    :param machine_controller_handle: The :ref:`handle` of the MachineController which will run the new node.</span>
+<span class="sd">    :type machine_controller_handle: :ref:`handle`</span>
+<span class="sd">    :return: A config for the new child node.</span>
+<span class="sd">    :rtype: :ref:`message`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">node_id</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Registering a new leaf input node config for an internal node. name=&#39;</span><span class="si">{node_name}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;internal_node&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span>
+            <span class="s1">&#39;leaf_node_id&#39;</span><span class="p">:</span> <span class="n">node_id</span><span class="p">,</span>
+            <span class="s1">&#39;node_name&#39;</span><span class="p">:</span> <span class="n">name</span>
+        <span class="p">})</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;pending&#39;</span>
+    <span class="k">return</span> <span class="n">messages</span><span class="o">.</span><span class="n">input_leaf_config</span><span class="p">(</span>
+        <span class="n">node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+        <span class="n">parent</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span>
+        <span class="n">parent_transport</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">new_transport_for</span><span class="p">(</span><span class="n">node_id</span><span class="p">),</span>
+        <span class="n">receivers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+<div class="viewcode-block" id="InputNode.added_leaf"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InputNode.added_leaf">[docs]</a>  <span class="k">def</span> <span class="nf">added_leaf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kid</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param kid: The :ref:`handle` of the leaf input node that was just added.</span>
+<span class="sd">    :type kid: :ref:`handle`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">kid</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+          <span class="s2">&quot;added_leaf: Could not find node matching id </span><span class="si">{missing_child_node_id}</span><span class="s2">&quot;</span><span class="p">,</span>
+          <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;missing_child_node_id&#39;</span><span class="p">:</span> <span class="n">kid</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]})</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span><span class="p">[</span><span class="n">kid</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="s1">&#39;active&#39;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="n">kid</span><span class="p">,</span> <span class="n">transport</span><span class="p">)</span>
+
+      <span class="k">for</span> <span class="n">receiver</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_receivers</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">receiver</span><span class="p">,</span>
+                  <span class="n">messages</span><span class="o">.</span><span class="n">add_link</span><span class="p">(</span><span class="n">kid</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;sender&#39;</span><span class="p">,</span> <span class="n">transport</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">convert_transport_for</span><span class="p">(</span><span class="n">receiver</span><span class="p">,</span> <span class="n">kid</span><span class="p">)))</span></div></div>
+
+
+<div class="viewcode-block" id="OutputNode"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputNode">[docs]</a><span class="k">class</span> <span class="nc">OutputNode</span><span class="p">(</span><span class="n">Node</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Represents a tree of outputs</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">controller</span><span class="p">,</span> <span class="n">initial_state</span><span class="p">,</span> <span class="n">senders</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param str node_id: The id to use for this node</span>
+<span class="sd">    :param `MachineController` controller: The controller for this node.</span>
+<span class="sd">    :param object initial_state: A json serializeable starting state for all output leaves spawned from this node.</span>
+<span class="sd">    :param list senders: A list of nodes that send to this node.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span> <span class="o">=</span> <span class="n">controller</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">node_id</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_initial_state</span> <span class="o">=</span> <span class="n">initial_state</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_senders</span> <span class="o">=</span> <span class="p">[]</span> <span class="k">if</span> <span class="n">senders</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">senders</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span> <span class="o">=</span> <span class="p">{}</span> <span class="c1"># A map from kid node id to either &#39;pending&#39; or &#39;active&#39;</span>
+    <span class="nb">super</span><span class="p">(</span><span class="n">OutputNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OutputNode.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputNode.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;start_receiving_from&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">receive_from</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;node&#39;</span><span class="p">],</span> <span class="n">transport</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;added_leaf&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">added_leaf</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;kid&#39;</span><span class="p">],</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Unrecognized message </span><span class="si">{bad_msg}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;bad_msg&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">})</span></div>
+
+  <span class="k">def</span> <span class="nf">receive_from</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="n">node_handle</span><span class="p">,</span> <span class="n">transport</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_senders</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">node_handle</span><span class="p">)</span>
+
+  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">from_config</span><span class="p">(</span><span class="n">node_config</span><span class="p">,</span> <span class="n">controller</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">OutputNode</span><span class="p">(</span><span class="n">node_id</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">initial_state</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;initial_state&#39;</span><span class="p">],</span> <span class="n">controller</span><span class="o">=</span><span class="n">controller</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OutputNode.elapse"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputNode.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="OutputNode.handle"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputNode.handle">[docs]</a>  <span class="k">def</span> <span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;OutputNode&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">&#39;controller_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">id</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="OutputNode.create_kid_config"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputNode.create_kid_config">[docs]</a>  <span class="k">def</span> <span class="nf">create_kid_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">machine_controller_handle</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Generate a config for a new child leaf node, and mark it as pending.</span>
+
+<span class="sd">    :param str name: The name to use for the new node.</span>
+
+<span class="sd">    :param machine_controller_handle: The :ref:`handle` of the MachineController which will run the new node.</span>
+<span class="sd">    :type machine_controller_handle: :ref:`handle`</span>
+<span class="sd">    :return: A config for the new child node.</span>
+<span class="sd">    :rtype: :ref:`message`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">node_id</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Registering a new leaf output node config with an internal node. name=&#39;</span><span class="si">{node_name}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;internal_node&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span>
+            <span class="s1">&#39;leaf_node_id&#39;</span><span class="p">:</span> <span class="n">node_id</span><span class="p">,</span>
+            <span class="s1">&#39;node_name&#39;</span><span class="p">:</span> <span class="n">name</span>
+        <span class="p">})</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;pending&#39;</span>
+    <span class="k">return</span> <span class="n">messages</span><span class="o">.</span><span class="n">output_leaf_config</span><span class="p">(</span>
+        <span class="n">node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+        <span class="n">initial_state</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_initial_state</span><span class="p">,</span>
+        <span class="n">parent</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span>
+        <span class="n">parent_transport</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">new_transport_for</span><span class="p">(</span><span class="n">node_id</span><span class="p">),</span>
+        <span class="n">senders</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_senders</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OutputNode.added_leaf"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.OutputNode.added_leaf">[docs]</a>  <span class="k">def</span> <span class="nf">added_leaf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kid</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param kid: The :ref:`handle` of the leaf output node that was just added.</span>
+<span class="sd">    :type kid: :ref:`handle`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">kid</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+          <span class="s2">&quot;added_leaf: Could not find node matching id </span><span class="si">{missing_child_node_id}</span><span class="s2">&quot;</span><span class="p">,</span>
+          <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;missing_child_node_id&#39;</span><span class="p">:</span> <span class="n">kid</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]})</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span><span class="p">[</span><span class="n">kid</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="s1">&#39;active&#39;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="n">kid</span><span class="p">,</span> <span class="n">transport</span><span class="p">)</span>
+
+      <span class="k">for</span> <span class="n">sender</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_senders</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">add_link</span><span class="p">(</span>
+            <span class="n">kid</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;receiver&#39;</span><span class="p">,</span> <span class="n">transport</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">convert_transport_for</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">kid</span><span class="p">)))</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

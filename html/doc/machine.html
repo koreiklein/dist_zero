@@ -1,0 +1,403 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Machine &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="System Controller" href="system_controller.html" />
+    <link rel="prev" title="Machine Runner" href="machine_runner.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="machine">
+<h1>Machine<a class="headerlink" href="#machine" title="Permalink to this headline">¶</a></h1>
+<p><a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> instances interact with the underlying hardware via the <a class="reference internal" href="#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> interface.
+That interface has a unique implementation as a <a class="reference internal" href="#dist_zero.machine.NodeManager" title="dist_zero.machine.NodeManager"><code class="xref any py py-class docutils literal notranslate"><span class="pre">NodeManager</span></code></a> that provides additional
+methods, hidden from <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> intances, that allow various types of runners to indicate to the <a class="reference internal" href="#dist_zero.machine.NodeManager" title="dist_zero.machine.NodeManager"><code class="xref any py py-class docutils literal notranslate"><span class="pre">NodeManager</span></code></a>
+the passage of time and the arrival of messages.</p>
+<p>In simulated mode, the <a class="reference internal" href="simulator.html#dist_zero.spawners.simulator.SimulatedSpawner" title="dist_zero.spawners.simulator.SimulatedSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SimulatedSpawner</span></code></a> class runs every <a class="reference internal" href="#dist_zero.machine.NodeManager" title="dist_zero.machine.NodeManager"><code class="xref any py py-class docutils literal notranslate"><span class="pre">NodeManager</span></code></a> instance in the system.
+In virtual and cloud modes, the unique <a class="reference internal" href="machine_runner.html#dist_zero.machine_runner.MachineRunner" title="dist_zero.machine_runner.MachineRunner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineRunner</span></code></a> runloop on each container or cloud instance
+runs a single <a class="reference internal" href="#dist_zero.machine.NodeManager" title="dist_zero.machine.NodeManager"><code class="xref any py py-class docutils literal notranslate"><span class="pre">NodeManager</span></code></a>.</p>
+<span class="target" id="module-dist_zero.machine"></span><dl class="class">
+<dt id="dist_zero.machine.MachineController">
+<em class="property">class </em><code class="descclassname">dist_zero.machine.</code><code class="descname">MachineController</code><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController" title="Permalink to this definition">¶</a></dt>
+<dd><p>The interface that <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> instances will use to interact with the underlying hardware.</p>
+<dl class="method">
+<dt id="dist_zero.machine.MachineController.convert_transport_for">
+<code class="descname">convert_transport_for</code><span class="sig-paren">(</span><em>current_sender</em>, <em>new_sender</em>, <em>receiver</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.convert_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.convert_transport_for" title="Permalink to this definition">¶</a></dt>
+<dd><p>If there exists a transport that a node on self uses to talk to a receiver,
+this method creates a new transport allowing a different node to talk to the same receiver.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>current_sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – A node managed by self.</li>
+<li><strong>new_sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – Any node</li>
+<li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – Any node for which current_sender has a working transport.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A transport that new_sender can use to talk to receiver</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.MachineController.new_transport_for">
+<code class="descname">new_transport_for</code><span class="sig-paren">(</span><em>local_node_id</em>, <em>remote_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.new_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.new_transport_for" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a transport that a remote node can use to link to a node on this machine.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>local_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of a node on this machine.</li>
+<li><strong>remote_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of any node.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A transport that the remote node can use to send to the local node.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.MachineController.send">
+<code class="descname">send</code><span class="sig-paren">(</span><em>node_handle</em>, <em>message</em>, <em>sending_node_handle</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.send"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.send" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a message to a node either managed by self, or linked to self.
+A transport must be set for the sender to send to the destination node.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of a node</li>
+<li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A message for that node</li>
+<li><strong>sending_node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of the sending node.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.MachineController.set_transport">
+<code class="descname">set_transport</code><span class="sig-paren">(</span><em>sender</em>, <em>receiver</em>, <em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.set_transport"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.set_transport" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the transport for messages from sender to receiver.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the sending node. It must be managed by self.</li>
+<li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the receiving node.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.MachineController.spawn_node">
+<code class="descname">spawn_node</code><span class="sig-paren">(</span><em>node_config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.spawn_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.spawn_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start creating a new node on a linked machine.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>node_config</strong> (<em>json</em>) – A JSON serializable message that describes how to run the node.</li>
+<li><strong>on_machine</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of a <a class="reference internal" href="#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a>.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The handle of the newly created node.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="dist_zero.machine.NodeManager">
+<em class="property">class </em><code class="descclassname">dist_zero.machine.</code><code class="descname">NodeManager</code><span class="sig-paren">(</span><em>machine_id</em>, <em>machine_name</em>, <em>mode</em>, <em>system_id</em>, <em>ip_host</em>, <em>send_to_machine</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager" title="Permalink to this definition">¶</a></dt>
+<dd><p>The only implementation of <a class="reference internal" href="#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a>.  A <a class="reference internal" href="#dist_zero.machine.NodeManager" title="dist_zero.machine.NodeManager"><code class="xref any py py-class docutils literal notranslate"><span class="pre">NodeManager</span></code></a> instance exposes two interfaces.</p>
+<p>The first interface is the <a class="reference internal" href="#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> interface to the <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> instances it manages.</p>
+<p>The second interface is to whatever is running the <a class="reference internal" href="#dist_zero.machine.NodeManager" title="dist_zero.machine.NodeManager"><code class="xref any py py-class docutils literal notranslate"><span class="pre">NodeManager</span></code></a> .  In virtual and cloud modes,
+the <a class="reference internal" href="#dist_zero.machine.NodeManager" title="dist_zero.machine.NodeManager"><code class="xref any py py-class docutils literal notranslate"><span class="pre">NodeManager</span></code></a> is probably managed by a <a class="reference internal" href="machine_runner.html#dist_zero.machine_runner.MachineRunner" title="dist_zero.machine_runner.MachineRunner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineRunner</span></code></a> runloop for the process responding to the passage of time
+and to events on a socket.  In simulated mode, the <a class="reference internal" href="#dist_zero.machine.NodeManager" title="dist_zero.machine.NodeManager"><code class="xref any py py-class docutils literal notranslate"><span class="pre">NodeManager</span></code></a> is managed by a <a class="reference internal" href="simulator.html#dist_zero.spawners.simulator.SimulatedSpawner" title="dist_zero.spawners.simulator.SimulatedSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SimulatedSpawner</span></code></a>
+instance.  Either way, whatever manages the <a class="reference internal" href="#dist_zero.machine.NodeManager" title="dist_zero.machine.NodeManager"><code class="xref any py py-class docutils literal notranslate"><span class="pre">NodeManager</span></code></a> must elapse time,
+and deliver ordinary messages and api messages.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>machine_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The unique id of this machine.</li>
+<li><strong>machine_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – A name to use for this machine.</li>
+<li><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – A mode (from <a class="reference internal" href="spawners.html#module-dist_zero.spawners" title="dist_zero.spawners"><code class="xref any py py-mod docutils literal notranslate"><span class="pre">dist_zero.spawners</span></code></a>) (simulated, virtual, or cloud)</li>
+<li><strong>system_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the overall distributed system</li>
+<li><strong>ip_host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The host parameter to use when generating transports that send to this machine.</li>
+<li><strong>send_to_machine</strong> (<em>func</em>) – A function send_to_machine(message, transport)
+where message is a <a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>, and transport is a <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> for a receiving node.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="dist_zero.machine.NodeManager.convert_transport_for">
+<code class="descname">convert_transport_for</code><span class="sig-paren">(</span><em>current_sender</em>, <em>new_sender</em>, <em>receiver</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.convert_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.convert_transport_for" title="Permalink to this definition">¶</a></dt>
+<dd><p>If there exists a transport that a node on self uses to talk to a receiver,
+this method creates a new transport allowing a different node to talk to the same receiver.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>current_sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – A node managed by self.</li>
+<li><strong>new_sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – Any node</li>
+<li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – Any node for which current_sender has a working transport.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A transport that new_sender can use to talk to receiver</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.NodeManager.elapse_nodes">
+<code class="descname">elapse_nodes</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.elapse_nodes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.elapse_nodes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Elapse ms milliseconds of time on all nodes managed by self.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>ms</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – The number of milliseconds to elapse.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.NodeManager.handle_api_message">
+<code class="descname">handle_api_message</code><span class="sig-paren">(</span><em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.handle_api_message"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.handle_api_message" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A json message for the API</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The API response to the message</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)">object</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.NodeManager.handle_message">
+<code class="descname">handle_message</code><span class="sig-paren">(</span><em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.handle_message"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.handle_message" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle an arbitrary machine message for this <a class="reference internal" href="#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> instance.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A machine <a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a> for this <a class="reference internal" href="#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> instance.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.NodeManager.new_transport_for">
+<code class="descname">new_transport_for</code><span class="sig-paren">(</span><em>local_node_id</em>, <em>remote_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.new_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.new_transport_for" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a transport that a remote node can use to link to a node on this machine.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>local_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of a node on this machine.</li>
+<li><strong>remote_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of any node.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A transport that the remote node can use to send to the local node.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.NodeManager.send">
+<code class="descname">send</code><span class="sig-paren">(</span><em>node_handle</em>, <em>message</em>, <em>sending_node_handle</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.send"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.send" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a message to a node either managed by self, or linked to self.
+A transport must be set for the sender to send to the destination node.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of a node</li>
+<li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A message for that node</li>
+<li><strong>sending_node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of the sending node.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.NodeManager.set_transport">
+<code class="descname">set_transport</code><span class="sig-paren">(</span><em>sender</em>, <em>receiver</em>, <em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.set_transport"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.set_transport" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the transport for messages from sender to receiver.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the sending node. It must be managed by self.</li>
+<li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the receiving node.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.NodeManager.spawn_node">
+<code class="descname">spawn_node</code><span class="sig-paren">(</span><em>node_config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.spawn_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.spawn_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start creating a new node on a linked machine.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>node_config</strong> (<em>json</em>) – A JSON serializable message that describes how to run the node.</li>
+<li><strong>on_machine</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of a <a class="reference internal" href="#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a>.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The handle of the newly created node.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="machine_runner.html" title="previous chapter">Machine Runner</a></li>
+      <li>Next: <a href="system_controller.html" title="next chapter">System Controller</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../_sources/doc/machine.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="../_sources/doc/machine.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

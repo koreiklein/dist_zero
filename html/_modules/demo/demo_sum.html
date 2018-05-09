@@ -1,0 +1,233 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>demo.demo_sum &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for demo.demo_sum</h1><div class="highlight"><pre>
+<span></span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Long running demos involving sum nodes.</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">random</span>
+
+<span class="kn">import</span> <span class="nn">dist_zero.ids</span>
+
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">messages</span><span class="p">,</span> <span class="n">errors</span><span class="p">,</span> <span class="n">spawners</span>
+<span class="kn">from</span> <span class="nn">dist_zero.spawners.docker</span> <span class="k">import</span> <span class="n">DockerSpawner</span>
+<span class="kn">from</span> <span class="nn">dist_zero.spawners.simulator</span> <span class="k">import</span> <span class="n">SimulatedSpawner</span>
+<span class="kn">from</span> <span class="nn">dist_zero.recorded</span> <span class="k">import</span> <span class="n">RecordedUser</span>
+<span class="kn">from</span> <span class="nn">dist_zero.system_controller</span> <span class="k">import</span> <span class="n">SystemController</span>
+
+
+<div class="viewcode-block" id="Demo"><a class="viewcode-back" href="../../doc/demo.html#demo.demo_sum.Demo">[docs]</a><span class="k">class</span> <span class="nc">Demo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Common Superclass for running these demos.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">setUp</span><span class="p">()</span>
+    <span class="k">try</span><span class="p">:</span>
+      <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)()</span>
+    <span class="k">finally</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">tearDown</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="SumDemo"><a class="viewcode-back" href="../../doc/demo.html#demo.demo_sum.SumDemo">[docs]</a><span class="k">class</span> <span class="nc">SumDemo</span><span class="p">(</span><span class="n">Demo</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">n_machines</span> <span class="o">=</span> <span class="mi">6</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">system_id</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">()</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">virtual_spawner</span> <span class="o">=</span> <span class="n">DockerSpawner</span><span class="p">(</span><span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">system_id</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">simulated_spawner</span> <span class="o">=</span> <span class="n">SimulatedSpawner</span><span class="p">(</span><span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">system_id</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="s1">&#39;SimulatedSumTest&#39;</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">tearDown</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">virtual_spawner</span><span class="o">.</span><span class="n">started</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">virtual_spawner</span><span class="o">.</span><span class="n">clean_all</span><span class="p">()</span>
+
+<div class="viewcode-block" id="SumDemo.demo_node_splitting"><a class="viewcode-back" href="../../doc/demo.html#demo.demo_sum.SumDemo.demo_node_splitting">[docs]</a>  <span class="k">def</span> <span class="nf">demo_node_splitting</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Spawn a single sum node, and add senders until it splits.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">simulated</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">system</span> <span class="o">=</span> <span class="n">SystemController</span><span class="p">(</span><span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">system_id</span><span class="p">,</span> <span class="n">spawner</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">simulated_spawner</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">configure_logging</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">simulated_spawner</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_spawn_initial_nodes</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_run_for</span><span class="p">(</span><span class="n">ms</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">input_nodes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_spawn_inputs_loop</span><span class="p">(</span><span class="n">n_inputs</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">total_time_ms</span><span class="o">=</span><span class="mi">20</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span></div>
+
+  <span class="k">def</span> <span class="nf">_now_ms</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">simulated</span><span class="p">:</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">simulated_spawner</span><span class="o">.</span><span class="n">now_ms</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">return</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+  <span class="k">def</span> <span class="nf">_run_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">simulated</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">simulated_spawner</span><span class="o">.</span><span class="n">run_for</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">ms</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">ms</span> <span class="o">/</span> <span class="mi">1000</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SumDemo.demo_single_node_hits_sender_limit"><a class="viewcode-back" href="../../doc/demo.html#demo.demo_sum.SumDemo.demo_single_node_hits_sender_limit">[docs]</a>  <span class="k">def</span> <span class="nf">demo_single_node_hits_sender_limit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Spawn a single sum node, and keep adding input nodes that send to it.</span>
+<span class="sd">    When running this demo, a developer should -- through a log analysis tool -- be able to chart the</span>
+<span class="sd">    number of senders on that node over time, watching as it continues to increase, until eventually it hits</span>
+<span class="sd">    the node&#39;s limit for number of senders and some indication of the limit appears on the chart.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">simulated</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">system</span> <span class="o">=</span> <span class="n">SystemController</span><span class="p">(</span><span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">system_id</span><span class="p">,</span> <span class="n">spawner</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">virtual_spawner</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">configure_logging</span><span class="p">()</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">virtual_spawner</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_spawn_initial_nodes</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_run_for</span><span class="p">(</span><span class="n">ms</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">input_nodes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_spawn_inputs_loop</span><span class="p">(</span><span class="n">n_inputs</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">total_time_ms</span><span class="o">=</span><span class="mi">20</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span></div>
+
+  <span class="k">def</span> <span class="nf">_spawn_initial_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">machine_handles</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">create_machines</span><span class="p">([</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">machine_config</span><span class="p">(</span><span class="n">machine_name</span><span class="o">=</span><span class="s1">&#39;machine </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="n">machine_controller_id</span><span class="o">=</span><span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">())</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_machines</span><span class="p">)</span>
+    <span class="p">])</span>
+
+    <span class="n">machine_a_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">machine_handles</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">root_input_node_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span>
+        <span class="n">on_machine</span><span class="o">=</span><span class="n">machine_a_handle</span><span class="p">,</span> <span class="n">node_config</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">input_node_config</span><span class="p">(</span><span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">()))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">root_output_node_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span>
+        <span class="n">on_machine</span><span class="o">=</span><span class="n">machine_a_handle</span><span class="p">,</span> <span class="n">node_config</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">output_node_config</span><span class="p">(</span><span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(),</span> <span class="n">initial_state</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">sum_node_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span>
+        <span class="n">on_machine</span><span class="o">=</span><span class="n">machine_a_handle</span><span class="p">,</span>
+        <span class="n">node_config</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">sum_node_config</span><span class="p">(</span>
+            <span class="n">node_id</span><span class="o">=</span><span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(),</span>
+            <span class="n">senders</span><span class="o">=</span><span class="p">[],</span>
+            <span class="n">receivers</span><span class="o">=</span><span class="p">[],</span>
+        <span class="p">))</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">send_to_node</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_input_node_handle</span><span class="p">,</span>
+                             <span class="n">messages</span><span class="o">.</span><span class="n">start_sending_to</span><span class="p">(</span>
+                                 <span class="n">new_receiver</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sum_node_handle</span><span class="p">,</span>
+                                 <span class="n">transport</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">create_transport_for</span><span class="p">(</span>
+                                     <span class="n">sender</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">root_input_node_handle</span><span class="p">,</span> <span class="n">receiver</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sum_node_handle</span><span class="p">)))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">send_to_node</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_output_node_handle</span><span class="p">,</span>
+                             <span class="n">messages</span><span class="o">.</span><span class="n">start_receiving_from</span><span class="p">(</span>
+                                 <span class="n">new_sender</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sum_node_handle</span><span class="p">,</span>
+                                 <span class="n">transport</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">create_transport_for</span><span class="p">(</span>
+                                     <span class="n">sender</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">root_output_node_handle</span><span class="p">,</span> <span class="n">receiver</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sum_node_handle</span><span class="p">),</span>
+                             <span class="p">))</span>
+
+  <span class="k">def</span> <span class="nf">_spawn_inputs_loop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n_inputs</span><span class="p">,</span> <span class="n">total_time_ms</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Spawn n_inputs input leaf nodes over the course of total_time_ms.</span>
+
+<span class="sd">    Each input should randomly send some increment messages.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">time_per_spawn_ms</span> <span class="o">=</span> <span class="n">total_time_ms</span> <span class="o">/</span> <span class="n">n_inputs</span>
+    <span class="n">start_time_ms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span><span class="p">()</span>
+    <span class="n">end_time_ms</span> <span class="o">=</span> <span class="n">start_time_ms</span> <span class="o">+</span> <span class="n">total_time_ms</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_inputs</span><span class="p">):</span>
+      <span class="n">expected_spawn_time</span> <span class="o">=</span> <span class="n">start_time_ms</span> <span class="o">+</span> <span class="n">time_per_spawn_ms</span> <span class="o">*</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+      <span class="n">cur_time_ms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span><span class="p">()</span>
+
+      <span class="k">if</span> <span class="n">cur_time_ms</span> <span class="o">&lt;</span> <span class="n">expected_spawn_time</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_run_for</span><span class="p">(</span><span class="n">expected_spawn_time</span> <span class="o">-</span> <span class="n">cur_time_ms</span><span class="p">)</span>
+
+      <span class="n">remaining_time_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">end_time_ms</span> <span class="o">-</span> <span class="n">cur_time_ms</span><span class="p">)</span> <span class="o">-</span> <span class="mi">30</span> <span class="c1"># Send messages in almost the whole remaining time window.</span>
+      <span class="n">AVE_INTER_MESSAGE_TIME_MS</span> <span class="o">=</span> <span class="mi">1200</span>
+
+      <span class="bp">self</span><span class="o">.</span><span class="n">input_nodes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">create_kid</span><span class="p">(</span>
+              <span class="n">parent_node</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">root_input_node_handle</span><span class="p">,</span>
+              <span class="n">new_node_name</span><span class="o">=</span><span class="s1">&#39;input_</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">),</span>
+              <span class="c1"># Place the new nodes on machines in a round-robin manner.</span>
+              <span class="n">machine_controller_handle</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">machine_handles</span><span class="p">[</span><span class="n">i</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">machine_handles</span><span class="p">)],</span>
+              <span class="n">recorded_user</span><span class="o">=</span><span class="n">RecordedUser</span><span class="p">(</span>
+                  <span class="s1">&#39;user </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">),</span>
+                  <span class="p">[(</span><span class="n">t</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">increment</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">*</span> <span class="mi">20</span><span class="p">)))</span>
+                   <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">*</span> <span class="n">remaining_time_ms</span>
+                                   <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">remaining_time_ms</span> <span class="o">/</span> <span class="n">AVE_INTER_MESSAGE_TIME_MS</span><span class="p">)))])))</span>
+
+    <span class="c1"># Let things settle down</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_run_for</span><span class="p">(</span><span class="n">ms</span><span class="o">=</span><span class="mi">4000</span><span class="p">)</span></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+  <span class="c1">#SumDemo().run(&#39;demo_single_node_hits_sender_limit&#39;)</span>
+  <span class="n">SumDemo</span><span class="p">()</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="s1">&#39;demo_node_splitting&#39;</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

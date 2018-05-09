@@ -1,0 +1,324 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>dist_zero.spawners.simulator &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for dist_zero.spawners.simulator</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">heapq</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="kn">import</span> <span class="nn">dist_zero.logging</span>
+<span class="kn">import</span> <span class="nn">dist_zero.ids</span>
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">machine</span><span class="p">,</span> <span class="n">errors</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">spawners</span>
+<span class="kn">from</span> <span class="nn">dist_zero.node</span> <span class="k">import</span> <span class="n">io</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="k">import</span> <span class="n">spawner</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="SimulatedSpawner"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner">[docs]</a><span class="k">class</span> <span class="nc">SimulatedSpawner</span><span class="p">(</span><span class="n">spawner</span><span class="o">.</span><span class="n">Spawner</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A class for creating instances of `MachineRunner` each in its own container to simulate distinct machines in tests.</span>
+
+<span class="sd">  Tests should typically create a single instance of this factory, and use it to generate</span>
+<span class="sd">  all their `MachineController` instances.</span>
+<span class="sd">  Then, this factory class will simulate the behavior of a real-life network during the test.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="c1"># The number of milliseconds to simulate at a time</span>
+  <span class="n">MAX_STEP_TIME_MS</span> <span class="o">=</span> <span class="mi">5</span>
+  <span class="n">AVERAGE_SEND_TIME_MS</span> <span class="o">=</span> <span class="mi">10</span>
+  <span class="n">SEND_TIME_STDDEV_MS</span> <span class="o">=</span> <span class="mi">3</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">system_id</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="s1">&#39;random_seed&#39;</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param str system_id: The id of the overall simulated distributed system.</span>
+<span class="sd">    :param str random_seed: A random seed for all randomness employed by this class.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span> <span class="o">=</span> <span class="n">system_id</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_start_datetime</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller_by_id</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="o">=</span> <span class="kc">None</span> <span class="c1"># None if unstarted, otherwise the number of ms simulated so far</span>
+
+    <span class="c1"># a heap (as in heapq) of tuples (ms_at_which_receipt_takes place, message_to_receive)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_pending_receives</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_random</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="n">random_seed</span><span class="p">)</span>
+
+    <span class="c1"># A log of all the items pushed onto the heap in the order they were pushed.</span>
+    <span class="c1"># This log is useful for debugging.</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_log</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="SimulatedSpawner.mode"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.mode">[docs]</a>  <span class="k">def</span> <span class="nf">mode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">spawners</span><span class="o">.</span><span class="n">MODE_SIMULATED</span></div>
+
+  <span class="k">def</span> <span class="nf">_random_ms_for_send</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span>
+               <span class="nb">int</span><span class="p">(</span>
+                   <span class="bp">self</span><span class="o">.</span><span class="n">_random</span><span class="o">.</span><span class="n">gauss</span><span class="p">(</span>
+                       <span class="n">mu</span><span class="o">=</span><span class="n">SimulatedSpawner</span><span class="o">.</span><span class="n">AVERAGE_SEND_TIME_MS</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">SimulatedSpawner</span><span class="o">.</span><span class="n">SEND_TIME_STDDEV_MS</span><span class="p">)))</span>
+
+<div class="viewcode-block" id="SimulatedSpawner.start"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.start">[docs]</a>  <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Begin the simulation&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t start the same simulation twice&quot;</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;=================================================&quot;</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;========== STARTING SIMULATOR LOGGING  ==========&quot;</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;=================================================&quot;</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Simulator = </span><span class="si">{simulator_id}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;simulator_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">})</span></div>
+
+  <span class="k">def</span> <span class="nf">_format_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Format a node handle as a human readable string to look nice in logs.</span>
+<span class="sd">    :param node_handle: None, or a node handle.</span>
+<span class="sd">    :type node_handle: :ref:`handle`</span>
+
+<span class="sd">    :return: A human readable string represending that node handle.</span>
+<span class="sd">    :rtype: str</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">node_handle</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="k">return</span> <span class="s2">&quot;null&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">return</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">.</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">],</span> <span class="nb">str</span><span class="p">(</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])[</span><span class="o">-</span><span class="mi">4</span><span class="p">:])</span>
+
+  <span class="k">def</span> <span class="nf">_format_log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_message</span><span class="p">):</span>
+    <span class="n">ms</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">log_message</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;machine_deliver_to_node&#39;</span><span class="p">:</span>
+      <span class="k">return</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> --</span><span class="si">{}</span><span class="s2">--&gt; </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">_format_node</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sending_node&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+          <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">][</span><span class="s1">&#39;type&#39;</span><span class="p">],</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">_format_node</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;node&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+      <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">return</span> <span class="s2">&quot;Control Message: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">])</span>
+
+<div class="viewcode-block" id="SimulatedSpawner.run_for"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.run_for">[docs]</a>  <span class="k">def</span> <span class="nf">run_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Run the simulation for a number of milliseconds.</span>
+<span class="sd">    Wrap exceptions thrown by the underlying nodes in a `SimulationError`.</span>
+
+<span class="sd">    :param int ms: The number of milliseconds to run for</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">try</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_run_for_throwing_inner_exns</span><span class="p">(</span><span class="n">ms</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">RuntimeError</span><span class="p">:</span>
+      <span class="n">exc_info</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+      <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">SimulationError</span><span class="p">(</span><span class="n">log_lines</span><span class="o">=</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_format_log</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_log</span><span class="p">],</span> <span class="n">exc_info</span><span class="o">=</span><span class="n">exc_info</span><span class="p">)</span></div>
+
+  <span class="k">def</span> <span class="nf">_run_for_throwing_inner_exns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Run the simulation for a number of milliseconds.  Raise any</span>
+<span class="sd">    exception thrown by the underlying nodes directly.</span>
+
+<span class="sd">    :param int ms: The number of milliseconds to run for</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Cannot run a simulate that is not yet started.  Please call .start() first&quot;</span><span class="p">)</span>
+
+    <span class="n">stop_time_ms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="o">+</span> <span class="n">ms</span>
+
+    <span class="k">while</span> <span class="n">stop_time_ms</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span><span class="p">:</span>
+      <span class="c1"># The amount of time to simulate in this iteration of the loop</span>
+      <span class="n">step_time_ms</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">stop_time_ms</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span><span class="p">,</span> <span class="n">SimulatedSpawner</span><span class="o">.</span><span class="n">MAX_STEP_TIME_MS</span><span class="p">)</span>
+      <span class="c1"># The value of self._elapsed_time at the end of this iteration of the loop</span>
+      <span class="n">new_elapsed_time_ms</span> <span class="o">=</span> <span class="n">step_time_ms</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span>
+
+      <span class="c1"># Even for debug logs, the below logging statement is overly verbose.</span>
+      <span class="c1">#logger.debug(</span>
+      <span class="c1">#    &quot;Simulating from {start_time} ms to {end_time} ms&quot;,</span>
+      <span class="c1">#    extra={</span>
+      <span class="c1">#        &#39;start_time&#39;: self._elapsed_time_ms,</span>
+      <span class="c1">#        &#39;end_time&#39;: new_elapsed_time_ms,</span>
+      <span class="c1">#    })</span>
+
+      <span class="c1"># Simulate every event in the queue</span>
+      <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_receives</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_receives</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">t</span> <span class="o">&lt;=</span> <span class="n">new_elapsed_time_ms</span><span class="p">:</span>
+        <span class="n">received_at</span><span class="p">,</span> <span class="n">to_receive</span> <span class="o">=</span> <span class="n">heapq</span><span class="o">.</span><span class="n">heappop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_receives</span><span class="p">)</span><span class="o">.</span><span class="n">tuple</span><span class="p">()</span>
+        <span class="c1"># Simulate the time before this event</span>
+        <span class="k">for</span> <span class="n">controller</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller_by_id</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+          <span class="n">controller</span><span class="o">.</span><span class="n">elapse_nodes</span><span class="p">(</span><span class="n">received_at</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span><span class="p">)</span>
+
+        <span class="c1"># Simulate the event</span>
+        <span class="n">receiving_controller</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller_by_id</span><span class="p">[</span><span class="n">to_receive</span><span class="p">[</span><span class="s1">&#39;machine_id&#39;</span><span class="p">]]</span>
+        <span class="n">receiving_controller</span><span class="o">.</span><span class="n">handle_message</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">to_receive</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">])</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="o">=</span> <span class="n">received_at</span>
+
+      <span class="c1"># Simulate the rest of step_time_ms not simulated in the above loop over events</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="o">&lt;</span> <span class="n">new_elapsed_time_ms</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">controller</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller_by_id</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+          <span class="n">controller</span><span class="o">.</span><span class="n">elapse_nodes</span><span class="p">(</span><span class="n">new_elapsed_time_ms</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span><span class="p">)</span>
+
+      <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="o">=</span> <span class="n">new_elapsed_time_ms</span>
+
+<div class="viewcode-block" id="SimulatedSpawner.get_machine_controller"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.get_machine_controller">[docs]</a>  <span class="k">def</span> <span class="nf">get_machine_controller</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param handle: The handle of a MachineController being simulated by this simulator.</span>
+<span class="sd">    :type handle: :ref:`handle`</span>
+
+<span class="sd">    :return: The associated `MachineController` instance.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller_by_id</span><span class="p">[</span><span class="n">handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span></div>
+
+<div class="viewcode-block" id="SimulatedSpawner.create_machines"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.create_machines">[docs]</a>  <span class="k">def</span> <span class="nf">create_machines</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_configs</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">create_machine</span><span class="p">(</span><span class="n">machine_config</span><span class="p">)</span> <span class="k">for</span> <span class="n">machine_config</span> <span class="ow">in</span> <span class="n">machine_configs</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="SimulatedSpawner.create_machine"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.create_machine">[docs]</a>  <span class="k">def</span> <span class="nf">create_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_config</span><span class="p">):</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">machine</span><span class="o">.</span><span class="n">NodeManager</span><span class="p">(</span>
+        <span class="n">machine_id</span><span class="o">=</span><span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+        <span class="n">machine_name</span><span class="o">=</span><span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;machine_name&#39;</span><span class="p">],</span>
+        <span class="n">mode</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">(),</span>
+        <span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span><span class="p">,</span>
+        <span class="n">ip_host</span><span class="o">=</span><span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+        <span class="n">send_to_machine</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_node_manager_send_to_machine</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller_by_id</span><span class="p">[</span><span class="n">result</span><span class="o">.</span><span class="n">id</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span>
+    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">handle</span><span class="p">()</span></div>
+
+  <span class="k">def</span> <span class="nf">_add_to_heap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">heapitem</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Add a new item to the heap.</span>
+
+<span class="sd">    :param tuple heapitem: A pair (ms_at_which_receipt_takes place, message_to_receive)</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_log</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">heapitem</span><span class="p">)</span>
+    <span class="n">heapq</span><span class="o">.</span><span class="n">heappush</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_receives</span><span class="p">,</span> <span class="n">_Event</span><span class="p">(</span><span class="o">*</span><span class="n">heapitem</span><span class="p">))</span>
+
+  <span class="k">def</span> <span class="nf">now_ms</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span>
+
+<div class="viewcode-block" id="SimulatedSpawner.send_to_machine"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.send_to_machine">[docs]</a>  <span class="k">def</span> <span class="nf">send_to_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;udp&#39;</span><span class="p">):</span>
+    <span class="c1"># Simulate the serializing and deserializing that happens in other Spawners.</span>
+    <span class="c1"># This behavior is important so that simulated tests don&#39;t accidentally share data.</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">message</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;The simulation must be started before it can send messages.&#39;</span><span class="p">)</span>
+
+    <span class="n">sending_time_ms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_random_ms_for_send</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">sock_type</span> <span class="o">==</span> <span class="s1">&#39;udp&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_add_to_heap</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="o">+</span> <span class="n">sending_time_ms</span><span class="p">,</span> <span class="p">{</span>
+          <span class="s1">&#39;machine_id&#39;</span><span class="p">:</span> <span class="n">machine</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+          <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
+      <span class="p">}))</span>
+    <span class="k">elif</span> <span class="n">sock_type</span> <span class="o">==</span> <span class="s1">&#39;tcp&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">run_for</span><span class="p">(</span><span class="n">ms</span><span class="o">=</span><span class="n">sending_time_ms</span><span class="p">)</span>
+      <span class="n">receiving_controller</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller_by_id</span><span class="p">[</span><span class="n">machine</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span>
+      <span class="n">response</span> <span class="o">=</span> <span class="n">receiving_controller</span><span class="o">.</span><span class="n">handle_api_message</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">response</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ok&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">response</span><span class="p">[</span><span class="s1">&#39;data&#39;</span><span class="p">]</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Bad response from api: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;reason&#39;</span><span class="p">]))</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unrecognized socket type &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sock_type</span><span class="p">))</span></div>
+
+  <span class="k">def</span> <span class="nf">_node_manager_send_to_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;The simulation must be started before it can send messages.&#39;</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_add_to_heap</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_random_ms_for_send</span><span class="p">(),</span> <span class="p">{</span>
+        <span class="s1">&#39;machine_id&#39;</span><span class="p">:</span> <span class="n">transport</span><span class="p">[</span><span class="s1">&#39;host&#39;</span><span class="p">],</span>
+        <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
+    <span class="p">}))</span></div>
+
+
+<span class="k">class</span> <span class="nc">_Event</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Instances of _Event represent events in the simulation.</span>
+<span class="sd">  This class is here just to define the ordering on events.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
+
+  <span class="k">def</span> <span class="nf">__lt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">t</span><span class="p">:</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">&lt;</span> <span class="n">other</span><span class="o">.</span><span class="n">t</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="c1"># Return a consistent answer when comparing events that occur at the exact same time.</span>
+      <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">tuple</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

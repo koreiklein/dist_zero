@@ -1,0 +1,416 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>dist_zero.spawners.cloud.aws &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for dist_zero.spawners.cloud.aws</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">defaultdict</span>
+
+<span class="kn">import</span> <span class="nn">boto3</span>
+<span class="kn">import</span> <span class="nn">paramiko</span>
+<span class="kn">import</span> <span class="nn">paramiko.ssh_exception</span>
+
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">settings</span><span class="p">,</span> <span class="n">messages</span><span class="p">,</span> <span class="n">spawners</span><span class="p">,</span> <span class="n">transport</span>
+<span class="kn">from</span> <span class="nn">..</span> <span class="k">import</span> <span class="n">spawner</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Ec2Spawner"><a class="viewcode-back" href="../../../../doc/cloud.html#dist_zero.spawners.cloud.aws.Ec2Spawner">[docs]</a><span class="k">class</span> <span class="nc">Ec2Spawner</span><span class="p">(</span><span class="n">spawner</span><span class="o">.</span><span class="n">Spawner</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A `Spawner` subclass that creates each new `MachineController` instance by spinning up an aws ec2 instance</span>
+<span class="sd">  and starting a long-running `dist_zero.machine_init` process on it.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+               <span class="n">system_id</span><span class="p">,</span>
+               <span class="n">aws_region</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">DEFAULT_AWS_REGION</span><span class="p">,</span>
+               <span class="n">base_ami</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">AWS_BASE_AMI</span><span class="p">,</span>
+               <span class="n">security_group</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">DEFAULT_AWS_SECURITY_GROUP</span><span class="p">,</span>
+               <span class="n">instance_type</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">DEFAULT_AWS_INSTANCE_TYPE</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param str system_id: The id of  the overall distributed system</span>
+<span class="sd">    :param str aws_region: The aws region in which to spawn the new ec2 instances.</span>
+<span class="sd">    :param str base_ami: A base aws ami image to use when spawning new ec2 instances.</span>
+<span class="sd">    :param str security_group: A security group to add to all new ec2 instances.  It must open the appropriate ports.</span>
+<span class="sd">      Ports for communication with running instances are defined in `dist_zero.settings`</span>
+<span class="sd">    :param str instance_type: The aws instance type (e.g. &#39;t2.micro&#39;)</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span> <span class="o">=</span> <span class="n">system_id</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_handle_by_id</span> <span class="o">=</span> <span class="p">{}</span> <span class="c1"># id to machine controller handle</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_aws_instance_by_id</span> <span class="o">=</span> <span class="p">{}</span> <span class="c1"># id to the boto instance object</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_aws_region</span> <span class="o">=</span> <span class="n">aws_region</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_base_ami</span> <span class="o">=</span> <span class="n">base_ami</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_security_group</span> <span class="o">=</span> <span class="n">security_group</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_instance_type</span> <span class="o">=</span> <span class="n">instance_type</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">aws_region</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Missing aws region parameter&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">base_ami</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Missing base_ami parameter&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">security_group</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Missing security_group parameter&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">instance_type</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Missing instance_type parameter&quot;</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_ec2</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+        <span class="s1">&#39;ec2&#39;</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_aws_region</span><span class="p">,</span>
+        <span class="n">aws_access_key_id</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">AWS_ACCESS_KEY_ID</span><span class="p">,</span>
+        <span class="n">aws_secret_access_key</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">AWS_SECRET_ACCESS_KEY_ID</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_ec2_resource</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">resource</span><span class="p">(</span>
+        <span class="s1">&#39;ec2&#39;</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_aws_region</span><span class="p">,</span>
+        <span class="n">aws_access_key_id</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">AWS_ACCESS_KEY_ID</span><span class="p">,</span>
+        <span class="n">aws_secret_access_key</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">AWS_SECRET_ACCESS_KEY_ID</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Ec2Spawner.mode"><a class="viewcode-back" href="../../../../doc/cloud.html#dist_zero.spawners.cloud.aws.Ec2Spawner.mode">[docs]</a>  <span class="k">def</span> <span class="nf">mode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">spawners</span><span class="o">.</span><span class="n">MODE_CLOUD</span></div>
+
+  <span class="k">def</span> <span class="nf">clean_all</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_aws_instance_by_id</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_ec2</span><span class="o">.</span><span class="n">terminate_instances</span><span class="p">(</span><span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">instance</span><span class="o">.</span><span class="n">id</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_aws_instance_by_id</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span> <span class="p">)</span>
+
+<div class="viewcode-block" id="Ec2Spawner.create_machine"><a class="viewcode-back" href="../../../../doc/cloud.html#dist_zero.spawners.cloud.aws.Ec2Spawner.create_machine">[docs]</a>  <span class="k">def</span> <span class="nf">create_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_config</span><span class="p">):</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_machines</span><span class="p">([</span><span class="n">machine_config</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span></div>
+
+  <span class="k">def</span> <span class="nf">_instance_placement</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;AvailabilityZone&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_aws_region</span><span class="p">,</span>
+        <span class="c1">#&#39;Affinity&#39;: &#39;string&#39;,</span>
+        <span class="c1">#&#39;GroupName&#39;: &#39;string&#39;,</span>
+        <span class="s1">&#39;HostId&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;Tenancy&#39;</span><span class="p">:</span> <span class="s1">&#39;default&#39;</span><span class="p">,</span>
+        <span class="c1">#&#39;SpreadDomain&#39;: &#39;string&#39;</span>
+    <span class="p">},</span>
+
+  <span class="k">def</span> <span class="nf">_instance_block_device_mappings</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s1">&#39;DeviceName&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;VirtualName&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Ebs&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;Encrypted&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s1">&#39;DeleteOnTermination&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s1">&#39;Iops&#39;</span><span class="p">:</span> <span class="mi">123</span><span class="p">,</span>
+                <span class="s1">&#39;KmsKeyId&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;SnapshotId&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;VolumeSize&#39;</span><span class="p">:</span> <span class="mi">123</span><span class="p">,</span>
+                <span class="s1">&#39;VolumeType&#39;</span><span class="p">:</span> <span class="s1">&#39;gp2&#39;</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">},</span>
+    <span class="p">]</span>
+
+  <span class="k">def</span> <span class="nf">_instance_tag_specifications</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">[{</span>
+        <span class="s1">&#39;ResourceType&#39;</span><span class="p">:</span>
+        <span class="s1">&#39;instance&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;Tags&#39;</span><span class="p">:</span> <span class="p">[{</span>
+            <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;Application&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="s1">&#39;dist_zero&#39;</span>
+        <span class="p">},</span> <span class="p">{</span>
+            <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;dist_zero_type&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="s1">&#39;std_instance&#39;</span>
+        <span class="p">},</span> <span class="p">{</span>
+            <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;System ID&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span><span class="p">,</span>
+        <span class="p">}],</span>
+    <span class="p">}]</span>
+
+<div class="viewcode-block" id="Ec2Spawner.create_machines"><a class="viewcode-back" href="../../../../doc/cloud.html#dist_zero.spawners.cloud.aws.Ec2Spawner.create_machines">[docs]</a>  <span class="k">def</span> <span class="nf">create_machines</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_configs</span><span class="p">):</span>
+    <span class="c1"># see http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.ServiceResource.create_instances</span>
+    <span class="c1"># For available parameters.</span>
+    <span class="n">n_new_machines</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">machine_configs</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating new instance(s) on on aws ec2. n=</span><span class="si">{n_instances}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;n_instances&#39;</span><span class="p">:</span> <span class="n">n_new_machines</span><span class="p">})</span>
+    <span class="n">instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ec2_resource</span><span class="o">.</span><span class="n">create_instances</span><span class="p">(</span>
+        <span class="c1">#BlockDeviceMappings=self._instance_block_device_mappings(),</span>
+        <span class="c1">#Placement=self._instance_placement(),</span>
+        <span class="n">ImageId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_base_ami</span><span class="p">,</span>
+        <span class="n">KeyName</span><span class="o">=</span><span class="s1">&#39;dist_zero&#39;</span><span class="p">,</span>
+        <span class="n">MaxCount</span><span class="o">=</span><span class="n">n_new_machines</span><span class="p">,</span>
+        <span class="n">MinCount</span><span class="o">=</span><span class="n">n_new_machines</span><span class="p">,</span>
+        <span class="n">InstanceType</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_instance_type</span><span class="p">,</span>
+        <span class="n">Monitoring</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Enabled&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
+        <span class="n">SecurityGroupIds</span><span class="o">=</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_security_group</span><span class="p">],</span>
+        <span class="n">InstanceInitiatedShutdownBehavior</span><span class="o">=</span><span class="s1">&#39;stop&#39;</span><span class="p">,</span>
+        <span class="n">TagSpecifications</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_instance_tag_specifications</span><span class="p">(),</span>
+    <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_running_instances</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
+    <span class="c1"># NOTE(KK): reachability can take longer than it takes before ssh works.  We should skip this check to run faster.</span>
+    <span class="c1">#self._wait_for_reachable_instances(instances)</span>
+
+    <span class="k">return</span> <span class="p">[</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_configure_instance</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">machine_config</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">instance</span><span class="p">,</span> <span class="n">machine_config</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">instances</span><span class="p">,</span> <span class="n">machine_configs</span><span class="p">)</span>
+    <span class="p">]</span></div>
+
+  <span class="k">def</span> <span class="nf">_configure_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">machine_config</span><span class="p">):</span>
+    <span class="n">machine_name</span> <span class="o">=</span> <span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;machine_name&#39;</span><span class="p">]</span>
+    <span class="n">machine_controller_id</span> <span class="o">=</span> <span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span>
+    <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;machine_name&#39;</span><span class="p">:</span> <span class="n">machine_name</span><span class="p">,</span>
+        <span class="s1">&#39;machine_controller_id&#39;</span><span class="p">:</span> <span class="n">machine_controller_id</span><span class="p">,</span>
+        <span class="s1">&#39;aws_instance_id&#39;</span><span class="p">:</span> <span class="n">instance</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="s1">&#39;provisioning_aws_instance&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Configuring instance &#39;</span><span class="si">{machine_name}</span><span class="s2">&#39; id=&#39;</span><span class="si">{machine_controller_id}</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Configuring machine specific tags&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
+    <span class="n">instance</span><span class="o">.</span><span class="n">create_tags</span><span class="p">(</span><span class="n">Tags</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;Name&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">machine_name</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;machine_controller_id&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">machine_controller_id</span>
+        <span class="p">},</span>
+    <span class="p">])</span>
+
+    <span class="n">ssh</span> <span class="o">=</span> <span class="n">paramiko</span><span class="o">.</span><span class="n">SSHClient</span><span class="p">()</span>
+    <span class="n">ssh</span><span class="o">.</span><span class="n">set_missing_host_key_policy</span><span class="p">(</span><span class="n">paramiko</span><span class="o">.</span><span class="n">WarningPolicy</span><span class="p">())</span>
+    <span class="n">connected</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Connecting to aws instance </span><span class="si">{aws_instance_id}</span><span class="s2"> over ssh&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+      <span class="k">try</span><span class="p">:</span>
+        <span class="n">ssh</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">hostname</span><span class="o">=</span><span class="n">instance</span><span class="o">.</span><span class="n">public_dns_name</span><span class="p">,</span> <span class="n">key_filename</span><span class="o">=</span><span class="s1">&#39;.keys/dist_zero.pem&#39;</span><span class="p">,</span> <span class="n">username</span><span class="o">=</span><span class="s1">&#39;ec2-user&#39;</span><span class="p">)</span>
+        <span class="n">connected</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">break</span>
+      <span class="k">except</span> <span class="n">paramiko</span><span class="o">.</span><span class="n">ssh_exception</span><span class="o">.</span><span class="n">NoValidConnectionsError</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Ssh failed to connect to instance </span><span class="si">{aws_instance_id}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">connected</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Could not connect via ssh&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">command</span> <span class="ow">in</span> <span class="p">[</span>
+        <span class="s2">&quot;sudo yum update -y&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sudo yum install -y python36&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sudo easy_install-3.6 pip&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sudo /usr/local/bin/pip3 install --upgrade pip&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sudo mkdir -p /dist_zero&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sudo mkdir -p /logs&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sudo chown ec2-user /dist_zero&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sudo chown ec2-user /logs&quot;</span><span class="p">,</span>
+    <span class="p">]:</span>
+      <span class="n">ssh</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Rsyncing dist_zero files to aws instance </span><span class="si">{aws_instance_id}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
+
+    <span class="c1"># Do the rsync</span>
+    <span class="n">rsync_ssh_params</span> <span class="o">=</span> <span class="s1">&#39;ssh -oStrictHostKeyChecking=no -i </span><span class="si">{keyfile}</span><span class="s1">&#39;</span>
+    <span class="n">rsync_excludes</span> <span class="o">=</span> <span class="s1">&#39;--exclude &quot;*.pyc&quot; --exclude &quot;*__pycache__*&quot;&#39;</span>
+    <span class="k">for</span> <span class="n">precommand</span> <span class="ow">in</span> <span class="p">[</span>
+        <span class="s1">&#39;rsync -avz -e &quot;</span><span class="si">{rsync_ssh_params}</span><span class="s1">&quot; </span><span class="si">{rsync_excludes}</span><span class="s1"> dist_zero </span><span class="si">{user}</span><span class="s1">@</span><span class="si">{instance}</span><span class="s1">:/dist_zero/ &gt;&gt; </span><span class="si">{outfile}</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;rsync -avz -e &quot;</span><span class="si">{rsync_ssh_params}</span><span class="s1">&quot; </span><span class="si">{rsync_excludes}</span><span class="s1"> requirements.txt </span><span class="si">{user}</span><span class="s1">@</span><span class="si">{instance}</span><span class="s1">:/dist_zero/requirements.txt &gt;&gt; </span><span class="si">{outfile}</span><span class="s1">&#39;</span><span class="p">,</span>
+    <span class="p">]:</span>
+      <span class="n">command</span> <span class="o">=</span> <span class="n">precommand</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+          <span class="n">rsync_ssh_params</span><span class="o">=</span><span class="n">rsync_ssh_params</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">keyfile</span><span class="o">=</span><span class="s1">&#39;.keys/dist_zero.pem&#39;</span><span class="p">),</span>
+          <span class="n">rsync_excludes</span><span class="o">=</span><span class="n">rsync_excludes</span><span class="p">,</span>
+          <span class="n">user</span><span class="o">=</span><span class="s1">&#39;ec2-user&#39;</span><span class="p">,</span>
+          <span class="n">instance</span><span class="o">=</span><span class="n">instance</span><span class="o">.</span><span class="n">public_dns_name</span><span class="p">,</span>
+          <span class="n">outfile</span><span class="o">=</span><span class="s1">&#39;.rsync.output.log&#39;</span><span class="p">,</span>
+      <span class="p">)</span>
+      <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+          <span class="s2">&quot;Running rsync command&quot;</span><span class="p">,</span>
+          <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+              <span class="s1">&#39;aws_instance_id&#39;</span><span class="p">:</span> <span class="n">instance</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+              <span class="s1">&#39;provisioning_aws_instance&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+              <span class="s1">&#39;command&#39;</span><span class="p">:</span> <span class="n">command</span><span class="p">,</span>
+              <span class="s1">&#39;machine_name&#39;</span><span class="p">:</span> <span class="n">machine_name</span><span class="p">,</span>
+              <span class="s1">&#39;machine_controller_id&#39;</span><span class="p">:</span> <span class="n">machine_controller_id</span><span class="p">,</span>
+          <span class="p">})</span>
+      <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Running pip install&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
+    <span class="n">ssh</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="s1">&#39;cd /dist_zero; pip3 install --user -r requirements.txt&#39;</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Copying relevant environment variables&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
+    <span class="n">ssh</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="s1">&#39;&#39;&#39;cat &lt;&lt; EOF &gt; /dist_zero/.env</span><span class="se">\n\n</span><span class="si">{}</span><span class="se">\n</span><span class="s1">EOF</span><span class="se">\n</span><span class="s1">&#39;&#39;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+        <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">=&#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">variable</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="n">variable</span><span class="p">))</span> <span class="k">for</span> <span class="n">variable</span> <span class="ow">in</span> <span class="n">settings</span><span class="o">.</span><span class="n">CLOUD_ENV_VARS</span><span class="p">)))</span>
+
+    <span class="n">command</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;cd /dist_zero; &quot;</span>
+               <span class="s2">&quot;nohup python3 -m &quot;</span>
+               <span class="s2">&quot;dist_zero.machine_init &#39;</span><span class="si">{machine_controller_id}</span><span class="s2">&#39; &#39;</span><span class="si">{machine_name}</span><span class="s2">&#39; &#39;</span><span class="si">{mode}</span><span class="s2">&#39; &#39;</span><span class="si">{system_id}</span><span class="s2">&#39; &amp;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                   <span class="n">machine_controller_id</span><span class="o">=</span><span class="n">machine_controller_id</span><span class="p">,</span>
+                   <span class="n">machine_name</span><span class="o">=</span><span class="n">machine_name</span><span class="p">,</span>
+                   <span class="n">mode</span><span class="o">=</span><span class="n">spawners</span><span class="o">.</span><span class="n">MODE_CLOUD</span><span class="p">,</span>
+                   <span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting a MachineController process on an aws instance&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
+    <span class="n">ssh</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+
+    <span class="n">handle</span> <span class="o">=</span> <span class="n">messages</span><span class="o">.</span><span class="n">machine_controller_handle</span><span class="p">(</span><span class="n">machine_controller_id</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_handle_by_id</span><span class="p">[</span><span class="n">machine_controller_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">handle</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_aws_instance_by_id</span><span class="p">[</span><span class="n">machine_controller_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">instance</span>
+    <span class="k">return</span> <span class="n">handle</span>
+
+  <span class="k">def</span> <span class="nf">_instance_status_is_reachable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">status</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Check if a machine is reachable.</span>
+
+<span class="sd">    :param object status: An InstanceStatus object as returned by the boto3 API.</span>
+<span class="sd">    :return: True iff the status object indicates that the machine is reachable.</span>
+<span class="sd">    :rtype: bool</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">details</span> <span class="o">=</span> <span class="n">status</span><span class="p">[</span><span class="s1">&#39;InstanceStatus&#39;</span><span class="p">][</span><span class="s1">&#39;Details&#39;</span><span class="p">]</span>
+    <span class="n">reachabilities</span> <span class="o">=</span> <span class="p">[</span><span class="n">detail</span> <span class="k">for</span> <span class="n">detail</span> <span class="ow">in</span> <span class="n">details</span> <span class="k">if</span> <span class="n">detail</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;reachability&#39;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">reachabilities</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+      <span class="n">reachability</span> <span class="o">=</span> <span class="n">reachabilities</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="k">if</span> <span class="n">reachability</span><span class="p">[</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;passed&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="k">return</span> <span class="kc">False</span>
+
+  <span class="k">def</span> <span class="nf">_retry_loop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">on_wait</span><span class="p">,</span> <span class="n">on_fail</span><span class="p">,</span> <span class="n">wait_time_sec</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">retries</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_result</span><span class="p">(</span><span class="n">loop_iteration</span><span class="p">):</span>
+      <span class="n">remaining</span> <span class="o">=</span> <span class="n">retries</span>
+      <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">loop_iteration</span><span class="p">():</span>
+          <span class="k">return</span>
+        <span class="n">remaining</span> <span class="o">-=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">remaining</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
+          <span class="n">on_wait</span><span class="p">()</span>
+          <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">wait_time_sec</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+          <span class="n">on_fail</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">_result</span>
+
+  <span class="k">def</span> <span class="nf">_wait_for_reachable_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Wait until the boto3 API indicates that the desired are reachable.</span>
+
+<span class="sd">    :param list instances: A list of aws instances.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">instance_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">instance</span><span class="o">.</span><span class="n">id</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">]</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Waiting for aws instances to enter a &#39;reachable&#39; status&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;instance_ids&#39;</span><span class="p">:</span> <span class="n">instance_ids</span><span class="p">})</span>
+
+    <span class="k">def</span> <span class="nf">on_wait</span><span class="p">():</span>
+      <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+          <span class="s2">&quot;aws instances were not all reachable.  Waiting and trying again.&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;instance_ids&#39;</span><span class="p">:</span> <span class="n">instance_ids</span><span class="p">})</span>
+
+    <span class="k">def</span> <span class="nf">on_fail</span><span class="p">():</span>
+      <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;instances did not become reachable.&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;instance_ids&#39;</span><span class="p">:</span> <span class="n">instance_ids</span><span class="p">})</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Instances did not become reachable&quot;</span><span class="p">)</span>
+
+    <span class="nd">@self</span><span class="o">.</span><span class="n">_retry_loop</span><span class="p">(</span><span class="n">on_wait</span><span class="o">=</span><span class="n">on_wait</span><span class="p">,</span> <span class="n">on_fail</span><span class="o">=</span><span class="n">on_fail</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_loop</span><span class="p">():</span>
+      <span class="n">resp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ec2</span><span class="o">.</span><span class="n">describe_instance_status</span><span class="p">(</span><span class="n">InstanceIds</span><span class="o">=</span><span class="n">instance_ids</span><span class="p">)</span>
+      <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_instance_status_is_reachable</span><span class="p">(</span><span class="n">status</span><span class="p">)</span> <span class="k">for</span> <span class="n">status</span> <span class="ow">in</span> <span class="n">resp</span><span class="p">[</span><span class="s1">&#39;InstanceStatuses&#39;</span><span class="p">]):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;The requested aws instances are now reachable&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;instance_ids&#39;</span><span class="p">:</span> <span class="n">instance_ids</span><span class="p">})</span>
+        <span class="k">return</span> <span class="kc">True</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+  <span class="k">def</span> <span class="nf">_wait_for_running_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+    <span class="n">instance_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">instance</span><span class="o">.</span><span class="n">id</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">]</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Waiting for aws instances to enter a &#39;running&#39; state&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;instance_ids&#39;</span><span class="p">:</span> <span class="n">instance_ids</span><span class="p">})</span>
+
+    <span class="k">def</span> <span class="nf">on_wait</span><span class="p">():</span>
+      <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;instances were not all running.  Waiting and trying again.&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;instance_ids&#39;</span><span class="p">:</span> <span class="n">instance_ids</span><span class="p">})</span>
+
+    <span class="k">def</span> <span class="nf">on_fail</span><span class="p">():</span>
+      <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Instances did not become running.&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;instance_ids&#39;</span><span class="p">:</span> <span class="n">instance_ids</span><span class="p">})</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Instances did not become running.&quot;</span><span class="p">)</span>
+
+    <span class="nd">@self</span><span class="o">.</span><span class="n">_retry_loop</span><span class="p">(</span><span class="n">on_wait</span><span class="o">=</span><span class="n">on_wait</span><span class="p">,</span> <span class="n">on_fail</span><span class="o">=</span><span class="n">on_fail</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_loop</span><span class="p">():</span>
+      <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">:</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+
+      <span class="n">states</span> <span class="o">=</span> <span class="p">[</span><span class="n">instance</span><span class="o">.</span><span class="n">state</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">]</span>
+
+      <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;running&#39;</span> <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="n">states</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;The requested aws instances are now running&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+<div class="viewcode-block" id="Ec2Spawner.send_to_machine"><a class="viewcode-back" href="../../../../doc/cloud.html#dist_zero.spawners.cloud.aws.Ec2Spawner.send_to_machine">[docs]</a>  <span class="k">def</span> <span class="nf">send_to_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;udp&#39;</span><span class="p">):</span>
+    <span class="n">instance</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_aws_instance_by_id</span><span class="p">[</span><span class="n">machine</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span>
+
+    <span class="k">if</span> <span class="n">sock_type</span> <span class="o">==</span> <span class="s1">&#39;udp&#39;</span><span class="p">:</span>
+      <span class="n">dst</span> <span class="o">=</span> <span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">public_ip_address</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">MACHINE_CONTROLLER_DEFAULT_UDP_PORT</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">transport</span><span class="o">.</span><span class="n">send_udp</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">dst</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">sock_type</span> <span class="o">==</span> <span class="s1">&#39;tcp&#39;</span><span class="p">:</span>
+      <span class="n">dst</span> <span class="o">=</span> <span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">public_ip_address</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">MACHINE_CONTROLLER_DEFAULT_TCP_PORT</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">transport</span><span class="o">.</span><span class="n">send_tcp</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">dst</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unrecognized sock_type </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sock_type</span><span class="p">))</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

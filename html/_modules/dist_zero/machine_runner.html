@@ -1,0 +1,298 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>dist_zero.machine_runner &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for dist_zero.machine_runner</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">select</span>
+<span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+
+<span class="kn">from</span> <span class="nn">logstash_async.handler</span> <span class="k">import</span> <span class="n">AsynchronousLogstashHandler</span>
+
+<span class="kn">import</span> <span class="nn">dist_zero.transport</span>
+<span class="kn">import</span> <span class="nn">dist_zero.logging</span>
+
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">settings</span><span class="p">,</span> <span class="n">machine</span><span class="p">,</span> <span class="n">messages</span>
+<span class="kn">from</span> <span class="nn">dist_zero.spawners</span> <span class="k">import</span> <span class="n">docker</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="MachineRunner"><a class="viewcode-back" href="../../doc/machine_runner.html#dist_zero.machine_runner.MachineRunner">[docs]</a><span class="k">class</span> <span class="nc">MachineRunner</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  For running A `NodeManager` on a machine inside a runloop.</span>
+<span class="sd">  Real time is passed in, and messages are read from os sockets.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="n">STEP_LENGTH_MS</span> <span class="o">=</span> <span class="mi">5</span> <span class="c1"># Target number of milliseconds per iteration of the run loop.</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_id</span><span class="p">,</span> <span class="n">machine_name</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="n">system_id</span><span class="p">):</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_udp_port</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">MACHINE_CONTROLLER_DEFAULT_UDP_PORT</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_udp_dst</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_udp_port</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_port</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">MACHINE_CONTROLLER_DEFAULT_TCP_PORT</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_dst</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_port</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_udp_socket</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_socket</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span> <span class="o">=</span> <span class="n">machine</span><span class="o">.</span><span class="n">NodeManager</span><span class="p">(</span>
+        <span class="n">machine_id</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span>
+        <span class="n">machine_name</span><span class="o">=</span><span class="n">machine_name</span><span class="p">,</span>
+        <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span>
+        <span class="n">system_id</span><span class="o">=</span><span class="n">system_id</span><span class="p">,</span>
+        <span class="n">ip_host</span><span class="o">=</span><span class="n">socket</span><span class="o">.</span><span class="n">gethostname</span><span class="p">(),</span>
+        <span class="n">send_to_machine</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span><span class="p">)</span>
+    <span class="sd">&#39;&#39;&#39;The `NodeManager` underlying this `MachineRunner`&#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">_send_to_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+    <span class="n">dst</span> <span class="o">=</span> <span class="p">(</span><span class="n">transport</span><span class="p">[</span><span class="s1">&#39;host&#39;</span><span class="p">],</span> <span class="n">settings</span><span class="o">.</span><span class="n">MACHINE_CONTROLLER_DEFAULT_UDP_PORT</span><span class="p">)</span>
+    <span class="n">dist_zero</span><span class="o">.</span><span class="n">transport</span><span class="o">.</span><span class="n">send_udp</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">dst</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">_bind_udp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;MachineRunner binding UDP port </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_udp_port</span><span class="p">),</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;port&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_udp_port</span><span class="p">})</span>
+    <span class="n">sock</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_DGRAM</span><span class="p">)</span>
+    <span class="n">sock</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_udp_dst</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_udp_socket</span> <span class="o">=</span> <span class="n">sock</span>
+
+  <span class="k">def</span> <span class="nf">_bind_and_listen_tcp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;MachineRunner binding TCP port </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_tcp_port</span><span class="p">),</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;port&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_port</span><span class="p">})</span>
+    <span class="n">sock</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+    <span class="n">sock</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_tcp_dst</span><span class="p">)</span>
+    <span class="n">sock</span><span class="o">.</span><span class="n">listen</span><span class="p">()</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;MachineRunner listening on TCP port </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_tcp_port</span><span class="p">),</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;port&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_port</span><span class="p">})</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_socket</span> <span class="o">=</span> <span class="n">sock</span>
+
+<div class="viewcode-block" id="MachineRunner.runloop"><a class="viewcode-back" href="../../doc/machine_runner.html#dist_zero.machine_runner.MachineRunner.runloop">[docs]</a>  <span class="k">def</span> <span class="nf">runloop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Enter a runloop for the contained `NodeManager`.</span>
+
+<span class="sd">    In each iteration of the loop, pass the real elapsed time to `NodeManager.elapse_nodes` on the `NodeManager` and</span>
+<span class="sd">    pass messages from sockets to `NodeManager.handle_message` and `NodeManager.handle_api_message`.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Starting run loop for machine </span><span class="si">{machine_name}</span><span class="s2">: </span><span class="si">{machine_id}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;machine_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="s1">&#39;machine_name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_bind_udp</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_bind_and_listen_tcp</span><span class="p">()</span>
+
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+      <span class="k">try</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_loop_iteration</span><span class="p">()</span>
+      <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exn</span><span class="p">:</span>
+        <span class="n">e_type</span><span class="p">,</span> <span class="n">e_value</span><span class="p">,</span> <span class="n">e_tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+        <span class="c1">#tb_lines = traceback.format_tb(e_tb)</span>
+        <span class="n">exn_lines</span> <span class="o">=</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exception</span><span class="p">(</span><span class="n">e_type</span><span class="p">,</span> <span class="n">e_value</span><span class="p">,</span> <span class="n">e_tb</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Exception in run loop: </span><span class="si">{e_lines}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;e_type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e_type</span><span class="p">),</span> <span class="s1">&#39;e_lines&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">exn_lines</span><span class="p">)})</span>
+        <span class="c1"># log the exception and go on.  These exceptions should not stop the run loop.</span>
+        <span class="k">continue</span>
+
+    <span class="k">for</span> <span class="n">sock</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_udp_socket</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_socket</span><span class="p">]:</span>
+      <span class="n">sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+  <span class="k">def</span> <span class="nf">_loop_iteration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Run a single iterator of the run loop, raising any errors that come up.&#39;&#39;&#39;</span>
+
+    <span class="n">current_time_s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">remaining_ms</span> <span class="o">=</span> <span class="n">MachineRunner</span><span class="o">.</span><span class="n">STEP_LENGTH_MS</span>
+
+    <span class="c1"># First, elapse the whole time interval on all the nodes.</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">elapse_nodes</span><span class="p">(</span><span class="n">remaining_ms</span><span class="p">)</span>
+    <span class="n">after_elapse_s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">time_running_nodes_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">after_elapse_s</span> <span class="o">-</span> <span class="n">current_time_s</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+
+    <span class="c1"># Then, spend the remaining time waiting on messages from the network</span>
+    <span class="n">network_ms</span> <span class="o">=</span> <span class="n">remaining_ms</span> <span class="o">-</span> <span class="n">time_running_nodes_ms</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_elapse_network</span><span class="p">(</span><span class="n">network_ms</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">_elapse_zero_or_one_network_messages</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">max_s</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Wait on the network for not more than max_ms milleseconds, and process 0 or 1 messages.</span>
+
+<span class="sd">    :param number max_s: The maximum number of seconds to wait for.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">readers</span><span class="p">,</span> <span class="n">writers</span><span class="p">,</span> <span class="n">errs</span> <span class="o">=</span> <span class="n">select</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+        <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_udp_socket</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_socket</span><span class="p">],</span>
+        <span class="p">[],</span>
+        <span class="p">[],</span>
+        <span class="n">max_s</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">for</span> <span class="n">sock</span> <span class="ow">in</span> <span class="n">readers</span><span class="p">:</span>
+      <span class="k">if</span> <span class="n">sock</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_udp_socket</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_read_udp</span><span class="p">()</span>
+      <span class="k">elif</span> <span class="n">sock</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_socket</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_accept_tcp</span><span class="p">()</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+            <span class="s2">&quot;Impossible! Unrecognized socket returned by select() </span><span class="si">{bad_socket}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;bad_socket&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">sock</span><span class="p">)})</span>
+
+  <span class="k">def</span> <span class="nf">_elapse_network</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remaining_ms</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;read and process network messages for remaining_ms milliseconds of real time&#39;&#39;&#39;</span>
+    <span class="k">while</span> <span class="n">remaining_ms</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+      <span class="n">before_network_s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_elapse_zero_or_one_network_messages</span><span class="p">(</span><span class="n">remaining_ms</span> <span class="o">/</span> <span class="mi">1000</span><span class="p">)</span>
+      <span class="n">after_network_s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+      <span class="n">remaining_ms</span> <span class="o">-=</span> <span class="p">(</span><span class="n">after_network_s</span> <span class="o">-</span> <span class="n">before_network_s</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+
+  <span class="k">def</span> <span class="nf">_accept_tcp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Process to completion a new tcp conection now available on the self._tcp_socket server socket.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Accepting new TCP connection&quot;</span><span class="p">)</span>
+    <span class="n">client_sock</span><span class="p">,</span> <span class="n">client_addr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tcp_socket</span><span class="o">.</span><span class="n">accept</span><span class="p">()</span>
+    <span class="n">buf</span> <span class="o">=</span> <span class="n">client_sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">MSG_BUFSIZE</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Received </span><span class="si">{}</span><span class="s2"> bytes from TCP socket&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">buf</span><span class="p">)),</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;bufsize&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">buf</span><span class="p">)})</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">buf</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">messages</span><span class="o">.</span><span class="n">ENCODING</span><span class="p">))</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">handle_api_message</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+    <span class="n">binary</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">response</span><span class="p">),</span> <span class="n">messages</span><span class="o">.</span><span class="n">ENCODING</span><span class="p">)</span>
+    <span class="n">client_sock</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">binary</span><span class="p">)</span>
+    <span class="n">client_sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+  <span class="k">def</span> <span class="nf">_read_udp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Call this method whenever there is a datagram ready to read on the UDP socket&#39;&#39;&#39;</span>
+    <span class="n">buf</span><span class="p">,</span> <span class="n">sender_address</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_udp_socket</span><span class="o">.</span><span class="n">recvfrom</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">MSG_BUFSIZE</span><span class="p">)</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">buf</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">messages</span><span class="o">.</span><span class="n">ENCODING</span><span class="p">))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">handle_message</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+<div class="viewcode-block" id="MachineRunner.configure_logging"><a class="viewcode-back" href="../../doc/machine_runner.html#dist_zero.machine_runner.MachineRunner.configure_logging">[docs]</a>  <span class="k">def</span> <span class="nf">configure_logging</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Configure logging for a `MachineController`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="c1"># Filters</span>
+    <span class="n">str_format_filter</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">StrFormatFilter</span><span class="p">()</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;env&#39;</span><span class="p">:</span> <span class="n">settings</span><span class="o">.</span><span class="n">DIST_ZERO_ENV</span><span class="p">,</span>
+        <span class="s1">&#39;mode&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">mode</span><span class="p">,</span>
+        <span class="s1">&#39;runner&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s1">&#39;machine_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="s1">&#39;machine_name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+        <span class="s1">&#39;system_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">system_id</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">LOGZ_IO_TOKEN</span><span class="p">:</span>
+      <span class="n">context</span><span class="p">[</span><span class="s1">&#39;token&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">LOGZ_IO_TOKEN</span>
+    <span class="n">context_filter</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">ContextFilter</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+    <span class="c1"># Formatters</span>
+    <span class="n">human_formatter</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">HUMAN_FORMATTER</span>
+    <span class="n">json_formatter</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">JsonFormatter</span><span class="p">(</span><span class="s1">&#39;(asctime) (levelname) (name) (message)&#39;</span><span class="p">)</span>
+
+    <span class="c1"># Handlers</span>
+    <span class="n">stdout_handler</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">StreamHandler</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+    <span class="n">human_file_handler</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">FileHandler</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">docker</span><span class="o">.</span><span class="n">DockerSpawner</span><span class="o">.</span><span class="n">CONTAINER_LOGS_DIR</span><span class="p">,</span> <span class="s1">&#39;output.log&#39;</span><span class="p">))</span>
+    <span class="n">json_file_handler</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">FileHandler</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">docker</span><span class="o">.</span><span class="n">DockerSpawner</span><span class="o">.</span><span class="n">CONTAINER_LOGS_DIR</span><span class="p">,</span> <span class="s1">&#39;output.json.log&#39;</span><span class="p">))</span>
+    <span class="n">logstash_handler</span> <span class="o">=</span> <span class="n">AsynchronousLogstashHandler</span><span class="p">(</span>
+        <span class="n">settings</span><span class="o">.</span><span class="n">LOGSTASH_HOST</span><span class="p">,</span>
+        <span class="n">settings</span><span class="o">.</span><span class="n">LOGSTASH_PORT</span><span class="p">,</span>
+        <span class="n">database_path</span><span class="o">=</span><span class="s1">&#39;/logs/.logstash.db&#39;</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">stdout_handler</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
+    <span class="n">human_file_handler</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="n">json_file_handler</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="n">logstash_handler</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+
+    <span class="n">stdout_handler</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span><span class="n">human_formatter</span><span class="p">)</span>
+    <span class="n">human_file_handler</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span><span class="n">human_formatter</span><span class="p">)</span>
+    <span class="n">json_file_handler</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span><span class="n">json_formatter</span><span class="p">)</span>
+    <span class="n">logstash_handler</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span><span class="n">json_formatter</span><span class="p">)</span>
+
+    <span class="n">stdout_handler</span><span class="o">.</span><span class="n">addFilter</span><span class="p">(</span><span class="n">str_format_filter</span><span class="p">)</span>
+    <span class="n">human_file_handler</span><span class="o">.</span><span class="n">addFilter</span><span class="p">(</span><span class="n">str_format_filter</span><span class="p">)</span>
+    <span class="n">json_file_handler</span><span class="o">.</span><span class="n">addFilter</span><span class="p">(</span><span class="n">str_format_filter</span><span class="p">)</span>
+    <span class="n">json_file_handler</span><span class="o">.</span><span class="n">addFilter</span><span class="p">(</span><span class="n">context_filter</span><span class="p">)</span>
+    <span class="n">logstash_handler</span><span class="o">.</span><span class="n">addFilter</span><span class="p">(</span><span class="n">str_format_filter</span><span class="p">)</span>
+    <span class="n">logstash_handler</span><span class="o">.</span><span class="n">addFilter</span><span class="p">(</span><span class="n">context_filter</span><span class="p">)</span>
+
+    <span class="c1"># Loggers</span>
+    <span class="n">dist_zero_logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;dist_zero&#39;</span><span class="p">)</span>
+    <span class="n">root_logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span>
+    <span class="n">root_logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">MIN_LOG_LEVEL</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">))</span>
+
+    <span class="n">dist_zero</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">set_handlers</span><span class="p">(</span><span class="n">root_logger</span><span class="p">,</span> <span class="p">[</span>
+        <span class="n">json_file_handler</span><span class="p">,</span>
+        <span class="n">human_file_handler</span><span class="p">,</span>
+        <span class="n">logstash_handler</span><span class="p">,</span>
+        <span class="n">stdout_handler</span><span class="p">,</span>
+    <span class="p">])</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,409 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>dist_zero.messages &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for dist_zero.messages</h1><div class="highlight"><pre>
+<span></span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Functions to build standard messages.</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="n">ENCODING</span> <span class="o">=</span> <span class="s1">&#39;utf-8&#39;</span>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">The encoding to use for messages.</span>
+<span class="sd">This should be a string understood by the python internals that operate on encodings.</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+
+<span class="k">def</span> <span class="nf">ip_transport</span><span class="p">(</span><span class="n">host</span><span class="p">):</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;ip_transport&#39;</span><span class="p">,</span> <span class="s1">&#39;host&#39;</span><span class="p">:</span> <span class="n">host</span><span class="p">}</span>
+
+
+<span class="c1"># Handles</span>
+<span class="k">def</span> <span class="nf">machine_controller_handle</span><span class="p">(</span><span class="n">machine_id</span><span class="p">):</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;MachineController&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">machine_id</span><span class="p">}</span>
+
+
+<span class="c1"># Machine configs</span>
+
+
+<div class="viewcode-block" id="machine_config"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.machine_config">[docs]</a><span class="k">def</span> <span class="nf">machine_config</span><span class="p">(</span><span class="n">machine_controller_id</span><span class="p">,</span> <span class="n">machine_name</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A machine config</span>
+
+<span class="sd">  :param str machine_controller_id: The unique id for the new machine.</span>
+<span class="sd">  :param str machine_name: A human readable name for the new machine.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;machine_config&#39;</span><span class="p">,</span> <span class="s1">&#39;machine_name&#39;</span><span class="p">:</span> <span class="n">machine_name</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">machine_controller_id</span><span class="p">}</span></div>
+
+
+<span class="c1"># Node configs</span>
+
+
+<div class="viewcode-block" id="input_node_config"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.input_node_config">[docs]</a><span class="k">def</span> <span class="nf">input_node_config</span><span class="p">(</span><span class="n">node_id</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A node config for creating a node to manage a new list of inputs.</span>
+
+<span class="sd">  :param str node_id: The id of the new node.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;InputNode&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">node_id</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="output_node_config"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.output_node_config">[docs]</a><span class="k">def</span> <span class="nf">output_node_config</span><span class="p">(</span><span class="n">node_id</span><span class="p">,</span> <span class="n">initial_state</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A node config for creating a node to manage a new list of outputs.</span>
+
+<span class="sd">  :param str node_id: The id of the new node.</span>
+<span class="sd">  :param object initial_state: The initial state to use for new nodes.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;OutputNode&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">node_id</span><span class="p">,</span> <span class="s1">&#39;initial_state&#39;</span><span class="p">:</span> <span class="n">initial_state</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="sum_node_started"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.sum_node_started">[docs]</a><span class="k">def</span> <span class="nf">sum_node_started</span><span class="p">(</span><span class="n">transport</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  For when a new sum node informs its parent that it has just started, and will now be sending messages.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;sum_node_started&#39;</span><span class="p">,</span> <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="n">transport</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="middle_node_is_live"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.middle_node_is_live">[docs]</a><span class="k">def</span> <span class="nf">middle_node_is_live</span><span class="p">():</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Indicates that a middle node is now fully synced up.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;middle_node_is_live&#39;</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="middle_node_is_duplicated"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.middle_node_is_duplicated">[docs]</a><span class="k">def</span> <span class="nf">middle_node_is_duplicated</span><span class="p">():</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Indicates that a middle node is now receiving from all the proper senders.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;middle_node_is_duplicated&#39;</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="start_duplicating"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.start_duplicating">[docs]</a><span class="k">def</span> <span class="nf">start_duplicating</span><span class="p">(</span><span class="n">receiver</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  This message is sent to inform a node that it should duplicate its sends to a new receiver.</span>
+
+<span class="sd">  After receipt of this message, the node will send messages to the usual receivers just as before, but also</span>
+<span class="sd">  send duplicated messages to the newly added receiver.</span>
+
+<span class="sd">  :param receiver: The :ref:`handle` of the node to send the duplicates to.</span>
+<span class="sd">  :type receiver: :ref:`handle`</span>
+
+<span class="sd">  :param transport: A :ref:`transport` for talking to receiver.</span>
+<span class="sd">  :type transport: :ref:`transport`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;start_duplicating&#39;</span><span class="p">,</span> <span class="s1">&#39;receiver&#39;</span><span class="p">:</span> <span class="n">receiver</span><span class="p">,</span> <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="n">transport</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="finish_duplicating"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.finish_duplicating">[docs]</a><span class="k">def</span> <span class="nf">finish_duplicating</span><span class="p">():</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  This message is sent to a node that is duplicating its sends to inform it that it no longer need send messages</span>
+<span class="sd">  to the old receivers.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;finish_duplicating&#39;</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="finished_duplicating"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.finished_duplicating">[docs]</a><span class="k">def</span> <span class="nf">finished_duplicating</span><span class="p">():</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  This message is sent to inform a migrator that an input has stopped sending messages as it was before</span>
+<span class="sd">  the migration started, and is now only sending messages the new way.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;finished_duplicating&#39;</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="set_sum_total"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.set_sum_total">[docs]</a><span class="k">def</span> <span class="nf">set_sum_total</span><span class="p">(</span><span class="n">total</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  For sum nodes that are the middle nodes in a migration and are currently migrating but not synced up,</span>
+<span class="sd">  the message informs them of their total.</span>
+
+<span class="sd">  :param int total: The total to start with.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;set_sum_total&#39;</span><span class="p">,</span> <span class="s1">&#39;total&#39;</span><span class="p">:</span> <span class="n">total</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="sum_node_config"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.sum_node_config">[docs]</a><span class="k">def</span> <span class="nf">sum_node_config</span><span class="p">(</span><span class="n">node_id</span><span class="p">,</span> <span class="n">senders</span><span class="p">,</span> <span class="n">receivers</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">parent_transport</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A node config for creating a node to accept increments from a set of senders, sum them</span>
+<span class="sd">  together and pass all increments to every receiver.</span>
+
+<span class="sd">  :param str node_id: The id of the new node.</span>
+<span class="sd">  :param list senders: A list of :ref:`handle` for sending nodes.</span>
+<span class="sd">  :param list receivers: A list of :ref:`handle` for receiving nodes.</span>
+<span class="sd">  :param parent: The :ref:`handle` of the parent `SumNode` of this node.</span>
+<span class="sd">  :type parent: :ref:`handle`</span>
+<span class="sd">  :param parent_transport: A :ref:`transport` for talking to this node&#39;s parent.</span>
+<span class="sd">  :type parent_transport: :ref:`transport`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span>
+      <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;SumNode&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">node_id</span><span class="p">,</span>
+      <span class="s1">&#39;senders&#39;</span><span class="p">:</span> <span class="n">senders</span><span class="p">,</span>
+      <span class="s1">&#39;receivers&#39;</span><span class="p">:</span> <span class="n">receivers</span><span class="p">,</span>
+      <span class="s1">&#39;parent&#39;</span><span class="p">:</span> <span class="n">parent</span><span class="p">,</span>
+      <span class="s1">&#39;parent_transport&#39;</span><span class="p">:</span> <span class="n">parent_transport</span>
+  <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="input_leaf_config"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.input_leaf_config">[docs]</a><span class="k">def</span> <span class="nf">input_leaf_config</span><span class="p">(</span><span class="n">node_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">parent</span><span class="p">,</span> <span class="n">parent_transport</span><span class="p">,</span> <span class="n">receivers</span><span class="p">,</span> <span class="n">recorded_user_json</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Add a new leaf node to an InputNode list.</span>
+
+<span class="sd">  :param str name: The name to use for the new node.</span>
+<span class="sd">  :param parent: The handle of the parent node.</span>
+<span class="sd">  :type parent: :ref:`handle`</span>
+<span class="sd">  :param object parent_transport: A transport for talking to the parent.</span>
+<span class="sd">  :param list receivers: The list of handles of receiver nodes the new node should send to.</span>
+<span class="sd">  :param json recorded_user_json: json for a recorded user instance to initialize on the new node.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span>
+      <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;InputLeafNode&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">node_id</span><span class="p">,</span>
+      <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+      <span class="s1">&#39;parent&#39;</span><span class="p">:</span> <span class="n">parent</span><span class="p">,</span>
+      <span class="s1">&#39;parent_transport&#39;</span><span class="p">:</span> <span class="n">parent_transport</span><span class="p">,</span>
+      <span class="s1">&#39;receivers&#39;</span><span class="p">:</span> <span class="n">receivers</span><span class="p">,</span>
+      <span class="s1">&#39;recorded_user_json&#39;</span><span class="p">:</span> <span class="n">recorded_user_json</span><span class="p">,</span>
+  <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="output_leaf_config"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.output_leaf_config">[docs]</a><span class="k">def</span> <span class="nf">output_leaf_config</span><span class="p">(</span><span class="n">node_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">initial_state</span><span class="p">,</span> <span class="n">parent</span><span class="p">,</span> <span class="n">parent_transport</span><span class="p">,</span> <span class="n">senders</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Add a new leaf node to an OutputNode list.</span>
+
+<span class="sd">  :param str node_id: The id of the new node.</span>
+
+<span class="sd">  :param str name: The name to use for the new node.</span>
+
+<span class="sd">  :param object initial_state: A json serializeable starting state for this node.</span>
+
+<span class="sd">  :param parent: The handle of the parent node.</span>
+<span class="sd">  :type parent: :ref:`handle`</span>
+
+<span class="sd">  :param object parent_transport: A transport for talking to the parent.</span>
+
+<span class="sd">  :param list senders: The list of handles of senders nodes the new node should receive from.</span>
+<span class="sd">  :type senders: A list of :ref:`handle`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span>
+      <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;OutputLeafNode&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">node_id</span><span class="p">,</span>
+      <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+      <span class="s1">&#39;initial_state&#39;</span><span class="p">:</span> <span class="n">initial_state</span><span class="p">,</span>
+      <span class="s1">&#39;parent&#39;</span><span class="p">:</span> <span class="n">parent</span><span class="p">,</span>
+      <span class="s1">&#39;parent_transport&#39;</span><span class="p">:</span> <span class="n">parent_transport</span><span class="p">,</span>
+      <span class="s1">&#39;senders&#39;</span><span class="p">:</span> <span class="n">senders</span><span class="p">,</span>
+  <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="added_leaf"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.added_leaf">[docs]</a><span class="k">def</span> <span class="nf">added_leaf</span><span class="p">(</span><span class="n">kid</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Indicates that a pending LeafNode has successfull been added to the network, and is</span>
+<span class="sd">  now ready to receive messages.</span>
+
+<span class="sd">  :param kid: The :ref:`handle` of the leaf node that was just added.</span>
+<span class="sd">  :type kid: :ref:`handle`</span>
+
+<span class="sd">  :param object transport: A transport that the recipient can use to send messages to the new leaf.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;added_leaf&#39;</span><span class="p">,</span> <span class="s1">&#39;kid&#39;</span><span class="p">:</span> <span class="n">kid</span><span class="p">,</span> <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="n">transport</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="add_link"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.add_link">[docs]</a><span class="k">def</span> <span class="nf">add_link</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">direction</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Inform a node that it is now linked to a new node.</span>
+
+<span class="sd">  :param node: The handle of the new node</span>
+<span class="sd">  :type node: :ref:`handle`</span>
+<span class="sd">  :param str direction: &#39;sender&#39; or &#39;receiver&#39; depending respectively on whether the newly added node will</span>
+<span class="sd">    send or receive from the node getting this message.</span>
+<span class="sd">  :param transport: Transport data for communicating with node.</span>
+<span class="sd">  :type transport: :ref:`transport`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;add_link&#39;</span><span class="p">,</span> <span class="s1">&#39;node&#39;</span><span class="p">:</span> <span class="n">node</span><span class="p">,</span> <span class="s1">&#39;direction&#39;</span><span class="p">:</span> <span class="n">direction</span><span class="p">,</span> <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="n">transport</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="added_link"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.added_link">[docs]</a><span class="k">def</span> <span class="nf">added_link</span><span class="p">(</span><span class="n">transport</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Inform a node that it has been successfully linked, and give a transport back to the sender.</span>
+
+<span class="sd">  :param transport: Transport data for communicating with node.</span>
+<span class="sd">  :type transport: :ref:`transport`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;added_link&#39;</span><span class="p">,</span> <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="n">transport</span><span class="p">}</span></div>
+
+
+<span class="c1"># Actions</span>
+
+
+<div class="viewcode-block" id="increment"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.increment">[docs]</a><span class="k">def</span> <span class="nf">increment</span><span class="p">(</span><span class="n">amount</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  :param int amount: An integer amount by which to increment.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;increment&#39;</span><span class="p">,</span> <span class="s1">&#39;amount&#39;</span><span class="p">:</span> <span class="n">amount</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="start_sending_to"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.start_sending_to">[docs]</a><span class="k">def</span> <span class="nf">start_sending_to</span><span class="p">(</span><span class="n">new_receiver</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A message informing a node to start sending messages to a new receiver.</span>
+
+<span class="sd">  :param new_receiver: The receiver to start sending to.</span>
+<span class="sd">  :type new_receiver: A node :ref:`handle`</span>
+<span class="sd">  :param transport: A transport allowing to send to new_receiver.</span>
+<span class="sd">  :type transport: :ref:`transport`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;start_sending_to&#39;</span><span class="p">,</span> <span class="s1">&#39;node&#39;</span><span class="p">:</span> <span class="n">new_receiver</span><span class="p">,</span> <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="n">transport</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="start_receiving_from"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.start_receiving_from">[docs]</a><span class="k">def</span> <span class="nf">start_receiving_from</span><span class="p">(</span><span class="n">new_sender</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A message informing a node to start receiving messages from a new sender.</span>
+
+<span class="sd">  :param new_sender: The sender to start receiving from</span>
+<span class="sd">  :type new_sender: A node :ref:`handle`</span>
+<span class="sd">  :param transport: A transport allowing to send to new_sender.</span>
+<span class="sd">  :type transport: :ref:`transport`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;start_receiving_from&#39;</span><span class="p">,</span> <span class="s1">&#39;node&#39;</span><span class="p">:</span> <span class="n">new_sender</span><span class="p">,</span> <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="n">transport</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="machine_start_node"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.machine_start_node">[docs]</a><span class="k">def</span> <span class="nf">machine_start_node</span><span class="p">(</span><span class="n">node_config</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A message to a machine indicating that it should start a new node based on a config.</span>
+
+<span class="sd">  :param node_config: A node config for a new node.</span>
+<span class="sd">  :type node_config: :ref:`message`</span>
+
+<span class="sd">  :param str node_id: The unique id to use for this node.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;machine_start_node&#39;</span><span class="p">,</span> <span class="s1">&#39;node_config&#39;</span><span class="p">:</span> <span class="n">node_config</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="machine_deliver_to_node"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.machine_deliver_to_node">[docs]</a><span class="k">def</span> <span class="nf">machine_deliver_to_node</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A message to a machine telling it to deliver an embedded message to a node.</span>
+
+<span class="sd">  :param node: A node to send to.</span>
+<span class="sd">  :type node: :ref:`handle`</span>
+<span class="sd">  :param message: The message to deliver</span>
+<span class="sd">  :type message: :ref:`message`</span>
+<span class="sd">  :param sending_node: The node that was sending, or `None` if the message was not sent by a node.</span>
+<span class="sd">  :type sending_node: :ref:`handle`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;machine_deliver_to_node&#39;</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span> <span class="s1">&#39;node&#39;</span><span class="p">:</span> <span class="n">node</span><span class="p">,</span> <span class="s1">&#39;sending_node&#39;</span><span class="p">:</span> <span class="n">sending_node</span><span class="p">}</span></div>
+
+
+<span class="c1"># API messages</span>
+<div class="viewcode-block" id="api_new_transport"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.api_new_transport">[docs]</a><span class="k">def</span> <span class="nf">api_new_transport</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">receiver</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Get and return a transport that can be used to send from sender to receiver.</span>
+<span class="sd">  :param sender: The :ref:`handle` of a sending node.</span>
+<span class="sd">  :type sender: :ref:`handle`</span>
+<span class="sd">  :param receiver: The :ref:`handle` of a sending node.</span>
+<span class="sd">  :type receiver: :ref:`handle`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;api_new_transport&#39;</span><span class="p">,</span> <span class="s1">&#39;sender&#39;</span><span class="p">:</span> <span class="n">sender</span><span class="p">,</span> <span class="s1">&#39;receiver&#39;</span><span class="p">:</span> <span class="n">receiver</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="api_get_output_state"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.api_get_output_state">[docs]</a><span class="k">def</span> <span class="nf">api_get_output_state</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Get and return the current output state for an output node.</span>
+<span class="sd">  :param node: The :ref:`handle` of an output leaf node.</span>
+<span class="sd">  :type node: :ref:`handle`</span>
+<span class="sd">  :return: The current output state of that node.</span>
+<span class="sd">  :rtype: object</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;api_get_output_state&#39;</span><span class="p">,</span> <span class="s1">&#39;node&#39;</span><span class="p">:</span> <span class="n">node</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="api_create_kid_config"><a class="viewcode-back" href="../../doc/messages.html#dist_zero.messages.api_create_kid_config">[docs]</a><span class="k">def</span> <span class="nf">api_create_kid_config</span><span class="p">(</span><span class="n">internal_node</span><span class="p">,</span> <span class="n">new_node_name</span><span class="p">,</span> <span class="n">machine_controller_handle</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Create a node_config for a new kid node of an internal io node.</span>
+
+<span class="sd">  :param internal_node: The :ref:`handle` of the parent internalnode.</span>
+<span class="sd">  :type internal_node: :ref:`handle`</span>
+<span class="sd">  :param str new_node_name: The name to use for the new node.</span>
+<span class="sd">  :param machine_controller_handle: The :ref:`handle` of the machine on which the new node will run.</span>
+<span class="sd">  :type machine_controller_handle: :ref:`handle`</span>
+
+<span class="sd">  :return: A node_config for creating the new kid node.</span>
+<span class="sd">  :rtype: :ref:`message`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">return</span> <span class="p">{</span>
+      <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;api_create_kid_config&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;internal_node_id&#39;</span><span class="p">:</span> <span class="n">internal_node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+      <span class="s1">&#39;new_node_name&#39;</span><span class="p">:</span> <span class="n">new_node_name</span><span class="p">,</span>
+      <span class="s1">&#39;machine_controller_handle&#39;</span><span class="p">:</span> <span class="n">machine_controller_handle</span><span class="p">,</span>
+  <span class="p">}</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,148 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>dist_zero.recorded &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for dist_zero.recorded</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">errors</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="RecordedUser"><a class="viewcode-back" href="../../doc/recorded.html#dist_zero.recorded.RecordedUser">[docs]</a><span class="k">class</span> <span class="nc">RecordedUser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  In tests, it can be helpful to generate recordings of user interactions</span>
+<span class="sd">  and play them back against nodes in order to generate input for a distributed</span>
+<span class="sd">  system.</span>
+<span class="sd">  Instances of this class represent the recorded user.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="n">MAX_STEP_TIME_MS</span> <span class="o">=</span> <span class="mi">3</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">time_action_pairs</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span> <span class="o">=</span> <span class="p">[]</span> <span class="k">if</span> <span class="n">time_action_pairs</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">time_action_pairs</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_started</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span><span class="p">)):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s1">&#39;Times are not in order.&#39;</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">now_ms</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_index</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_started</span> <span class="o">=</span> <span class="kc">True</span>
+
+  <span class="k">def</span> <span class="nf">to_json</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+        <span class="s1">&#39;time_action_pairs&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span><span class="p">,</span>
+    <span class="p">}</span>
+
+  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">from_json</span><span class="p">(</span><span class="n">recorded_user_json</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">RecordedUser</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="n">recorded_user_json</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span>
+        <span class="n">time_action_pairs</span><span class="o">=</span><span class="n">recorded_user_json</span><span class="p">[</span><span class="s1">&#39;time_action_pairs&#39;</span><span class="p">],</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="RecordedUser.elapse_and_get_messages"><a class="viewcode-back" href="../../doc/recorded.html#dist_zero.recorded.RecordedUser.elapse_and_get_messages">[docs]</a>  <span class="k">def</span> <span class="nf">elapse_and_get_messages</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param int ms: The number of milliseconds to elapse.</span>
+<span class="sd">    :yield: pairs (ms, msg) where ms is the amount of elapsed time, and msg is a :ref:`message` generated at that time.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_started</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t elapse time until the RecordedUser has been started.&quot;</span><span class="p">)</span>
+
+    <span class="n">stop_time_ms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">now_ms</span> <span class="o">+</span> <span class="n">ms</span>
+    <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">now_ms</span> <span class="o">&lt;</span> <span class="n">stop_time_ms</span><span class="p">:</span>
+      <span class="n">step_time_ms</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">stop_time_ms</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">now_ms</span><span class="p">,</span> <span class="n">RecordedUser</span><span class="o">.</span><span class="n">MAX_STEP_TIME_MS</span><span class="p">)</span>
+      <span class="n">step_stop_ms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">now_ms</span> <span class="o">+</span> <span class="n">step_time_ms</span>
+
+      <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_index</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">step_stop_ms</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="n">step_time_ms</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_index</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_index</span> <span class="o">+=</span> <span class="mi">1</span>
+
+      <span class="bp">self</span><span class="o">.</span><span class="n">now_ms</span> <span class="o">=</span> <span class="n">step_stop_ms</span></div>
+
+  <span class="k">def</span> <span class="nf">record_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time_action_pairs</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_started</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t record additional actions after RecordedUser has started playback.&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">tm</span> <span class="ow">in</span> <span class="n">time_action_pairs</span><span class="p">:</span>
+      <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">tm</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+          <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s1">&#39;Times are not in order.&#39;</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_time_action_pairs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tm</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

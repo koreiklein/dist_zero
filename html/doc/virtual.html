@@ -1,0 +1,238 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Virtual Spawner &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Cloud Spawners" href="cloud.html" />
+    <link rel="prev" title="Simulated Spawner" href="simulator.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="virtual-spawner">
+<h1>Virtual Spawner<a class="headerlink" href="#virtual-spawner" title="Permalink to this headline">¶</a></h1>
+<p>A virtual spawner will run a distributed system as a collection of virtual machines
+all residing on the same physical host.</p>
+<p>DistZero’s current virtualization technology is docker; virtualized distributed systems
+should be run with the docker spawner.</p>
+<span class="target" id="module-dist_zero.spawners.docker"></span><dl class="class">
+<dt id="dist_zero.spawners.docker.DockerSpawner">
+<em class="property">class </em><code class="descclassname">dist_zero.spawners.docker.</code><code class="descname">DockerSpawner</code><span class="sig-paren">(</span><em>system_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner" title="Permalink to this definition">¶</a></dt>
+<dd><p>A class for simulating new hardware by spinning up docker containers on a host and
+running a ‘production’ <a class="reference internal" href="machine_runner.html#dist_zero.machine_runner.MachineRunner" title="dist_zero.machine_runner.MachineRunner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineRunner</span></code></a> on each.</p>
+<dl class="method">
+<dt id="dist_zero.spawners.docker.DockerSpawner.all_spawned_containers">
+<code class="descname">all_spawned_containers</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.all_spawned_containers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.all_spawned_containers" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The list of all container handles for containers this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a> has ever spawned.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.spawners.docker.DockerSpawner.clean_all">
+<code class="descname">clean_all</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.clean_all"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.clean_all" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove all the docker resources associated with any instance of <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a>
+(not just the current instance).</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.spawners.docker.DockerSpawner.create_machine">
+<code class="descname">create_machine</code><span class="sig-paren">(</span><em>machine_config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.create_machine"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.create_machine" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start up a new machine and run a <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> instance on it.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>machine_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A machine configuration object.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.spawners.docker.DockerSpawner.create_machines">
+<code class="descname">create_machines</code><span class="sig-paren">(</span><em>machine_configs</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.create_machines"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.create_machines" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start up new machines and run <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> instances on them.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>machine_configs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)"><em>list</em></a>) – A list of machine configuration objects.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> in the same order as the matching</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">list[<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>]</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.spawners.docker.DockerSpawner.get_running_containers">
+<code class="descname">get_running_containers</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.get_running_containers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.get_running_containers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the list of this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a> instance’s running containers from the docker daemon.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of container handles for all running containers spawned by this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.spawners.docker.DockerSpawner.get_stopped_containers">
+<code class="descname">get_stopped_containers</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.get_stopped_containers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.get_stopped_containers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the list of this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a> instance’s non-running containers from the docker daemon.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of container handles for all running containers spawned by this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.spawners.docker.DockerSpawner.mode">
+<code class="descname">mode</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.mode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.mode" title="Permalink to this definition">¶</a></dt>
+<dd><p>This spawner’s mode.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The mode in which this spawner runs.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.spawners.docker.DockerSpawner.send_to_machine">
+<code class="descname">send_to_machine</code><span class="sig-paren">(</span><em>machine</em>, <em>message</em>, <em>sock_type='udp'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.send_to_machine"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.send_to_machine" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a message from the current process to a <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> listening
+on a port on a spawned machine.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>machine</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> for one of the managed machines.</li>
+<li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – Some json serializable message to send to that machine.</li>
+<li><strong>sock_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Either ‘udp’ or ‘tcp’.  Indicating the type of connection.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">None if sock_type == ‘udp’.
+If sock_type == ‘tcp’, then return the response from the <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> tcp API.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)">object</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.spawners.docker.DockerSpawner.started">
+<code class="descname">started</code><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.started" title="Permalink to this definition">¶</a></dt>
+<dd><p>True iff this simulation has started running</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="spawners.html">Spawners and Machine Controllers</a><ul>
+      <li>Previous: <a href="simulator.html" title="previous chapter">Simulated Spawner</a></li>
+      <li>Next: <a href="cloud.html" title="next chapter">Cloud Spawners</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../_sources/doc/virtual.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="../_sources/doc/virtual.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

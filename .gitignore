@@ -1,7 +1,0 @@
-__pycache__
-_build
-*.pyc
-.env
-.tmp
-.keys
-.rsync.output.log
