@@ -15,8 +15,6 @@ script:
 
 after_success:
   - make html
-  on:
-    branch: $DOCS_BRANCH
 
 deploy:
   provider: pages
