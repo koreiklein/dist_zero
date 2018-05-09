@@ -12,3 +12,15 @@ script:
 
 after_success:
   - make html
+
+deploy:
+  provider: pages
+  skip-cleanup: true
+  github-token: $GH_TOKEN
+  keep-history: true
+  local-dir: doc/_build
+  committer-from-gh: true
+  on:
+    branch: feature/kk/gh-pages
+
+
