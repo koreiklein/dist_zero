@@ -28,4 +28,3 @@ deploy:
   on:
     branch: $DOCS_BRANCH
 
-
