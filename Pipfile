@@ -1,0 +1,15 @@
+[[source]]
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+python-dotenv = "*"
+paramiko = "*"
+"boto3" = "*"
+python-logstash-async = "*"
+docker = "*"
+
+[dev-packages]
+yapf = "*"
+ipdb = "*"

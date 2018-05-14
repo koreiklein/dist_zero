@@ -76,6 +76,8 @@ class DockerSpawner(spawner.Spawner):
       json.dump(message, f)
 
     exit_code, output = self._container_by_id[machine['id']].exec_run([
+        'pipenv',
+        'run',
         'python',
         '-m',
         'dist_zero.spawners.docker.send_local_msg_from_file',
@@ -181,6 +183,8 @@ class DockerSpawner(spawner.Spawner):
     container = self._docker.containers.run(
         image=self.image,
         command=[
+            'pipenv',
+            'run',
             'python',
             '-m',
             'dist_zero.machine_init',

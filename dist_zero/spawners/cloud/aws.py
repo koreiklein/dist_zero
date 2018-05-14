@@ -186,7 +186,7 @@ class Ec2Spawner(spawner.Spawner):
         "sudo yum update -y",
         "sudo yum install -y python36",
         "sudo easy_install-3.6 pip",
-        "sudo /usr/local/bin/pip3 install --upgrade pip",
+        "sudo pip install pipenv==2018.5.18",
         "sudo mkdir -p /dist_zero",
         "sudo mkdir -p /logs",
         "sudo chown ec2-user /dist_zero",
@@ -201,7 +201,8 @@ class Ec2Spawner(spawner.Spawner):
     rsync_excludes = '--exclude "*.pyc" --exclude "*__pycache__*"'
     for precommand in [
         'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} dist_zero {user}@{instance}:/dist_zero/ >> {outfile}',
-        'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} requirements.txt {user}@{instance}:/dist_zero/requirements.txt >> {outfile}',
+        'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} Pipfile {user}@{instance}:/dist_zero/Pipfile >> {outfile}',
+        'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} Pipfile.lock {user}@{instance}:/dist_zero/Pipfile.lock >> {outfile}',
     ]:
       command = precommand.format(
           rsync_ssh_params=rsync_ssh_params.format(keyfile='.keys/dist_zero.pem'),
@@ -222,14 +223,14 @@ class Ec2Spawner(spawner.Spawner):
       os.system(command)
 
     logger.debug("Running pip install", extra=extra)
-    ssh.exec_command('cd /dist_zero; pip3 install --user -r requirements.txt')
+    ssh.exec_command('cd /dist_zero; pipenv install')
 
     logger.debug("Copying relevant environment variables", extra=extra)
     ssh.exec_command('''cat << EOF > /dist_zero/.env\n\n{}\nEOF\n'''.format('\n'.join(
         "{}='{}'".format(variable, getattr(settings, variable)) for variable in settings.CLOUD_ENV_VARS)))
 
     command = ("cd /dist_zero; "
-               "nohup python3 -m "
+               "nohup pipenv run python -m "
                "dist_zero.machine_init '{machine_controller_id}' '{machine_name}' '{mode}' '{system_id}' &").format(
                    machine_controller_id=machine_controller_id,
                    machine_name=machine_name,
