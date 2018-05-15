@@ -44,7 +44,16 @@ def simulated_demo(request):
 
 
 class Demo(object):
+  '''
+  For running Demos of a full distributed system.
+
+  Demos may run in simulated, virtual, or cloud mode.
+  '''
+
   def __init__(self, mode=spawners.MODE_SIMULATED):
+    '''
+    :param str mode: The mode in which to run the demo.
+    '''
     self.mode = mode
     self.nodes = 0
 
@@ -55,6 +64,7 @@ class Demo(object):
     self.cloud_spawner = None
 
   def start(self):
+    '''Start the demo.'''
     self._set_system_by_mode()
 
     self.system.configure_logging()
@@ -65,6 +75,7 @@ class Demo(object):
       self.virtual_spawner.start()
 
   def tear_down(self):
+    '''Remove any resources created as part of the demo.'''
     if self.virtual_spawner and self.virtual_spawner.started:
       self.virtual_spawner.clean_all()
 

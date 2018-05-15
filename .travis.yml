@@ -8,11 +8,9 @@ env:
 install:
   - cp .env.template .env
   - mkdir .tmp
-  - pip install pipenv
-  - pipenv install
 
 script:
-  - pipenv run pytest -k simulated
+  - pytest -k simulated
 
 after_success:
   - make html

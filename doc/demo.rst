@@ -1,5 +1,5 @@
-DistZero Demos
-==============
+Demos
+==========
 
-.. automodule:: demo.demo_sum
+.. automodule:: test.demo
    :members:

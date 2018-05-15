@@ -235,7 +235,7 @@ class Ec2Spawner(spawner.Spawner):
         "{}='{}'".format(variable, getattr(settings, variable)) for variable in settings.CLOUD_ENV_VARS)))
 
     logger.debug("Running pip install", extra=extra)
-    _exec_command("cd /dist_zero; pipenv install --python 3.6.5")
+    _exec_command("cd /dist_zero && pipenv --python 3.6.5 && pipenv sync")
 
     logger.info("Starting dist_zero.machine_init process on remote machine", extra=extra)
     command = ("cd /dist_zero; "
