@@ -1,5 +1,6 @@
 import logging
 import sys
+import time
 
 from logstash_async.handler import AsynchronousLogstashHandler
 
@@ -28,6 +29,11 @@ class SystemController(object):
 
     self._node_id_to_machine_handle = {}
     '''For nodes spawned by this instance, map the node id to the handle of the machine it was spawned on.'''
+
+  @property
+  def spawner(self):
+    '''The underlying spawner of this `SystemController`'''
+    return self._spawner
 
   def create_kid_config(self, internal_node, new_node_name, machine_controller_handle):
     '''

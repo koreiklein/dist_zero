@@ -167,6 +167,14 @@ class Ec2Spawner(spawner.Spawner):
     ])
 
     ssh = paramiko.SSHClient()
+
+    def _exec_command(command):
+      stdin, stdout, stderr = ssh.exec_command(command)
+      # Wait for the command to finish
+      status = stdout.channel.recv_exit_status()
+      if 0 != status:
+        raise RuntimeError("Command did not execute with 0 exit status. Got {} for {}".format(status, command))
+
     ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
     connected = False
     logger.debug("Connecting to aws instance {aws_instance_id} over ssh", extra=extra)
@@ -192,13 +200,13 @@ class Ec2Spawner(spawner.Spawner):
         "sudo chown ec2-user /dist_zero",
         "sudo chown ec2-user /logs",
     ]:
-      ssh.exec_command(command)
+      _exec_command(command)
 
     logger.info("Rsyncing dist_zero files to aws instance {aws_instance_id}", extra=extra)
 
     # Do the rsync
     rsync_ssh_params = 'ssh -oStrictHostKeyChecking=no -i {keyfile}'
-    rsync_excludes = '--exclude "*.pyc" --exclude "*__pycache__*"'
+    rsync_excludes = '--exclude "*.pyc" --exclude "*__pycache__*" --exclude .pytest_cache'
     for precommand in [
         'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} dist_zero {user}@{instance}:/dist_zero/ >> {outfile}',
         'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} Pipfile {user}@{instance}:/dist_zero/Pipfile >> {outfile}',
@@ -222,13 +230,14 @@ class Ec2Spawner(spawner.Spawner):
           })
       os.system(command)
 
-    logger.debug("Running pip install", extra=extra)
-    ssh.exec_command('cd /dist_zero; pipenv install')
-
     logger.debug("Copying relevant environment variables", extra=extra)
-    ssh.exec_command('''cat << EOF > /dist_zero/.env\n\n{}\nEOF\n'''.format('\n'.join(
+    _exec_command('''cat << EOF > /dist_zero/.env\n\n{}\nEOF\n'''.format('\n'.join(
         "{}='{}'".format(variable, getattr(settings, variable)) for variable in settings.CLOUD_ENV_VARS)))
 
+    logger.debug("Running pip install", extra=extra)
+    _exec_command("cd /dist_zero; pipenv install --python 3.6.5")
+
+    logger.info("Starting dist_zero.machine_init process on remote machine", extra=extra)
     command = ("cd /dist_zero; "
                "nohup pipenv run python -m "
                "dist_zero.machine_init '{machine_controller_id}' '{machine_name}' '{mode}' '{system_id}' &").format(
@@ -237,7 +246,7 @@ class Ec2Spawner(spawner.Spawner):
                    mode=spawners.MODE_CLOUD,
                    system_id=self._system_id)
     logger.info("Starting a MachineController process on an aws instance", extra=extra)
-    ssh.exec_command(command)
+    _exec_command(command)
 
     handle = messages.machine_controller_handle(machine_controller_id)
     self._handle_by_id[machine_controller_id] = handle

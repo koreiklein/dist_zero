@@ -8,10 +8,10 @@ env:
 install:
   - cp .env.template .env
   - mkdir .tmp
-  - pip install -r requirements.dev.txt
+  - pipenv install
 
 script:
-  - nosetests -a mode=simulated
+  - pipenv run pytest -k simulated
 
 after_success:
   - make html

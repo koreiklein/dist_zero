@@ -9,7 +9,12 @@ paramiko = "*"
 "boto3" = "*"
 python-logstash-async = "*"
 docker = "*"
+python-json-logger = "*"
 
 [dev-packages]
 yapf = "*"
 ipdb = "*"
+pytest = "*"
+
+[requires]
+python_version = "3.6.5"
