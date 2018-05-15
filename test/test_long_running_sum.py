@@ -2,6 +2,7 @@
 Long running demos involving sum nodes.
 '''
 
+import pytest
 import time
 import random
 
@@ -14,71 +15,37 @@ from dist_zero.recorded import RecordedUser
 from dist_zero.system_controller import SystemController
 
 
-class Demo(object):
-  '''
-  Common Superclass for running these demos.
-  '''
-
-  def run(self, name):
-    self.setUp()
-    try:
-      getattr(self, name)()
-    finally:
-      self.tearDown()
-
-
-class SumDemo(Demo):
-  def setUp(self):
-    self.n_machines = 6
-    self.system_id = dist_zero.ids.new_id()
-
-    self.virtual_spawner = DockerSpawner(system_id=self.system_id)
-    self.simulated_spawner = SimulatedSpawner(system_id=self.system_id, random_seed='SimulatedSumTest')
-
-  def tearDown(self):
-    if self.virtual_spawner.started:
-      self.virtual_spawner.clean_all()
-
-  def demo_node_splitting(self):
+class TestLongRunningSum(object):
+  def test_node_splitting(self, demo):
     '''
     Spawn a single sum node, and add senders until it splits.
     '''
+    self.demo = demo
+    self.n_machines = 6
+
     self.simulated = True
-    self.system = SystemController(system_id=self.system_id, spawner=self.simulated_spawner)
-    self.system.configure_logging()
-    self.simulated_spawner.start()
+    self.system = demo.system
     self._spawn_initial_nodes()
-    self._run_for(ms=500)
+    self.demo.run_for(ms=500)
 
     self.input_nodes = []
     self._spawn_inputs_loop(n_inputs=15, total_time_ms=20 * 1000)
 
-  def _now_ms(self):
-    if self.simulated:
-      return self.simulated_spawner.now_ms()
-    else:
-      return time.time()
-
-  def _run_for(self, ms):
-    if self.simulated:
-      self.simulated_spawner.run_for(int(ms))
-    else:
-      time.sleep(ms / 1000)
-
-  def demo_single_node_hits_sender_limit(self):
+  def test_single_node_hits_sender_limit(self, demo):
     '''
     Spawn a single sum node, and keep adding input nodes that send to it.
     When running this demo, a developer should -- through a log analysis tool -- be able to chart the
     number of senders on that node over time, watching as it continues to increase, until eventually it hits
     the node's limit for number of senders and some indication of the limit appears on the chart.
     '''
-    self.simulated = False
-    self.system = SystemController(system_id=self.system_id, spawner=self.virtual_spawner)
-    self.system.configure_logging()
+    self.n_machines = 6
+    self.demo = demo
 
-    self.virtual_spawner.start()
+    self.simulated = False
+    self.system = self.demo.system
+
     self._spawn_initial_nodes()
-    self._run_for(ms=500)
+    self.demo.run_for(ms=500)
 
     self.input_nodes = []
     self._spawn_inputs_loop(n_inputs=20, total_time_ms=20 * 1000)
@@ -122,14 +89,14 @@ class SumDemo(Demo):
     Each input should randomly send some increment messages.
     '''
     time_per_spawn_ms = total_time_ms / n_inputs
-    start_time_ms = self._now_ms()
+    start_time_ms = self.demo.now_ms()
     end_time_ms = start_time_ms + total_time_ms
     for i in range(n_inputs):
       expected_spawn_time = start_time_ms + time_per_spawn_ms * (i + 1)
-      cur_time_ms = self._now_ms()
+      cur_time_ms = self.demo.now_ms()
 
       if cur_time_ms < expected_spawn_time:
-        self._run_for(expected_spawn_time - cur_time_ms)
+        self.demo.run_for(expected_spawn_time - cur_time_ms)
 
       remaining_time_ms = (end_time_ms - cur_time_ms) - 30 # Send messages in almost the whole remaining time window.
       AVE_INTER_MESSAGE_TIME_MS = 1200
@@ -147,9 +114,4 @@ class SumDemo(Demo):
                                    for x in range(int(remaining_time_ms / AVE_INTER_MESSAGE_TIME_MS)))])))
 
     # Let things settle down
-    self._run_for(ms=4000)
-
-
-if __name__ == '__main__':
-  #SumDemo().run('demo_single_node_hits_sender_limit')
-  SumDemo().run('demo_node_splitting')
+    self.demo.run_for(ms=4000)

@@ -9,3 +9,6 @@ MODE_SIMULATED = 'simulated'
 MODE_VIRTUAL = 'virtual'
 #: For running machines by provisioning instances in the cloud.
 MODE_CLOUD = 'cloud'
+
+#: The list of all modes
+ALL_MODES = [MODE_SIMULATED, MODE_VIRTUAL, MODE_CLOUD]

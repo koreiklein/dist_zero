@@ -212,9 +212,13 @@ class MachineRunner(object):
     root_logger = logging.getLogger()
     root_logger.setLevel(max(settings.MIN_LOG_LEVEL, logging.DEBUG))
 
-    dist_zero.logging.set_handlers(root_logger, [
+    main_handlers = [
         json_file_handler,
         human_file_handler,
-        logstash_handler,
         stdout_handler,
-    ])
+    ]
+
+    if settings.LOGSTASH_HOST:
+      main_handlers.append(logstash_handler)
+
+    dist_zero.logging.set_handlers(root_logger, main_handlers)
