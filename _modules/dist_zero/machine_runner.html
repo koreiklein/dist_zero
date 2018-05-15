@@ -245,12 +245,16 @@
     <span class="n">root_logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span>
     <span class="n">root_logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">MIN_LOG_LEVEL</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">))</span>
 
-    <span class="n">dist_zero</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">set_handlers</span><span class="p">(</span><span class="n">root_logger</span><span class="p">,</span> <span class="p">[</span>
+    <span class="n">main_handlers</span> <span class="o">=</span> <span class="p">[</span>
         <span class="n">json_file_handler</span><span class="p">,</span>
         <span class="n">human_file_handler</span><span class="p">,</span>
-        <span class="n">logstash_handler</span><span class="p">,</span>
         <span class="n">stdout_handler</span><span class="p">,</span>
-    <span class="p">])</span></div></div>
+    <span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">LOGSTASH_HOST</span><span class="p">:</span>
+      <span class="n">main_handlers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">logstash_handler</span><span class="p">)</span>
+
+    <span class="n">dist_zero</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">set_handlers</span><span class="p">(</span><span class="n">root_logger</span><span class="p">,</span> <span class="n">main_handlers</span><span class="p">)</span></div></div>
 </pre></div>
 
           </div>
@@ -286,7 +290,7 @@
       &copy;2018, Korei Klein.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.4</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
       
     </div>

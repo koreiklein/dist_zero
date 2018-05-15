@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>DistZero Demos &#8212; DistZero  documentation</title>
+    <title>Demos &#8212; DistZero  documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script type="text/javascript" src="../_static/documentation_options.js"></script>
@@ -31,31 +31,80 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <div class="section" id="module-demo.demo_sum">
-<span id="distzero-demos"></span><h1>DistZero Demos<a class="headerlink" href="#module-demo.demo_sum" title="Permalink to this headline">¶</a></h1>
-<p>Long running demos involving sum nodes.</p>
+  <div class="section" id="module-test.demo">
+<span id="demos"></span><h1>Demos<a class="headerlink" href="#module-test.demo" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
-<dt id="demo.demo_sum.Demo">
-<em class="property">class </em><code class="descclassname">demo.demo_sum.</code><code class="descname">Demo</code><a class="reference internal" href="../_modules/demo/demo_sum.html#Demo"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#demo.demo_sum.Demo" title="Permalink to this definition">¶</a></dt>
-<dd><p>Common Superclass for running these demos.</p>
-</dd></dl>
-
-<dl class="class">
-<dt id="demo.demo_sum.SumDemo">
-<em class="property">class </em><code class="descclassname">demo.demo_sum.</code><code class="descname">SumDemo</code><a class="reference internal" href="../_modules/demo/demo_sum.html#SumDemo"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#demo.demo_sum.SumDemo" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="method">
-<dt id="demo.demo_sum.SumDemo.demo_node_splitting">
-<code class="descname">demo_node_splitting</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/demo/demo_sum.html#SumDemo.demo_node_splitting"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#demo.demo_sum.SumDemo.demo_node_splitting" title="Permalink to this definition">¶</a></dt>
-<dd><p>Spawn a single sum node, and add senders until it splits.</p>
+<dt id="test.demo.Demo">
+<em class="property">class </em><code class="descclassname">test.demo.</code><code class="descname">Demo</code><span class="sig-paren">(</span><em>mode='simulated'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo" title="Permalink to this definition">¶</a></dt>
+<dd><p>For running Demos of a full distributed system.</p>
+<p>Demos may run in simulated, virtual, or cloud mode.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The mode in which to run the demo.</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="test.demo.Demo.new_machine_controller">
+<code class="descname">new_machine_controller</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo.new_machine_controller"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo.new_machine_controller" title="Permalink to this definition">¶</a></dt>
+<dd><p>Like <a class="reference internal" href="#test.demo.Demo.new_machine_controllers" title="test.demo.Demo.new_machine_controllers"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Demo.new_machine_controllers</span></code></a> but only creates and returns one.</p>
 </dd></dl>
 
 <dl class="method">
-<dt id="demo.demo_sum.SumDemo.demo_single_node_hits_sender_limit">
-<code class="descname">demo_single_node_hits_sender_limit</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/demo/demo_sum.html#SumDemo.demo_single_node_hits_sender_limit"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#demo.demo_sum.SumDemo.demo_single_node_hits_sender_limit" title="Permalink to this definition">¶</a></dt>
-<dd><p>Spawn a single sum node, and keep adding input nodes that send to it.
-When running this demo, a developer should – through a log analysis tool – be able to chart the
-number of senders on that node over time, watching as it continues to increase, until eventually it hits
-the node’s limit for number of senders and some indication of the limit appears on the chart.</p>
+<dt id="test.demo.Demo.new_machine_controllers">
+<code class="descname">new_machine_controllers</code><span class="sig-paren">(</span><em>n</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo.new_machine_controllers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo.new_machine_controllers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create n new machine controllers</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>n</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – The number of new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> instances to create.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The list of the new handles.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)">list</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="test.demo.Demo.now_ms">
+<code class="descname">now_ms</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo.now_ms"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo.now_ms" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The current time in milliseconds</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="test.demo.Demo.run_for">
+<code class="descname">run_for</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo.run_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo.run_for" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run for ms milliseconds, in either real or simulated time depending on the current mode.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="test.demo.Demo.simulated">
+<code class="descname">simulated</code><a class="headerlink" href="#test.demo.Demo.simulated" title="Permalink to this definition">¶</a></dt>
+<dd><p>True iff this demo is simulated</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="test.demo.Demo.start">
+<code class="descname">start</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo.start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start the demo.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="test.demo.Demo.tear_down">
+<code class="descname">tear_down</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo.tear_down"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo.tear_down" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove any resources created as part of the demo.</p>
 </dd></dl>
 
 </dd></dl>
@@ -102,7 +151,7 @@ the node’s limit for number of senders and some indication of the limit appear
       &copy;2018, Korei Klein.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.4</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
       
       |

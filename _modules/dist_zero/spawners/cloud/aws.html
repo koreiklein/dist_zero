@@ -200,7 +200,15 @@
     <span class="p">])</span>
 
     <span class="n">ssh</span> <span class="o">=</span> <span class="n">paramiko</span><span class="o">.</span><span class="n">SSHClient</span><span class="p">()</span>
-    <span class="n">ssh</span><span class="o">.</span><span class="n">set_missing_host_key_policy</span><span class="p">(</span><span class="n">paramiko</span><span class="o">.</span><span class="n">WarningPolicy</span><span class="p">())</span>
+
+    <span class="k">def</span> <span class="nf">_exec_command</span><span class="p">(</span><span class="n">command</span><span class="p">):</span>
+      <span class="n">stdin</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">ssh</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+      <span class="c1"># Wait for the command to finish</span>
+      <span class="n">status</span> <span class="o">=</span> <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">recv_exit_status</span><span class="p">()</span>
+      <span class="k">if</span> <span class="mi">0</span> <span class="o">!=</span> <span class="n">status</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Command did not execute with 0 exit status. Got </span><span class="si">{}</span><span class="s2"> for </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="n">command</span><span class="p">))</span>
+
+    <span class="n">ssh</span><span class="o">.</span><span class="n">set_missing_host_key_policy</span><span class="p">(</span><span class="n">paramiko</span><span class="o">.</span><span class="n">AutoAddPolicy</span><span class="p">())</span>
     <span class="n">connected</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Connecting to aws instance </span><span class="si">{aws_instance_id}</span><span class="s2"> over ssh&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
@@ -219,22 +227,23 @@
         <span class="s2">&quot;sudo yum update -y&quot;</span><span class="p">,</span>
         <span class="s2">&quot;sudo yum install -y python36&quot;</span><span class="p">,</span>
         <span class="s2">&quot;sudo easy_install-3.6 pip&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;sudo /usr/local/bin/pip3 install --upgrade pip&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sudo pip install pipenv==2018.5.18&quot;</span><span class="p">,</span>
         <span class="s2">&quot;sudo mkdir -p /dist_zero&quot;</span><span class="p">,</span>
         <span class="s2">&quot;sudo mkdir -p /logs&quot;</span><span class="p">,</span>
         <span class="s2">&quot;sudo chown ec2-user /dist_zero&quot;</span><span class="p">,</span>
         <span class="s2">&quot;sudo chown ec2-user /logs&quot;</span><span class="p">,</span>
     <span class="p">]:</span>
-      <span class="n">ssh</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+      <span class="n">_exec_command</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
 
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Rsyncing dist_zero files to aws instance </span><span class="si">{aws_instance_id}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
 
     <span class="c1"># Do the rsync</span>
     <span class="n">rsync_ssh_params</span> <span class="o">=</span> <span class="s1">&#39;ssh -oStrictHostKeyChecking=no -i </span><span class="si">{keyfile}</span><span class="s1">&#39;</span>
-    <span class="n">rsync_excludes</span> <span class="o">=</span> <span class="s1">&#39;--exclude &quot;*.pyc&quot; --exclude &quot;*__pycache__*&quot;&#39;</span>
+    <span class="n">rsync_excludes</span> <span class="o">=</span> <span class="s1">&#39;--exclude &quot;*.pyc&quot; --exclude &quot;*__pycache__*&quot; --exclude .pytest_cache&#39;</span>
     <span class="k">for</span> <span class="n">precommand</span> <span class="ow">in</span> <span class="p">[</span>
         <span class="s1">&#39;rsync -avz -e &quot;</span><span class="si">{rsync_ssh_params}</span><span class="s1">&quot; </span><span class="si">{rsync_excludes}</span><span class="s1"> dist_zero </span><span class="si">{user}</span><span class="s1">@</span><span class="si">{instance}</span><span class="s1">:/dist_zero/ &gt;&gt; </span><span class="si">{outfile}</span><span class="s1">&#39;</span><span class="p">,</span>
-        <span class="s1">&#39;rsync -avz -e &quot;</span><span class="si">{rsync_ssh_params}</span><span class="s1">&quot; </span><span class="si">{rsync_excludes}</span><span class="s1"> requirements.txt </span><span class="si">{user}</span><span class="s1">@</span><span class="si">{instance}</span><span class="s1">:/dist_zero/requirements.txt &gt;&gt; </span><span class="si">{outfile}</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;rsync -avz -e &quot;</span><span class="si">{rsync_ssh_params}</span><span class="s1">&quot; </span><span class="si">{rsync_excludes}</span><span class="s1"> Pipfile </span><span class="si">{user}</span><span class="s1">@</span><span class="si">{instance}</span><span class="s1">:/dist_zero/Pipfile &gt;&gt; </span><span class="si">{outfile}</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;rsync -avz -e &quot;</span><span class="si">{rsync_ssh_params}</span><span class="s1">&quot; </span><span class="si">{rsync_excludes}</span><span class="s1"> Pipfile.lock </span><span class="si">{user}</span><span class="s1">@</span><span class="si">{instance}</span><span class="s1">:/dist_zero/Pipfile.lock &gt;&gt; </span><span class="si">{outfile}</span><span class="s1">&#39;</span><span class="p">,</span>
     <span class="p">]:</span>
       <span class="n">command</span> <span class="o">=</span> <span class="n">precommand</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
           <span class="n">rsync_ssh_params</span><span class="o">=</span><span class="n">rsync_ssh_params</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">keyfile</span><span class="o">=</span><span class="s1">&#39;.keys/dist_zero.pem&#39;</span><span class="p">),</span>
@@ -254,22 +263,23 @@
           <span class="p">})</span>
       <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
 
-    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Running pip install&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
-    <span class="n">ssh</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="s1">&#39;cd /dist_zero; pip3 install --user -r requirements.txt&#39;</span><span class="p">)</span>
-
     <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Copying relevant environment variables&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
-    <span class="n">ssh</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="s1">&#39;&#39;&#39;cat &lt;&lt; EOF &gt; /dist_zero/.env</span><span class="se">\n\n</span><span class="si">{}</span><span class="se">\n</span><span class="s1">EOF</span><span class="se">\n</span><span class="s1">&#39;&#39;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+    <span class="n">_exec_command</span><span class="p">(</span><span class="s1">&#39;&#39;&#39;cat &lt;&lt; EOF &gt; /dist_zero/.env</span><span class="se">\n\n</span><span class="si">{}</span><span class="se">\n</span><span class="s1">EOF</span><span class="se">\n</span><span class="s1">&#39;&#39;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
         <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">=&#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">variable</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="n">variable</span><span class="p">))</span> <span class="k">for</span> <span class="n">variable</span> <span class="ow">in</span> <span class="n">settings</span><span class="o">.</span><span class="n">CLOUD_ENV_VARS</span><span class="p">)))</span>
 
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Running pip install&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
+    <span class="n">_exec_command</span><span class="p">(</span><span class="s2">&quot;cd /dist_zero &amp;&amp; pipenv --python 3.6.5 &amp;&amp; pipenv sync&quot;</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting dist_zero.machine_init process on remote machine&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
     <span class="n">command</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;cd /dist_zero; &quot;</span>
-               <span class="s2">&quot;nohup python3 -m &quot;</span>
+               <span class="s2">&quot;nohup pipenv run python -m &quot;</span>
                <span class="s2">&quot;dist_zero.machine_init &#39;</span><span class="si">{machine_controller_id}</span><span class="s2">&#39; &#39;</span><span class="si">{machine_name}</span><span class="s2">&#39; &#39;</span><span class="si">{mode}</span><span class="s2">&#39; &#39;</span><span class="si">{system_id}</span><span class="s2">&#39; &amp;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
                    <span class="n">machine_controller_id</span><span class="o">=</span><span class="n">machine_controller_id</span><span class="p">,</span>
                    <span class="n">machine_name</span><span class="o">=</span><span class="n">machine_name</span><span class="p">,</span>
                    <span class="n">mode</span><span class="o">=</span><span class="n">spawners</span><span class="o">.</span><span class="n">MODE_CLOUD</span><span class="p">,</span>
                    <span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span><span class="p">)</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting a MachineController process on an aws instance&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
-    <span class="n">ssh</span><span class="o">.</span><span class="n">exec_command</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+    <span class="n">_exec_command</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
 
     <span class="n">handle</span> <span class="o">=</span> <span class="n">messages</span><span class="o">.</span><span class="n">machine_controller_handle</span><span class="p">(</span><span class="n">machine_controller_id</span><span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_handle_by_id</span><span class="p">[</span><span class="n">machine_controller_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">handle</span>
@@ -404,7 +414,7 @@
       &copy;2018, Korei Klein.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.4</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
       
     </div>
