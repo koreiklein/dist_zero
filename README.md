@@ -75,8 +75,8 @@ You can build the stack with `docker-compose build` and run it with `docker-comp
 
 To send logs there during development *in simulated mode*, set `LOGSTASH_HOST=localhost` and `LOGSTASH_PORT=5533`.
 
-To send logs there while running *in virtual mode*, you'll need the hostname of the host from
-containers.  When using docker-for-mac, this is `host.docker.internal`
+To send logs there while running *in virtual mode*, you'll need a hostname that the containers can use to refer
+to the host.  When using docker-for-mac, this is `host.docker.internal`
 [see the notes](https://docs.docker.com/docker-for-mac/release-notes/#docker-community-edition-17060-ce-mac18-2017-06-28-stable)
 
 The elk stack contains a [LogTrail](https://github.com/sivasamyk/logtrail) configuration for browsing logs across all
@@ -107,7 +107,7 @@ pipenv run pytest -k cloud
 ```
 
 Virtual mode tests will spin up docker containers on the host running the tests,
-and cloud mode tests will spin up instances in the cloud.  Tests should generally be written to clean up any
+and cloud mode tests will spin up instances in the cloud.  The tests should generally be written to clean up any
 resources they use during testing, but you should still be aware that it's possible for tests to leak containers or
 cloud instances if something goes wrong with the cleanup.
 
