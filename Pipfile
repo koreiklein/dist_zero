@@ -17,4 +17,4 @@ ipdb = "*"
 pytest = "*"
 
 [requires]
-python_version = "3.6.5"
+python_version = "3.6"
