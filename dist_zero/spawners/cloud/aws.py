@@ -175,7 +175,7 @@ class Ec2Spawner(spawner.Spawner):
       if 0 != status:
         raise RuntimeError("Command did not execute with 0 exit status. Got {} for {}".format(status, command))
 
-    ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     connected = False
     logger.debug("Connecting to aws instance {aws_instance_id} over ssh", extra=extra)
     for i in range(5):
