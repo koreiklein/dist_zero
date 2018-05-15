@@ -132,5 +132,5 @@ class Demo(object):
     return self.system.create_machines(configs)
 
   def new_machine_controller(self):
-    '''Like `Demo.new_machine_controller` but only creates and returns one.'''
+    '''Like `Demo.new_machine_controllers` but only creates and returns one.'''
     return self.new_machine_controllers(1)[0]
