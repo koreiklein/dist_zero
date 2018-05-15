@@ -8,12 +8,14 @@ env:
 install:
   - cp .env.template .env
   - mkdir .tmp
+  - pip install pipenv
+  - pipenv sync --dev
 
 script:
-  - pytest -k simulated
+  - pipenv run pytest -k simulated
 
 after_success:
-  - make html
+  - pipenv run make html
 
 deploy:
   provider: pages
