@@ -12,10 +12,11 @@ class InputLeafNode(Node):
   A leaf input node
   '''
 
-  def __init__(self, node_id, parent, parent_transport, controller, receivers, recorded_user=None):
+  def __init__(self, node_id, parent, parent_transport, controller, receiver_config, recorded_user=None):
     '''
     :param `MachineController` controller: the controller for this node's machine.
-    :param list receivers: A list of :ref:`handle` for the nodes that should receive from this input.
+    :param receiver_config: A configuration to spawn the unique receiver for this node.
+    :type receiver_config: :ref:`message`
     :param parent: The :ref:`handle` of the parent `InputNode` of this node.
     :type parent: :ref:`handle`
     :param parent_transport: A :ref:`transport` for talking to this node's parent.
@@ -25,24 +26,17 @@ class InputLeafNode(Node):
     '''
     self._controller = controller
     self.id = node_id
-    self._receivers = receivers
+    self._receiver_config = receiver_config
+    self._receiver = None
     self._recorded_user = recorded_user
 
     self.parent = parent
     self._parent_transport = parent_transport
 
-    # A map from receiver id to 'pending' or 'ready'
-    self._receiver_state = {receiver['id']: 'pending' for receiver in self._receivers}
-    self._active = not self._receivers
     # Messages received before becoming active.
     self._pre_active_messages = []
 
-    self._new_receivers = None # for when a node is migrating to new receivers.
-
     super(InputLeafNode, self).__init__(logger)
-
-  def _all_receivers_are_active(self):
-    return all(state == 'active' for state in self._receiver_state.values())
 
   def _receive_added_link(self, sender, transport):
     '''
@@ -51,49 +45,29 @@ class InputLeafNode(Node):
     :param sender: The :ref:`handle` of the sending node.
     :type sender: :ref:`handle`
     '''
+    if self._receiver is not None:
+      raise errors.InternalError("InputLeafNodes have only a single receiver."
+                                 "  Can not add a new link once a receiver exists")
     self.set_transport(sender, transport)
-    self._receiver_state[sender['id']] = 'active'
-    if self._all_receivers_are_active():
-      self.logger.info("Activating Input Leaf Node {node_id}", extra={'node_id': self.id})
-      self._active = True
-      # Process all the postponed messages now
-      for m in self._pre_active_messages:
-        self._receive_increment_message(m)
-    else:
-      self.logger.debug("Received added_link message from {sender}", extra={'sender': sender})
+    self._receiver = sender
+
+    self.logger.info("Activating Input Leaf Node {node_id}", extra={'node_id': self.id})
+    # Process all the postponed messages now
+    for m in self._pre_active_messages:
+      self._receive_increment_message(m)
 
   def receive(self, message, sender):
     if sender is not None and message['type'] == 'added_link':
       self._receive_added_link(sender, message['transport'])
     elif message['type'] == 'increment':
       self._receive_increment_message(message)
-    elif message['type'] == 'start_duplicating':
-      new_receiver = message['receiver']
-      self.logger.info(
-          "Starting duplication phase for {cur_node_id} . {new_receiver_id} will now receive duplicates.",
-          extra={'new_receiver_id': new_receiver['id']})
-      self.set_transport(new_receiver, message['transport'])
-      self._receivers.append(new_receiver)
-      self._new_receivers = [new_receiver]
-      self.send(new_receiver, messages.added_link(self.new_transport_for(new_receiver['id'])))
-    elif message['type'] == 'finish_duplicating':
-      self.logger.info(
-          "Finishing duplication phase for {cur_node_id} ."
-          "  Cutting back number of receivers from {n_old_receivers} to {n_new_receivers}",
-          extra={
-              'n_old_receivers': len(self._receivers),
-              'n_new_receivers': len(self._new_receivers),
-          })
-      self._receivers = self._new_receivers
-      self.send(sender, messages.finished_duplicating())
     else:
       raise RuntimeError("Unrecognized message type {}".format(message['type']))
 
   def _receive_increment_message(self, message):
-    if self._active:
-      for receiver in self._receivers:
-        self.logger.debug("Forwarding input message to receiver {receiver}", extra={'receiver': receiver})
-        self.send(receiver, message)
+    if self._receiver is not None:
+      self.logger.debug("Forwarding input message to receiver {receiver}", extra={'receiver': self._receiver})
+      self.send(self._receiver, message)
     else:
       # Postpone message till later
       self.logger.debug("Input leaf is postponing a message send since not all receivers are active.")
@@ -121,7 +95,7 @@ class InputLeafNode(Node):
         node_id=node_config['id'],
         parent=node_config['parent'],
         parent_transport=node_config['parent_transport'],
-        receivers=node_config['receivers'],
+        receiver_config=node_config['receiver_config'],
         recorded_user=InputLeafNode._init_recorded_user_from_config(node_config['recorded_user_json']))
 
   def handle(self):
@@ -131,6 +105,11 @@ class InputLeafNode(Node):
     self.logger.info("Input leaf node sending 'added_leaf' message to parent")
     self.set_transport(self.parent, self._parent_transport)
     self.send(self.parent, messages.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
+
+    # The node config is deliberately missing a receiver for self.  Add it now before spawing the node.
+    self._receiver_config['senders'].append(self.handle())
+    self._receiver_config['sender_transports'].append(self.new_transport_for(self._receiver_config['id']))
+    self._controller.spawn_node(node_config=self._receiver_config)
 
   def elapse(self, ms):
     if self._recorded_user is not None:
@@ -142,13 +121,14 @@ class InputLeafNode(Node):
 class OutputLeafNode(Node):
   '''A leaf output node'''
 
-  def __init__(self, node_id, parent, parent_transport, controller, senders, update_state):
+  def __init__(self, node_id, parent, parent_transport, controller, sender_config, update_state):
     '''
     :param str node_id: The id of this  node.
     :param parent: The :ref:`handle` of the parent node.
     :type parent: :ref:`handle`
     :param `MachineController` controller: The `MachineController` that manages this node.
-    :param list senders: A list of :ref:`handle` of nodes that send to this node.
+    :param sender_config: A node configuration for the unique sender to this node.
+    :type sender_config: :ref:`message`
     :param func update_state: A function.
       Call it with a function that takes the current state and returns a new state.
     '''
@@ -158,10 +138,8 @@ class OutputLeafNode(Node):
     self.parent = parent
     self._parent_transport = parent_transport
 
-    self._senders = []
-
-    self._sender_state = {sender['id']: 'pending' for sender in self._senders}
-    self._active = False
+    self._sender = None # The unique sender to this node.
+    self._sender_config = sender_config
 
     self._update_state = update_state
 
@@ -170,11 +148,8 @@ class OutputLeafNode(Node):
 
     super(OutputLeafNode, self).__init__(logger)
 
-  def _all_senders_are_active(self):
-    return all(state == 'active' for state in self._sender_state.values())
-
   def _receive_increment_message(self, message):
-    if self._active:
+    if self._sender is not None:
       if message['type'] == 'increment':
         increment = message['amount']
         self.logger.debug("Output incrementing state by {increment}", extra={'increment': increment})
@@ -184,23 +159,22 @@ class OutputLeafNode(Node):
     else:
       self._pre_active_messages.append(message)
 
-  def _receive_added_link(self, receiver, transport):
+  def _receive_added_link(self, sender, transport):
     '''
     Called when a new receiver has been added.
 
     :param receiver: The :ref:`handle` of the receiving node.
     :type receiver: :ref:`handle`
     '''
-    self.set_transport(receiver, transport)
-    self._sender_state[receiver['id']] = 'active'
-    if self._all_senders_are_active():
-      self.logger.info("Activating Output Leaf Node {node_id}", extra={'node_id': self.id})
-      self._active = True
-      # Process all the postponed messages now
-      for m in self._pre_active_messages:
-        self._receive_increment_message(m)
-    else:
-      self.logger.debug("Received added_link message from {receiver}", extra={'receiver': receiver})
+    if self._sender is not None:
+      raise errors.InternalError("OutputLeafNodes have only a single sender."
+                                 "  Can not add a new link once a sender exists")
+    self.set_transport(sender, transport)
+    self._sender = sender
+    self.logger.info("Activating Output Leaf Node {node_id}", extra={'node_id': self.id})
+    # Process all the postponed messages now
+    for m in self._pre_active_messages:
+      self._receive_increment_message(m)
 
   def receive(self, message, sender):
     if sender is not None and message['type'] == 'added_link':
@@ -217,7 +191,7 @@ class OutputLeafNode(Node):
         parent=node_config['parent'],
         parent_transport=node_config['parent_transport'],
         controller=controller,
-        senders=node_config['senders'],
+        sender_config=node_config['sender_config'],
         update_state=update_state,
     )
 
@@ -231,6 +205,11 @@ class OutputLeafNode(Node):
     self.logger.info("Output leaf node sending 'added_leaf' message to parent")
     self.set_transport(self.parent, self._parent_transport)
     self.send(self.parent, messages.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
+
+    # The node config is deliberately missing a receiver for self.  Add it now before spawing the node.
+    self._sender_config['receivers'].append(self.handle())
+    self._sender_config['receiver_transports'].append(self.new_transport_for(self._sender_config['id']))
+    self._controller.spawn_node(node_config=self._sender_config)
 
 
 class InputNode(Node):
@@ -303,12 +282,24 @@ class InputNode(Node):
             'node_name': name
         })
     self._kids[node_id] = 'pending'
+    sum_node_id = dist_zero.ids.new_id()
     return messages.input_leaf_config(
         node_id=node_id,
         name=name,
         parent=self.handle(),
         parent_transport=self.new_transport_for(node_id),
-        receivers=self._receivers,
+        receiver_config=messages.sum_node_config(
+            node_id=sum_node_id,
+            senders=[], # The input leaf will add itself to the list of senders before spawing the node node.
+            sender_transports=[],
+            receivers=self._receivers,
+            receiver_transports=[
+                self.convert_transport_for(sender_id=sum_node_id, receiver_id=receiver['id'])
+                for receiver in self._receivers
+            ],
+            parent=None,
+            parent_transport=None,
+        ),
     )
 
   def added_leaf(self, kid, transport):
@@ -323,10 +314,6 @@ class InputNode(Node):
     else:
       self._kids[kid['id']] = 'active'
       self.set_transport(kid, transport)
-
-      for receiver in self._receivers:
-        self.send(receiver,
-                  messages.add_link(kid, direction='sender', transport=self.convert_transport_for(receiver, kid)))
 
 
 class OutputNode(Node):
@@ -393,13 +380,23 @@ class OutputNode(Node):
             'node_name': name
         })
     self._kids[node_id] = 'pending'
+    sum_node_id = dist_zero.ids.new_id()
     return messages.output_leaf_config(
         node_id=node_id,
         name=name,
         initial_state=self._initial_state,
         parent=self.handle(),
         parent_transport=self.new_transport_for(node_id),
-        senders=self._senders,
+        sender_config=messages.sum_node_config(
+            node_id=sum_node_id,
+            senders=self._senders,
+            sender_transports=[
+                self.convert_transport_for(sender_id=sum_node_id, receiver_id=sender['id']) for sender in self._senders
+            ],
+            receivers=[], # The output leaf will add itself before spawning the new node.
+            receiver_transports=[],
+            parent=None,
+            parent_transport=None),
     )
 
   def added_leaf(self, kid, transport):
@@ -414,7 +411,3 @@ class OutputNode(Node):
     else:
       self._kids[kid['id']] = 'active'
       self.set_transport(kid, transport)
-
-      for sender in self._senders:
-        self.send(sender, messages.add_link(
-            kid, direction='receiver', transport=self.convert_transport_for(sender, kid)))

@@ -116,14 +116,25 @@ def set_sum_total(total):
   return {'type': 'set_sum_total', 'total': total}
 
 
-def sum_node_config(node_id, senders, receivers, parent=None, parent_transport=None):
+def sum_node_config(node_id,
+                    senders,
+                    receivers,
+                    sender_transports,
+                    receiver_transports,
+                    parent=None,
+                    parent_transport=None):
   '''
   A node config for creating a node to accept increments from a set of senders, sum them
   together and pass all increments to every receiver.
 
   :param str node_id: The id of the new node.
+
   :param list senders: A list of :ref:`handle` for sending nodes.
   :param list receivers: A list of :ref:`handle` for receiving nodes.
+
+  :param list sender_transports: A list of :ref:`transport` of the nodes sending increments
+  :param list receiver_transports: A list of :ref:`transport` of the nodes to receive increments
+
   :param parent: The :ref:`handle` of the parent `SumNode` of this node.
   :type parent: :ref:`handle`
   :param parent_transport: A :ref:`transport` for talking to this node's parent.
@@ -134,12 +145,14 @@ def sum_node_config(node_id, senders, receivers, parent=None, parent_transport=N
       'id': node_id,
       'senders': senders,
       'receivers': receivers,
+      'sender_transports': sender_transports,
+      'receiver_transports': receiver_transports,
       'parent': parent,
       'parent_transport': parent_transport
   }
 
 
-def input_leaf_config(node_id, name, parent, parent_transport, receivers, recorded_user_json=None):
+def input_leaf_config(node_id, name, parent, parent_transport, receiver_config, recorded_user_json=None):
   '''
   Add a new leaf node to an InputNode list.
 
@@ -147,7 +160,8 @@ def input_leaf_config(node_id, name, parent, parent_transport, receivers, record
   :param parent: The handle of the parent node.
   :type parent: :ref:`handle`
   :param object parent_transport: A transport for talking to the parent.
-  :param list receivers: The list of handles of receiver nodes the new node should send to.
+  :param receiver_config: The node config for the unique receiver for this input node.
+  :type receiver_config: :ref:`message`
   :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
   '''
   return {
@@ -156,12 +170,12 @@ def input_leaf_config(node_id, name, parent, parent_transport, receivers, record
       'name': name,
       'parent': parent,
       'parent_transport': parent_transport,
-      'receivers': receivers,
+      'receiver_config': receiver_config,
       'recorded_user_json': recorded_user_json,
   }
 
 
-def output_leaf_config(node_id, name, initial_state, parent, parent_transport, senders):
+def output_leaf_config(node_id, name, initial_state, parent, parent_transport, sender_config):
   '''
   Add a new leaf node to an OutputNode list.
 
@@ -176,8 +190,8 @@ def output_leaf_config(node_id, name, initial_state, parent, parent_transport, s
 
   :param object parent_transport: A transport for talking to the parent.
 
-  :param list senders: The list of handles of senders nodes the new node should receive from.
-  :type senders: A list of :ref:`handle`
+  :param sender_config: The node config for the unique sender for this output node.
+  :type sender_config: :ref:`message`
   '''
   return {
       'type': 'OutputLeafNode',
@@ -186,7 +200,7 @@ def output_leaf_config(node_id, name, initial_state, parent, parent_transport, s
       'initial_state': initial_state,
       'parent': parent,
       'parent_transport': parent_transport,
-      'senders': senders,
+      'sender_config': sender_config,
   }
 
 
@@ -203,28 +217,18 @@ def added_leaf(kid, transport):
   return {'type': 'added_leaf', 'kid': kid, 'transport': transport}
 
 
-def add_link(node, direction, transport):
+def added_link(node, direction, transport):
   '''
   Inform a node that it is now linked to a new node.
 
   :param node: The handle of the new node
   :type node: :ref:`handle`
   :param str direction: 'sender' or 'receiver' depending respectively on whether the newly added node will
-    send or receive from the node getting this message.
+    send to or receive from the node getting this message.
   :param transport: Transport data for communicating with node.
   :type transport: :ref:`transport`
   '''
-  return {'type': 'add_link', 'node': node, 'direction': direction, 'transport': transport}
-
-
-def added_link(transport):
-  '''
-  Inform a node that it has been successfully linked, and give a transport back to the sender.
-
-  :param transport: Transport data for communicating with node.
-  :type transport: :ref:`transport`
-  '''
-  return {'type': 'added_link', 'transport': transport}
+  return {'type': 'added_link', 'node': node, 'direction': direction, 'transport': transport}
 
 
 # Actions

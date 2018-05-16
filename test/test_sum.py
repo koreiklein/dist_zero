@@ -57,7 +57,9 @@ def test_sum_two_nodes_on_three_machines(demo):
       node_config=messages.sum_node_config(
           node_id=dist_zero.ids.new_id(),
           senders=[],
+          sender_transports=[],
           receivers=[],
+          receiver_transports=[],
       ))
 
   demo.run_for(ms=1000)

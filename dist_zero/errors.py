@@ -16,8 +16,8 @@ class InternalError(DistZeroError):
 
 
 class NoTransportError(DistZeroError):
-  def __init__(self, sender, receiver):
-    msg = 'No transport has been initialized between sender {} and receiver {}'.format(sender, receiver)
+  def __init__(self, sender_id, receiver_id):
+    msg = 'No transport has been initialized between sender {} and receiver {}'.format(sender_id, receiver_id)
     super(NoTransportError, self).__init__(msg)
 
 
@@ -29,9 +29,6 @@ class SimulationError(DistZeroError):
     :param tuple exc_info: The result of a call to `sys.exc_info`
     '''
     e_type, e_value, e_tb = exc_info
-    tb_lines = traceback.format_tb(e_tb)
     exn_lines = traceback.format_exception_only(e_type, e_value)
-    msg = "{}\nAfter simulated trace:\n\t{}\nA node raised an error:  {}".format(
-        ''.join(tb_lines), '\n\t'.join(log_lines), ''.join(exn_lines))
 
-    super(SimulationError, self).__init__(msg)
+    super(SimulationError, self).__init__(''.join(exn_lines))

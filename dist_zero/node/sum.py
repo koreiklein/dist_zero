@@ -14,25 +14,37 @@ class SumNode(Node):
   SEND_INTERVAL_MS = 30
   '''The number of ms between sends to receivers.'''
 
-  def __init__(self, node_id, senders, receivers, parent, parent_transport, controller):
+  def __init__(self, node_id, senders, sender_transports, receivers, receiver_transports, parent, parent_transport,
+               controller):
     '''
     :param str node_id: The node id for this node.
     :param list senders: A list of :ref:`handle` of the nodes sending increments
     :param list receivers: A list of :ref:`handle` of the nodes to receive increments
+
+    :param list sender_transports: A list of :ref:`transport` of the nodes sending increments
+    :param list receiver_transports: A list of :ref:`transport` of the nodes to receive increments
+
     :param parent: The :ref:`handle` of the parent `SumNode` of this node if it has one.
     :type parent: :ref:`handle` or None
     :param parent_transport: A :ref:`transport` for talking to this node's parent if it has a parent.
     :type parent_transport: :ref:`transport` or None
     '''
-    self._senders = senders
-    self._receivers = receivers
     self._controller = controller
+
     self.id = node_id
 
     self._parent = parent
     self._parent_transport = parent_transport
 
     self.migrator = None
+
+    self._senders = senders
+    self._receivers = receivers
+
+    for sender, sender_transport in zip(senders, sender_transports):
+      self.set_transport(sender, sender_transport)
+    for receiver, receiver_transport in zip(receivers, receiver_transports):
+      self.set_transport(receiver, receiver_transport)
 
     self._pending_sender_ids = set(sender['id'] for sender in self._senders)
 
@@ -73,6 +85,8 @@ class SumNode(Node):
         node_id=node_config['id'],
         senders=node_config['senders'],
         receivers=node_config['receivers'],
+        sender_transports=node_config['sender_transports'],
+        receiver_transports=node_config['receiver_transports'],
         parent=node_config['parent'],
         parent_transport=node_config['parent_transport'],
         controller=controller)
@@ -91,7 +105,7 @@ class SumNode(Node):
       self._unsent_total += message['amount']
     elif message['type'] == 'finished_duplicating':
       self.migrator.finished_duplicating(sender)
-    elif message['type'] == 'add_link':
+    elif message['type'] == 'added_link':
       node = message['node']
       direction = message['direction']
       transport = message['transport']
@@ -104,15 +118,12 @@ class SumNode(Node):
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
 
       self.set_transport(node, transport)
-      self.send(node, messages.added_link(self.new_transport_for(node['id'])))
-    elif message['type'] == 'added_link':
-      if self._parent is None:
-        raise RuntimeError("parent should not be None."
-                           "  This node received 'added_link' and must therefore be a migrating middle node")
-      self.set_transport(sender, message['transport'])
-      if sender['id'] in self._pending_sender_ids:
-        self._pending_sender_ids.remove(sender['id'])
-      self._maybe_finish_middle_node_startup()
+
+      if self._parent is not None:
+        # Doing a migration
+        if sender['id'] in self._pending_sender_ids:
+          self._pending_sender_ids.remove(sender['id'])
+        self._maybe_finish_middle_node_startup()
     elif message['type'] == 'sum_node_started':
       self._senders.append(sender)
       self.set_transport(sender, message['transport'])
@@ -127,6 +138,9 @@ class SumNode(Node):
       self.migrator.middle_node_duplicated(sender)
     elif message['type'] == 'middle_node_is_live':
       self.migrator.middle_node_live(sender)
+    elif message['type'] == 'start_duplicating':
+      import ipdb
+      ipdb.set_trace()
     else:
       self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
@@ -161,6 +175,16 @@ class SumNode(Node):
     if self._parent:
       self.set_transport(self._parent, self._parent_transport)
       self.send(self._parent, messages.sum_node_started(transport=self.new_transport_for(self._parent['id'])))
+
+    for sender in self._senders:
+      self.send(sender,
+                messages.added_link(
+                    node=self.handle(), direction='receiver', transport=self.new_transport_for(sender['id'])))
+
+    for receiver in self._receivers:
+      self.send(receiver,
+                messages.added_link(
+                    node=self.handle(), direction='sender', transport=self.new_transport_for(sender['id'])))
 
 
 class SumNodeSenderSplitMigrator(object):
@@ -267,7 +291,8 @@ class SumNodeSenderSplitMigrator(object):
         self.node.send(sender,
                        messages.start_duplicating(
                            receiver=middle_node,
-                           transport=self.node.convert_transport_for(sender=sender, receiver=middle_node)))
+                           transport=self.node.convert_transport_for(
+                               sender_id=sender['id'], receiver_id=middle_node['id'])))
 
   def _transition_to_syncing(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS,
@@ -368,7 +393,11 @@ class SumNodeSenderSplitMigrator(object):
         messages.sum_node_config(
             node_id=node_id,
             senders=senders,
+            sender_transports=[
+                self.node.convert_transport_for(sender_id=node_id, receiver_id=sender['id']) for sender in senders
+            ],
             receivers=[self.node.handle()],
+            receiver_transports=[self.node.new_transport_for(node_id)],
             parent=self.node.handle(),
             parent_transport=self.node.new_transport_for(node_id),
         ) for node_id, senders in self._partition.items()

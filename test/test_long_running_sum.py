@@ -67,7 +67,9 @@ class TestLongRunningSum(object):
         node_config=messages.sum_node_config(
             node_id=dist_zero.ids.new_id(),
             senders=[],
+            sender_transports=[],
             receivers=[],
+            receiver_transports=[],
         ))
 
     self.system.send_to_node(self.root_input_node_handle,
