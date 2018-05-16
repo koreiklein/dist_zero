@@ -15,7 +15,7 @@ class SumNode(Node):
   '''The number of ms between sends to receivers.'''
 
   def __init__(self, node_id, senders, sender_transports, receivers, receiver_transports, parent, parent_transport,
-               pending_sender_ids, controller):
+               input_node, output_node, input_transport, output_transport, pending_sender_ids, controller):
     '''
     :param str node_id: The node id for this node.
     :param list senders: A list of :ref:`handle` of the nodes sending increments
@@ -38,6 +38,11 @@ class SumNode(Node):
 
     self._parent = parent
     self._parent_transport = parent_transport
+
+    self._input_node = input_node
+    self._input_transport = input_transport
+    self._output_node = output_node
+    self._output_transport = output_transport
 
     self.migrator = None
 
@@ -93,6 +98,10 @@ class SumNode(Node):
         sender_transports=node_config['sender_transports'],
         receiver_transports=node_config['receiver_transports'],
         pending_sender_ids=node_config['pending_sender_ids'],
+        output_node=node_config['output_node'],
+        input_node=node_config['input_node'],
+        output_transport=node_config['output_transport'],
+        input_transport=node_config['input_transport'],
         parent=node_config['parent'],
         parent_transport=node_config['parent_transport'],
         controller=controller)
@@ -190,6 +199,10 @@ class SumNode(Node):
     for receiver in self._receivers:
       message = messages.increment(self._unsent_total)
       self.send(receiver, message)
+    if self._output_node:
+      message = messages.increment(self._unsent_total)
+      self.send(self._output_node, message)
+
     self._unsent_time_ms = 0
     self._sent_total += self._unsent_total
     self._unsent_total = 0
@@ -200,17 +213,30 @@ class SumNode(Node):
       self.set_transport(self._parent, self._parent_transport)
       self.send(self._parent, messages.sum_node_started(transport=self.new_transport_for(self._parent['id'])))
 
+    if self._output_node:
+      self.set_transport(self._output_node, self._output_transport)
+      self.send(self._output_node,
+                messages.added_link(
+                    node=self.handle(), direction='sender', transport=self.new_transport_for(self._output_node['id'])))
+
+    if self._input_node:
+      self.set_transport(self._input_node, self._input_transport)
+      self.send(self._input_node,
+                messages.added_link(
+                    node=self.handle(), direction='receiver', transport=self.new_transport_for(self._input_node['id'])))
+
     for sender in self._senders:
       self.send(sender,
                 messages.added_link(
                     node=self.handle(), direction='receiver', transport=self.new_transport_for(sender['id'])))
 
     for receiver in self._receivers:
+      # FIXME(KK): Try to remove.
       if self._parent and receiver['id'] == self._parent['id']:
         continue
       self.send(receiver,
                 messages.added_link(
-                    node=self.handle(), direction='sender', transport=self.new_transport_for(sender['id'])))
+                    node=self.handle(), direction='sender', transport=self.new_transport_for(receiver['id'])))
 
 
 class SumNodeSenderSplitMigrator(object):

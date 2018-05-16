@@ -107,8 +107,8 @@ class InputLeafNode(Node):
     self.send(self.parent, messages.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
 
     # The node config is deliberately missing a receiver for self.  Add it now before spawing the node.
-    self._receiver_config['senders'].append(self.handle())
-    self._receiver_config['sender_transports'].append(self.new_transport_for(self._receiver_config['id']))
+    self._receiver_config['input_node'] = self.handle()
+    self._receiver_config['input_transport'] = self.new_transport_for(self._receiver_config['id'])
     self._controller.spawn_node(node_config=self._receiver_config)
 
   def elapse(self, ms):
@@ -207,8 +207,8 @@ class OutputLeafNode(Node):
     self.send(self.parent, messages.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
 
     # The node config is deliberately missing a receiver for self.  Add it now before spawing the node.
-    self._sender_config['receivers'].append(self.handle())
-    self._sender_config['receiver_transports'].append(self.new_transport_for(self._sender_config['id']))
+    self._sender_config['output_node'] = self.handle()
+    self._sender_config['output_transport'] = self.new_transport_for(self._sender_config['id'])
     self._controller.spawn_node(node_config=self._sender_config)
 
 
@@ -290,7 +290,8 @@ class InputNode(Node):
         parent_transport=self.new_transport_for(node_id),
         receiver_config=messages.sum_node_config(
             node_id=sum_node_id,
-            senders=[], # The input leaf will add itself to the list of senders before spawing the node node.
+            senders=[],
+            # The input leaf will add the input and input_transport parameters
             sender_transports=[],
             receivers=self._receivers,
             receiver_transports=[
@@ -384,19 +385,21 @@ class OutputNode(Node):
     return messages.output_leaf_config(
         node_id=node_id,
         name=name,
-        initial_state=self._initial_state,
         parent=self.handle(),
         parent_transport=self.new_transport_for(node_id),
         sender_config=messages.sum_node_config(
             node_id=sum_node_id,
             senders=self._senders,
+            receivers=[],
+            # The output leaf will add the output and output_transport parameters
+            receiver_transports=[],
             sender_transports=[
                 self.convert_transport_for(sender_id=sum_node_id, receiver_id=sender['id']) for sender in self._senders
             ],
-            receivers=[], # The output leaf will add itself before spawning the new node.
-            receiver_transports=[],
             parent=None,
-            parent_transport=None),
+            parent_transport=None,
+        ),
+        initial_state=self._initial_state,
     )
 
   def added_leaf(self, kid, transport):
