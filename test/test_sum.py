@@ -66,11 +66,13 @@ def test_sum_two_nodes_on_three_machines(demo):
 
   demo.system.send_to_node(root_input_node_handle,
                            messages.start_sending_to(
+                               template=messages.TEMPLATE_SUM_NODE_CONFIG,
                                new_receiver=sum_node_handle,
                                transport=demo.system.create_transport_for(
                                    sender=root_input_node_handle, receiver=sum_node_handle)))
   demo.system.send_to_node(root_output_node_handle,
                            messages.start_receiving_from(
+                               template=messages.TEMPLATE_SUM_NODE_CONFIG,
                                new_sender=sum_node_handle,
                                transport=demo.system.create_transport_for(
                                    sender=root_output_node_handle, receiver=sum_node_handle),

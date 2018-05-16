@@ -109,6 +109,9 @@ class InputLeafNode(Node):
     # The node config is deliberately missing a receiver for self.  Add it now before spawing the node.
     self._receiver_config['input_node'] = self.handle()
     self._receiver_config['input_transport'] = self.new_transport_for(self._receiver_config['id'])
+    self.logger.info(
+        "Spawning a receiver {adjacent_type} node adjacent to {cur_node}",
+        extra={'adjacent_type': self._receiver_config['type']})
     self._controller.spawn_node(node_config=self._receiver_config)
 
   def elapse(self, ms):
@@ -209,6 +212,9 @@ class OutputLeafNode(Node):
     # The node config is deliberately missing a receiver for self.  Add it now before spawing the node.
     self._sender_config['output_node'] = self.handle()
     self._sender_config['output_transport'] = self.new_transport_for(self._sender_config['id'])
+    self.logger.info(
+        "Spawning a sender {adjacent_type} node adjacent to {cur_node}",
+        extra={'adjacent_type': self._sender_config['type']})
     self._controller.spawn_node(node_config=self._sender_config)
 
 
@@ -218,21 +224,29 @@ class InputNode(Node):
   '''
 
   def __init__(self, node_id, controller, receivers=None):
+    '''
+    :param str node_id: The id to use for this node
+    :param `MachineController` controller: The controller for this node.
+    :param template: The template node config to use as a base for spawning nodes adjacent to new leaves.
+    :param list receivers: A list of nodes that receive from this node.
+    '''
     self._controller = controller
     self.id = node_id
+    self._template = None
     self._kids = {} # A map from kid node id to either 'pending' or 'active'
     self._receivers = [] if receivers is None else receivers
     super(InputNode, self).__init__(logger)
 
   def receive(self, message, sender):
     if message['type'] == 'start_sending_to':
-      self.start_sending_to(message['node'], transport=message['transport'])
+      self.start_sending_to(message['node'], transport=message['transport'], template=message['template'])
     elif message['type'] == 'added_leaf':
       self.added_leaf(message['kid'], message['transport'])
     else:
       self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
-  def start_sending_to(self, node_handle, transport):
+  def start_sending_to(self, node_handle, transport, template):
+    self._template = template
     self.set_transport(node_handle, transport)
     self._receivers.append(node_handle)
 
@@ -282,26 +296,28 @@ class InputNode(Node):
             'node_name': name
         })
     self._kids[node_id] = 'pending'
-    sum_node_id = dist_zero.ids.new_id()
+
     return messages.input_leaf_config(
         node_id=node_id,
         name=name,
         parent=self.handle(),
         parent_transport=self.new_transport_for(node_id),
-        receiver_config=messages.sum_node_config(
-            node_id=sum_node_id,
-            senders=[],
-            # The input leaf will add the input and input_transport parameters
-            sender_transports=[],
-            receivers=self._receivers,
-            receiver_transports=[
-                self.convert_transport_for(sender_id=sum_node_id, receiver_id=receiver['id'])
-                for receiver in self._receivers
-            ],
-            parent=None,
-            parent_transport=None,
-        ),
+        receiver_config=self._new_adjacent_node_config(),
     )
+
+  def _new_adjacent_node_config(self):
+    if self._template is None:
+      return None
+    else:
+      receiver_config = dict(self._template)
+      adjacent_node_id = dist_zero.ids.new_id()
+      receiver_config['id'] = adjacent_node_id
+      receiver_config['receivers'] = self._receivers
+      receiver_config['receiver_transports'] = [
+          self.convert_transport_for(sender_id=adjacent_node_id, receiver_id=receiver['id'])
+          for receiver in self._receivers
+      ]
+      return receiver_config
 
   def added_leaf(self, kid, transport):
     '''
@@ -327,10 +343,13 @@ class OutputNode(Node):
     :param str node_id: The id to use for this node
     :param `MachineController` controller: The controller for this node.
     :param object initial_state: A json serializeable starting state for all output leaves spawned from this node.
+    :param template: The template node config to use as a base for spawning nodes adjacent to new leaves.
     :param list senders: A list of nodes that send to this node.
     '''
     self._controller = controller
     self.id = node_id
+
+    self._template = None
 
     self._initial_state = initial_state
 
@@ -341,13 +360,14 @@ class OutputNode(Node):
 
   def receive(self, message, sender):
     if message['type'] == 'start_receiving_from':
-      self.receive_from(message['node'], transport=message['transport'])
+      self.receive_from(message['node'], transport=message['transport'], template=message['template'])
     elif message['type'] == 'added_leaf':
       self.added_leaf(message['kid'], message['transport'])
     else:
       self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
-  def receive_from(self, node_handle, transport):
+  def receive_from(self, node_handle, transport, template):
+    self._template = template
     self.set_transport(node_handle, transport)
     self._senders.append(node_handle)
 
@@ -381,26 +401,27 @@ class OutputNode(Node):
             'node_name': name
         })
     self._kids[node_id] = 'pending'
-    sum_node_id = dist_zero.ids.new_id()
     return messages.output_leaf_config(
         node_id=node_id,
         name=name,
         parent=self.handle(),
         parent_transport=self.new_transport_for(node_id),
-        sender_config=messages.sum_node_config(
-            node_id=sum_node_id,
-            senders=self._senders,
-            receivers=[],
-            # The output leaf will add the output and output_transport parameters
-            receiver_transports=[],
-            sender_transports=[
-                self.convert_transport_for(sender_id=sum_node_id, receiver_id=sender['id']) for sender in self._senders
-            ],
-            parent=None,
-            parent_transport=None,
-        ),
+        sender_config=self._new_adjacent_node_config(),
         initial_state=self._initial_state,
     )
+
+  def _new_adjacent_node_config(self):
+    if self._template is None:
+      return None
+    else:
+      adjacent_node_id = dist_zero.ids.new_id()
+      sender_config = dict(self._template)
+      sender_config['id'] = adjacent_node_id
+      sender_config['senders'] = self._senders
+      sender_config['sender_transports'] = [
+          self.convert_transport_for(sender_id=adjacent_node_id, receiver_id=sender['id']) for sender in self._senders
+      ]
+      return sender_config
 
   def added_leaf(self, kid, transport):
     '''

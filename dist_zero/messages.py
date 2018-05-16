@@ -165,6 +165,17 @@ def sum_node_config(node_id,
   }
 
 
+TEMPLATE_SUM_NODE_CONFIG = sum_node_config(
+    node_id=None,
+    senders=[],
+    # The input leaf will add the input and input_transport parameters
+    sender_transports=[],
+    receivers=[],
+    receiver_transports=[],
+    parent=None,
+    parent_transport=None)
+
+
 def input_leaf_config(node_id, name, parent, parent_transport, receiver_config, recorded_user_json=None):
   '''
   Add a new leaf node to an InputNode list.
@@ -254,7 +265,7 @@ def increment(amount):
   return {'type': 'increment', 'amount': amount}
 
 
-def start_sending_to(new_receiver, transport):
+def start_sending_to(new_receiver, transport, template):
   '''
   A message informing a node to start sending messages to a new receiver.
 
@@ -262,11 +273,13 @@ def start_sending_to(new_receiver, transport):
   :type new_receiver: A node :ref:`handle`
   :param transport: A transport allowing to send to new_receiver.
   :type transport: :ref:`transport`
+  :param template: A template node config to use for an adjacent node.
+  :type template: :ref:`message`
   '''
-  return {'type': 'start_sending_to', 'node': new_receiver, 'transport': transport}
+  return {'type': 'start_sending_to', 'node': new_receiver, 'transport': transport, 'template': template}
 
 
-def start_receiving_from(new_sender, transport):
+def start_receiving_from(new_sender, transport, template):
   '''
   A message informing a node to start receiving messages from a new sender.
 
@@ -274,8 +287,10 @@ def start_receiving_from(new_sender, transport):
   :type new_sender: A node :ref:`handle`
   :param transport: A transport allowing to send to new_sender.
   :type transport: :ref:`transport`
+  :param template: A template node config to use for an adjacent node.
+  :type template: :ref:`message`
   '''
-  return {'type': 'start_receiving_from', 'node': new_sender, 'transport': transport}
+  return {'type': 'start_receiving_from', 'node': new_sender, 'transport': transport, 'template': template}
 
 
 def machine_start_node(node_config):

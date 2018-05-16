@@ -74,11 +74,13 @@ class TestLongRunningSum(object):
 
     self.system.send_to_node(self.root_input_node_handle,
                              messages.start_sending_to(
+                                 template=messages.TEMPLATE_SUM_NODE_CONFIG,
                                  new_receiver=self.sum_node_handle,
                                  transport=self.system.create_transport_for(
                                      sender=self.root_input_node_handle, receiver=self.sum_node_handle)))
     self.system.send_to_node(self.root_output_node_handle,
                              messages.start_receiving_from(
+                                 template=messages.TEMPLATE_SUM_NODE_CONFIG,
                                  new_sender=self.sum_node_handle,
                                  transport=self.system.create_transport_for(
                                      sender=self.root_output_node_handle, receiver=self.sum_node_handle),
