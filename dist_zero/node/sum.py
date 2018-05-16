@@ -15,7 +15,7 @@ class SumNode(Node):
   '''The number of ms between sends to receivers.'''
 
   def __init__(self, node_id, senders, sender_transports, receivers, receiver_transports, parent, parent_transport,
-               controller):
+               pending_sender_ids, controller):
     '''
     :param str node_id: The node id for this node.
     :param list senders: A list of :ref:`handle` of the nodes sending increments
@@ -23,6 +23,9 @@ class SumNode(Node):
 
     :param list sender_transports: A list of :ref:`transport` of the nodes sending increments
     :param list receiver_transports: A list of :ref:`transport` of the nodes to receive increments
+
+    :param list pending_sender_ids: In the event that this node is starting via a migration, this is the list of
+      senders that must be registered as sending duplicates in order for this node to decide that it is fully duplicated.
 
     :param parent: The :ref:`handle` of the parent `SumNode` of this node if it has one.
     :type parent: :ref:`handle` or None
@@ -41,12 +44,14 @@ class SumNode(Node):
     self._senders = senders
     self._receivers = receivers
 
+    self._new_receivers = [] # For duplications
+
     for sender, sender_transport in zip(senders, sender_transports):
       self.set_transport(sender, sender_transport)
     for receiver, receiver_transport in zip(receivers, receiver_transports):
       self.set_transport(receiver, receiver_transport)
 
-    self._pending_sender_ids = set(sender['id'] for sender in self._senders)
+    self._pending_sender_ids = set(pending_sender_ids)
 
     # Invariants:
     #   At certain points in time, a increment message is sent to every receiver.
@@ -87,6 +92,7 @@ class SumNode(Node):
         receivers=node_config['receivers'],
         sender_transports=node_config['sender_transports'],
         receiver_transports=node_config['receiver_transports'],
+        pending_sender_ids=node_config['pending_sender_ids'],
         parent=node_config['parent'],
         parent_transport=node_config['parent_transport'],
         controller=controller)
@@ -139,8 +145,26 @@ class SumNode(Node):
     elif message['type'] == 'middle_node_is_live':
       self.migrator.middle_node_live(sender)
     elif message['type'] == 'start_duplicating':
-      import ipdb
-      ipdb.set_trace()
+      new_receiver = message['receiver']
+      self.logger.info(
+          "Starting duplication phase for {cur_node_id} . {new_receiver_id} will now receive duplicates.",
+          extra={'new_receiver_id': new_receiver['id']})
+      self.set_transport(new_receiver, message['transport'])
+      self._receivers.append(new_receiver)
+      self._new_receivers = [new_receiver]
+      self.send(new_receiver,
+                messages.added_link(
+                    node=self.handle(), direction='sender', transport=self.new_transport_for(new_receiver['id'])))
+    elif message['type'] == 'finish_duplicating':
+      self.logger.info(
+          "Finishing duplication phase for {cur_node_id} ."
+          "  Cutting back number of receivers from {n_old_receivers} to {n_new_receivers}",
+          extra={
+              'n_old_receivers': len(self._receivers),
+              'n_new_receivers': len(self._new_receivers),
+          })
+      self._receivers = self._new_receivers
+      self.send(sender, messages.finished_duplicating())
     else:
       self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
@@ -182,6 +206,8 @@ class SumNode(Node):
                     node=self.handle(), direction='receiver', transport=self.new_transport_for(sender['id'])))
 
     for receiver in self._receivers:
+      if self._parent and receiver['id'] == self._parent['id']:
+        continue
       self.send(receiver,
                 messages.added_link(
                     node=self.handle(), direction='sender', transport=self.new_transport_for(sender['id'])))
@@ -348,15 +374,15 @@ class SumNodeSenderSplitMigrator(object):
     if all(state == 'duplicated' for state in self._middle_node_states.values()):
       self._transition_to_syncing()
 
-  def finished_duplicating(self, input_node):
+  def finished_duplicating(self, sender):
     '''
-    Called when an input node is sending messages only according the structure at the end of migration, and not
+    Called when a sender sum node is sending messages only according the structure at the end of migration, and not
     the duplicate messages from the beginning of the migration.
 
-    :param input_node: The :ref:`handle` of the input node that has finished duplicating.
-    :type input_node: :ref:`handle`
+    :param sender: The :ref:`handle` of the sender node that has finished duplicating.
+    :type sender: :ref:`handle`
     '''
-    self._duplicating_input_ids.remove(input_node['id'])
+    self._duplicating_input_ids.remove(sender['id'])
     if not self._duplicating_input_ids:
       self._transition_to_finished()
 
@@ -392,10 +418,9 @@ class SumNodeSenderSplitMigrator(object):
     return [
         messages.sum_node_config(
             node_id=node_id,
-            senders=senders,
-            sender_transports=[
-                self.node.convert_transport_for(sender_id=node_id, receiver_id=sender['id']) for sender in senders
-            ],
+            pending_sender_ids=[sender['id'] for sender in senders],
+            senders=[],
+            sender_transports=[],
             receivers=[self.node.handle()],
             receiver_transports=[self.node.new_transport_for(node_id)],
             parent=self.node.handle(),

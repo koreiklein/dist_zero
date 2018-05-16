@@ -1,3 +1,4 @@
+import json
 import logging
 
 from dist_zero import errors, messages
@@ -148,6 +149,11 @@ class NodeManager(MachineController):
   def spawn_node(self, node_config):
     # TODO(KK): Rethink how the machine for each node is chosen.  Always running on the same machine
     #   is easy, but an obviously flawed approach.
+
+    # In general, the config should be serialized and deserialized at some point.
+    # Do it here so that simulated tests don't accidentally share data.
+    node_config = json.loads(json.dumps(node_config))
+
     return self.start_node(node_config).handle()
 
   def new_transport_for(self, local_node_id, remote_node_id):

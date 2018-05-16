@@ -121,6 +121,7 @@ def sum_node_config(node_id,
                     receivers,
                     sender_transports,
                     receiver_transports,
+                    pending_sender_ids=[],
                     parent=None,
                     parent_transport=None):
   '''
@@ -135,6 +136,9 @@ def sum_node_config(node_id,
   :param list sender_transports: A list of :ref:`transport` of the nodes sending increments
   :param list receiver_transports: A list of :ref:`transport` of the nodes to receive increments
 
+  :param list pending_sender_ids: In the event that this node is starting via a migration, this is the list of
+    senders that must be registered as sending duplicates in order for this node to decide that it is fully duplicated.
+
   :param parent: The :ref:`handle` of the parent `SumNode` of this node.
   :type parent: :ref:`handle`
   :param parent_transport: A :ref:`transport` for talking to this node's parent.
@@ -147,6 +151,7 @@ def sum_node_config(node_id,
       'receivers': receivers,
       'sender_transports': sender_transports,
       'receiver_transports': receiver_transports,
+      'pending_sender_ids': pending_sender_ids,
       'parent': parent,
       'parent_transport': parent_transport
   }
