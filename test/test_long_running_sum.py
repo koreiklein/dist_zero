@@ -52,7 +52,8 @@ class TestLongRunningSum(object):
 
   def _spawn_initial_nodes(self):
     self.machine_handles = self.system.create_machines([
-        messages.machine_config(machine_name='machine {}'.format(i), machine_controller_id=dist_zero.ids.new_id())
+        messages.machine.machine_config(
+            machine_name='machine {}'.format(i), machine_controller_id=dist_zero.ids.new_id())
         for i in range(self.n_machines)
     ])
 
@@ -60,7 +61,7 @@ class TestLongRunningSum(object):
 
     self.sum_node_handle = self.system.spawn_node(
         on_machine=machine_a_handle,
-        node_config=messages.sum_node_config(
+        node_config=messages.sum.sum_node_config(
             node_id=dist_zero.ids.new_id(),
             senders=[],
             sender_transports=[],
@@ -69,18 +70,19 @@ class TestLongRunningSum(object):
         ))
 
     self.root_input_node_handle = self.system.spawn_node(
-        on_machine=machine_a_handle, node_config=messages.input_node_config(dist_zero.ids.new_id()))
+        on_machine=machine_a_handle, node_config=messages.io.input_node_config(dist_zero.ids.new_id()))
     self.root_output_node_handle = self.system.spawn_node(
-        on_machine=machine_a_handle, node_config=messages.output_node_config(dist_zero.ids.new_id(), initial_state=0))
+        on_machine=machine_a_handle,
+        node_config=messages.io.output_node_config(dist_zero.ids.new_id(), initial_state=0))
 
     self.system.send_to_node(self.sum_node_handle,
-                             messages.set_input(self.root_input_node_handle,
-                                                self.system.create_transport_for(self.sum_node_handle,
-                                                                                 self.root_input_node_handle)))
+                             messages.sum.set_input(self.root_input_node_handle,
+                                                    self.system.create_transport_for(
+                                                        self.sum_node_handle, self.root_input_node_handle)))
     self.system.send_to_node(self.sum_node_handle,
-                             messages.set_output(self.root_output_node_handle,
-                                                 self.system.create_transport_for(self.sum_node_handle,
-                                                                                  self.root_output_node_handle)))
+                             messages.sum.set_output(self.root_output_node_handle,
+                                                     self.system.create_transport_for(
+                                                         self.sum_node_handle, self.root_output_node_handle)))
 
   def _spawn_inputs_loop(self, n_inputs, total_time_ms):
     '''
@@ -109,7 +111,7 @@ class TestLongRunningSum(object):
               machine_controller_handle=self.machine_handles[i % len(self.machine_handles)],
               recorded_user=RecordedUser(
                   'user {}'.format(i),
-                  [(t, messages.increment(int(random.random() * 20)))
+                  [(t, messages.sum.increment(int(random.random() * 20)))
                    for t in sorted(random.random() * remaining_time_ms
                                    for x in range(int(remaining_time_ms / AVE_INTER_MESSAGE_TIME_MS)))])))
 

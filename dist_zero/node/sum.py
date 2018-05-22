@@ -119,7 +119,7 @@ class SumNode(Node):
     this node is totally synced up.
     '''
     if not self._pending_sender_ids:
-      self.send(self._parent, messages.middle_node_is_duplicated())
+      self.send(self._parent, messages.migration.middle_node_is_duplicated())
 
   def receive(self, sender, message):
     if message['type'] == 'increment':
@@ -140,7 +140,7 @@ class SumNode(Node):
         # TODO(KK): Find a way to avoid having to set_transport here.
         self.set_transport(message['kid'], message['transport'])
         self._controller.spawn_node(
-            messages.sum_node_config(
+            messages.sum.sum_node_config(
                 node_id=node_id,
                 senders=[],
                 receivers=[self.handle()],
@@ -156,7 +156,7 @@ class SumNode(Node):
         # TODO(KK): Find a way to avoid having to set_transport here.
         self.set_transport(message['kid'], message['transport'])
         self._controller.spawn_node(
-            messages.sum_node_config(
+            messages.sum.sum_node_config(
                 node_id=node_id,
                 senders=[self.handle()],
                 receivers=[],
@@ -197,7 +197,7 @@ class SumNode(Node):
       self._sent_total = message['total']
       self._unsent_total = 0
       self._unsent_time_ms = 0
-      self.send(self._parent, messages.middle_node_is_live())
+      self.send(self._parent, messages.migration.middle_node_is_live())
     elif message['type'] == 'middle_node_is_duplicated':
       self.migrator.middle_node_duplicated(sender)
     elif message['type'] == 'middle_node_is_live':
@@ -211,7 +211,7 @@ class SumNode(Node):
       self._receivers.append(new_receiver)
       self._new_receivers = [new_receiver]
       self.send(new_receiver,
-                messages.added_link(
+                messages.common.added_link(
                     node=self.handle(), direction='sender', transport=self.new_transport_for(new_receiver['id'])))
     elif message['type'] == 'finish_duplicating':
       self.logger.info(
@@ -222,7 +222,7 @@ class SumNode(Node):
               'n_new_receivers': len(self._new_receivers),
           })
       self._receivers = self._new_receivers
-      self.send(sender, messages.finished_duplicating())
+      self.send(sender, messages.migration.finished_duplicating())
     else:
       self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
@@ -250,10 +250,10 @@ class SumNode(Node):
             'n_receivers': len(self._receivers)
         })
     for receiver in self._receivers:
-      message = messages.increment(self._unsent_total)
+      message = messages.sum.increment(self._unsent_total)
       self.send(receiver, message)
     if self._output_node and self._output_node['type'] == 'OutputLeafNode':
-      message = messages.increment(self._unsent_total)
+      message = messages.sum.increment(self._unsent_total)
       self.send(self._output_node, message)
 
     self._unsent_time_ms = 0
@@ -270,23 +270,23 @@ class SumNode(Node):
         })
     if self._parent:
       self.set_transport(self._parent, self._parent_transport)
-      self.send(self._parent, messages.sum_node_started(transport=self.new_transport_for(self._parent['id'])))
+      self.send(self._parent, messages.sum.sum_node_started(transport=self.new_transport_for(self._parent['id'])))
 
     if self._output_node:
       self.set_transport(self._output_node, self._output_transport)
       self.send(self._output_node,
-                messages.added_link(
+                messages.common.added_link(
                     node=self.handle(), direction='sender', transport=self.new_transport_for(self._output_node['id'])))
 
     if self._input_node:
       self.set_transport(self._input_node, self._input_transport)
       self.send(self._input_node,
-                messages.added_link(
+                messages.common.added_link(
                     node=self.handle(), direction='receiver', transport=self.new_transport_for(self._input_node['id'])))
 
     for sender in self._senders:
       self.send(sender,
-                messages.added_link(
+                messages.common.added_link(
                     node=self.handle(), direction='receiver', transport=self.new_transport_for(sender['id'])))
 
     for receiver in self._receivers:
@@ -294,7 +294,7 @@ class SumNode(Node):
       if self._parent and receiver['id'] == self._parent['id']:
         continue
       self.send(receiver,
-                messages.added_link(
+                messages.common.added_link(
                     node=self.handle(), direction='sender', transport=self.new_transport_for(receiver['id'])))
 
 
@@ -400,7 +400,7 @@ class SumNodeSenderSplitMigrator(object):
       for sender in self._partition[middle_node['id']]:
         self._duplicating_input_ids.add(sender['id'])
         self.node.send(sender,
-                       messages.start_duplicating(
+                       messages.migration.start_duplicating(
                            receiver=middle_node,
                            transport=self.node.convert_transport_for(
                                sender_id=sender['id'], receiver_id=middle_node['id'])))
@@ -410,7 +410,7 @@ class SumNodeSenderSplitMigrator(object):
                            SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES)
 
     for middle_node in self._middle_nodes:
-      self.node.send(middle_node, messages.set_sum_total(self._totals[middle_node['id']]))
+      self.node.send(middle_node, messages.sum.set_sum_total(self._totals[middle_node['id']]))
 
   def _transition_to_trimming(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES,
@@ -418,7 +418,7 @@ class SumNodeSenderSplitMigrator(object):
 
     for senders in self._partition.values():
       for sender in senders:
-        self.node.send(sender, messages.finish_duplicating())
+        self.node.send(sender, messages.migration.finish_duplicating())
 
   def _transition_to_finished(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS, SumNodeSenderSplitMigrator.STATE_FINISHED)
@@ -501,7 +501,7 @@ class SumNodeSenderSplitMigrator(object):
       self._partition[new_node_ids[j]].append(extra_sender)
 
     return [
-        messages.sum_node_config(
+        messages.sum.sum_node_config(
             node_id=node_id,
             pending_sender_ids=[sender['id'] for sender in senders],
             senders=[],

@@ -143,7 +143,8 @@ class NodeManager(MachineController):
 
   def send(self, node_handle, message, sending_node_handle):
     self._send_to_machine(
-        message=messages.machine_deliver_to_node(node=node_handle, message=message, sending_node=sending_node_handle),
+        message=messages.machine.machine_deliver_to_node(
+            node=node_handle, message=message, sending_node=sending_node_handle),
         transport=self._get_transport(sending_node_handle['id'], node_handle['id']))
 
   def spawn_node(self, node_config):
@@ -157,7 +158,7 @@ class NodeManager(MachineController):
     return self.start_node(node_config).handle()
 
   def new_transport_for(self, local_node_id, remote_node_id):
-    return messages.ip_transport(self._ip_host)
+    return messages.machine.ip_transport(self._ip_host)
 
   def get_node(self, handle):
     return self._node_by_id[handle['id']]

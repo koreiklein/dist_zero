@@ -100,7 +100,7 @@ class InputLeafNode(Node):
   def initialize(self):
     self.logger.info("Input leaf node sending 'added_leaf' message to parent")
     self.set_transport(self.parent, self._parent_transport)
-    self.send(self.parent, messages.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
+    self.send(self.parent, messages.io.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
 
   def elapse(self, ms):
     if self._recorded_user is not None:
@@ -191,7 +191,7 @@ class OutputLeafNode(Node):
   def initialize(self):
     self.logger.info("Output leaf node sending 'added_leaf' message to parent")
     self.set_transport(self.parent, self._parent_transport)
-    self.send(self.parent, messages.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
+    self.send(self.parent, messages.io.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
 
 
 class InputNode(Node):
@@ -266,25 +266,12 @@ class InputNode(Node):
         })
     self._kids[node_id] = 'pending'
 
-    return messages.input_leaf_config(
+    return messages.io.input_leaf_config(
         node_id=node_id,
         name=name,
         parent=self.handle(),
         parent_transport=self.new_transport_for(node_id),
     )
-
-  def _new_adjacent_node_config(self):
-    if self._template is None:
-      return None
-    else:
-      receiver_config = dict(self._template)
-      adjacent_node_id = dist_zero.ids.new_id()
-      receiver_config['id'] = adjacent_node_id
-      receiver_config['receiver_transports'] = [
-          self.convert_transport_for(sender_id=adjacent_node_id, receiver_id=receiver['id'])
-          for receiver in receiver_config['receivers']
-      ]
-      return receiver_config
 
   def added_leaf(self, kid, transport):
     '''
@@ -303,9 +290,9 @@ class InputNode(Node):
       self.set_transport(kid, transport)
 
       self.send(self._receiver,
-                messages.added_input_leaf(kid,
-                                          self.convert_transport_for(
-                                              sender_id=self._receiver['id'], receiver_id=kid['id'])))
+                messages.io.added_input_leaf(kid,
+                                             self.convert_transport_for(
+                                                 sender_id=self._receiver['id'], receiver_id=kid['id'])))
 
 
 class OutputNode(Node):
@@ -321,8 +308,6 @@ class OutputNode(Node):
     '''
     self._controller = controller
     self.id = node_id
-
-    self._template = None
 
     self._initial_state = initial_state
 
@@ -370,7 +355,7 @@ class OutputNode(Node):
             'node_name': name
         })
     self._kids[node_id] = 'pending'
-    return messages.output_leaf_config(
+    return messages.io.output_leaf_config(
         node_id=node_id,
         name=name,
         parent=self.handle(),
@@ -395,6 +380,6 @@ class OutputNode(Node):
       self.set_transport(kid, transport)
 
       self.send(self._sender,
-                messages.added_output_leaf(kid,
-                                           self.convert_transport_for(
-                                               sender_id=self._sender['id'], receiver_id=kid['id'])))
+                messages.io.added_output_leaf(kid,
+                                              self.convert_transport_for(
+                                                  sender_id=self._sender['id'], receiver_id=kid['id'])))
