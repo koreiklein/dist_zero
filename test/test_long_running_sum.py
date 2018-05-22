@@ -58,10 +58,6 @@ class TestLongRunningSum(object):
 
     machine_a_handle = self.machine_handles[0]
 
-    self.root_input_node_handle = self.system.spawn_node(
-        on_machine=machine_a_handle, node_config=messages.input_node_config(dist_zero.ids.new_id()))
-    self.root_output_node_handle = self.system.spawn_node(
-        on_machine=machine_a_handle, node_config=messages.output_node_config(dist_zero.ids.new_id(), initial_state=0))
     self.sum_node_handle = self.system.spawn_node(
         on_machine=machine_a_handle,
         node_config=messages.sum_node_config(
@@ -72,19 +68,19 @@ class TestLongRunningSum(object):
             receiver_transports=[],
         ))
 
-    self.system.send_to_node(self.root_input_node_handle,
-                             messages.start_sending_to(
-                                 template=messages.TEMPLATE_SUM_NODE_CONFIG,
-                                 new_receiver=self.sum_node_handle,
-                                 transport=self.system.create_transport_for(
-                                     sender=self.root_input_node_handle, receiver=self.sum_node_handle)))
-    self.system.send_to_node(self.root_output_node_handle,
-                             messages.start_receiving_from(
-                                 template=messages.TEMPLATE_SUM_NODE_CONFIG,
-                                 new_sender=self.sum_node_handle,
-                                 transport=self.system.create_transport_for(
-                                     sender=self.root_output_node_handle, receiver=self.sum_node_handle),
-                             ))
+    self.root_input_node_handle = self.system.spawn_node(
+        on_machine=machine_a_handle, node_config=messages.input_node_config(dist_zero.ids.new_id()))
+    self.root_output_node_handle = self.system.spawn_node(
+        on_machine=machine_a_handle, node_config=messages.output_node_config(dist_zero.ids.new_id(), initial_state=0))
+
+    self.system.send_to_node(self.sum_node_handle,
+                             messages.set_input(self.root_input_node_handle,
+                                                self.system.create_transport_for(self.sum_node_handle,
+                                                                                 self.root_input_node_handle)))
+    self.system.send_to_node(self.sum_node_handle,
+                             messages.set_output(self.root_output_node_handle,
+                                                 self.system.create_transport_for(self.sum_node_handle,
+                                                                                  self.root_output_node_handle)))
 
   def _spawn_inputs_loop(self, n_inputs, total_time_ms):
     '''

@@ -27,8 +27,14 @@ class SumNode(Node):
     :param list pending_sender_ids: In the event that this node is starting via a migration, this is the list of
       senders that must be registered as sending duplicates in order for this node to decide that it is fully duplicated.
 
+    :param input_node: The :ref:`handle` of the input node to this node if it has one.
+    :type input_node: :ref:`handle` or None
+    :param output_node: The :ref:`handle` of the output node to this node if it has one.
+    :type output_node: :ref:`handle` or None
+
     :param parent: The :ref:`handle` of the parent `SumNode` of this node if it has one.
     :type parent: :ref:`handle` or None
+
     :param parent_transport: A :ref:`transport` for talking to this node's parent if it has a parent.
     :type parent_transport: :ref:`transport` or None
     '''
@@ -118,6 +124,48 @@ class SumNode(Node):
   def receive(self, sender, message):
     if message['type'] == 'increment':
       self._unsent_total += message['amount']
+    elif message['type'] == 'set_input':
+      self._input_node = message['input_node']
+      self.set_transport(self._input_node, message['transport'])
+      self.send(self._input_node, messages.activate_input(self.handle(),
+                                                          self.new_transport_for(self._input_node['id'])))
+    elif message['type'] == 'set_output':
+      self._output_node = message['output_node']
+      self.set_transport(self._output_node, message['transport'])
+      self.send(self._output_node,
+                messages.activate_output(self.handle(), self.new_transport_for(self._output_node['id'])))
+    elif message['type'] == 'added_input_leaf':
+      if self._input_node is not None:
+        node_id = ids.new_id()
+        # TODO(KK): Find a way to avoid having to set_transport here.
+        self.set_transport(message['kid'], message['transport'])
+        self._controller.spawn_node(
+            messages.sum_node_config(
+                node_id=node_id,
+                senders=[],
+                receivers=[self.handle()],
+                sender_transports=[],
+                receiver_transports=[self.new_transport_for(node_id)],
+                input_node=message['kid'],
+                input_transport=self.convert_transport_for(sender_id=node_id, receiver_id=message['kid']['id']),
+                parent=self.handle(),
+                parent_transport=self.new_transport_for(node_id)))
+    elif message['type'] == 'added_output_leaf':
+      if self._output_node is not None:
+        node_id = ids.new_id()
+        # TODO(KK): Find a way to avoid having to set_transport here.
+        self.set_transport(message['kid'], message['transport'])
+        self._controller.spawn_node(
+            messages.sum_node_config(
+                node_id=node_id,
+                senders=[self.handle()],
+                receivers=[],
+                sender_transports=[self.new_transport_for(node_id)],
+                receiver_transports=[],
+                output_node=message['kid'],
+                output_transport=self.convert_transport_for(sender_id=node_id, receiver_id=message['kid']['id']),
+                parent=self.handle(),
+                parent_transport=self.new_transport_for(node_id)))
     elif message['type'] == 'finished_duplicating':
       self.migrator.finished_duplicating(sender)
     elif message['type'] == 'added_link':
@@ -142,7 +190,8 @@ class SumNode(Node):
     elif message['type'] == 'sum_node_started':
       self._senders.append(sender)
       self.set_transport(sender, message['transport'])
-      self.migrator.middle_node_started(sender)
+      if self.migrator:
+        self.migrator.middle_node_started(sender)
     elif message['type'] == 'set_sum_total':
       # FIXME(KK): Think through how to set these parameters appropriately during startup.
       self._sent_total = message['total']
@@ -195,11 +244,15 @@ class SumNode(Node):
 
   def _send_to_all(self):
     self.logger.debug(
-        "Sending new increment of {unsent_total} to all receivers", extra={'unsent_total': self._unsent_total})
+        "Sending new increment of {unsent_total} to all {n_receivers} receivers",
+        extra={
+            'unsent_total': self._unsent_total,
+            'n_receivers': len(self._receivers)
+        })
     for receiver in self._receivers:
       message = messages.increment(self._unsent_total)
       self.send(receiver, message)
-    if self._output_node:
+    if self._output_node and self._output_node['type'] == 'OutputLeafNode':
       message = messages.increment(self._unsent_total)
       self.send(self._output_node, message)
 
@@ -208,7 +261,13 @@ class SumNode(Node):
     self._unsent_total = 0
 
   def initialize(self):
-    self.logger.info('Starting sum node {sum_node_id}', extra={'sum_node_id': self.id})
+    self.logger.info(
+        'Starting sum node {sum_node_id}. input={input_node}, output={output_node}',
+        extra={
+            'sum_node_id': self.id,
+            'input_node': self._input_node,
+            'output_node': self._output_node,
+        })
     if self._parent:
       self.set_transport(self._parent, self._parent_transport)
       self.send(self._parent, messages.sum_node_started(transport=self.new_transport_for(self._parent['id'])))

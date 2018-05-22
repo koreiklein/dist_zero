@@ -125,7 +125,7 @@ def sum_node_config(node_id,
                     output_transport=None,
                     input_node=None,
                     input_transport=None,
-                    pending_sender_ids=[],
+                    pending_sender_ids=None,
                     parent=None,
                     parent_transport=None):
   '''
@@ -159,24 +159,25 @@ def sum_node_config(node_id,
       'input_node': input_node,
       'output_transport': output_transport,
       'input_transport': input_transport,
-      'pending_sender_ids': pending_sender_ids,
+      'pending_sender_ids': pending_sender_ids if pending_sender_ids is not None else [],
       'parent': parent,
       'parent_transport': parent_transport
   }
 
 
-TEMPLATE_SUM_NODE_CONFIG = sum_node_config(
-    node_id=None,
-    senders=[],
-    # The input leaf will add the input and input_transport parameters
-    sender_transports=[],
-    receivers=[],
-    receiver_transports=[],
-    parent=None,
-    parent_transport=None)
+def template_sum_node_config(senders=None, receivers=None):
+  return sum_node_config(
+      node_id=None,
+      senders=senders if senders is not None else [],
+      # The input leaf will add the input and input_transport parameters
+      sender_transports=[],
+      receivers=receivers if receivers is not None else [],
+      receiver_transports=[],
+      parent=None,
+      parent_transport=None)
 
 
-def input_leaf_config(node_id, name, parent, parent_transport, receiver_config, recorded_user_json=None):
+def input_leaf_config(node_id, name, parent, parent_transport, recorded_user_json=None):
   '''
   Add a new leaf node to an InputNode list.
 
@@ -184,8 +185,6 @@ def input_leaf_config(node_id, name, parent, parent_transport, receiver_config, 
   :param parent: The handle of the parent node.
   :type parent: :ref:`handle`
   :param object parent_transport: A transport for talking to the parent.
-  :param receiver_config: The node config for the unique receiver for this input node.
-  :type receiver_config: :ref:`message`
   :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
   '''
   return {
@@ -194,12 +193,11 @@ def input_leaf_config(node_id, name, parent, parent_transport, receiver_config, 
       'name': name,
       'parent': parent,
       'parent_transport': parent_transport,
-      'receiver_config': receiver_config,
       'recorded_user_json': recorded_user_json,
   }
 
 
-def output_leaf_config(node_id, name, initial_state, parent, parent_transport, sender_config):
+def output_leaf_config(node_id, name, initial_state, parent, parent_transport):
   '''
   Add a new leaf node to an OutputNode list.
 
@@ -213,9 +211,6 @@ def output_leaf_config(node_id, name, initial_state, parent, parent_transport, s
   :type parent: :ref:`handle`
 
   :param object parent_transport: A transport for talking to the parent.
-
-  :param sender_config: The node config for the unique sender for this output node.
-  :type sender_config: :ref:`message`
   '''
   return {
       'type': 'OutputLeafNode',
@@ -224,7 +219,6 @@ def output_leaf_config(node_id, name, initial_state, parent, parent_transport, s
       'initial_state': initial_state,
       'parent': parent,
       'parent_transport': parent_transport,
-      'sender_config': sender_config,
   }
 
 
@@ -239,6 +233,32 @@ def added_leaf(kid, transport):
   :param object transport: A transport that the recipient can use to send messages to the new leaf.
   '''
   return {'type': 'added_leaf', 'kid': kid, 'transport': transport}
+
+
+def added_input_leaf(kid, transport):
+  '''
+  Indicates that a pending input LeafNode has successfull been added to the network, and is
+  now ready to receive messages.
+
+  :param kid: The :ref:`handle` of the leaf node that was just added.
+  :type kid: :ref:`handle`
+
+  :param object transport: A transport that the recipient can use to send messages to the new leaf.
+  '''
+  return {'type': 'added_input_leaf', 'kid': kid, 'transport': transport}
+
+
+def added_output_leaf(kid, transport):
+  '''
+  Indicates that a pending output LeafNode has successfull been added to the network, and is
+  now ready to receive messages.
+
+  :param kid: The :ref:`handle` of the leaf node that was just added.
+  :type kid: :ref:`handle`
+
+  :param object transport: A transport that the recipient can use to send messages to the new leaf.
+  '''
+  return {'type': 'added_output_leaf', 'kid': kid, 'transport': transport}
 
 
 def added_link(node, direction, transport):
@@ -265,32 +285,56 @@ def increment(amount):
   return {'type': 'increment', 'amount': amount}
 
 
-def start_sending_to(new_receiver, transport, template):
+def set_input(input_node, transport):
   '''
-  A message informing a node to start sending messages to a new receiver.
+  Configure the input node for a calculating node at the edge.
 
-  :param new_receiver: The receiver to start sending to.
-  :type new_receiver: A node :ref:`handle`
-  :param transport: A transport allowing to send to new_receiver.
+  :param input_node: The :ref:`handle` of the node to use as input.
+  :type input_node: :ref:`handle`
+
+  :param transport: A :ref:`transport` for talking to input_node
   :type transport: :ref:`transport`
-  :param template: A template node config to use for an adjacent node.
-  :type template: :ref:`message`
   '''
-  return {'type': 'start_sending_to', 'node': new_receiver, 'transport': transport, 'template': template}
+  return {'type': 'set_input', 'input_node': input_node, 'transport': transport}
 
 
-def start_receiving_from(new_sender, transport, template):
+def activate_input(receiver, transport):
   '''
-  A message informing a node to start receiving messages from a new sender.
+  Activates an input node when its edge node has been set.
 
-  :param new_sender: The sender to start receiving from
-  :type new_sender: A node :ref:`handle`
-  :param transport: A transport allowing to send to new_sender.
+  :param receiver: The :ref:`handle` of the node to be the receiver.
+  :type receiver: :ref:`handle`
+
+  :param transport: A :ref:`transport` for talking to receiver
   :type transport: :ref:`transport`
-  :param template: A template node config to use for an adjacent node.
-  :type template: :ref:`message`
   '''
-  return {'type': 'start_receiving_from', 'node': new_sender, 'transport': transport, 'template': template}
+  return {'type': 'activate_input', 'receiver': receiver, 'transport': transport}
+
+
+def set_output(output_node, transport):
+  '''
+  Configure the output node for a calculating node at the edge.
+
+  :param output_node: The :ref:`handle` of the node to use as output.
+  :type output_node: :ref:`handle`
+
+  :param transport: A :ref:`transport` for talking to output_node
+  :type transport: :ref:`transport`
+  '''
+  return {'type': 'set_output', 'output_node': output_node, 'transport': transport}
+
+
+def activate_output(sender, transport):
+  '''
+  Activates an output node when its edge node has been set.
+
+  :param sender: The :ref:`handle` of the node to be the sender.
+  :type sender: :ref:`handle`
+
+  :param transport: A :ref:`transport` for talking to sender
+  :type transport: :ref:`transport`
+  '''
+  return {'type': 'activate_output', 'sender': sender, 'transport': transport}
 
 
 def machine_start_node(node_config):

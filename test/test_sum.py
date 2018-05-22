@@ -46,12 +46,6 @@ def test_sum_two_nodes_on_three_machines(demo):
 
   demo.run_for(ms=200)
 
-  # Configure the starting network topology
-  root_input_node_handle = demo.system.spawn_node(
-      on_machine=machine_a_handle, node_config=messages.input_node_config(dist_zero.ids.new_id()))
-  root_output_node_handle = demo.system.spawn_node(
-      on_machine=machine_a_handle, node_config=messages.output_node_config(dist_zero.ids.new_id(), initial_state=0))
-
   sum_node_handle = demo.system.spawn_node(
       on_machine=machine_a_handle,
       node_config=messages.sum_node_config(
@@ -62,23 +56,26 @@ def test_sum_two_nodes_on_three_machines(demo):
           receiver_transports=[],
       ))
 
+  demo.run_for(ms=200)
+
+  # Configure the starting network topology
+  root_input_node_handle = demo.system.spawn_node(
+      on_machine=machine_a_handle, node_config=messages.input_node_config(dist_zero.ids.new_id()))
+  root_output_node_handle = demo.system.spawn_node(
+      on_machine=machine_a_handle, node_config=messages.output_node_config(dist_zero.ids.new_id(), initial_state=0))
+
   demo.run_for(ms=1000)
 
-  demo.system.send_to_node(root_input_node_handle,
-                           messages.start_sending_to(
-                               template=messages.TEMPLATE_SUM_NODE_CONFIG,
-                               new_receiver=sum_node_handle,
-                               transport=demo.system.create_transport_for(
-                                   sender=root_input_node_handle, receiver=sum_node_handle)))
-  demo.system.send_to_node(root_output_node_handle,
-                           messages.start_receiving_from(
-                               template=messages.TEMPLATE_SUM_NODE_CONFIG,
-                               new_sender=sum_node_handle,
-                               transport=demo.system.create_transport_for(
-                                   sender=root_output_node_handle, receiver=sum_node_handle),
-                           ))
+  demo.system.send_to_node(sum_node_handle,
+                           messages.set_input(root_input_node_handle,
+                                              demo.system.create_transport_for(sum_node_handle,
+                                                                               root_input_node_handle)))
+  demo.system.send_to_node(sum_node_handle,
+                           messages.set_output(root_output_node_handle,
+                                               demo.system.create_transport_for(sum_node_handle,
+                                                                                root_output_node_handle)))
 
-  demo.run_for(ms=5)
+  demo.run_for(ms=200)
 
   user_b_output_handle = demo.system.create_kid(
       parent_node=root_output_node_handle, new_node_name='output_b', machine_controller_handle=machine_b_handle)
