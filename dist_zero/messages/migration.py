@@ -58,12 +58,14 @@ def middle_node_is_duplicated():
   return {'type': 'middle_node_is_duplicated'}
 
 
-def start_duplicating(receiver, transport):
+def start_duplicating(old_receiver_id, receiver, transport):
   '''
   This message is sent to inform a node that it should duplicate its sends to a new receiver.
 
   After receipt of this message, the node will send messages to the usual receivers just as before, but also
   send duplicated messages to the newly added receiver.
+
+  :param str old_receiver_id: The id of the node whose messages should be duplicated.
 
   :param receiver: The :ref:`handle` of the node to send the duplicates to.
   :type receiver: :ref:`handle`
@@ -71,15 +73,18 @@ def start_duplicating(receiver, transport):
   :param transport: A :ref:`transport` for talking to receiver.
   :type transport: :ref:`transport`
   '''
-  return {'type': 'start_duplicating', 'receiver': receiver, 'transport': transport}
+  return {'type': 'start_duplicating', 'old_receiver_id': old_receiver_id, 'receiver': receiver, 'transport': transport}
 
 
-def finish_duplicating():
+def finish_duplicating(receiver):
   '''
   This message is sent to a node that is duplicating its sends to inform it that it no longer need send messages
   to the old receivers.
+
+  :param receiver: The receiver `Node` which sent the original `start_duplicating` message to begin duplication.
+  :type receiver: :ref:`handle`
   '''
-  return {'type': 'finish_duplicating'}
+  return {'type': 'finish_duplicating', 'receiver': receiver}
 
 
 def finished_duplicating():

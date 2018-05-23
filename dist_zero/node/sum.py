@@ -1,6 +1,6 @@
 import logging
 
-from dist_zero import messages, errors, ids
+from dist_zero import messages, errors, ids, importer, exporter
 from .node import Node
 
 logger = logging.getLogger(__name__)
@@ -52,15 +52,14 @@ class SumNode(Node):
 
     self.migrator = None
 
-    self._senders = senders
-    self._receivers = receivers
-
-    self._new_receivers = [] # For duplications
-
-    for sender, sender_transport in zip(senders, sender_transports):
-      self.set_transport(sender, sender_transport)
-    for receiver, receiver_transport in zip(receivers, receiver_transports):
-      self.set_transport(receiver, receiver_transport)
+    self._importers = {
+        sender['id']: self._new_importer(sender, transport)
+        for sender, transport in zip(senders, sender_transports)
+    }
+    self._exporters = {
+        receiver['id']: self._new_exporter(receiver, transport)
+        for receiver, transport in zip(receivers, receiver_transports)
+    }
 
     self._pending_sender_ids = set(pending_sender_ids)
 
@@ -77,19 +76,27 @@ class SumNode(Node):
 
     super(SumNode, self).__init__(logger)
 
+  def _new_importer(self, sender, transport):
+    self.set_transport(sender, transport)
+    return importer.Importer(node=self, sender=sender)
+
+  def _new_exporter(self, receiver, transport):
+    self.set_transport(receiver, transport)
+    return exporter.Exporter(node=self, receiver=receiver)
+
   def migration_finished(self, remaining_sender_ids):
     '''
     Called when the current migrator has finished migrating.
     :param set remaining_sender_ids: The set of senders that are still sending.  All other senders can be removed.
     '''
     self.migrator = None
-    old_senders = self._senders
-    self._senders = [sender for sender in self._senders if sender['id'] in remaining_sender_ids]
+    old_importers = self._importers
+    self._importers = {sender_id: i for sender_id, i in self._importers.items() if sender_id in remaining_sender_ids}
     self.logger.info(
         "Finished migration, cutting back number of senders from {n_old_senders} to {n_new_senders}",
         extra={
-            'n_old_senders': len(old_senders),
-            'n_new_senders': len(self._senders),
+            'n_old_senders': len(old_importers),
+            'n_new_senders': len(self._importers),
         })
 
   def handle(self):
@@ -174,9 +181,9 @@ class SumNode(Node):
       transport = message['transport']
 
       if direction == 'sender':
-        self._senders.append(node)
+        self._importers[node['id']] = self._new_importer(sender=node, transport=transport)
       elif direction == 'receiver':
-        self._receivers.append(node)
+        self._exporters[node['id']] = self._new_exporter(receiver=node, transport=transport)
       else:
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
 
@@ -188,8 +195,7 @@ class SumNode(Node):
           self._pending_sender_ids.remove(sender['id'])
         self._maybe_finish_middle_node_startup()
     elif message['type'] == 'sum_node_started':
-      self._senders.append(sender)
-      self.set_transport(sender, message['transport'])
+      self._importers[sender['id']] = self._new_importer(sender, message['transport'])
       if self.migrator:
         self.migrator.middle_node_started(sender)
     elif message['type'] == 'set_sum_total':
@@ -203,37 +209,32 @@ class SumNode(Node):
     elif message['type'] == 'middle_node_is_live':
       self.migrator.middle_node_live(sender)
     elif message['type'] == 'start_duplicating':
+      old_receiver_id = message['old_receiver_id']
       new_receiver = message['receiver']
       self.logger.info(
-          "Starting duplication phase for {cur_node_id} . {new_receiver_id} will now receive duplicates.",
-          extra={'new_receiver_id': new_receiver['id']})
-      self.set_transport(new_receiver, message['transport'])
-      self._receivers.append(new_receiver)
-      self._new_receivers = [new_receiver]
-      self.send(new_receiver,
-                messages.migration.connect_internal(
-                    node=self.handle(), direction='sender', transport=self.new_transport_for(new_receiver['id'])))
-    elif message['type'] == 'finish_duplicating':
-      self.logger.info(
-          "Finishing duplication phase for {cur_node_id} ."
-          "  Cutting back number of receivers from {n_old_receivers} to {n_new_receivers}",
+          "Starting duplication phase for {cur_node_id} . {new_receiver_id} will now receive duplicates from {old_receiver_id}.",
           extra={
-              'n_old_receivers': len(self._receivers),
-              'n_new_receivers': len(self._new_receivers),
+              'new_receiver_id': new_receiver['id'],
+              'old_receiver_id': old_receiver_id,
           })
-      self._receivers = self._new_receivers
-      self._new_receivers = []
-      self.send(sender, messages.migration.finished_duplicating())
+      exporter = self._exporters[old_receiver_id]
+      exporter.duplicate([self._new_exporter(new_receiver, message['transport'])])
+    elif message['type'] == 'finish_duplicating':
+      receiver = message['receiver']
+      exporter = self._exporters[receiver['id']]
+      del self._exporters[receiver['id']]
+      for new_exporter in exporter.finish_duplicating():
+        self._exporters[new_exporter.receiver_id] = new_exporter
     else:
       self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
   def elapse(self, ms):
     self._unsent_time_ms += ms
     if self._unsent_total > 0 and self._unsent_time_ms > SumNode.SEND_INTERVAL_MS:
-      self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._senders)})
+      self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
       SENDER_LIMIT = 15
-      if len(self._senders) >= SENDER_LIMIT:
+      if len(self._importers) >= SENDER_LIMIT:
         self.logger.info("Hit sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
         if self.migrator is None:
           self._hit_sender_limit()
@@ -248,11 +249,11 @@ class SumNode(Node):
         "Sending new increment of {unsent_total} to all {n_receivers} receivers",
         extra={
             'unsent_total': self._unsent_total,
-            'n_receivers': len(self._receivers)
+            'n_receivers': len(self._exporters)
         })
-    for receiver in self._receivers:
+    for exporter in self._exporters.values():
       message = messages.sum.increment(self._unsent_total)
-      self.send(receiver, message)
+      exporter.export(message)
     if self._output_node and self._output_node['type'] == 'OutputLeafNode':
       message = messages.sum.increment(self._unsent_total)
       self.send(self._output_node, message)
@@ -285,18 +286,15 @@ class SumNode(Node):
                 messages.io.set_input_receiver(
                     node=self.handle(), transport=self.new_transport_for(self._input_node['id'])))
 
-    for sender in self._senders:
-      self.send(sender,
-                messages.migration.connect_internal(
-                    node=self.handle(), direction='receiver', transport=self.new_transport_for(sender['id'])))
+    for importer in self._importers.values():
+      importer.initialize()
 
-    for receiver in self._receivers:
+    for receiver_id, exporter in self._exporters.items():
       # FIXME(KK): Try to remove.
-      if self._parent and receiver['id'] == self._parent['id']:
+      if self._parent and receiver_id == self._parent['id']:
         continue
-      self.send(receiver,
-                messages.migration.connect_internal(
-                    node=self.handle(), direction='sender', transport=self.new_transport_for(receiver['id'])))
+
+      exporter.initialize()
 
 
 class SumNodeSenderSplitMigrator(object):
@@ -356,7 +354,7 @@ class SumNodeSenderSplitMigrator(object):
     '''A map from middle node id to its starting total'''
 
     self._partition = {}
-    '''A map from middle node id to a list of its leftmost senders' ids'''
+    '''A map from middle node id to a list of the importers that will be moved to it'''
     self._duplicating_input_ids = set()
     '''The set of ids of input nodes that have been told to duplicate, and have not yet confirmed that they
     are done duplicating.'''
@@ -398,13 +396,9 @@ class SumNodeSenderSplitMigrator(object):
                            SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS)
 
     for middle_node in self._middle_nodes:
-      for sender in self._partition[middle_node['id']]:
-        self._duplicating_input_ids.add(sender['id'])
-        self.node.send(sender,
-                       messages.migration.start_duplicating(
-                           receiver=middle_node,
-                           transport=self.node.convert_transport_for(
-                               sender_id=sender['id'], receiver_id=middle_node['id'])))
+      for importer in self._partition[middle_node['id']]:
+        self._duplicating_input_ids.add(importer.sender_id)
+        importer.duplicate_paired_exporters_to(middle_node)
 
   def _transition_to_syncing(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS,
@@ -417,9 +411,9 @@ class SumNodeSenderSplitMigrator(object):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES,
                            SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS)
 
-    for senders in self._partition.values():
-      for sender in senders:
-        self.node.send(sender, messages.migration.finish_duplicating())
+    for importers in self._partition.values():
+      for i in importers:
+        i.finish_duplicating_paired_exporters()
 
   def _transition_to_finished(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS, SumNodeSenderSplitMigrator.STATE_FINISHED)
@@ -481,10 +475,12 @@ class SumNodeSenderSplitMigrator(object):
       once we reach the terminal state.
     '''
     n_new_nodes = 2
-    n_senders_per_node = len(self.node._senders) // n_new_nodes
+    n_senders_per_node = len(self.node._importers) // n_new_nodes
 
     total = self.node._sent_total
     total_quotient, total_remainder = total % n_new_nodes, total // n_new_nodes
+
+    importers = list(self.node._importers.values())
 
     for i in range(n_new_nodes):
       new_id = ids.new_id()
@@ -492,26 +488,26 @@ class SumNodeSenderSplitMigrator(object):
       # The first total_remainder nodes start with a slightly larger total
       self._totals[new_id] = total_quotient + 1 if i < total_remainder else total_quotient
 
-      self._partition[new_id] = self.node._senders[i * n_senders_per_node:(i + 1) * n_senders_per_node]
+      self._partition[new_id] = importers[i * n_senders_per_node:(i + 1) * n_senders_per_node]
       self._middle_node_states[new_id] = 'new'
 
     new_node_ids = list(self._partition.keys())
 
     # allocate the remaining senders as evenly as possible
-    for j, extra_sender in enumerate(self.node._senders[n_new_nodes * n_senders_per_node:]):
-      self._partition[new_node_ids[j]].append(extra_sender)
+    for j, extra_importer in enumerate(importers[n_new_nodes * n_senders_per_node:]):
+      self._partition[new_node_ids[j]].append(extra_importer)
 
     return [
         messages.sum.sum_node_config(
             node_id=node_id,
-            pending_sender_ids=[sender['id'] for sender in senders],
+            pending_sender_ids=[i.sender_id for i in importers],
             senders=[],
             sender_transports=[],
             receivers=[self.node.handle()],
             receiver_transports=[self.node.new_transport_for(node_id)],
             parent=self.node.handle(),
             parent_transport=self.node.new_transport_for(node_id),
-        ) for node_id, senders in self._partition.items()
+        ) for node_id, importers in self._partition.items()
     ]
 
   @property
