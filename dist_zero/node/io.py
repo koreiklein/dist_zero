@@ -35,7 +35,7 @@ class InputLeafNode(Node):
 
     super(InputLeafNode, self).__init__(logger)
 
-  def _receive_added_link(self, sender, transport):
+  def _set_input_receiver(self, sender, transport):
     '''
     Called when a new sender has been added.
 
@@ -54,8 +54,8 @@ class InputLeafNode(Node):
       self._receive_increment_message(m)
 
   def receive(self, message, sender):
-    if sender is not None and message['type'] == 'added_link':
-      self._receive_added_link(sender, message['transport'])
+    if message['type'] == 'set_input_receiver':
+      self._set_input_receiver(message['node'], message['transport'])
     elif message['type'] == 'increment':
       self._receive_increment_message(message)
     else:
@@ -147,7 +147,7 @@ class OutputLeafNode(Node):
     else:
       self._pre_active_messages.append(message)
 
-  def _receive_added_link(self, sender, transport):
+  def _set_output_sender(self, sender, transport):
     '''
     Called when a new receiver has been added.
 
@@ -165,8 +165,8 @@ class OutputLeafNode(Node):
       self._receive_increment_message(m)
 
   def receive(self, message, sender):
-    if sender is not None and message['type'] == 'added_link':
-      self._receive_added_link(sender, message['transport'])
+    if message['type'] == 'set_output_sender':
+      self._set_output_sender(message['node'], message['transport'])
     elif message['type'] == 'increment':
       self._receive_increment_message(message)
     else:

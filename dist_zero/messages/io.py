@@ -3,6 +3,34 @@ Messages to be received by input and output nodes.
 '''
 
 
+def set_input_receiver(node, transport):
+  '''
+  Inform an input node of its adjacent node.
+  This will activate the input node and it will start sending all its messages
+  to the new adjacent node.
+
+  :param node: The handle of the new node
+  :type node: :ref:`handle`
+  :param transport: Transport data for communicating with node.
+  :type transport: :ref:`transport`
+  '''
+  return {'type': 'set_input_receiver', 'node': node, 'transport': transport}
+
+
+def set_output_sender(node, transport):
+  '''
+  Inform an output node of its adjacent node.
+  This will activate the output node and it will start receiving all its messages
+  from the new adjacent node.
+
+  :param node: The handle of the new node
+  :type node: :ref:`handle`
+  :param transport: Transport data for communicating with node.
+  :type transport: :ref:`transport`
+  '''
+  return {'type': 'set_output_sender', 'node': node, 'transport': transport}
+
+
 def input_node_config(node_id):
   '''
   A node config for creating a node to manage a new list of inputs.

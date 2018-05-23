@@ -3,6 +3,21 @@ Messages to be received by migration nodes.
 '''
 
 
+def connect_internal(node, direction, transport):
+  '''
+  Inform a node internal to a computation that it is now linked to a new node either
+  as a sender or a receiver.
+
+  :param node: The handle of the new node
+  :type node: :ref:`handle`
+  :param str direction: 'sender' or 'receiver' depending respectively on whether the newly added node will
+    send to or receive from the node getting this message.
+  :param transport: Transport data for communicating with node.
+  :type transport: :ref:`transport`
+  '''
+  return {'type': 'connect_internal', 'node': node, 'direction': direction, 'transport': transport}
+
+
 def set_input(input_node, transport):
   '''
   Configure the input node for a calculating node at the edge.

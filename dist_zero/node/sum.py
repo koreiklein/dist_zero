@@ -168,7 +168,7 @@ class SumNode(Node):
                 parent_transport=self.new_transport_for(node_id)))
     elif message['type'] == 'finished_duplicating':
       self.migrator.finished_duplicating(sender)
-    elif message['type'] == 'added_link':
+    elif message['type'] == 'connect_internal':
       node = message['node']
       direction = message['direction']
       transport = message['transport']
@@ -211,7 +211,7 @@ class SumNode(Node):
       self._receivers.append(new_receiver)
       self._new_receivers = [new_receiver]
       self.send(new_receiver,
-                messages.common.added_link(
+                messages.migration.connect_internal(
                     node=self.handle(), direction='sender', transport=self.new_transport_for(new_receiver['id'])))
     elif message['type'] == 'finish_duplicating':
       self.logger.info(
@@ -222,6 +222,7 @@ class SumNode(Node):
               'n_new_receivers': len(self._new_receivers),
           })
       self._receivers = self._new_receivers
+      self._new_receivers = []
       self.send(sender, messages.migration.finished_duplicating())
     else:
       self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
@@ -275,18 +276,18 @@ class SumNode(Node):
     if self._output_node:
       self.set_transport(self._output_node, self._output_transport)
       self.send(self._output_node,
-                messages.common.added_link(
-                    node=self.handle(), direction='sender', transport=self.new_transport_for(self._output_node['id'])))
+                messages.io.set_output_sender(
+                    node=self.handle(), transport=self.new_transport_for(self._output_node['id'])))
 
     if self._input_node:
       self.set_transport(self._input_node, self._input_transport)
       self.send(self._input_node,
-                messages.common.added_link(
-                    node=self.handle(), direction='receiver', transport=self.new_transport_for(self._input_node['id'])))
+                messages.io.set_input_receiver(
+                    node=self.handle(), transport=self.new_transport_for(self._input_node['id'])))
 
     for sender in self._senders:
       self.send(sender,
-                messages.common.added_link(
+                messages.migration.connect_internal(
                     node=self.handle(), direction='receiver', transport=self.new_transport_for(sender['id'])))
 
     for receiver in self._receivers:
@@ -294,7 +295,7 @@ class SumNode(Node):
       if self._parent and receiver['id'] == self._parent['id']:
         continue
       self.send(receiver,
-                messages.common.added_link(
+                messages.migration.connect_internal(
                     node=self.handle(), direction='sender', transport=self.new_transport_for(receiver['id'])))
 
 
