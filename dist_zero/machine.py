@@ -169,20 +169,14 @@ class NodeManager(MachineController):
 
   def start_node(self, node_config):
     logger.info("Starting new '{node_type}' node", extra={'node_type': node_config['type']})
-    if node_config['type'] == 'OutputLeafNode':
+    if node_config['type'] == 'LeafNode':
       self._output_node_state_by_id[node_config['id']] = node_config['initial_state']
-      node = io.OutputLeafNode.from_config(
+      node = io.LeafNode.from_config(
           node_config=node_config,
           controller=self,
           update_state=lambda f: self._update_output_node_state(node_config['id'], f))
-    elif node_config['type'] == 'InputLeafNode':
-      node = io.InputLeafNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'OutputLeafNode':
-      node = io.OutputLeafNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'InputNode':
-      node = io.InputNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'OutputNode':
-      node = io.OutputNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'InternalNode':
+      node = io.InternalNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'SumNode':
       node = SumNode.from_config(node_config, controller=self)
     else:

@@ -8,7 +8,7 @@ from . import common, migration, sum, machine, io
 # Actions
 
 
-def activate_input(receiver, transport):
+def activate(receiver, transport):
   '''
   Activates an input node when its edge node has been set.
 

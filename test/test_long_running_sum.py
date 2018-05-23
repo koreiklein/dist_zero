@@ -70,10 +70,11 @@ class TestLongRunningSum(object):
         ))
 
     self.root_input_node_handle = self.system.spawn_node(
-        on_machine=machine_a_handle, node_config=messages.io.input_node_config(dist_zero.ids.new_id()))
+        on_machine=machine_a_handle,
+        node_config=messages.io.internal_node_config(dist_zero.ids.new_id(), variant='input'))
     self.root_output_node_handle = self.system.spawn_node(
         on_machine=machine_a_handle,
-        node_config=messages.io.output_node_config(dist_zero.ids.new_id(), initial_state=0))
+        node_config=messages.io.internal_node_config(dist_zero.ids.new_id(), variant='output', initial_state=0))
 
     self.system.send_to_node(self.sum_node_handle,
                              messages.migration.set_input(self.root_input_node_handle,

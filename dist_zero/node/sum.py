@@ -136,43 +136,47 @@ class SumNode(Node):
     elif message['type'] == 'set_input':
       self._input_node = message['input_node']
       self.set_transport(self._input_node, message['transport'])
-      self.send(self._input_node, messages.activate_input(self.handle(),
-                                                          self.new_transport_for(self._input_node['id'])))
+      self.send(self._input_node, messages.io.set_adjacent(self.handle(), self.new_transport_for(
+          self._input_node['id'])))
     elif message['type'] == 'set_output':
       self._output_node = message['output_node']
       self.set_transport(self._output_node, message['transport'])
       self.send(self._output_node,
-                messages.activate_output(self.handle(), self.new_transport_for(self._output_node['id'])))
-    elif message['type'] == 'added_input_leaf':
-      if self._input_node is not None:
-        node_id = ids.new_id()
-        # TODO(KK): Find a way to avoid having to set_transport here.
-        self.set_transport(message['kid'], message['transport'])
-        self._controller.spawn_node(
-            messages.sum.sum_node_config(
-                node_id=node_id,
-                senders=[],
-                receivers=[self.handle()],
-                sender_transports=[],
-                receiver_transports=[self.new_transport_for(node_id)],
-                input_node=message['kid'],
-                input_transport=self.convert_transport_for(sender_id=node_id, receiver_id=message['kid']['id']),
-            ))
-    elif message['type'] == 'added_output_leaf':
-      if self._output_node is not None:
-        node_id = ids.new_id()
-        # TODO(KK): Find a way to avoid having to set_transport here.
-        self.set_transport(message['kid'], message['transport'])
-        self._controller.spawn_node(
-            messages.sum.sum_node_config(
-                node_id=node_id,
-                senders=[self.handle()],
-                receivers=[],
-                sender_transports=[self.new_transport_for(node_id)],
-                receiver_transports=[],
-                output_node=message['kid'],
-                output_transport=self.convert_transport_for(sender_id=node_id, receiver_id=message['kid']['id']),
-            ))
+                messages.io.set_adjacent(self.handle(), self.new_transport_for(self._output_node['id'])))
+    elif message['type'] == 'added_adjacent_leaf':
+      if message['variant'] == 'input':
+        if self._input_node is not None:
+          node_id = ids.new_id()
+          # TODO(KK): Find a way to avoid having to set_transport here.
+          self.set_transport(message['kid'], message['transport'])
+          self._controller.spawn_node(
+              messages.sum.sum_node_config(
+                  node_id=node_id,
+                  senders=[],
+                  receivers=[self.handle()],
+                  sender_transports=[],
+                  receiver_transports=[self.new_transport_for(node_id)],
+                  input_node=message['kid'],
+                  input_transport=self.convert_transport_for(sender_id=node_id, receiver_id=message['kid']['id']),
+              ))
+      elif message['variant'] == 'output':
+        if self._output_node is not None:
+          node_id = ids.new_id()
+          # TODO(KK): Find a way to avoid having to set_transport here.
+          self.set_transport(message['kid'], message['transport'])
+          self._controller.spawn_node(
+              messages.sum.sum_node_config(
+                  node_id=node_id,
+                  senders=[self.handle()],
+                  receivers=[],
+                  sender_transports=[self.new_transport_for(node_id)],
+                  receiver_transports=[],
+                  output_node=message['kid'],
+                  output_transport=self.convert_transport_for(sender_id=node_id, receiver_id=message['kid']['id']),
+              ))
+      else:
+        raise errors.InternalError("Unrecognized variant {}".format(message['variant']))
+
     elif message['type'] == 'finished_duplicating':
       self.migrator.finished_duplicating(sender)
     elif message['type'] == 'connect_internal':
@@ -257,7 +261,7 @@ class SumNode(Node):
     for exporter in self._exporters.values():
       message = messages.sum.increment(self._unsent_total)
       exporter.export(message)
-    if self._output_node and self._output_node['type'] == 'OutputLeafNode':
+    if self._output_node and self._output_node['type'] == 'LeafNode':
       message = messages.sum.increment(self._unsent_total)
       self.send(self._output_node, message)
 
@@ -282,14 +286,12 @@ class SumNode(Node):
     if self._output_node:
       self.set_transport(self._output_node, self._output_transport)
       self.send(self._output_node,
-                messages.io.set_output_sender(
-                    node=self.handle(), transport=self.new_transport_for(self._output_node['id'])))
+                messages.io.set_adjacent(node=self.handle(), transport=self.new_transport_for(self._output_node['id'])))
 
     if self._input_node:
       self.set_transport(self._input_node, self._input_transport)
       self.send(self._input_node,
-                messages.io.set_input_receiver(
-                    node=self.handle(), transport=self.new_transport_for(self._input_node['id'])))
+                messages.io.set_adjacent(node=self.handle(), transport=self.new_transport_for(self._input_node['id'])))
 
     for importer in self._importers.values():
       importer.initialize()
