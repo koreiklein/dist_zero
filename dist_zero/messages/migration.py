@@ -3,6 +3,32 @@ Messages to be received by migration nodes.
 '''
 
 
+def set_input(input_node, transport):
+  '''
+  Configure the input node for a calculating node at the edge.
+
+  :param input_node: The :ref:`handle` of the node to use as input.
+  :type input_node: :ref:`handle`
+
+  :param transport: A :ref:`transport` for talking to input_node
+  :type transport: :ref:`transport`
+  '''
+  return {'type': 'set_input', 'input_node': input_node, 'transport': transport}
+
+
+def set_output(output_node, transport):
+  '''
+  Configure the output node for a calculating node at the edge.
+
+  :param output_node: The :ref:`handle` of the node to use as output.
+  :type output_node: :ref:`handle`
+
+  :param transport: A :ref:`transport` for talking to output_node
+  :type transport: :ref:`transport`
+  '''
+  return {'type': 'set_output', 'output_node': output_node, 'transport': transport}
+
+
 def middle_node_is_live():
   '''
   Indicates that a middle node is now fully synced up.

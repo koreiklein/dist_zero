@@ -11,7 +11,7 @@ import os
 import socket
 import sys
 
-from dist_zero import errors, messages, settings, transport
+from dist_zero import errors, settings, transport
 from dist_zero.spawners import docker
 
 logger = logging.getLogger(__name__)

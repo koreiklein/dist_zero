@@ -76,13 +76,13 @@ class TestLongRunningSum(object):
         node_config=messages.io.output_node_config(dist_zero.ids.new_id(), initial_state=0))
 
     self.system.send_to_node(self.sum_node_handle,
-                             messages.sum.set_input(self.root_input_node_handle,
-                                                    self.system.create_transport_for(
-                                                        self.sum_node_handle, self.root_input_node_handle)))
+                             messages.migration.set_input(self.root_input_node_handle,
+                                                          self.system.create_transport_for(
+                                                              self.sum_node_handle, self.root_input_node_handle)))
     self.system.send_to_node(self.sum_node_handle,
-                             messages.sum.set_output(self.root_output_node_handle,
-                                                     self.system.create_transport_for(
-                                                         self.sum_node_handle, self.root_output_node_handle)))
+                             messages.migration.set_output(self.root_output_node_handle,
+                                                           self.system.create_transport_for(
+                                                               self.sum_node_handle, self.root_output_node_handle)))
 
   def _spawn_inputs_loop(self, n_inputs, total_time_ms):
     '''
