@@ -37,8 +37,8 @@ def sum_node_config(node_id,
                     input_node=None,
                     input_transport=None,
                     pending_sender_ids=None,
-                    parent=None,
-                    parent_transport=None):
+                    spawning_migration=None,
+                    spawning_migration_transport=None):
   '''
   A node config for creating a node to accept increments from a set of senders, sum them
   together and pass all increments to every receiver.
@@ -54,10 +54,10 @@ def sum_node_config(node_id,
   :param list pending_sender_ids: In the event that this node is starting via a migration, this is the list of
     senders that must be registered as sending duplicates in order for this node to decide that it is fully duplicated.
 
-  :param parent: The :ref:`handle` of the parent `SumNode` of this node.
-  :type parent: :ref:`handle`
-  :param parent_transport: A :ref:`transport` for talking to this node's parent.
-  :type parent_transport: :ref:`transport`
+  :param spawning_migration: The :ref:`handle` of the migration spawning this `SumNode` if it has one.
+  :type spawning_migration: :ref:`handle` or None.
+  :param spawning_migration_transport: A :ref:`transport` for talking to this node's spawning migration.
+  :type spawning_migration_transport: :ref:`transport` or None
   '''
   return {
       'type': 'SumNode',
@@ -71,6 +71,6 @@ def sum_node_config(node_id,
       'output_transport': output_transport,
       'input_transport': input_transport,
       'pending_sender_ids': pending_sender_ids if pending_sender_ids is not None else [],
-      'parent': parent,
-      'parent_transport': parent_transport
+      'spawning_migration': spawning_migration,
+      'spawning_migration_transport': spawning_migration_transport
   }
