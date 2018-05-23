@@ -34,7 +34,7 @@ class SumNode(Node):
     :param output_node: The :ref:`handle` of the output node to this node if it has one.
     :type output_node: :ref:`handle` or None
 
-    :param spawning_migration: The :ref:`handle` of the migration spawing this `SumNode` of this node if it has one.
+    :param spawning_migration: The :ref:`handle` of the migration spawing this `SumNode` if it has one.
     :type spawning_migration: :ref:`handle` or None
 
     :param spawning_migration_transport: A :ref:`transport` for talking to this node's spawning migration if it has one.
