@@ -49,7 +49,7 @@ class SystemController(object):
     machine_handle = self._node_id_to_machine_handle[internal_node['id']]
     return self._spawner.send_to_machine(
         machine=machine_handle,
-        message=messages.api_create_kid_config(
+        message=messages.machine.api_create_kid_config(
             internal_node=internal_node,
             new_node_name=new_node_name,
             machine_controller_handle=machine_controller_handle,
@@ -78,7 +78,7 @@ class SystemController(object):
     :return: The node :ref:`handle` of the spawned node.
     '''
     node_id = node_config['id']
-    self._spawner.send_to_machine(machine=on_machine, message=messages.machine_start_node(node_config))
+    self._spawner.send_to_machine(machine=on_machine, message=messages.machine.machine_start_node(node_config))
     self._node_id_to_machine_handle[node_id] = on_machine
     return {'type': node_config['type'], 'id': node_id, 'controller_id': on_machine['id']}
 
@@ -98,7 +98,7 @@ class SystemController(object):
     return self._spawner.send_to_machine(
         machine=self._node_id_to_machine_handle[receiver['id']],
         sock_type='tcp',
-        message=messages.api_new_transport(sender, receiver))
+        message=messages.machine.api_new_transport(sender, receiver))
 
   def create_machine(self, machine_config):
     '''
@@ -133,7 +133,7 @@ class SystemController(object):
     '''
     machine_handle = self._node_id_to_machine_handle[output_node['id']]
     return self._spawner.send_to_machine(
-        machine=machine_handle, message=messages.api_get_output_state(node=output_node), sock_type='tcp')
+        machine=machine_handle, message=messages.machine.api_get_output_state(node=output_node), sock_type='tcp')
 
   def send_to_node(self, node_handle, message, sending_node_handle=None):
     '''
@@ -149,7 +149,7 @@ class SystemController(object):
     :type sending_node_handle: :ref:`handle`
     '''
     machine_handle = self._node_handle_to_machine_handle(node_handle)
-    machine_message = messages.machine_deliver_to_node(
+    machine_message = messages.machine.machine_deliver_to_node(
         node=node_handle, message=message, sending_node=sending_node_handle)
     self._spawner.send_to_machine(machine=machine_handle, message=machine_message)
 

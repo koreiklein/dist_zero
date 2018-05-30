@@ -1,3 +1,4 @@
+import json
 import logging
 
 from dist_zero import errors, messages
@@ -25,17 +26,15 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
-  def convert_transport_for(self, current_sender, new_sender, receiver):
+  def convert_transport_for(self, current_sender, new_sender_id, receiver_id):
     '''
     If there exists a transport that a node on self uses to talk to a receiver,
     this method creates a new transport allowing a different node to talk to the same receiver.
 
     :param current_sender: A node managed by self.
     :type current_sender: :ref:`handle`
-    :param new_sender: Any node
-    :type new_sender: :ref:`handle`
-    :param receiver: Any node for which current_sender has a working transport.
-    :type receiver: :ref:`handle`
+    :param str new_sender: Any node id
+    :param str receiver: Any node id for which current_sender has a working transport.
 
     :return: A transport that new_sender can use to talk to receiver
     :rtype: :ref:`transport`
@@ -125,8 +124,8 @@ class NodeManager(MachineController):
   def set_transport(self, sender, receiver, transport):
     self._transports[(sender['id'], receiver['id'])] = transport
 
-  def convert_transport_for(self, current_sender, new_sender, receiver):
-    old_transport = self._get_transport(current_sender, receiver)
+  def convert_transport_for(self, current_sender, new_sender_id, receiver_id):
+    old_transport = self._get_transport(current_sender['id'], receiver_id)
 
     # TODO(KK): Once we start to add security to transports, it will no longer be possible
     #   to re-use the old transport as is.
@@ -134,26 +133,32 @@ class NodeManager(MachineController):
 
     return new_transport
 
-  def _get_transport(self, sender, receiver):
-    transport = self._transports.get((sender['id'], receiver['id']), None)
+  def _get_transport(self, sender_id, receiver_id):
+    transport = self._transports.get((sender_id, receiver_id), None)
 
     if transport is None:
-      raise errors.NoTransportError(sender=sender, receiver=receiver)
+      raise errors.NoTransportError(sender_id=sender_id, receiver_id=receiver_id)
     else:
       return transport
 
   def send(self, node_handle, message, sending_node_handle):
     self._send_to_machine(
-        message=messages.machine_deliver_to_node(node=node_handle, message=message, sending_node=sending_node_handle),
-        transport=self._get_transport(sending_node_handle, node_handle))
+        message=messages.machine.machine_deliver_to_node(
+            node=node_handle, message=message, sending_node=sending_node_handle),
+        transport=self._get_transport(sending_node_handle['id'], node_handle['id']))
 
   def spawn_node(self, node_config):
     # TODO(KK): Rethink how the machine for each node is chosen.  Always running on the same machine
     #   is easy, but an obviously flawed approach.
+
+    # In general, the config should be serialized and deserialized at some point.
+    # Do it here so that simulated tests don't accidentally share data.
+    node_config = json.loads(json.dumps(node_config))
+
     return self.start_node(node_config).handle()
 
   def new_transport_for(self, local_node_id, remote_node_id):
-    return messages.ip_transport(self._ip_host)
+    return messages.machine.ip_transport(self._ip_host)
 
   def get_node(self, handle):
     return self._node_by_id[handle['id']]
@@ -164,20 +169,14 @@ class NodeManager(MachineController):
 
   def start_node(self, node_config):
     logger.info("Starting new '{node_type}' node", extra={'node_type': node_config['type']})
-    if node_config['type'] == 'OutputLeafNode':
+    if node_config['type'] == 'LeafNode':
       self._output_node_state_by_id[node_config['id']] = node_config['initial_state']
-      node = io.OutputLeafNode.from_config(
+      node = io.LeafNode.from_config(
           node_config=node_config,
           controller=self,
           update_state=lambda f: self._update_output_node_state(node_config['id'], f))
-    elif node_config['type'] == 'InputLeafNode':
-      node = io.InputLeafNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'OutputLeafNode':
-      node = io.OutputLeafNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'InputNode':
-      node = io.InputNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'OutputNode':
-      node = io.OutputNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'InternalNode':
+      node = io.InternalNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'SumNode':
       node = SumNode.from_config(node_config, controller=self)
     else:
@@ -246,6 +245,12 @@ class NodeManager(MachineController):
   def handle(self):
     return {'type': 'MachineController', 'id': self.id}
 
+  def _format_handle_for_logs(self, handle):
+    if handle is None:
+      return 'None'
+    else:
+      return "{}:{}".format(handle['type'], handle['id'][:8])
+
   def handle_message(self, message):
     '''
     Handle an arbitrary machine message for this `MachineController` instance.
@@ -258,10 +263,13 @@ class NodeManager(MachineController):
     elif message['type'] == 'machine_deliver_to_node':
       node_handle = message['node']
       logger.info(
-          "Delivering message of type {message_type} to node {to_node}",
+          "Delivering message of type {message_type} to node {to_node_pretty} from node {from_node_pretty}",
           extra={
               'message_type': message['message']['type'],
               'to_node': node_handle,
+              'from_node': message['sending_node'],
+              'to_node_pretty': self._format_handle_for_logs(node_handle),
+              'from_node_pretty': self._format_handle_for_logs(message['sending_node']),
           })
       node = self._get_node_by_handle(node_handle)
       node.receive(message=message['message'], sender=message['sending_node'])

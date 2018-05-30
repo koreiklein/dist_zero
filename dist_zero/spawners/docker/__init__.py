@@ -217,7 +217,7 @@ class DockerSpawner(spawner.Spawner):
     )
     self._network.connect(container)
 
-    handle = messages.machine_controller_handle(machine_controller_id)
+    handle = messages.machine.machine_controller_handle(machine_controller_id)
     self._handle_by_id[machine_controller_id] = handle
     self._container_by_id[machine_controller_id] = container
     return handle

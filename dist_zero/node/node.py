@@ -21,21 +21,20 @@ class Node(object):
     '''
     self._controller.set_transport(self.handle(), other, transport)
 
-  def convert_transport_for(self, sender, receiver):
+  def convert_transport_for(self, sender_id, receiver_id):
     '''
     Given a transport that self can use to link to kid,
     create a new transport that the other node can use to link to kid.
 
-    :param sender: The :ref:`handle` of the node that will be sending.
-    :type sender: :ref:`handle`
+    :param str sender_id: The id of the node that will be sending.
 
-    :param receiver: The :ref:`handle` of the node that will be receiving.
-    :type receiver: :ref:`handle`
+    :param str receiver: The id of the node that will be receiving.
 
     :return: A transport that other can use to talk to kid.
     :rtype: :ref:`transport`
     '''
-    return self._controller.convert_transport_for(current_sender=self.handle(), new_sender=sender, receiver=receiver)
+    return self._controller.convert_transport_for(
+        current_sender=self.handle(), new_sender_id=sender_id, receiver_id=receiver_id)
 
   def new_transport_for(self, node_id):
     '''
