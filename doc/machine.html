@@ -47,7 +47,7 @@ runs a single <a class="reference internal" href="#dist_zero.machine.NodeManager
 <dd><p>The interface that <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> instances will use to interact with the underlying hardware.</p>
 <dl class="method">
 <dt id="dist_zero.machine.MachineController.convert_transport_for">
-<code class="descname">convert_transport_for</code><span class="sig-paren">(</span><em>current_sender</em>, <em>new_sender</em>, <em>receiver</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.convert_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.convert_transport_for" title="Permalink to this definition">¶</a></dt>
+<code class="descname">convert_transport_for</code><span class="sig-paren">(</span><em>current_sender</em>, <em>new_sender_id</em>, <em>receiver_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.convert_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.convert_transport_for" title="Permalink to this definition">¶</a></dt>
 <dd><p>If there exists a transport that a node on self uses to talk to a receiver,
 this method creates a new transport allowing a different node to talk to the same receiver.</p>
 <table class="docutils field-list" frame="void" rules="none">
@@ -56,8 +56,8 @@ this method creates a new transport allowing a different node to talk to the sam
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
 <li><strong>current_sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – A node managed by self.</li>
-<li><strong>new_sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – Any node</li>
-<li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – Any node for which current_sender has a working transport.</li>
+<li><strong>new_sender</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Any node id</li>
+<li><strong>receiver</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Any node id for which current_sender has a working transport.</li>
 </ul>
 </td>
 </tr>
@@ -188,7 +188,7 @@ where message is a <a class="reference internal" href="message.html#message"><sp
 </table>
 <dl class="method">
 <dt id="dist_zero.machine.NodeManager.convert_transport_for">
-<code class="descname">convert_transport_for</code><span class="sig-paren">(</span><em>current_sender</em>, <em>new_sender</em>, <em>receiver</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.convert_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.convert_transport_for" title="Permalink to this definition">¶</a></dt>
+<code class="descname">convert_transport_for</code><span class="sig-paren">(</span><em>current_sender</em>, <em>new_sender_id</em>, <em>receiver_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.convert_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.convert_transport_for" title="Permalink to this definition">¶</a></dt>
 <dd><p>If there exists a transport that a node on self uses to talk to a receiver,
 this method creates a new transport allowing a different node to talk to the same receiver.</p>
 <table class="docutils field-list" frame="void" rules="none">
@@ -197,8 +197,8 @@ this method creates a new transport allowing a different node to talk to the sam
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
 <li><strong>current_sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – A node managed by self.</li>
-<li><strong>new_sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – Any node</li>
-<li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – Any node for which current_sender has a working transport.</li>
+<li><strong>new_sender</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Any node id</li>
+<li><strong>receiver</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Any node id for which current_sender has a working transport.</li>
 </ul>
 </td>
 </tr>

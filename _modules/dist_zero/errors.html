@@ -49,8 +49,8 @@
 
 
 <div class="viewcode-block" id="NoTransportError"><a class="viewcode-back" href="../../doc/errors.html#dist_zero.errors.NoTransportError">[docs]</a><span class="k">class</span> <span class="nc">NoTransportError</span><span class="p">(</span><span class="n">DistZeroError</span><span class="p">):</span>
-  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="n">receiver</span><span class="p">):</span>
-    <span class="n">msg</span> <span class="o">=</span> <span class="s1">&#39;No transport has been initialized between sender </span><span class="si">{}</span><span class="s1"> and receiver </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">receiver</span><span class="p">)</span>
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="p">):</span>
+    <span class="n">msg</span> <span class="o">=</span> <span class="s1">&#39;No transport has been initialized between sender </span><span class="si">{}</span><span class="s1"> and receiver </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="p">)</span>
     <span class="nb">super</span><span class="p">(</span><span class="n">NoTransportError</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span></div>
 
 
@@ -62,12 +62,9 @@
 <span class="sd">    :param tuple exc_info: The result of a call to `sys.exc_info`</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="n">e_type</span><span class="p">,</span> <span class="n">e_value</span><span class="p">,</span> <span class="n">e_tb</span> <span class="o">=</span> <span class="n">exc_info</span>
-    <span class="n">tb_lines</span> <span class="o">=</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_tb</span><span class="p">(</span><span class="n">e_tb</span><span class="p">)</span>
     <span class="n">exn_lines</span> <span class="o">=</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exception_only</span><span class="p">(</span><span class="n">e_type</span><span class="p">,</span> <span class="n">e_value</span><span class="p">)</span>
-    <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="se">\n</span><span class="s2">After simulated trace:</span><span class="se">\n\t</span><span class="si">{}</span><span class="se">\n</span><span class="s2">A node raised an error:  </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-        <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tb_lines</span><span class="p">),</span> <span class="s1">&#39;</span><span class="se">\n\t</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">log_lines</span><span class="p">),</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">exn_lines</span><span class="p">))</span>
 
-    <span class="nb">super</span><span class="p">(</span><span class="n">SimulationError</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span></div>
+    <span class="nb">super</span><span class="p">(</span><span class="n">SimulationError</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">exn_lines</span><span class="p">))</span></div>
 </pre></div>
 
           </div>

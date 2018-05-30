@@ -54,21 +54,20 @@
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span> <span class="n">other</span><span class="p">,</span> <span class="n">transport</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="Node.convert_transport_for"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.convert_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">convert_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="n">receiver</span><span class="p">):</span>
+<div class="viewcode-block" id="Node.convert_transport_for"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.convert_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">convert_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Given a transport that self can use to link to kid,</span>
 <span class="sd">    create a new transport that the other node can use to link to kid.</span>
 
-<span class="sd">    :param sender: The :ref:`handle` of the node that will be sending.</span>
-<span class="sd">    :type sender: :ref:`handle`</span>
+<span class="sd">    :param str sender_id: The id of the node that will be sending.</span>
 
-<span class="sd">    :param receiver: The :ref:`handle` of the node that will be receiving.</span>
-<span class="sd">    :type receiver: :ref:`handle`</span>
+<span class="sd">    :param str receiver: The id of the node that will be receiving.</span>
 
 <span class="sd">    :return: A transport that other can use to talk to kid.</span>
 <span class="sd">    :rtype: :ref:`transport`</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">convert_transport_for</span><span class="p">(</span><span class="n">current_sender</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span> <span class="n">new_sender</span><span class="o">=</span><span class="n">sender</span><span class="p">,</span> <span class="n">receiver</span><span class="o">=</span><span class="n">receiver</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">convert_transport_for</span><span class="p">(</span>
+        <span class="n">current_sender</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span> <span class="n">new_sender_id</span><span class="o">=</span><span class="n">sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="o">=</span><span class="n">receiver_id</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Node.new_transport_for"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.new_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">new_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
