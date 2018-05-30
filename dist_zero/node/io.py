@@ -10,6 +10,27 @@ logger = logging.getLogger(__name__)
 class LeafNode(Node):
   '''
   Represents a leaf in a tree of input or output nodes.
+
+  The leaf nodes are meant to correspond to the code closest to the actual physical input or output devices.
+
+  For example, if a laptop or desktop computer is interfacing with a user, it should have a leaf node running on it
+  to interact with the hardware.
+
+  Leaf nodes function
+  
+  * either with ``variant == 'input'`` in which case the node is reading messages from an input device.
+  * or with ``variant == 'output'`` in which case the node is writing output messages to an output device.
+
+  A single device that functions as both an input and an output should run 2 separate nodes for input and output.
+
+
+  Input and output leaves are designed to be abstract with respect to where the input goes to or where the output comes
+  from.  Practically, this design decision motivates two behaviors:
+
+  * From the perspective of an input node, each input message will be sent to a single ``adjacent`` node.
+  * From the perspective of an output node, each output message will be received from a single ``adjacent`` node.
+
+  so leaves are designed never to have to manage complex sets of senders or receivers.
   '''
 
   def __init__(self, node_id, parent, parent_transport, controller, variant, update_state, recorded_user=None):
@@ -22,7 +43,7 @@ class LeafNode(Node):
     :param str variant: 'input' or 'output'
     :param func update_state: A function.
       Call it with a function that takes the current state and returns a new state.
-    :param `RecordedUser` recorded_user: In tests, this parameter may be not null to indicate that this input
+    :param `RecordedUser` recorded_user: In tests, this parameter may be not null to indicate that this
       node should playback the actions of an attached `RecordedUser` instance.
     '''
     self._controller = controller
@@ -81,7 +102,7 @@ class LeafNode(Node):
         raise errors.InternalError("Unrecognized variant {}".format(self._variant))
     else:
       # Postpone message till later
-      self.logger.debug("Input leaf is postponing a message send since not all receivers are active.")
+      self.logger.debug("Leaf node is postponing a message send since not all receivers are active.")
       self._pre_active_messages.append(message)
 
   @staticmethod
@@ -127,7 +148,11 @@ class LeafNode(Node):
 
 class InternalNode(Node):
   '''
-  Represents a tree of inputs or outputs
+  The root of a tree of `LeafNode` instances of the same ``variant``.
+
+  Each `InternalNode` instance is responsible for keeping track of the state of its subtree, and for growing
+  or shrinking it as necessary.  In particular, when new leaves are created, `InternalNode.create_kid_config` must
+  be called on the desired immediate parent to generate the node config for starting that child.
   '''
 
   def __init__(self, node_id, variant, initial_state, controller):
@@ -135,7 +160,8 @@ class InternalNode(Node):
     :param str node_id: The id to use for this node
     :param str variant: 'input' or 'output'
     :param `MachineController` controller: The controller for this node.
-    :param object initial_state: A json serializeable starting state for all output leaves spawned from this node.
+    :param object initial_state: A json serializeable starting state for all leaves spawned from this node.
+      This state is important for output leaves that update that state over time.
     '''
     self._controller = controller
     self._variant = variant
@@ -170,7 +196,7 @@ class InternalNode(Node):
 
   def create_kid_config(self, name, machine_controller_handle):
     '''
-    Generate a config for a new child leaf node, and mark it as pending.
+    Generate a config for a new child leaf node, and mark it as a pending child on this parent node.
 
     :param str name: The name to use for the new node.
 
@@ -200,8 +226,10 @@ class InternalNode(Node):
 
   def added_leaf(self, kid, transport):
     '''
-    :param kid: The :ref:`handle` of the leaf input node that was just added.
+    :param kid: The :ref:`handle` of the leaf node that was just added.
     :type kid: :ref:`handle`
+    :param transport: The :ref:`transport` for the kid.
+    :type transport: :ref:`transport`
     '''
     if kid['id'] not in self._kids:
       self.logger.error(

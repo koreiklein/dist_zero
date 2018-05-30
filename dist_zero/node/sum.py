@@ -9,6 +9,19 @@ logger = logging.getLogger(__name__)
 class SumNode(Node):
   '''
   An internal node for summing all increments from its senders and forwarding the total to its receivers.
+
+  Each `SumNode` is of one of three types
+
+  * input `SumNode`, which receive as the adjacent node to an `io.LeafNode` or `io.InternalNode` and send to ``receivers``.
+    These nodes have an ``input_node`` but no ``output_node`` and some nonempty list of ``receivers``.
+  * output `SumNode`, which send as the adjacent node to an `io.LeafNode` or `io.InternalNode` and receive from ``senders``.
+    These nodes have an ``output_node`` but no ``input_node`` and some nonempty list of ``senders``.
+  * internal `SumNode`, which receive from senders and send to receivers.  These nodes have ``input_node is None``
+    and ``output_node is None``
+
+  Note that input/output `SumNode` could be for either `io.LeafNode` or `io.InternalNode`.  A `SumNode` adjacent to an 
+  `InternalNode` is primarily responsible for helping to spin up new leaves, whereas a `SumNode` adjacent to a
+  `LeafNode` will actually receive input messages from (or send output messages to) its adjacent leaf.
   '''
 
   SEND_INTERVAL_MS = 30
@@ -89,6 +102,7 @@ class SumNode(Node):
   def migration_finished(self, remaining_sender_ids):
     '''
     Called when the current migrator has finished migrating.
+
     :param set remaining_sender_ids: The set of senders that are still sending.  All other senders can be removed.
     '''
     self.migrator = None
