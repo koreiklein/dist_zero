@@ -71,12 +71,11 @@ def api_get_output_state(node_id):
   return {'type': 'api_get_output_state', 'node_id': node_id}
 
 
-def api_create_kid_config(internal_node, new_node_name, machine_controller_handle):
+def api_create_kid_config(internal_node_id, new_node_name, machine_controller_handle):
   '''
   Create a node_config for a new kid node of an internal io node.
 
-  :param internal_node: The :ref:`handle` of the parent internalnode.
-  :type internal_node: :ref:`handle`
+  :param internal_node_id: The id of the parent `InternalNode`.
   :param str new_node_name: The name to use for the new node.
   :param machine_controller_handle: The :ref:`handle` of the machine on which the new node will run.
   :type machine_controller_handle: :ref:`handle`
@@ -86,7 +85,7 @@ def api_create_kid_config(internal_node, new_node_name, machine_controller_handl
   '''
   return {
       'type': 'api_create_kid_config',
-      'internal_node_id': internal_node['id'],
+      'internal_node_id': internal_node_id,
       'new_node_name': new_node_name,
       'machine_controller_handle': machine_controller_handle,
   }

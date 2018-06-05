@@ -3,7 +3,7 @@ Messages to be received by migration nodes.
 '''
 
 
-def connect_internal(node, direction, transport):
+def connect_internal(node, direction):
   '''
   Inform a node internal to a computation that it is now linked to a new node either
   as a sender or a receiver.
@@ -12,30 +12,8 @@ def connect_internal(node, direction, transport):
   :type node: :ref:`handle`
   :param str direction: 'sender' or 'receiver' depending respectively on whether the newly added node will
     send to or receive from the node getting this message.
-  :param transport: Transport data for communicating with node.
-  :type transport: :ref:`transport`
   '''
-  return {'type': 'connect_internal', 'node': node, 'direction': direction, 'transport': transport}
-
-
-def set_input(input_node):
-  '''
-  Configure the input node for a calculating node at the edge.
-
-  :param input_node: The :ref:`handle` of the node to use as input.
-  :type input_node: :ref:`handle`
-  '''
-  return {'type': 'set_input', 'input_node': input_node}
-
-
-def set_output(output_node):
-  '''
-  Configure the output node for a calculating node at the edge.
-
-  :param output_node: The :ref:`handle` of the node to use as output.
-  :type output_node: :ref:`handle`
-  '''
-  return {'type': 'set_output', 'output_node': output_node}
+  return {'type': 'connect_internal', 'node': node, 'direction': direction}
 
 
 def middle_node_is_live():
@@ -52,7 +30,7 @@ def middle_node_is_duplicated():
   return {'type': 'middle_node_is_duplicated'}
 
 
-def start_duplicating(old_receiver_id, receiver, transport):
+def start_duplicating(old_receiver_id, receiver):
   '''
   This message is sent to inform a node that it should duplicate its sends to a new receiver.
 
@@ -64,10 +42,8 @@ def start_duplicating(old_receiver_id, receiver, transport):
   :param receiver: The :ref:`handle` of the node to send the duplicates to.
   :type receiver: :ref:`handle`
 
-  :param transport: A :ref:`transport` for talking to receiver.
-  :type transport: :ref:`transport`
   '''
-  return {'type': 'start_duplicating', 'old_receiver_id': old_receiver_id, 'receiver': receiver, 'transport': transport}
+  return {'type': 'start_duplicating', 'old_receiver_id': old_receiver_id, 'receiver': receiver}
 
 
 def finish_duplicating(receiver_id):

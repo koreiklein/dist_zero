@@ -42,7 +42,7 @@ class MachineController(object):
   def fresh_transport_for(self, local_node, new_node_id):
     raise RuntimeError("Abstract Superclass")
 
-  def convert_transport_for(self, local_node, remote_node_handle):
+  def convert_transport_for(self, existing_node_id, remote_node_handle):
     raise RuntimeError("Abstract Superclass")
 
   def new_transport_for(self, local_node, remote_node_handle):
@@ -119,7 +119,7 @@ class NodeManager(MachineController):
   def new_transport_for(self, local_node, remote_node_handle):
     return messages.machine.ip_transport(self._ip_host)
 
-  def convert_transport_for(self, local_node, remote_node_handle):
+  def convert_transport_for(self, existing_node_id, remote_node_handle):
     return messages.machine.ip_transport(self._ip_host)
 
   def get_node(self, handle):
@@ -130,7 +130,13 @@ class NodeManager(MachineController):
     self._output_node_state_by_id[node_id] = new_state
 
   def start_node(self, node_config):
-    logger.info("Starting new '{node_type}' node", extra={'node_type': node_config['type']})
+    logger.info(
+        "Starting new '{node_type}' node {node_id} on machine '{machine_name}'",
+        extra={
+            'node_type': node_config['type'],
+            'node_id': self._format_node_id_for_logs(node_config['id']),
+            'machine_name': self.name,
+        })
     if node_config['type'] == 'LeafNode':
       self._output_node_state_by_id[node_config['id']] = node_config['initial_state']
       node = io.LeafNode.from_config(
@@ -228,10 +234,10 @@ class NodeManager(MachineController):
               'to_node_id': node_id,
               'from_node_id': message['sending_node_id'],
               'to_node_pretty': self._format_node_id_for_logs(node_id),
-              'from_node_pretty': self._format_node_id_for_logs(message['sending_node']),
+              'from_node_pretty': self._format_node_id_for_logs(message['sending_node_id']),
           })
       node = self._get_node_by_id(node_id)
-      node.receive(message=message['message'], sender=message['sending_node'])
+      node.receive(message=message['message'], sender_id=message['sending_node_id'])
     else:
       logger.error("Unrecognized message type {unrecognized_type}", extra={'unrecognized_type': message['type']})
 

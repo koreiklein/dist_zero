@@ -3,7 +3,7 @@ Messages to be received by input and output nodes.
 '''
 
 
-def set_adjacent(node, transport):
+def set_adjacent(node):
   '''
   Inform a node of its adjacent node.
   This will activate the node and it will start sending all its messages
@@ -11,10 +11,8 @@ def set_adjacent(node, transport):
 
   :param node: The handle of the new node
   :type node: :ref:`handle`
-  :param transport: Transport data for communicating with node.
-  :type transport: :ref:`transport`
   '''
-  return {'type': 'set_adjacent', 'node': node, 'transport': transport}
+  return {'type': 'set_adjacent', 'node': node}
 
 
 def internal_node_config(node_id, variant, adjacent, initial_state=None):
@@ -27,10 +25,36 @@ def internal_node_config(node_id, variant, adjacent, initial_state=None):
   :type adjacent: :ref:`handle`
   :param object initial_state: The initial state to use for new nodes.
   '''
-  return {'type': 'InternalNode', 'id': node_id, 'variant': variant, 'initial_state': initial_state}
+  return {
+      'type': 'InternalNode',
+      'id': node_id,
+      'variant': variant,
+      'adjacent': adjacent,
+      'initial_state': initial_state
+  }
 
 
-def leaf_config(node_id, name, parent, parent_transport, variant, initial_state, recorded_user_json=None):
+def set_input(input_node):
+  '''
+  Configure the input node for a calculating node at the edge.
+
+  :param input_node: The :ref:`handle` of the node to use as input.
+  :type input_node: :ref:`handle`
+  '''
+  return {'type': 'set_input', 'input_node': input_node}
+
+
+def set_output(output_node):
+  '''
+  Configure the output node for a calculating node at the edge.
+
+  :param output_node: The :ref:`handle` of the node to use as output.
+  :type output_node: :ref:`handle`
+  '''
+  return {'type': 'set_output', 'output_node': output_node}
+
+
+def leaf_config(node_id, name, parent, variant, initial_state, recorded_user_json=None):
   '''
   A node config for a new leaf node.
 
@@ -38,7 +62,6 @@ def leaf_config(node_id, name, parent, parent_transport, variant, initial_state,
   :param str name: The name to use for the new node.
   :param parent: The handle of the parent node.
   :type parent: :ref:`handle`
-  :param object parent_transport: A transport for talking to the parent.
   :param str variant: 'input' or 'output'
   :param object initial_state: A json serializeable starting state for this node.
   :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
@@ -49,13 +72,12 @@ def leaf_config(node_id, name, parent, parent_transport, variant, initial_state,
       'name': name,
       'parent': parent,
       'variant': variant,
-      'parent_transport': parent_transport,
       'initial_state': initial_state,
       'recorded_user_json': recorded_user_json,
   }
 
 
-def added_leaf(kid, transport):
+def added_leaf(kid):
   '''
   Indicates that a pending LeafNode has successfull been added to the network, and is
   now ready to receive messages.

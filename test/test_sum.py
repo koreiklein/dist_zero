@@ -37,28 +37,28 @@ def test_sum_two_nodes_on_three_machines(demo):
       node_config=messages.sum.sum_node_config(
           node_id=dist_zero.ids.new_id(),
           senders=[],
-          sender_transports=[],
           receivers=[],
-          receiver_transports=[],
       ))
 
   demo.run_for(ms=200)
 
   # Configure the starting network topology
   root_input_node_id = dist_zero.ids.new_id()
-  demo.system.spawn_node(on_machine=machine_a_handle,
+  demo.system.spawn_node(
+      on_machine=machine_a_handle,
       node_config=messages.io.internal_node_config(
-        root_input_node_id,
-        variant='input',
-        adjacent=self.system.fresh_handle(new_node_id=root_input_node_id, existing_node_id=sum_node_id)))
+          root_input_node_id,
+          variant='input',
+          adjacent=demo.system.fresh_handle(new_node_id=root_input_node_id, existing_node_id=sum_node_id)))
 
   root_output_node_id = dist_zero.ids.new_id()
-  demo.system.spawn_node(on_machine=machine_a_handle,
+  demo.system.spawn_node(
+      on_machine=machine_a_handle,
       node_config=messages.io.internal_node_config(
-        root_output_node_id,
-        variant='output',
-        adjacent=self.system.fresh_handle(new_node_id=root_output_node_id, existing_node_id=sum_node_id),
-        initial_state=0))
+          root_output_node_id,
+          variant='output',
+          adjacent=demo.system.fresh_handle(new_node_id=root_output_node_id, existing_node_id=sum_node_id),
+          initial_state=0))
 
   demo.run_for(ms=1000)
 

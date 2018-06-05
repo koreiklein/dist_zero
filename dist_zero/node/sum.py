@@ -27,8 +27,8 @@ class SumNode(Node):
   SEND_INTERVAL_MS = 30
   '''The number of ms between sends to receivers.'''
 
-  def __init__(self, node_id, senders, receivers, spawning_migration, input_node, output_node,
-               pending_sender_ids, controller):
+  def __init__(self, node_id, senders, receivers, spawning_migration, input_node, output_node, pending_sender_ids,
+               controller):
     '''
     :param str node_id: The node id for this node.
     :param list senders: A list of :ref:`handle` of the nodes sending increments
@@ -58,14 +58,8 @@ class SumNode(Node):
 
     self.migrator = None
 
-    self._importers = {
-        sender['id']: self._new_importer(sender)
-        for sender in senders
-    }
-    self._exporters = {
-        receiver['id']: self._new_exporter(receiver)
-        for receiver in receivers
-    }
+    self._importers = {sender['id']: self._new_importer(sender) for sender in senders}
+    self._exporters = {receiver['id']: self._new_exporter(receiver) for receiver in receivers}
 
     self._pending_sender_ids = set(pending_sender_ids)
 
@@ -125,7 +119,7 @@ class SumNode(Node):
     if not self._pending_sender_ids:
       self.send(self._spawning_migration, messages.migration.middle_node_is_duplicated())
 
-  def receive(self, sender, message):
+  def receive(self, sender_id, message):
     if message['type'] == 'increment':
       self._unsent_total += message['amount']
     elif message['type'] == 'set_input':
@@ -136,18 +130,18 @@ class SumNode(Node):
       if message['variant'] == 'input':
         if self._input_node is not None:
           node_id = ids.new_id()
-          self_handle = self.node.fresh_handle(node_id)
+          self_handle = self.fresh_handle(node_id)
           self._controller.spawn_node(
               messages.sum.sum_node_config(
                   node_id=node_id,
                   senders=[],
                   receivers=[self_handle],
-                  input_node=self.convert_handle_for_new_node(handle=message['kid'], node_id=node_id),
+                  input_node=self.convert_handle_for_new_node(handle=message['kid'], new_node_id=node_id),
               ))
       elif message['variant'] == 'output':
         if self._output_node is not None:
           node_id = ids.new_id()
-          self_handle = self.node.fresh_handle(node_id)
+          self_handle = self.fresh_handle(node_id)
           self._controller.spawn_node(
               messages.sum.sum_node_config(
                   node_id=node_id,
@@ -159,7 +153,7 @@ class SumNode(Node):
         raise errors.InternalError("Unrecognized variant {}".format(message['variant']))
 
     elif message['type'] == 'finished_duplicating':
-      self.migrator.finished_duplicating(sender)
+      self.migrator.finished_duplicating(sender_id)
     elif message['type'] == 'connect_internal':
       node = message['node']
       direction = message['direction']
@@ -178,7 +172,7 @@ class SumNode(Node):
       if self._spawning_migration is not None:
         # Doing a migration
         if node['id'] in self._pending_sender_ids:
-          self._pending_sender_ids.remove(sender['id'])
+          self._pending_sender_ids.remove(sender_id)
         self._maybe_finish_middle_node_startup()
     elif message['type'] == 'sum_node_started':
       if self.migrator:
@@ -190,9 +184,9 @@ class SumNode(Node):
       self._unsent_time_ms = 0
       self.send(self._spawning_migration, messages.migration.middle_node_is_live())
     elif message['type'] == 'middle_node_is_duplicated':
-      self.migrator.middle_node_duplicated(sender)
+      self.migrator.middle_node_duplicated(sender_id)
     elif message['type'] == 'middle_node_is_live':
-      self.migrator.middle_node_live(sender)
+      self.migrator.middle_node_live(sender_id)
     elif message['type'] == 'start_duplicating':
       old_receiver_id = message['old_receiver_id']
       new_receiver = message['receiver']
@@ -396,10 +390,10 @@ class SumNodeSenderSplitMigrator(object):
 
     self.node.migration_finished(set(self._partition.keys()))
 
-  def middle_node_live(self, middle_node_handle):
+  def middle_node_live(self, middle_node_id):
     '''Called when a middle node has been confirmed to be live.'''
-    self.logger.info("Marking middle node as now being live", extra={'middle_node_id': middle_node_handle['id']})
-    self._middle_node_states[middle_node_handle['id']] = 'live'
+    self.logger.info("Marking middle node as now being live", extra={'middle_node_id': middle_node_id})
+    self._middle_node_states[middle_node_id] = 'live'
 
     if all(state == 'live' for state in self._middle_node_states.values()):
       self._transition_to_trimming()
@@ -417,28 +411,26 @@ class SumNodeSenderSplitMigrator(object):
     if all(state == 'started' for state in self._middle_node_states.values()):
       self._transition_to_duplicating()
 
-  def middle_node_duplicated(self, middle_node_handle):
+  def middle_node_duplicated(self, middle_node_id):
     '''
     Called when a middle node has confirmed that it is receiving all the proper duplicated inputs.
 
-    :param middle_node_handle: The :ref:`handle` of the middle node.
-    :type middle_node_handle: :ref:`handle`
+    :param str middle_node_id: The id of the middle node.
     '''
-    self.logger.info("Marking middle node as now being duplicated", extra={'middle_node_id': middle_node_handle['id']})
-    self._middle_node_states[middle_node_handle['id']] = 'duplicated'
+    self.logger.info("Marking middle node as now being duplicated", extra={'middle_node_id': middle_node_id})
+    self._middle_node_states[middle_node_id] = 'duplicated'
 
     if all(state == 'duplicated' for state in self._middle_node_states.values()):
       self._transition_to_syncing()
 
-  def finished_duplicating(self, sender):
+  def finished_duplicating(self, sender_id):
     '''
     Called when a sender sum node is sending messages only according the structure at the end of migration, and not
     the duplicate messages from the beginning of the migration.
 
-    :param sender: The :ref:`handle` of the sender node that has finished duplicating.
-    :type sender: :ref:`handle`
+    :param str sender_id: The id of the sender node that has finished duplicating.
     '''
-    self._duplicating_input_ids.remove(sender['id'])
+    self._duplicating_input_ids.remove(sender_id)
     if not self._duplicating_input_ids:
       self._transition_to_finished()
 
@@ -473,7 +465,6 @@ class SumNodeSenderSplitMigrator(object):
     for j, extra_importer in enumerate(importers[n_new_nodes * n_senders_per_node:]):
       self._partition[new_node_ids[j]].append(extra_importer)
 
-    self_handle = self.node.fresh_handle(node_id)
     return [
         messages.sum.sum_node_config(
             node_id=node_id,
@@ -481,7 +472,7 @@ class SumNodeSenderSplitMigrator(object):
             senders=[],
             receivers=[self_handle],
             spawning_migration=self_handle,
-        ) for node_id, importers in self._partition.items()
+        ) for node_id, importers in self._partition.items() for self_handle in [self.node.fresh_handle(node_id)]
     ]
 
   @property

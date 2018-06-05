@@ -77,7 +77,7 @@ class LeafNode(Node):
     for m in self._pre_active_messages:
       self._receive_increment_message(m)
 
-  def receive(self, message, sender):
+  def receive(self, message, sender_id):
     if message['type'] == 'set_adjacent':
       self._set_adjacent(message['node'])
     elif message['type'] == 'increment':
@@ -134,7 +134,7 @@ class LeafNode(Node):
     if self._recorded_user is not None:
       for t, msg in self._recorded_user.elapse_and_get_messages(ms):
         self.logger.info("Simulated user generated a message", extra={'recorded_message': msg})
-        self.receive(msg, sender=None)
+        self.receive(msg, sender_id=None)
 
 
 class InternalNode(Node):
@@ -174,7 +174,7 @@ class InternalNode(Node):
     else:
       raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
-  def receive(self, message, sender):
+  def receive(self, message, sender_id):
     if message['type'] == 'added_leaf':
       self.added_leaf(message['kid'])
     else:
@@ -238,5 +238,5 @@ class InternalNode(Node):
 
       self.send(self._adjacent,
                 messages.io.added_adjacent_leaf(
-                    kid=self.convert_handle_for_new_node(handle=kid, new_node_id=self._adjacent['id']),
+                    kid=self.convert_handle_for_existing_node(existing_handle=kid, new_node_handle=self._adjacent),
                     variant=self._variant))

@@ -12,6 +12,10 @@ class Node(object):
   def send(self, receiver, message):
     self._controller.send(node_handle=receiver, message=message, sending_node_id=self.id)
 
+  def convert_handle_for_existing_node(self, existing_handle, new_node_handle):
+    result = dict(existing_handle)
+    return result
+
   def convert_handle_for_new_node(self, handle, new_node_id):
     '''
     :param handle: A :ref:`handle` that self can use to talk to another node.
@@ -21,9 +25,8 @@ class Node(object):
     :return: A :ref:`handle` that the newly spawned node will be able to use to talk to the node referenced by handle.
     :rtype: :ref:`handle`
     '''
-    return self._handle(transport=self._controller.convert_transport_for(
-      remote_node_handle=handle,
-      new_node_id=new_node_id, 
+    result = dict(handle)
+    return result
 
   def fresh_handle(self, other_node_id):
     '''
@@ -34,8 +37,7 @@ class Node(object):
 
     :param str other_node_id: The id of a node that has not yet been spawned.
     '''
-    return self._handle(transport=self._controller.fresh_transport_for(
-      new_node_id=other_node_id, 
+    return self._handle(transport=self._controller.fresh_transport_for(local_node=self, new_node_id=other_node_id))
 
   def connect_handle(self, other_node):
     '''
@@ -53,7 +55,7 @@ class Node(object):
         'id': self.id,
         'controller_id': self._controller.id,
         'transport': transport,
-      }
+    }
 
   def initialize(self):
     '''Called exactly once, when a node starts to run.'''
@@ -67,14 +69,13 @@ class Node(object):
     '''
     raise RuntimeError('Abstract Superclass')
 
-  def receive(self, message, sender):
+  def receive(self, message, sender_id):
     '''
     Receive a message from some sender.
 
     :param message: A :ref:`message` from one of the senders to this node.
     :type message: :ref:`message`
 
-    :param sender: The :ref:`handle` of the node that sent the message.
-    :type sender: :ref:`handle`
+    :param str sender_id: The id of the node that sent the message.
     '''
     raise RuntimeError('Abstract Superclass')

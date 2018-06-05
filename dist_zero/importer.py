@@ -20,7 +20,8 @@ class Importer(object):
 
   def initialize(self):
     self._node.send(self._sender,
-                    messages.migration.connect_internal(node=self._node.handle(self._sender), direction='receiver'))
+                    messages.migration.connect_internal(
+                        node=self._node.connect_handle(self._sender), direction='receiver'))
 
   @property
   def sender_id(self):
@@ -30,7 +31,8 @@ class Importer(object):
     self._node.send(self._sender,
                     messages.migration.start_duplicating(
                         old_receiver_id=self._node.id,
-                        receiver=self.convert_handle_for_new_node(handle=other_node, new_node_id=self._sender['id']),
+                        receiver=self._node.convert_handle_for_existing_node(
+                            existing_handle=other_node, new_node_handle=self._sender),
                     ))
 
   def finish_duplicating_paired_exporters(self):

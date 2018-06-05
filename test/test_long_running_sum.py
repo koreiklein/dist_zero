@@ -64,26 +64,24 @@ class TestLongRunningSum(object):
         node_config=messages.sum.sum_node_config(
             node_id=dist_zero.ids.new_id(),
             senders=[],
-            sender_transports=[],
             receivers=[],
-            receiver_transports=[],
         ))
 
     self.root_input_node_id = dist_zero.ids.new_id()
     self.system.spawn_node(
         on_machine=machine_a_handle,
         node_config=messages.io.internal_node_config(
-          self.root_input_node_id,
-          adjacent=self.system.fresh_handle(new_node_id=self.root_input_node_id, existing_node_id=self.sum_node_id),
-          variant='input'))
+            self.root_input_node_id,
+            adjacent=self.system.fresh_handle(new_node_id=self.root_input_node_id, existing_node_id=self.sum_node_id),
+            variant='input'))
     self.root_output_node_id = dist_zero.ids.new_id()
     self.system.spawn_node(
         on_machine=machine_a_handle,
         node_config=messages.io.internal_node_config(
-          self.root_output_node_id,
-          variant='output',
-          adjacent=self.system.fresh_handle(new_node_id=self.root_output_node_id, existing_node_id=self.sum_node_id),
-          initial_state=0))
+            self.root_output_node_id,
+            variant='output',
+            adjacent=self.system.fresh_handle(new_node_id=self.root_output_node_id, existing_node_id=self.sum_node_id),
+            initial_state=0))
 
   def _spawn_inputs_loop(self, n_inputs, total_time_ms):
     '''
