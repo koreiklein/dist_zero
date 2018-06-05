@@ -14,34 +14,7 @@ class MachineController(object):
   The interface that `Node` instances will use to interact with the underlying hardware.
   '''
 
-  def set_transport(self, sender, receiver, transport):
-    '''
-    Set the transport for messages from sender to receiver.
-
-    :param sender: The :ref:`handle` of the sending node. It must be managed by self.
-    :type sender: :ref:`handle`
-
-    :param receiver: The :ref:`handle` of the receiving node.
-    :type receiver: :ref:`handle`
-    '''
-    raise RuntimeError("Abstract Superclass")
-
-  def convert_transport_for(self, current_sender, new_sender_id, receiver_id):
-    '''
-    If there exists a transport that a node on self uses to talk to a receiver,
-    this method creates a new transport allowing a different node to talk to the same receiver.
-
-    :param current_sender: A node managed by self.
-    :type current_sender: :ref:`handle`
-    :param str new_sender: Any node id
-    :param str receiver: Any node id for which current_sender has a working transport.
-
-    :return: A transport that new_sender can use to talk to receiver
-    :rtype: :ref:`transport`
-    '''
-    raise RuntimeError("Abstract Superclass")
-
-  def send(self, node_handle, message, sending_node_handle):
+  def send(self, node_handle, message, sending_node_id):
     '''
     Send a message to a node either managed by self, or linked to self.
     A transport must be set for the sender to send to the destination node.
@@ -50,8 +23,7 @@ class MachineController(object):
     :type node_handle: :ref:`handle`
     :param message message: A message for that node
     :type message: :ref:`message`
-    :param sending_node_handle: The handle of the sending node.
-    :type sending_node_handle: :ref:`handle`
+    :param str sending_node_id: The id of the sending node.
     '''
     raise RuntimeError("Abstract Superclass")
 
@@ -62,17 +34,25 @@ class MachineController(object):
     :param json node_config: A JSON serializable message that describes how to run the node.
     :param on_machine: The handle of a :any:`MachineController`.
     :type on_machine: :ref:`handle`
-    :return: The handle of the newly created node.
-    :rtype: :ref:`handle`
+    :return: The id of the newly created node.
+    :rtype: str
     '''
     raise RuntimeError("Abstract Superclass")
 
-  def new_transport_for(self, local_node_id, remote_node_id):
+  def fresh_transport_for(self, local_node, new_node_id):
+    raise RuntimeError("Abstract Superclass")
+
+  def convert_transport_for(self, local_node, remote_node_handle):
+    raise RuntimeError("Abstract Superclass")
+
+  def new_transport_for(self, local_node, remote_node_handle):
     '''
     Create a transport that a remote node can use to link to a node on this machine.
 
-    :param str local_node_id: The id of a node on this machine.
-    :param str remote_node_id: The id of any node.
+    :param local_node: A node on this machine.
+    :type local_noded: `Node`
+    :param remote_node_handle: The :ref:`handle` of the node that will be using the returned handle to talk to local_node.
+    :type remote_node_handle: :ref:`handle`
 
     :return: A transport that the remote node can use to send to the local node.
     :rtype: :ref:`transport`
@@ -117,35 +97,11 @@ class NodeManager(MachineController):
 
     self._send_to_machine = send_to_machine
 
-    # A dict taking a pair (sender_node_id, receiver_node_id) to the transport to be used to send
-    # from that sender to that receiver.
-    self._transports = {}
-
-  def set_transport(self, sender, receiver, transport):
-    self._transports[(sender['id'], receiver['id'])] = transport
-
-  def convert_transport_for(self, current_sender, new_sender_id, receiver_id):
-    old_transport = self._get_transport(current_sender['id'], receiver_id)
-
-    # TODO(KK): Once we start to add security to transports, it will no longer be possible
-    #   to re-use the old transport as is.
-    new_transport = old_transport
-
-    return new_transport
-
-  def _get_transport(self, sender_id, receiver_id):
-    transport = self._transports.get((sender_id, receiver_id), None)
-
-    if transport is None:
-      raise errors.NoTransportError(sender_id=sender_id, receiver_id=receiver_id)
-    else:
-      return transport
-
-  def send(self, node_handle, message, sending_node_handle):
+  def send(self, node_handle, message, sending_node_id):
     self._send_to_machine(
         message=messages.machine.machine_deliver_to_node(
-            node=node_handle, message=message, sending_node=sending_node_handle),
-        transport=self._get_transport(sending_node_handle['id'], node_handle['id']))
+            node_id=node_handle['id'], message=message, sending_node_id=sending_node_id),
+        transport=node_handle['transport'])
 
   def spawn_node(self, node_config):
     # TODO(KK): Rethink how the machine for each node is chosen.  Always running on the same machine
@@ -155,9 +111,15 @@ class NodeManager(MachineController):
     # Do it here so that simulated tests don't accidentally share data.
     node_config = json.loads(json.dumps(node_config))
 
-    return self.start_node(node_config).handle()
+    return self.start_node(node_config).id
 
-  def new_transport_for(self, local_node_id, remote_node_id):
+  def fresh_transport_for(self, local_node, new_node_id):
+    return messages.machine.ip_transport(self._ip_host)
+
+  def new_transport_for(self, local_node, remote_node_handle):
+    return messages.machine.ip_transport(self._ip_host)
+
+  def convert_transport_for(self, local_node, remote_node_handle):
     return messages.machine.ip_transport(self._ip_host)
 
   def get_node(self, handle):
@@ -186,13 +148,12 @@ class NodeManager(MachineController):
     node.initialize()
     return node
 
-  def _get_node_by_handle(self, node_handle):
+  def _get_node_by_id(self, node_id):
     '''
-    :param node_handle: The handle of a node managed by self.
-    :type node_handle: :ref:`handle`
+    :param str node_id: The id of a node managed by self.
     :return: The node instance itself.
     '''
-    return self._node_by_id[node_handle['id']]
+    return self._node_by_id[node_id]
 
   def handle_api_message(self, message):
     '''
@@ -213,24 +174,22 @@ class NodeManager(MachineController):
           'status': 'ok',
           'data': node.create_kid_config(message['new_node_name'], message['machine_controller_handle']),
       }
-    elif message['type'] == 'api_new_transport':
-      node = self._node_by_id[message['receiver']['id']]
-      logger.info(
-          "API getting new transport for sending from node {sender_id} node {receiver_id}",
+    elif message['type'] == 'api_fresh_handle':
+      node = self._node_by_id[message['local_node_id']]
+      logger.debug(
+          "API is creating a fresh handle for a new node {new_node_id} to talk to the existing local node {local_node_id}",
           extra={
-              'sender': message['sender'],
-              'sender_id': message['sender']['id'],
-              'receiver': message['receiver'],
-              'receiver_id': message['receiver']['id'],
+              'local_node_id': message['local_node_id'],
+              'new_node_id': message['new_node_id'],
           })
       return {
           'status': 'ok',
-          'data': node.new_transport_for(message['sender']['id']),
+          'data': node.fresh_handle(other_node_id=message['new_node_id']),
       }
     elif message['type'] == 'api_get_output_state':
       return {
           'status': 'ok',
-          'data': self.get_output_state(message['node']['id']),
+          'data': self.get_output_state(message['node_id']),
       }
     else:
       logger.error("Unrecognized API message type {message_type}", extra={'message_type': message['type']})
@@ -245,11 +204,11 @@ class NodeManager(MachineController):
   def handle(self):
     return {'type': 'MachineController', 'id': self.id}
 
-  def _format_handle_for_logs(self, handle):
-    if handle is None:
+  def _format_node_id_for_logs(self, node_id):
+    if node_id is None:
       return 'None'
     else:
-      return "{}:{}".format(handle['type'], handle['id'][:8])
+      return node_id[:8]
 
   def handle_message(self, message):
     '''
@@ -261,17 +220,17 @@ class NodeManager(MachineController):
     if message['type'] == 'machine_start_node':
       self.start_node(message['node_config'])
     elif message['type'] == 'machine_deliver_to_node':
-      node_handle = message['node']
+      node_id = message['node_id']
       logger.info(
           "Delivering message of type {message_type} to node {to_node_pretty} from node {from_node_pretty}",
           extra={
               'message_type': message['message']['type'],
-              'to_node': node_handle,
-              'from_node': message['sending_node'],
-              'to_node_pretty': self._format_handle_for_logs(node_handle),
-              'from_node_pretty': self._format_handle_for_logs(message['sending_node']),
+              'to_node_id': node_id,
+              'from_node_id': message['sending_node_id'],
+              'to_node_pretty': self._format_node_id_for_logs(node_id),
+              'from_node_pretty': self._format_node_id_for_logs(message['sending_node']),
           })
-      node = self._get_node_by_handle(node_handle)
+      node = self._get_node_by_id(node_id)
       node.receive(message=message['message'], sender=message['sending_node'])
     else:
       logger.error("Unrecognized message type {unrecognized_type}", extra={'unrecognized_type': message['type']})

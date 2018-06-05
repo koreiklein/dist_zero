@@ -17,12 +17,14 @@ def set_adjacent(node, transport):
   return {'type': 'set_adjacent', 'node': node, 'transport': transport}
 
 
-def internal_node_config(node_id, variant, initial_state=None):
+def internal_node_config(node_id, variant, adjacent, initial_state=None):
   '''
   A node config for creating an internal node to manage a new list of io nodes.
 
   :param str node_id: The id of the new node.
   :param str variant: 'input' or 'output'
+  :param adjacent: The :ref:`handle` adjacent node to either receiver from or forward to.
+  :type adjacent: :ref:`handle`
   :param object initial_state: The initial state to use for new nodes.
   '''
   return {'type': 'InternalNode', 'id': node_id, 'variant': variant, 'initial_state': initial_state}
@@ -60,13 +62,11 @@ def added_leaf(kid, transport):
 
   :param kid: The :ref:`handle` of the leaf node that was just added.
   :type kid: :ref:`handle`
-
-  :param object transport: A transport that the recipient can use to send messages to the new leaf.
   '''
-  return {'type': 'added_leaf', 'kid': kid, 'transport': transport}
+  return {'type': 'added_leaf', 'kid': kid}
 
 
-def added_adjacent_leaf(kid, variant, transport):
+def added_adjacent_leaf(kid, variant):
   '''
   Indicates to an adjacent edge node in a computation that a pending LeafNode has successfull been added to the network, and is
   now ready to receive messages.
@@ -75,7 +75,5 @@ def added_adjacent_leaf(kid, variant, transport):
   :type kid: :ref:`handle`
 
   :param str variant: 'input' or 'output'
-
-  :param object transport: A transport that the recipient can use to send messages to the new leaf.
   '''
-  return {'type': 'added_adjacent_leaf', 'kid': kid, 'variant': variant, 'transport': transport}
+  return {'type': 'added_adjacent_leaf', 'kid': kid, 'variant': variant}

@@ -10,11 +10,14 @@ def increment(amount):
   return {'type': 'increment', 'amount': amount}
 
 
-def sum_node_started(transport):
+def sum_node_started(sum_node_handle):
   '''
   For when a new sum node informs its parent that it has just started, and will now be sending messages.
+
+  :param sum_node_handle: The :ref:`handle` of the newly started node.
+  :type sum_node_handle: :ref:`handle`
   '''
-  return {'type': 'sum_node_started', 'transport': transport}
+  return {'type': 'sum_node_started', 'sum_node_handle': sum_node_handle}
 
 
 def set_sum_total(total):

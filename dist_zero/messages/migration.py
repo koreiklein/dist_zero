@@ -18,30 +18,24 @@ def connect_internal(node, direction, transport):
   return {'type': 'connect_internal', 'node': node, 'direction': direction, 'transport': transport}
 
 
-def set_input(input_node, transport):
+def set_input(input_node):
   '''
   Configure the input node for a calculating node at the edge.
 
   :param input_node: The :ref:`handle` of the node to use as input.
   :type input_node: :ref:`handle`
-
-  :param transport: A :ref:`transport` for talking to input_node
-  :type transport: :ref:`transport`
   '''
-  return {'type': 'set_input', 'input_node': input_node, 'transport': transport}
+  return {'type': 'set_input', 'input_node': input_node}
 
 
-def set_output(output_node, transport):
+def set_output(output_node):
   '''
   Configure the output node for a calculating node at the edge.
 
   :param output_node: The :ref:`handle` of the node to use as output.
   :type output_node: :ref:`handle`
-
-  :param transport: A :ref:`transport` for talking to output_node
-  :type transport: :ref:`transport`
   '''
-  return {'type': 'set_output', 'output_node': output_node, 'transport': transport}
+  return {'type': 'set_output', 'output_node': output_node}
 
 
 def middle_node_is_live():
@@ -76,15 +70,14 @@ def start_duplicating(old_receiver_id, receiver, transport):
   return {'type': 'start_duplicating', 'old_receiver_id': old_receiver_id, 'receiver': receiver, 'transport': transport}
 
 
-def finish_duplicating(receiver):
+def finish_duplicating(receiver_id):
   '''
   This message is sent to a node that is duplicating its sends to inform it that it no longer need send messages
   to the old receivers.
 
-  :param receiver: The receiver `Node` which sent the original `start_duplicating` message to begin duplication.
-  :type receiver: :ref:`handle`
+  :param str receiver: The id of the receiver `Node` which sent the original `start_duplicating` message to begin duplication.
   '''
-  return {'type': 'finish_duplicating', 'receiver': receiver}
+  return {'type': 'finish_duplicating', 'receiver_id': receiver_id}
 
 
 def finished_duplicating():

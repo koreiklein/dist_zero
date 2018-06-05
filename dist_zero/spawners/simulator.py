@@ -88,9 +88,9 @@ class SimulatedSpawner(spawner.Spawner):
     message = msg['message']
     if message['type'] == 'machine_deliver_to_node':
       return "{} --{}--> {}".format(
-          self._format_node(message.get('sending_node', None)),
+          self._format_node(message.get('sending_node_id', None)),
           msg['message']['type'],
-          self._format_node(message.get('node', None)),
+          self._format_node(message.get('node_id', None)),
       )
     else:
       return "Control Message: {}".format(message['type'])

@@ -27,16 +27,12 @@ class SumNode(Node):
   SEND_INTERVAL_MS = 30
   '''The number of ms between sends to receivers.'''
 
-  def __init__(self, node_id, senders, sender_transports, receivers, receiver_transports, spawning_migration,
-               spawning_migration_transport, input_node, output_node, input_transport, output_transport,
+  def __init__(self, node_id, senders, receivers, spawning_migration, input_node, output_node,
                pending_sender_ids, controller):
     '''
     :param str node_id: The node id for this node.
     :param list senders: A list of :ref:`handle` of the nodes sending increments
     :param list receivers: A list of :ref:`handle` of the nodes to receive increments
-
-    :param list sender_transports: A list of :ref:`transport` of the nodes sending increments
-    :param list receiver_transports: A list of :ref:`transport` of the nodes to receive increments
 
     :param list pending_sender_ids: In the event that this node is starting via a migration, this is the list of
       senders that must be registered as sending duplicates in order for this node to decide that it is fully duplicated.
@@ -50,30 +46,25 @@ class SumNode(Node):
     :param spawning_migration: The :ref:`handle` of the migration spawing this `SumNode` if it has one.
     :type spawning_migration: :ref:`handle` or None
 
-    :param spawning_migration_transport: A :ref:`transport` for talking to this node's spawning migration if it has one.
-    :type spawning_migration_transport: :ref:`transport` or None
     '''
     self._controller = controller
 
     self.id = node_id
 
     self._spawning_migration = spawning_migration
-    self._spawning_migration_transport = spawning_migration_transport
 
     self._input_node = input_node
-    self._input_transport = input_transport
     self._output_node = output_node
-    self._output_transport = output_transport
 
     self.migrator = None
 
     self._importers = {
-        sender['id']: self._new_importer(sender, transport)
-        for sender, transport in zip(senders, sender_transports)
+        sender['id']: self._new_importer(sender)
+        for sender in senders
     }
     self._exporters = {
-        receiver['id']: self._new_exporter(receiver, transport)
-        for receiver, transport in zip(receivers, receiver_transports)
+        receiver['id']: self._new_exporter(receiver)
+        for receiver in receivers
     }
 
     self._pending_sender_ids = set(pending_sender_ids)
@@ -91,12 +82,10 @@ class SumNode(Node):
 
     super(SumNode, self).__init__(logger)
 
-  def _new_importer(self, sender, transport):
-    self.set_transport(sender, transport)
+  def _new_importer(self, sender):
     return importer.Importer(node=self, sender=sender)
 
-  def _new_exporter(self, receiver, transport):
-    self.set_transport(receiver, transport)
+  def _new_exporter(self, receiver):
     return exporter.Exporter(node=self, receiver=receiver)
 
   def migration_finished(self, remaining_sender_ids):
@@ -115,24 +104,16 @@ class SumNode(Node):
             'n_new_senders': len(self._importers),
         })
 
-  def handle(self):
-    return {'type': 'SumNode', 'id': self.id, 'controller_id': self._controller.id}
-
   @staticmethod
   def from_config(node_config, controller):
     return SumNode(
         node_id=node_config['id'],
         senders=node_config['senders'],
         receivers=node_config['receivers'],
-        sender_transports=node_config['sender_transports'],
-        receiver_transports=node_config['receiver_transports'],
         pending_sender_ids=node_config['pending_sender_ids'],
         output_node=node_config['output_node'],
         input_node=node_config['input_node'],
-        output_transport=node_config['output_transport'],
-        input_transport=node_config['input_transport'],
         spawning_migration=node_config['spawning_migration'],
-        spawning_migration_transport=node_config['spawning_migration_transport'],
         controller=controller)
 
   def _maybe_finish_middle_node_startup(self):
@@ -149,44 +130,30 @@ class SumNode(Node):
       self._unsent_total += message['amount']
     elif message['type'] == 'set_input':
       self._input_node = message['input_node']
-      self.set_transport(self._input_node, message['transport'])
-      self.send(self._input_node, messages.io.set_adjacent(self.handle(), self.new_transport_for(
-          self._input_node['id'])))
     elif message['type'] == 'set_output':
       self._output_node = message['output_node']
-      self.set_transport(self._output_node, message['transport'])
-      self.send(self._output_node,
-                messages.io.set_adjacent(self.handle(), self.new_transport_for(self._output_node['id'])))
     elif message['type'] == 'added_adjacent_leaf':
       if message['variant'] == 'input':
         if self._input_node is not None:
           node_id = ids.new_id()
-          # TODO(KK): Find a way to avoid having to set_transport here.
-          self.set_transport(message['kid'], message['transport'])
+          self_handle = self.node.fresh_handle(node_id)
           self._controller.spawn_node(
               messages.sum.sum_node_config(
                   node_id=node_id,
                   senders=[],
-                  receivers=[self.handle()],
-                  sender_transports=[],
-                  receiver_transports=[self.new_transport_for(node_id)],
-                  input_node=message['kid'],
-                  input_transport=self.convert_transport_for(sender_id=node_id, receiver_id=message['kid']['id']),
+                  receivers=[self_handle],
+                  input_node=self.convert_handle_for_new_node(handle=message['kid'], node_id=node_id),
               ))
       elif message['variant'] == 'output':
         if self._output_node is not None:
           node_id = ids.new_id()
-          # TODO(KK): Find a way to avoid having to set_transport here.
-          self.set_transport(message['kid'], message['transport'])
+          self_handle = self.node.fresh_handle(node_id)
           self._controller.spawn_node(
               messages.sum.sum_node_config(
                   node_id=node_id,
-                  senders=[self.handle()],
+                  senders=[self_handle],
                   receivers=[],
-                  sender_transports=[self.new_transport_for(node_id)],
-                  receiver_transports=[],
-                  output_node=message['kid'],
-                  output_transport=self.convert_transport_for(sender_id=node_id, receiver_id=message['kid']['id']),
+                  output_node=self.convert_handle_for_new_node(handle=message['kid'], new_node_id=node_id),
               ))
       else:
         raise errors.InternalError("Unrecognized variant {}".format(message['variant']))
@@ -196,20 +163,17 @@ class SumNode(Node):
     elif message['type'] == 'connect_internal':
       node = message['node']
       direction = message['direction']
-      transport = message['transport']
 
       if direction == 'sender':
         if node['id'] in self._importers:
           raise errors.InternalError("Received connect_internal for an importer that had already been added.")
-        self._importers[node['id']] = self._new_importer(sender=node, transport=transport)
+        self._importers[node['id']] = self._new_importer(sender=node)
       elif direction == 'receiver':
         if node['id'] in self._exporters:
           raise errors.InternalError("Received connect_internal for an importer that had already been added.")
-        self._exporters[node['id']] = self._new_exporter(receiver=node, transport=transport)
+        self._exporters[node['id']] = self._new_exporter(receiver=node)
       else:
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
-
-      self.set_transport(node, transport)
 
       if self._spawning_migration is not None:
         # Doing a migration
@@ -218,7 +182,7 @@ class SumNode(Node):
         self._maybe_finish_middle_node_startup()
     elif message['type'] == 'sum_node_started':
       if self.migrator:
-        self.migrator.middle_node_started(sender, message['transport'])
+        self.migrator.middle_node_started(message['sum_node_handle'])
     elif message['type'] == 'set_sum_total':
       # FIXME(KK): Think through how to set these parameters appropriately during startup.
       self._sent_total = message['total']
@@ -239,11 +203,11 @@ class SumNode(Node):
               'old_receiver_id': old_receiver_id,
           })
       exporter = self._exporters[old_receiver_id]
-      exporter.duplicate([self._new_exporter(new_receiver, message['transport'])])
+      exporter.duplicate([self._new_exporter(new_receiver)])
     elif message['type'] == 'finish_duplicating':
-      receiver = message['receiver']
-      exporter = self._exporters[receiver['id']]
-      del self._exporters[receiver['id']]
+      receiver_id = message['receiver_id']
+      exporter = self._exporters[receiver_id]
+      del self._exporters[receiver_id]
       for new_exporter in exporter.finish_duplicating():
         self._exporters[new_exporter.receiver_id] = new_exporter
     else:
@@ -292,20 +256,15 @@ class SumNode(Node):
             'output_node': self._output_node,
         })
     if self._spawning_migration:
-      self.set_transport(self._spawning_migration, self._spawning_migration_transport)
       self.send(
           self._spawning_migration,
-          messages.sum.sum_node_started(transport=self.new_transport_for(self._spawning_migration['id'])))
+          messages.sum.sum_node_started(sum_node_handle=self.connect_handle(other_node=self._spawning_migration)))
 
     if self._output_node:
-      self.set_transport(self._output_node, self._output_transport)
-      self.send(self._output_node,
-                messages.io.set_adjacent(node=self.handle(), transport=self.new_transport_for(self._output_node['id'])))
+      self.send(self._output_node, messages.io.set_adjacent(node=self.connect_handle(self._output_node)))
 
     if self._input_node:
-      self.set_transport(self._input_node, self._input_transport)
-      self.send(self._input_node,
-                messages.io.set_adjacent(node=self.handle(), transport=self.new_transport_for(self._input_node['id'])))
+      self.send(self._input_node, messages.io.set_adjacent(node=self.connect_handle(self._input_node)))
 
     for importer in self._importers.values():
       importer.initialize()
@@ -445,18 +404,14 @@ class SumNodeSenderSplitMigrator(object):
     if all(state == 'live' for state in self._middle_node_states.values()):
       self._transition_to_trimming()
 
-  def middle_node_started(self, middle_node_handle, transport):
+  def middle_node_started(self, middle_node_handle):
     '''
     Called when a middle node is confirmed to be running.
 
     :param middle_node_handle: The :ref:`handle` of the middle node.
     :type middle_node_handle: :ref:`handle`
-
-    :param transport: A :ref:`transport` for sending to middle_node_handle
-    :type transport: :ref:`transport`
     '''
     self.logger.info("Marking middle node as having started", extra={'middle_node_id': middle_node_handle['id']})
-    self.node.set_transport(middle_node_handle, transport)
     self._middle_nodes.append(middle_node_handle)
     self._middle_node_states[middle_node_handle['id']] = 'started'
     if all(state == 'started' for state in self._middle_node_states.values()):
@@ -518,16 +473,14 @@ class SumNodeSenderSplitMigrator(object):
     for j, extra_importer in enumerate(importers[n_new_nodes * n_senders_per_node:]):
       self._partition[new_node_ids[j]].append(extra_importer)
 
+    self_handle = self.node.fresh_handle(node_id)
     return [
         messages.sum.sum_node_config(
             node_id=node_id,
             pending_sender_ids=[i.sender_id for i in importers],
             senders=[],
-            sender_transports=[],
-            receivers=[self.node.handle()],
-            receiver_transports=[self.node.new_transport_for(node_id)],
-            spawning_migration=self.node.handle(),
-            spawning_migration_transport=self.node.new_transport_for(node_id),
+            receivers=[self_handle],
+            spawning_migration=self_handle,
         ) for node_id, importers in self._partition.items()
     ]
 

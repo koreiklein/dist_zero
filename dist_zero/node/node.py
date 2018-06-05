@@ -10,54 +10,54 @@ class Node(object):
     self.logger = dist_zero.logging.LoggerAdapter(logger, extra={'cur_node_id': self.id})
 
   def send(self, receiver, message):
-    self._controller.send(receiver, message, self.handle())
+    self._controller.send(node_handle=receiver, message=message, sending_node_id=self.id)
 
-  def set_transport(self, other, transport=None):
+  def convert_handle_for_new_node(self, handle, new_node_id):
     '''
-    Set the transport to use when this node sends messages to node.
+    :param handle: A :ref:`handle` that self can use to talk to another node.
+    :type handle: :ref:`handle`
+    :param str new_node_id: The id of node that is not yet spawned.
 
-    :param node: The :ref:`handle` of a node.
-    :type node: :ref:`handle`
+    :return: A :ref:`handle` that the newly spawned node will be able to use to talk to the node referenced by handle.
+    :rtype: :ref:`handle`
     '''
-    self._controller.set_transport(self.handle(), other, transport)
+    return self._handle(transport=self._controller.convert_transport_for(
+      remote_node_handle=handle,
+      new_node_id=new_node_id, 
 
-  def convert_transport_for(self, sender_id, receiver_id):
+  def fresh_handle(self, other_node_id):
     '''
-    Given a transport that self can use to link to kid,
-    create a new transport that the other node can use to link to kid.
+    Given the id of a node that has *not yet been spawned*, generate a handle
+    to include in that node's config so that once it starts, it can connect to self.
 
-    :param str sender_id: The id of the node that will be sending.
+    This method should be used by parent spawning nodes to generate proper configs for their kids.
 
-    :param str receiver: The id of the node that will be receiving.
-
-    :return: A transport that other can use to talk to kid.
-    :rtype: :ref:`transport`
+    :param str other_node_id: The id of a node that has not yet been spawned.
     '''
-    return self._controller.convert_transport_for(
-        current_sender=self.handle(), new_sender_id=sender_id, receiver_id=receiver_id)
+    return self._handle(transport=self._controller.fresh_transport_for(
+      new_node_id=other_node_id, 
 
-  def new_transport_for(self, node_id):
+  def connect_handle(self, other_node):
     '''
-    Create a transport that a node can use to link to self.
+    Given a handle for sending from self to other_node,
+    produce a companion handle for sending from other_node to self.
 
-    :param str node_id: The id of some node.
-
-    :return: A transport that node can use to link to self.
+    :param other_node: The :ref:`handle` of another node.
+    :type other_node: :ref:`handle`
     '''
-    return self._controller.new_transport_for(self.id, node_id)
+    return self._handle(transport=self._controller.new_transport_for(self, other_node))
+
+  def _handle(self, transport):
+    return {
+        'type': self.__class__.__name__,
+        'id': self.id,
+        'controller_id': self._controller.id,
+        'transport': transport,
+      }
 
   def initialize(self):
     '''Called exactly once, when a node starts to run.'''
     pass
-
-  def handle(self):
-    '''
-    This node's handle.
-
-    :return: A :ref:`handle` for the current node.
-    :rtype: :ref:`handle`
-    '''
-    raise RuntimeError('Abstract Superclass')
 
   def elapse(self, ms):
     '''
