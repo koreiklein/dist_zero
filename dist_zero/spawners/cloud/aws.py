@@ -246,8 +246,6 @@ class Ec2Spawner(spawner.Spawner):
                    mode=spawners.MODE_CLOUD,
                    system_id=self._system_id)
     logger.info("Starting a MachineController process on an aws instance", extra=extra)
-    import ipdb
-    ipdb.set_trace()
     _exec_command(command)
 
     handle = messages.machine.machine_controller_handle(machine_controller_id)
