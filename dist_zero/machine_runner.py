@@ -1,4 +1,5 @@
 import json
+import signal
 import logging
 import os
 import select
@@ -77,6 +78,7 @@ class MachineRunner(object):
             'machine_id': self.node_manager.id,
             'machine_name': self.node_manager.name,
         })
+
     self._bind_udp()
     self._bind_and_listen_tcp()
 

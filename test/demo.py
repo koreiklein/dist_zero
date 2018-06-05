@@ -18,8 +18,8 @@ from dist_zero.spawners.cloud.aws import Ec2Spawner
 def demo(request):
   result = Demo(mode=request.param)
   result.start()
-  yield result
-  result.tear_down()
+  request.addfinalizer(lambda: result.tear_down())
+  return result
 
 
 @pytest.fixture(params=[
@@ -29,8 +29,8 @@ def demo(request):
 def no_cloud_demo(request):
   result = Demo(mode=request.param)
   result.start()
-  yield result
-  result.tear_down()
+  request.addfinalizer(lambda: result.tear_down())
+  return result
 
 
 @pytest.fixture(params=[

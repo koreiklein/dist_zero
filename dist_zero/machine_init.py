@@ -1,6 +1,10 @@
 import sys
+import traceback
+import logging
 
 from dist_zero.machine_runner import MachineRunner
+
+logger = logging.getLogger(__name__)
 
 
 def run_new_machine_runner_from_args():
@@ -14,4 +18,14 @@ def run_new_machine_runner_from_args():
 
 
 if __name__ == '__main__':
-  run_new_machine_runner_from_args()
+  try:
+    run_new_machine_runner_from_args()
+  except Exception as exn:
+    e_type, e_value, e_tb = sys.exc_info()
+    exn_lines = traceback.format_exception(e_type, e_value, e_tb)
+    logger.error(
+        "Error starting a machine_runner: {e_lines}", extra={
+            'e_type': str(e_type),
+            'e_lines': ''.join(exn_lines)
+        })
+    sys.exit(-1)
