@@ -26,9 +26,17 @@ def test_times_in_order():
     ])
 
 
-def test_sum_two_nodes_on_three_machines(demo):
+@pytest.mark.parametrize('drop_rate', [0.0, 0.27])
+def test_sum_two_nodes_on_three_machines(demo, drop_rate):
   # Create node controllers (each simulates the behavior of a separate machine.
-  machine_a_handle, machine_b_handle, machine_c_handle = demo.new_machine_controllers(3)
+  network_errors_config = messages.machine.std_simulated_network_errors_config()
+  network_errors_config['outgoing']['drop']['rate'] = drop_rate
+  network_errors_config['outgoing']['drop']['regexp'] = '.*increment.*'
+
+  machine_a_handle, machine_b_handle, machine_c_handle = demo.new_machine_controllers(
+      3, base_config={
+          'network_errors_config': network_errors_config,
+      })
 
   demo.run_for(ms=200)
 

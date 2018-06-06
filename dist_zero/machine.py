@@ -1,5 +1,10 @@
+import heapq
 import json
 import logging
+import re
+
+from cryptography.fernet import Fernet
+from random import Random
 
 from dist_zero import errors, messages
 
@@ -78,7 +83,12 @@ class NodeManager(MachineController):
   and deliver ordinary messages and api messages.
   '''
 
-  def __init__(self, machine_config, ip_host, send_to_machine):
+  MIN_POSTPONE_TIME_MS = 10
+  '''Minimum time a message will be postpone when simulating a network drop or reorder'''
+  MAX_POSTPONE_TIME_MS = 1200
+  '''Maximum time a message will be postpone when simulating a network drop or reorder'''
+
+  def __init__(self, machine_config, ip_host, send_to_machine, random=None):
     '''
     :param machine_config: A configuration message of type 'machine_config'
     :type machine_config: :ref:`message`
@@ -86,11 +96,17 @@ class NodeManager(MachineController):
     :param str ip_host: The host parameter to use when generating transports that send to this machine.
     :param func send_to_machine: A function send_to_machine(message, transport)
       where message is a :ref:`message`, and transport is a :ref:`transport` for a receiving node.
+    :param random: A source of randomness.
+    :type random: `random`
     '''
 
     self.id = machine_config['id']
     self.name = machine_config['machine_name']
     self.mode = machine_config['mode']
+
+    self._random = Random() if random is None else random
+
+    self._network_errors_config = self._parse_network_errors_config(machine_config['network_errors_config'])
 
     self.system_id = machine_config['system_id']
 
@@ -98,18 +114,71 @@ class NodeManager(MachineController):
 
     self._node_by_id = {}
 
+    self._now_ms = 0 # Current elapsed time in milliseconds
+    # a heap (as in heapq) of tuples (ms_of_occurence, send_receive, args)
+    # where args are the args to self._send_without_error_simulation or self._receive_without_error_simulation
+    # depending on whether send_or_receive is 'send' or 'receive'
+    self._pending_events = []
+
     self._output_node_state_by_id = {} # dict from output node id to it's current state
 
     self._send_to_machine = send_to_machine
 
-  def send(self, node_handle, message, sending_node_id):
-    if self._should_simulate_outgoing_message_drop(message):
-      logger.info('Simulating a drop of an outgoing message', extra={'sender_id': sending_node_id})
+  def _parse_network_errors_config(self, network_errors_config):
+    return {
+        direction: {
+            key: {
+                'rate': value['rate'],
+                'regexp': re.compile(value['regexp'])
+            }
+            for key, value in direction_config.items()
+        }
+        for direction, direction_config in network_errors_config.items()
+    }
+
+  def send(self, node_handle, message, sending_node):
+    sending_node_id = None if sending_node is None else sending_node.id
+    error_type = self._get_simulated_network_error(message, direction='outgoing')
+    send_args = (node_handle, message, sending_node_id)
+    if error_type:
+      logger.info(
+          'Simulating {error_type} of an outgoing message',
+          extra={
+              'sender_id': sending_node_id,
+              'error_type': error_type
+          })
+      if error_type == 'drop':
+        pass
+      elif error_type == 'reorder':
+        heapq.heappush(self._pending_events, (self._postpone_ms(), 'send', send_args))
+      elif error_type == 'duplicate':
+        self._send_without_error_simulation(node_handle, message, sending_node_id)
+        heapq.heappush(self._pending_events, (self._postpone_ms(), 'send', send_args))
+      else:
+        raise errors.InternalError("Unrecognized error type '{}'".format(error_type))
     else:
-      self._send_to_machine(
-          message=messages.machine.machine_deliver_to_node(
-              node_id=node_handle['id'], message=message, sending_node_id=sending_node_id),
-          transport=node_handle['transport'])
+      self._send_without_error_simulation(*send_args)
+
+  def _postpone_ms(self):
+    return (self._now_ms + NodeManager.MIN_POSTPONE_TIME_MS +
+            int(self._random.random() * (NodeManager.MAX_POSTPONE_TIME_MS - NodeManager.MIN_POSTPONE_TIME_MS)))
+
+  def _send_without_error_simulation(self, node_handle, message, sending_node_id):
+    '''Like `NodeManager.send`, but without checking for simulated errors'''
+    logger.debug(
+        "Sending message from {sending_node_id} to {recipient_handle}: {message}",
+        extra={
+            'sending_node_id': sending_node_id,
+            'recipient_handle': node_handle,
+            'message': message
+        })
+
+    fernet = Fernet(node_handle['fernet_key'])
+    encoded_message = fernet.encrypt(json.dumps(message).encode(messages.ENCODING)).decode(messages.ENCODING)
+    self._send_to_machine(
+        message=messages.machine.machine_deliver_to_node(
+            node_id=node_handle['id'], message=encoded_message, sending_node_id=sending_node_id),
+        transport=node_handle['transport'])
 
   def spawn_node(self, node_config):
     # TODO(KK): Rethink how the machine for each node is chosen.  Always running on the same machine
@@ -231,44 +300,95 @@ class NodeManager(MachineController):
     if message['type'] == 'machine_start_node':
       self.start_node(message['node_config'])
     elif message['type'] == 'machine_deliver_to_node':
-      if self._should_simulate_incomming_message_drop(message):
-        logger.info('Simulating a drop of an incomming message', extra={'sender_id': message['sending_node_id']})
+      sender_id = message['sending_node_id']
+      node_id = message['node_id']
+      node = self._get_node_by_id(node_id)
+
+      decoded_message = json.loads(
+          node.fernet.decrypt(message['message'].encode(messages.ENCODING)).decode(messages.ENCODING))
+
+      error_type = self._get_simulated_network_error(message, direction='outgoing')
+      receive_args = (node_id, decoded_message, sender_id)
+      if error_type:
+        logger.info(
+            'Simulating {error_type} of an outgoing message', extra={
+                'sender_id': sender_id,
+                'error_type': error_type
+            })
+        if error_type == 'drop':
+          pass
+        elif error_type == 'reorder':
+          heapq.heappush(self._pending_events, (self._postpone_ms(), 'receive', receive_args))
+        elif error_type == 'duplicate':
+          self._receive_without_error_simulation(node_id, decoded_message, sender_id)
+          heapq.heappush(self._pending_events, (self._postpone_ms(), 'receive', receive_args))
+        else:
+          raise errors.InternalError("Unrecognized error type '{}'".format(error_type))
       else:
-        node_id = message['node_id']
-        node = self._get_node_by_id(node_id)
-        node.receive(message=message['message'], sender_id=message['sending_node_id'])
+        self._receive_without_error_simulation(*receive_args)
     else:
       logger.error("Unrecognized message type {unrecognized_type}", extra={'unrecognized_type': message['type']})
+
+  def _receive_without_error_simulation(self, node_id, message, sender_id):
+    '''receive a message to the proper node without any network error simulations'''
+    node = self._get_node_by_id(node_id)
+    logger.info(
+        "Node is receiving message of type {message_type} from {sender_id}",
+        extra={
+            'message_type': message['type'],
+            'sender_id': sender_id,
+        })
+    node.receive(message=message, sender_id=sender_id)
 
   def elapse_nodes(self, ms):
     '''
     Elapse ms milliseconds of time on all nodes managed by self.
 
+    Also, simulate any postponed network activity from network errors generated earlier.
+
     :param int ms: The number of milliseconds to elapse.
     '''
+
+    final_time_ms = self._now_ms + ms
+
+    while self._pending_events and self._pending_events[0][0] <= final_time_ms:
+      t, send_or_receive, args = heapq.heappop(self._pending_events)
+      if send_or_receive == 'send':
+        self._send_without_error_simulation(*args)
+      elif send_or_receive == 'receive':
+        self._receive_without_error_simulation(*args)
+      else:
+        raise errors.InternalError("Unrecognized 'send' or 'receive': {}".format(send_or_receive))
+
+      self._elapse_nodes_without_simulated_network_messages(t - self._now_ms)
+      self._now_ms = t
+
+    self._elapse_nodes_without_simulated_network_messages(final_time_ms - self._now_ms)
+    self._now_ms = final_time_ms
+
+  def _elapse_nodes_without_simulated_network_messages(self, ms):
+    '''Like elapse_nodes, but do no simulate any postponed network activity.'''
     # Elapsing time on nodes can create new nodes, thus changing the list of nodes.
     # Therefore, to avoid updating a dictionary while iterating over it, we make a copy
     for node in list(self._node_by_id.values()):
       node.elapse(ms)
 
-  def _should_simulate_incomming_message_drop(self, message):
+  def _get_simulated_network_error(self, message, direction):
     '''
-    Determine whether we should simulate dropping an incomming message.
-
-    :param message: A message of type 'machine_deliver_to_node'
-    :type message: :ref:`message`
-    :return: True iff we should simulate a drop of this message.
-    :rtype: bool
-    '''
-    return False
-
-  def _should_simulate_outgoing_message_drop(self, message):
-    '''
-    Determine whether we should simulate dropping an outgoing message.
+    Determine whether we should simulate a network error on a message.
 
     :param message: Any message that a `Node` on this machine is trying to send.
     :type message: :ref:`message`
-    :return: True iff we should simulate a drop of this message.
-    :rtype: bool
+    :param str direction: 'incomming' or 'outgoing'. Indicates whether the message is being received or sent respectively.
+
+    :return: The error type to simulate, or `None` if we should not simulate a network error at all.
+    :rtype: str
     '''
+    network_errors_config = self._network_errors_config[direction]
+    for error_type, match_parameters in network_errors_config.items():
+      rate = match_parameters['rate']
+      regexp = match_parameters['regexp']
+      if rate > 0.0 and self._random.random() < rate and regexp.match(json.dumps(message)):
+        return error_type
+
     return False

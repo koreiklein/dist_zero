@@ -87,6 +87,8 @@ class TestLongRunningSum(object):
 
     Each input should randomly send some increment messages.
     '''
+    rand = random.Random('static seed')
+
     time_per_spawn_ms = total_time_ms / n_inputs
     start_time_ms = self.demo.now_ms()
     end_time_ms = start_time_ms + total_time_ms
@@ -108,8 +110,8 @@ class TestLongRunningSum(object):
               machine_controller_handle=self.machine_handles[i % len(self.machine_handles)],
               recorded_user=RecordedUser(
                   'user {}'.format(i),
-                  [(t, messages.sum.increment(int(random.random() * 20)))
-                   for t in sorted(random.random() * remaining_time_ms
+                  [(t, messages.sum.increment(int(rand.random() * 20)))
+                   for t in sorted(rand.random() * remaining_time_ms
                                    for x in range(int(remaining_time_ms / AVE_INTER_MESSAGE_TIME_MS)))])))
 
     # Let things settle down
