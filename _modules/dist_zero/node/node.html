@@ -43,54 +43,45 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">LoggerAdapter</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;cur_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">})</span>
 
   <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">())</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">node_handle</span><span class="o">=</span><span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
 
-<div class="viewcode-block" id="Node.set_transport"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.set_transport">[docs]</a>  <span class="k">def</span> <span class="nf">set_transport</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">transport</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="Node.new_handle"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.new_handle">[docs]</a>  <span class="k">def</span> <span class="nf">new_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">for_node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Set the transport to use when this node sends messages to node.</span>
+<span class="sd">    Create a new handle for sending to self.</span>
 
-<span class="sd">    :param node: The :ref:`handle` of a node.</span>
-<span class="sd">    :type node: :ref:`handle`</span>
+<span class="sd">    :param str for_node_id: The id of the node that will be sending via the new handle.</span>
+<span class="sd">    :return: A :ref:`handle` that the ``for_node`` can use to send messages to self.</span>
+<span class="sd">    :rtype: :ref:`handle`</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">set_transport</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span> <span class="n">other</span><span class="p">,</span> <span class="n">transport</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">(</span><span class="n">transport</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">new_transport</span><span class="p">(</span><span class="n">node</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">for_node_id</span><span class="o">=</span><span class="n">for_node_id</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="Node.convert_transport_for"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.convert_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">convert_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="p">):</span>
+<div class="viewcode-block" id="Node.transfer_handle"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.transfer_handle">[docs]</a>  <span class="k">def</span> <span class="nf">transfer_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">,</span> <span class="n">for_node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Given a transport that self can use to link to kid,</span>
-<span class="sd">    create a new transport that the other node can use to link to kid.</span>
+<span class="sd">    Given a handle for use by self, create a new handle for use by another node.</span>
 
-<span class="sd">    :param str sender_id: The id of the node that will be sending.</span>
+<span class="sd">    :param handle: A :ref:`handle` that self can use to send to another node.</span>
+<span class="sd">    :type handle: :ref:`handle`</span>
+<span class="sd">    :param str for_node_id: The id of some other node.</span>
 
-<span class="sd">    :param str receiver: The id of the node that will be receiving.</span>
-
-<span class="sd">    :return: A transport that other can use to talk to kid.</span>
-<span class="sd">    :rtype: :ref:`transport`</span>
+<span class="sd">    :return: A :ref:`handle` that the ``for_node`` will be able to use to send to the node referenced by handle.</span>
+<span class="sd">    :rtype: :ref:`handle`</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">convert_transport_for</span><span class="p">(</span>
-        <span class="n">current_sender</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">handle</span><span class="p">(),</span> <span class="n">new_sender_id</span><span class="o">=</span><span class="n">sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="o">=</span><span class="n">receiver_id</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+        <span class="s1">&#39;controller_id&#39;</span><span class="p">:</span> <span class="n">handle</span><span class="p">[</span><span class="s1">&#39;controller_id&#39;</span><span class="p">],</span>
+        <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">transfer_transport</span><span class="p">(</span><span class="n">transport</span><span class="o">=</span><span class="n">handle</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">],</span> <span class="n">for_node_id</span><span class="o">=</span><span class="n">for_node_id</span><span class="p">),</span>
+    <span class="p">}</span></div>
 
-<div class="viewcode-block" id="Node.new_transport_for"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.new_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">new_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Create a transport that a node can use to link to self.</span>
-
-<span class="sd">    :param str node_id: The id of some node.</span>
-
-<span class="sd">    :return: A transport that node can use to link to self.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">new_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">node_id</span><span class="p">)</span></div>
+  <span class="k">def</span> <span class="nf">_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="s1">&#39;controller_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="n">transport</span><span class="p">,</span>
+    <span class="p">}</span>
 
 <div class="viewcode-block" id="Node.initialize"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;Called exactly once, when a node starts to run.&#39;&#39;&#39;</span>
     <span class="k">pass</span></div>
-
-<div class="viewcode-block" id="Node.handle"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.handle">[docs]</a>  <span class="k">def</span> <span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    This node&#39;s handle.</span>
-
-<span class="sd">    :return: A :ref:`handle` for the current node.</span>
-<span class="sd">    :rtype: :ref:`handle`</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;Abstract Superclass&#39;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Node.elapse"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -100,15 +91,14 @@
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;Abstract Superclass&#39;</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="Node.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender</span><span class="p">):</span>
+<div class="viewcode-block" id="Node.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Receive a message from some sender.</span>
 
 <span class="sd">    :param message: A :ref:`message` from one of the senders to this node.</span>
 <span class="sd">    :type message: :ref:`message`</span>
 
-<span class="sd">    :param sender: The :ref:`handle` of the node that sent the message.</span>
-<span class="sd">    :type sender: :ref:`handle`</span>
+<span class="sd">    :param str sender_id: The id of the node that sent the message.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;Abstract Superclass&#39;</span><span class="p">)</span></div></div>
 </pre></div>

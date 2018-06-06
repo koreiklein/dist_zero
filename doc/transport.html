@@ -39,11 +39,6 @@ order to communicate with another <a class="reference internal" href="nodes.html
 to a unique “receiving” <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</p>
 <p>Transports should include all the network information about the receiving <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>, along with any cryptographic
 information used to secure the connection.</p>
-<p>A transport that allows for sending messages to a node must be created either:</p>
-<ul class="simple">
-<li>by the receiving <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>, from the node_id of the sending <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>. (see <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.new_transport_for" title="dist_zero.node.node.Node.new_transport_for"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.new_transport_for</span></code></a>)</li>
-<li>by converting a separate transport to a new sender. (see <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.convert_transport_for" title="dist_zero.node.node.Node.convert_transport_for"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.convert_transport_for</span></code></a>)</li>
-</ul>
 </div>
 
 

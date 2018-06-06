@@ -51,8 +51,8 @@
 <span class="k">def</span> <span class="nf">demo</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
   <span class="n">result</span> <span class="o">=</span> <span class="n">Demo</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">param</span><span class="p">)</span>
   <span class="n">result</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-  <span class="k">yield</span> <span class="n">result</span>
-  <span class="n">result</span><span class="o">.</span><span class="n">tear_down</span><span class="p">()</span>
+  <span class="n">request</span><span class="o">.</span><span class="n">addfinalizer</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">tear_down</span><span class="p">())</span>
+  <span class="k">return</span> <span class="n">result</span>
 
 
 <span class="nd">@pytest</span><span class="o">.</span><span class="n">fixture</span><span class="p">(</span><span class="n">params</span><span class="o">=</span><span class="p">[</span>
@@ -62,8 +62,8 @@
 <span class="k">def</span> <span class="nf">no_cloud_demo</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
   <span class="n">result</span> <span class="o">=</span> <span class="n">Demo</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">param</span><span class="p">)</span>
   <span class="n">result</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-  <span class="k">yield</span> <span class="n">result</span>
-  <span class="n">result</span><span class="o">.</span><span class="n">tear_down</span><span class="p">()</span>
+  <span class="n">request</span><span class="o">.</span><span class="n">addfinalizer</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">tear_down</span><span class="p">())</span>
+  <span class="k">return</span> <span class="n">result</span>
 
 
 <span class="nd">@pytest</span><span class="o">.</span><span class="n">fixture</span><span class="p">(</span><span class="n">params</span><span class="o">=</span><span class="p">[</span>
@@ -116,7 +116,7 @@
       <span class="bp">self</span><span class="o">.</span><span class="n">cloud_spawner</span><span class="o">.</span><span class="n">clean_all</span><span class="p">()</span></div>
 
   <span class="k">def</span> <span class="nf">_set_system_by_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">system_id</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">system_id</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;System&#39;</span><span class="p">)</span>
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="n">spawners</span><span class="o">.</span><span class="n">MODE_SIMULATED</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">spawner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">simulated_spawner</span> <span class="o">=</span> <span class="n">SimulatedSpawner</span><span class="p">(</span>
           <span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">system_id</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="s1">&#39;TestSimulatedSpawner&#39;</span><span class="p">)</span>
@@ -160,7 +160,8 @@
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
       <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;machine </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="p">)</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span> <span class="o">+=</span> <span class="mi">1</span>
-      <span class="n">configs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">machine_config</span><span class="p">(</span><span class="n">machine_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">machine_controller_id</span><span class="o">=</span><span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">()))</span>
+      <span class="n">configs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+          <span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">machine_config</span><span class="p">(</span><span class="n">machine_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">machine_controller_id</span><span class="o">=</span><span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;Machine&#39;</span><span class="p">)))</span>
 
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">create_machines</span><span class="p">(</span><span class="n">configs</span><span class="p">)</span></div>
 

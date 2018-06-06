@@ -46,46 +46,20 @@ runs a single <a class="reference internal" href="#dist_zero.machine.NodeManager
 <em class="property">class </em><code class="descclassname">dist_zero.machine.</code><code class="descname">MachineController</code><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController" title="Permalink to this definition">¶</a></dt>
 <dd><p>The interface that <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> instances will use to interact with the underlying hardware.</p>
 <dl class="method">
-<dt id="dist_zero.machine.MachineController.convert_transport_for">
-<code class="descname">convert_transport_for</code><span class="sig-paren">(</span><em>current_sender</em>, <em>new_sender_id</em>, <em>receiver_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.convert_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.convert_transport_for" title="Permalink to this definition">¶</a></dt>
-<dd><p>If there exists a transport that a node on self uses to talk to a receiver,
-this method creates a new transport allowing a different node to talk to the same receiver.</p>
+<dt id="dist_zero.machine.MachineController.new_transport">
+<code class="descname">new_transport</code><span class="sig-paren">(</span><em>node</em>, <em>for_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.new_transport"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.new_transport" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a new transport for sending to a local node.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
-<li><strong>current_sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – A node managed by self.</li>
-<li><strong>new_sender</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Any node id</li>
-<li><strong>receiver</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Any node id for which current_sender has a working transport.</li>
+<li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – A <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> managed by self.</li>
+<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of some other <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a></li>
 </ul>
 </td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A transport that new_sender can use to talk to receiver</p>
-</td>
-</tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a></p>
-</td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.machine.MachineController.new_transport_for">
-<code class="descname">new_transport_for</code><span class="sig-paren">(</span><em>local_node_id</em>, <em>remote_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.new_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.new_transport_for" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a transport that a remote node can use to link to a node on this machine.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
-<li><strong>local_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of a node on this machine.</li>
-<li><strong>remote_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of any node.</li>
-</ul>
-</td>
-</tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A transport that the remote node can use to send to the local node.</p>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> that the other <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> can use to send to <code class="docutils literal notranslate"><span class="pre">node</span></code>.</p>
 </td>
 </tr>
 <tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a></p>
@@ -97,9 +71,8 @@ this method creates a new transport allowing a different node to talk to the sam
 
 <dl class="method">
 <dt id="dist_zero.machine.MachineController.send">
-<code class="descname">send</code><span class="sig-paren">(</span><em>node_handle</em>, <em>message</em>, <em>sending_node_handle</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.send"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.send" title="Permalink to this definition">¶</a></dt>
-<dd><p>Send a message to a node either managed by self, or linked to self.
-A transport must be set for the sender to send to the destination node.</p>
+<code class="descname">send</code><span class="sig-paren">(</span><em>node_handle</em>, <em>message</em>, <em>sending_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.send"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.send" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a message to a node either managed by self, or linked to self.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -107,25 +80,7 @@ A transport must be set for the sender to send to the destination node.</p>
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of a node</li>
 <li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A message for that node</li>
-<li><strong>sending_node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of the sending node.</li>
-</ul>
-</td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.machine.MachineController.set_transport">
-<code class="descname">set_transport</code><span class="sig-paren">(</span><em>sender</em>, <em>receiver</em>, <em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.set_transport"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.set_transport" title="Permalink to this definition">¶</a></dt>
-<dd><p>Set the transport for messages from sender to receiver.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
-<li><strong>sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the sending node. It must be managed by self.</li>
-<li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the receiving node.</li>
+<li><strong>sending_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the sending node.</li>
 </ul>
 </td>
 </tr>
@@ -136,7 +91,7 @@ A transport must be set for the sender to send to the destination node.</p>
 <dl class="method">
 <dt id="dist_zero.machine.MachineController.spawn_node">
 <code class="descname">spawn_node</code><span class="sig-paren">(</span><em>node_config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.spawn_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.spawn_node" title="Permalink to this definition">¶</a></dt>
-<dd><p>Start creating a new node on a linked machine.</p>
+<dd><p>Asynchronously trigger the creation of a new node on a linked machine.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -147,10 +102,34 @@ A transport must be set for the sender to send to the destination node.</p>
 </ul>
 </td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The handle of the newly created node.</p>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The id of the newly created node.</p>
 </td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a></p>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.MachineController.transfer_transport">
+<code class="descname">transfer_transport</code><span class="sig-paren">(</span><em>transport</em>, <em>for_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.transfer_transport"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.transfer_transport" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a new transport suitable for a distinct sender.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>transport</strong> (<a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a>) – A <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> that some local sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> can use to send to some receiver <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</li>
+<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of some new sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> that the new sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> can use to send to the same receiver <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a></p>
 </td>
 </tr>
 </tbody>
@@ -186,32 +165,6 @@ where message is a <a class="reference internal" href="message.html#message"><sp
 </tr>
 </tbody>
 </table>
-<dl class="method">
-<dt id="dist_zero.machine.NodeManager.convert_transport_for">
-<code class="descname">convert_transport_for</code><span class="sig-paren">(</span><em>current_sender</em>, <em>new_sender_id</em>, <em>receiver_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.convert_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.convert_transport_for" title="Permalink to this definition">¶</a></dt>
-<dd><p>If there exists a transport that a node on self uses to talk to a receiver,
-this method creates a new transport allowing a different node to talk to the same receiver.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
-<li><strong>current_sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – A node managed by self.</li>
-<li><strong>new_sender</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Any node id</li>
-<li><strong>receiver</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Any node id for which current_sender has a working transport.</li>
-</ul>
-</td>
-</tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A transport that new_sender can use to talk to receiver</p>
-</td>
-</tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a></p>
-</td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
-
 <dl class="method">
 <dt id="dist_zero.machine.NodeManager.elapse_nodes">
 <code class="descname">elapse_nodes</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.elapse_nodes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.elapse_nodes" title="Permalink to this definition">¶</a></dt>
@@ -258,20 +211,20 @@ this method creates a new transport allowing a different node to talk to the sam
 </dd></dl>
 
 <dl class="method">
-<dt id="dist_zero.machine.NodeManager.new_transport_for">
-<code class="descname">new_transport_for</code><span class="sig-paren">(</span><em>local_node_id</em>, <em>remote_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.new_transport_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.new_transport_for" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a transport that a remote node can use to link to a node on this machine.</p>
+<dt id="dist_zero.machine.NodeManager.new_transport">
+<code class="descname">new_transport</code><span class="sig-paren">(</span><em>node</em>, <em>for_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.new_transport"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.new_transport" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a new transport for sending to a local node.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
-<li><strong>local_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of a node on this machine.</li>
-<li><strong>remote_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of any node.</li>
+<li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – A <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> managed by self.</li>
+<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of some other <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a></li>
 </ul>
 </td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A transport that the remote node can use to send to the local node.</p>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> that the other <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> can use to send to <code class="docutils literal notranslate"><span class="pre">node</span></code>.</p>
 </td>
 </tr>
 <tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a></p>
@@ -283,9 +236,8 @@ this method creates a new transport allowing a different node to talk to the sam
 
 <dl class="method">
 <dt id="dist_zero.machine.NodeManager.send">
-<code class="descname">send</code><span class="sig-paren">(</span><em>node_handle</em>, <em>message</em>, <em>sending_node_handle</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.send"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.send" title="Permalink to this definition">¶</a></dt>
-<dd><p>Send a message to a node either managed by self, or linked to self.
-A transport must be set for the sender to send to the destination node.</p>
+<code class="descname">send</code><span class="sig-paren">(</span><em>node_handle</em>, <em>message</em>, <em>sending_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.send"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.send" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a message to a node either managed by self, or linked to self.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -293,25 +245,7 @@ A transport must be set for the sender to send to the destination node.</p>
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of a node</li>
 <li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A message for that node</li>
-<li><strong>sending_node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of the sending node.</li>
-</ul>
-</td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.machine.NodeManager.set_transport">
-<code class="descname">set_transport</code><span class="sig-paren">(</span><em>sender</em>, <em>receiver</em>, <em>transport</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.set_transport"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.set_transport" title="Permalink to this definition">¶</a></dt>
-<dd><p>Set the transport for messages from sender to receiver.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
-<li><strong>sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the sending node. It must be managed by self.</li>
-<li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the receiving node.</li>
+<li><strong>sending_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the sending node.</li>
 </ul>
 </td>
 </tr>
@@ -322,7 +256,7 @@ A transport must be set for the sender to send to the destination node.</p>
 <dl class="method">
 <dt id="dist_zero.machine.NodeManager.spawn_node">
 <code class="descname">spawn_node</code><span class="sig-paren">(</span><em>node_config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.spawn_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.spawn_node" title="Permalink to this definition">¶</a></dt>
-<dd><p>Start creating a new node on a linked machine.</p>
+<dd><p>Asynchronously trigger the creation of a new node on a linked machine.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -333,10 +267,34 @@ A transport must be set for the sender to send to the destination node.</p>
 </ul>
 </td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The handle of the newly created node.</p>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The id of the newly created node.</p>
 </td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a></p>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.NodeManager.transfer_transport">
+<code class="descname">transfer_transport</code><span class="sig-paren">(</span><em>transport</em>, <em>for_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.transfer_transport"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.transfer_transport" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a new transport suitable for a distinct sender.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>transport</strong> (<a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a>) – A <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> that some local sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> can use to send to some receiver <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</li>
+<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of some new sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> that the new sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> can use to send to the same receiver <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a></p>
 </td>
 </tr>
 </tbody>

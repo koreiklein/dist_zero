@@ -47,67 +47,52 @@
 <span class="sd">  The interface that `Node` instances will use to interact with the underlying hardware.</span>
 <span class="sd">  &#39;&#39;&#39;</span>
 
-<div class="viewcode-block" id="MachineController.set_transport"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.MachineController.set_transport">[docs]</a>  <span class="k">def</span> <span class="nf">set_transport</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="n">receiver</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Set the transport for messages from sender to receiver.</span>
-
-<span class="sd">    :param sender: The :ref:`handle` of the sending node. It must be managed by self.</span>
-<span class="sd">    :type sender: :ref:`handle`</span>
-
-<span class="sd">    :param receiver: The :ref:`handle` of the receiving node.</span>
-<span class="sd">    :type receiver: :ref:`handle`</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div>
-
-<div class="viewcode-block" id="MachineController.convert_transport_for"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.MachineController.convert_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">convert_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">current_sender</span><span class="p">,</span> <span class="n">new_sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    If there exists a transport that a node on self uses to talk to a receiver,</span>
-<span class="sd">    this method creates a new transport allowing a different node to talk to the same receiver.</span>
-
-<span class="sd">    :param current_sender: A node managed by self.</span>
-<span class="sd">    :type current_sender: :ref:`handle`</span>
-<span class="sd">    :param str new_sender: Any node id</span>
-<span class="sd">    :param str receiver: Any node id for which current_sender has a working transport.</span>
-
-<span class="sd">    :return: A transport that new_sender can use to talk to receiver</span>
-<span class="sd">    :rtype: :ref:`transport`</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div>
-
-<div class="viewcode-block" id="MachineController.send"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.MachineController.send">[docs]</a>  <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node_handle</span><span class="p">):</span>
+<div class="viewcode-block" id="MachineController.send"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.MachineController.send">[docs]</a>  <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Send a message to a node either managed by self, or linked to self.</span>
-<span class="sd">    A transport must be set for the sender to send to the destination node.</span>
 
 <span class="sd">    :param handle node_handle: The handle of a node</span>
 <span class="sd">    :type node_handle: :ref:`handle`</span>
 <span class="sd">    :param message message: A message for that node</span>
 <span class="sd">    :type message: :ref:`message`</span>
-<span class="sd">    :param sending_node_handle: The handle of the sending node.</span>
-<span class="sd">    :type sending_node_handle: :ref:`handle`</span>
+<span class="sd">    :param str sending_node_id: The id of the sending node.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="MachineController.spawn_node"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.MachineController.spawn_node">[docs]</a>  <span class="k">def</span> <span class="nf">spawn_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_config</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Start creating a new node on a linked machine.</span>
+<span class="sd">    Asynchronously trigger the creation of a new node on a linked machine.</span>
 
 <span class="sd">    :param json node_config: A JSON serializable message that describes how to run the node.</span>
 <span class="sd">    :param on_machine: The handle of a :any:`MachineController`.</span>
 <span class="sd">    :type on_machine: :ref:`handle`</span>
-<span class="sd">    :return: The handle of the newly created node.</span>
-<span class="sd">    :rtype: :ref:`handle`</span>
+<span class="sd">    :return: The id of the newly created node.</span>
+<span class="sd">    :rtype: str</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="MachineController.new_transport_for"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.MachineController.new_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">new_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">local_node_id</span><span class="p">,</span> <span class="n">remote_node_id</span><span class="p">):</span>
+<div class="viewcode-block" id="MachineController.new_transport"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.MachineController.new_transport">[docs]</a>  <span class="k">def</span> <span class="nf">new_transport</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">for_node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Create a transport that a remote node can use to link to a node on this machine.</span>
+<span class="sd">    Create a new transport for sending to a local node.</span>
 
-<span class="sd">    :param str local_node_id: The id of a node on this machine.</span>
-<span class="sd">    :param str remote_node_id: The id of any node.</span>
+<span class="sd">    :param node: A `Node` managed by self.</span>
+<span class="sd">    :type node: `Node`</span>
+<span class="sd">    :param str for_node_id: The id of some other `Node`</span>
 
-<span class="sd">    :return: A transport that the remote node can use to send to the local node.</span>
+<span class="sd">    :return: A :ref:`transport` that the other `Node` can use to send to ``node``.</span>
+<span class="sd">    :rtype: :ref:`transport`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MachineController.transfer_transport"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.MachineController.transfer_transport">[docs]</a>  <span class="k">def</span> <span class="nf">transfer_transport</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transport</span><span class="p">,</span> <span class="n">for_node_id</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Create a new transport suitable for a distinct sender.</span>
+
+<span class="sd">    :param transport: A :ref:`transport` that some local sender `Node` can use to send to some receiver `Node`.</span>
+<span class="sd">    :type transport: :ref:`transport`</span>
+<span class="sd">    :param str for_node_id: The id of some new sender `Node`.</span>
+
+<span class="sd">    :return: A :ref:`transport` that the new sender `Node` can use to send to the same receiver `Node`.</span>
 <span class="sd">    :rtype: :ref:`transport`</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div></div>
@@ -150,35 +135,11 @@
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span> <span class="o">=</span> <span class="n">send_to_machine</span>
 
-    <span class="c1"># A dict taking a pair (sender_node_id, receiver_node_id) to the transport to be used to send</span>
-    <span class="c1"># from that sender to that receiver.</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_transports</span> <span class="o">=</span> <span class="p">{}</span>
-
-<div class="viewcode-block" id="NodeManager.set_transport"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.set_transport">[docs]</a>  <span class="k">def</span> <span class="nf">set_transport</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="n">receiver</span><span class="p">,</span> <span class="n">transport</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_transports</span><span class="p">[(</span><span class="n">sender</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">receiver</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])]</span> <span class="o">=</span> <span class="n">transport</span></div>
-
-<div class="viewcode-block" id="NodeManager.convert_transport_for"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.convert_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">convert_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">current_sender</span><span class="p">,</span> <span class="n">new_sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="p">):</span>
-    <span class="n">old_transport</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_transport</span><span class="p">(</span><span class="n">current_sender</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">receiver_id</span><span class="p">)</span>
-
-    <span class="c1"># TODO(KK): Once we start to add security to transports, it will no longer be possible</span>
-    <span class="c1">#   to re-use the old transport as is.</span>
-    <span class="n">new_transport</span> <span class="o">=</span> <span class="n">old_transport</span>
-
-    <span class="k">return</span> <span class="n">new_transport</span></div>
-
-  <span class="k">def</span> <span class="nf">_get_transport</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="p">):</span>
-    <span class="n">transport</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_transports</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
-
-    <span class="k">if</span> <span class="n">transport</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-      <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">NoTransportError</span><span class="p">(</span><span class="n">sender_id</span><span class="o">=</span><span class="n">sender_id</span><span class="p">,</span> <span class="n">receiver_id</span><span class="o">=</span><span class="n">receiver_id</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-      <span class="k">return</span> <span class="n">transport</span>
-
-<div class="viewcode-block" id="NodeManager.send"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.send">[docs]</a>  <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node_handle</span><span class="p">):</span>
+<div class="viewcode-block" id="NodeManager.send"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.send">[docs]</a>  <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span><span class="p">(</span>
         <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">machine_deliver_to_node</span><span class="p">(</span>
-            <span class="n">node</span><span class="o">=</span><span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sending_node</span><span class="o">=</span><span class="n">sending_node_handle</span><span class="p">),</span>
-        <span class="n">transport</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_transport</span><span class="p">(</span><span class="n">sending_node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]))</span></div>
+            <span class="n">node_id</span><span class="o">=</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="o">=</span><span class="n">sending_node_id</span><span class="p">),</span>
+        <span class="n">transport</span><span class="o">=</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">])</span></div>
 
 <div class="viewcode-block" id="NodeManager.spawn_node"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.spawn_node">[docs]</a>  <span class="k">def</span> <span class="nf">spawn_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_config</span><span class="p">):</span>
     <span class="c1"># TODO(KK): Rethink how the machine for each node is chosen.  Always running on the same machine</span>
@@ -188,10 +149,13 @@
     <span class="c1"># Do it here so that simulated tests don&#39;t accidentally share data.</span>
     <span class="n">node_config</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">node_config</span><span class="p">))</span>
 
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_node</span><span class="p">(</span><span class="n">node_config</span><span class="p">)</span><span class="o">.</span><span class="n">handle</span><span class="p">()</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_node</span><span class="p">(</span><span class="n">node_config</span><span class="p">)</span><span class="o">.</span><span class="n">id</span></div>
 
-<div class="viewcode-block" id="NodeManager.new_transport_for"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.new_transport_for">[docs]</a>  <span class="k">def</span> <span class="nf">new_transport_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">local_node_id</span><span class="p">,</span> <span class="n">remote_node_id</span><span class="p">):</span>
+<div class="viewcode-block" id="NodeManager.new_transport"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.new_transport">[docs]</a>  <span class="k">def</span> <span class="nf">new_transport</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">for_node_id</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">ip_transport</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ip_host</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NodeManager.transfer_transport"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.transfer_transport">[docs]</a>  <span class="k">def</span> <span class="nf">transfer_transport</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transport</span><span class="p">,</span> <span class="n">for_node_id</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">transport</span><span class="p">)</span></div>
 
   <span class="k">def</span> <span class="nf">get_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">):</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_by_id</span><span class="p">[</span><span class="n">handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span>
@@ -201,7 +165,13 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">_output_node_state_by_id</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_state</span>
 
   <span class="k">def</span> <span class="nf">start_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_config</span><span class="p">):</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting new &#39;</span><span class="si">{node_type}</span><span class="s2">&#39; node&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;node_type&#39;</span><span class="p">:</span> <span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]})</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Starting new &#39;</span><span class="si">{node_type}</span><span class="s2">&#39; node </span><span class="si">{node_id}</span><span class="s2"> on machine &#39;</span><span class="si">{machine_name}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;node_type&#39;</span><span class="p">:</span> <span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_node_id_for_logs</span><span class="p">(</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]),</span>
+            <span class="s1">&#39;machine_name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+        <span class="p">})</span>
     <span class="k">if</span> <span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;LeafNode&#39;</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_output_node_state_by_id</span><span class="p">[</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;initial_state&#39;</span><span class="p">]</span>
       <span class="n">node</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">LeafNode</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span>
@@ -219,13 +189,12 @@
     <span class="n">node</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">node</span>
 
-  <span class="k">def</span> <span class="nf">_get_node_by_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">_get_node_by_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    :param node_handle: The handle of a node managed by self.</span>
-<span class="sd">    :type node_handle: :ref:`handle`</span>
+<span class="sd">    :param str node_id: The id of a node managed by self.</span>
 <span class="sd">    :return: The node instance itself.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_by_id</span><span class="p">[</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_by_id</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span>
 
 <div class="viewcode-block" id="NodeManager.handle_api_message"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.handle_api_message">[docs]</a>  <span class="k">def</span> <span class="nf">handle_api_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -246,24 +215,22 @@
           <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span>
           <span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">create_kid_config</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;new_node_name&#39;</span><span class="p">],</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;machine_controller_handle&#39;</span><span class="p">]),</span>
       <span class="p">}</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;api_new_transport&#39;</span><span class="p">:</span>
-      <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_by_id</span><span class="p">[</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;receiver&#39;</span><span class="p">][</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span>
-      <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-          <span class="s2">&quot;API getting new transport for sending from node </span><span class="si">{sender_id}</span><span class="s2"> node </span><span class="si">{receiver_id}</span><span class="s2">&quot;</span><span class="p">,</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;api_new_handle&#39;</span><span class="p">:</span>
+      <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_by_id</span><span class="p">[</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;local_node_id&#39;</span><span class="p">]]</span>
+      <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+          <span class="s2">&quot;API is creating a new handle for a new node </span><span class="si">{new_node_id}</span><span class="s2"> to send to the existing local node </span><span class="si">{local_node_id}</span><span class="s2">&quot;</span><span class="p">,</span>
           <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
-              <span class="s1">&#39;sender&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;sender&#39;</span><span class="p">],</span>
-              <span class="s1">&#39;sender_id&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;sender&#39;</span><span class="p">][</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
-              <span class="s1">&#39;receiver&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;receiver&#39;</span><span class="p">],</span>
-              <span class="s1">&#39;receiver_id&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;receiver&#39;</span><span class="p">][</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+              <span class="s1">&#39;local_node_id&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;local_node_id&#39;</span><span class="p">],</span>
+              <span class="s1">&#39;new_node_id&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;new_node_id&#39;</span><span class="p">],</span>
           <span class="p">})</span>
       <span class="k">return</span> <span class="p">{</span>
           <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span>
-          <span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">new_transport_for</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sender&#39;</span><span class="p">][</span><span class="s1">&#39;id&#39;</span><span class="p">]),</span>
+          <span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="n">for_node_id</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;new_node_id&#39;</span><span class="p">]),</span>
       <span class="p">}</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;api_get_output_state&#39;</span><span class="p">:</span>
       <span class="k">return</span> <span class="p">{</span>
           <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span>
-          <span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_output_state</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;node&#39;</span><span class="p">][</span><span class="s1">&#39;id&#39;</span><span class="p">]),</span>
+          <span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_output_state</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;node_id&#39;</span><span class="p">]),</span>
       <span class="p">}</span>
     <span class="k">else</span><span class="p">:</span>
       <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Unrecognized API message type </span><span class="si">{message_type}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;message_type&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]})</span>
@@ -278,11 +245,11 @@
   <span class="k">def</span> <span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;MachineController&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">}</span>
 
-  <span class="k">def</span> <span class="nf">_format_handle_for_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">):</span>
-    <span class="k">if</span> <span class="n">handle</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+  <span class="k">def</span> <span class="nf">_format_node_id_for_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">node_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
       <span class="k">return</span> <span class="s1">&#39;None&#39;</span>
     <span class="k">else</span><span class="p">:</span>
-      <span class="k">return</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">:</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">handle</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">],</span> <span class="n">handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">][:</span><span class="mi">8</span><span class="p">])</span>
+      <span class="k">return</span> <span class="n">node_id</span><span class="p">[:</span><span class="mi">8</span><span class="p">]</span>
 
 <div class="viewcode-block" id="NodeManager.handle_message"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.handle_message">[docs]</a>  <span class="k">def</span> <span class="nf">handle_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -294,18 +261,18 @@
     <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;machine_start_node&#39;</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">start_node</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;node_config&#39;</span><span class="p">])</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;machine_deliver_to_node&#39;</span><span class="p">:</span>
-      <span class="n">node_handle</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;node&#39;</span><span class="p">]</span>
+      <span class="n">node_id</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;node_id&#39;</span><span class="p">]</span>
       <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
           <span class="s2">&quot;Delivering message of type </span><span class="si">{message_type}</span><span class="s2"> to node </span><span class="si">{to_node_pretty}</span><span class="s2"> from node </span><span class="si">{from_node_pretty}</span><span class="s2">&quot;</span><span class="p">,</span>
           <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
               <span class="s1">&#39;message_type&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">][</span><span class="s1">&#39;type&#39;</span><span class="p">],</span>
-              <span class="s1">&#39;to_node&#39;</span><span class="p">:</span> <span class="n">node_handle</span><span class="p">,</span>
-              <span class="s1">&#39;from_node&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;sending_node&#39;</span><span class="p">],</span>
-              <span class="s1">&#39;to_node_pretty&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_handle_for_logs</span><span class="p">(</span><span class="n">node_handle</span><span class="p">),</span>
-              <span class="s1">&#39;from_node_pretty&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_handle_for_logs</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sending_node&#39;</span><span class="p">]),</span>
+              <span class="s1">&#39;to_node_id&#39;</span><span class="p">:</span> <span class="n">node_id</span><span class="p">,</span>
+              <span class="s1">&#39;from_node_id&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;sending_node_id&#39;</span><span class="p">],</span>
+              <span class="s1">&#39;to_node_pretty&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_node_id_for_logs</span><span class="p">(</span><span class="n">node_id</span><span class="p">),</span>
+              <span class="s1">&#39;from_node_pretty&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_node_id_for_logs</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sending_node_id&#39;</span><span class="p">]),</span>
           <span class="p">})</span>
-      <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_node_by_handle</span><span class="p">(</span><span class="n">node_handle</span><span class="p">)</span>
-      <span class="n">node</span><span class="o">.</span><span class="n">receive</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">],</span> <span class="n">sender</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sending_node&#39;</span><span class="p">])</span>
+      <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_node_by_id</span><span class="p">(</span><span class="n">node_id</span><span class="p">)</span>
+      <span class="n">node</span><span class="o">.</span><span class="n">receive</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">],</span> <span class="n">sender_id</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sending_node_id&#39;</span><span class="p">])</span>
     <span class="k">else</span><span class="p">:</span>
       <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Unrecognized message type </span><span class="si">{unrecognized_type}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;unrecognized_type&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]})</span></div>
 

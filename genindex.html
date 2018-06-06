@@ -76,14 +76,8 @@
 </li>
       <li><a href="doc/machine_runner.html#dist_zero.machine_runner.MachineRunner.configure_logging">configure_logging() (dist_zero.machine_runner.MachineRunner method)</a>
 </li>
-      <li><a href="doc/machine.html#dist_zero.machine.MachineController.convert_transport_for">convert_transport_for() (dist_zero.machine.MachineController method)</a>
-
-      <ul>
-        <li><a href="doc/machine.html#dist_zero.machine.NodeManager.convert_transport_for">(dist_zero.machine.NodeManager method)</a>
+      <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.create_kid">create_kid() (dist_zero.system_controller.SystemController method)</a>
 </li>
-        <li><a href="doc/nodes.html#dist_zero.node.node.Node.convert_transport_for">(dist_zero.node.node.Node method)</a>
-</li>
-      </ul></li>
       <li><a href="doc/nodes.html#dist_zero.node.io.InternalNode.create_kid_config">create_kid_config() (dist_zero.node.io.InternalNode method)</a>
 
       <ul>
@@ -116,8 +110,6 @@
         <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.create_machines">(dist_zero.system_controller.SystemController method)</a>
 </li>
       </ul></li>
-      <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.create_transport_for">create_transport_for() (dist_zero.system_controller.SystemController method)</a>
-</li>
   </ul></td>
 </tr></table>
 
@@ -204,12 +196,14 @@
 <h2 id="G">G</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.get_machine_controller">get_machine_controller() (dist_zero.spawners.simulator.SimulatedSpawner method)</a>
+      <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.generate_new_handle">generate_new_handle() (dist_zero.system_controller.SystemController method)</a>
 </li>
-      <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.get_output_state">get_output_state() (dist_zero.system_controller.SystemController method)</a>
+      <li><a href="doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.get_machine_controller">get_machine_controller() (dist_zero.spawners.simulator.SimulatedSpawner method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.get_output_state">get_output_state() (dist_zero.system_controller.SystemController method)</a>
+</li>
       <li><a href="doc/virtual.html#dist_zero.spawners.docker.DockerSpawner.get_running_containers">get_running_containers() (dist_zero.spawners.docker.DockerSpawner method)</a>
 </li>
       <li><a href="doc/virtual.html#dist_zero.spawners.docker.DockerSpawner.get_stopped_containers">get_stopped_containers() (dist_zero.spawners.docker.DockerSpawner method)</a>
@@ -220,20 +214,10 @@
 <h2 id="H">H</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="doc/nodes.html#dist_zero.node.io.InternalNode.handle">handle() (dist_zero.node.io.InternalNode method)</a>
-
-      <ul>
-        <li><a href="doc/nodes.html#dist_zero.node.io.LeafNode.handle">(dist_zero.node.io.LeafNode method)</a>
-</li>
-        <li><a href="doc/nodes.html#dist_zero.node.node.Node.handle">(dist_zero.node.node.Node method)</a>
-</li>
-        <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.handle">(dist_zero.node.sum.SumNode method)</a>
-</li>
-      </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/machine.html#dist_zero.machine.NodeManager.handle_api_message">handle_api_message() (dist_zero.machine.NodeManager method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/machine.html#dist_zero.machine.NodeManager.handle_message">handle_message() (dist_zero.machine.NodeManager method)</a>
 </li>
   </ul></td>
@@ -242,9 +226,11 @@
 <h2 id="I">I</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="doc/nodes.html#dist_zero.node.io.LeafNode.initialize">initialize() (dist_zero.node.io.LeafNode method)</a>
+      <li><a href="doc/nodes.html#dist_zero.node.io.InternalNode.initialize">initialize() (dist_zero.node.io.InternalNode method)</a>
 
       <ul>
+        <li><a href="doc/nodes.html#dist_zero.node.io.LeafNode.initialize">(dist_zero.node.io.LeafNode method)</a>
+</li>
         <li><a href="doc/nodes.html#dist_zero.node.node.Node.initialize">(dist_zero.node.node.Node method)</a>
 </li>
         <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.initialize">(dist_zero.node.sum.SumNode method)</a>
@@ -306,18 +292,18 @@
 <h2 id="N">N</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="doc/nodes.html#dist_zero.node.node.Node.new_handle">new_handle() (dist_zero.node.node.Node method)</a>
+</li>
       <li><a href="doc/ids.html#dist_zero.ids.new_id">new_id() (in module dist_zero.ids)</a>
 </li>
       <li><a href="doc/demo.html#test.demo.Demo.new_machine_controller">new_machine_controller() (test.demo.Demo method)</a>
 </li>
       <li><a href="doc/demo.html#test.demo.Demo.new_machine_controllers">new_machine_controllers() (test.demo.Demo method)</a>
 </li>
-      <li><a href="doc/machine.html#dist_zero.machine.MachineController.new_transport_for">new_transport_for() (dist_zero.machine.MachineController method)</a>
+      <li><a href="doc/machine.html#dist_zero.machine.MachineController.new_transport">new_transport() (dist_zero.machine.MachineController method)</a>
 
       <ul>
-        <li><a href="doc/machine.html#dist_zero.machine.NodeManager.new_transport_for">(dist_zero.machine.NodeManager method)</a>
-</li>
-        <li><a href="doc/nodes.html#dist_zero.node.node.Node.new_transport_for">(dist_zero.node.node.Node method)</a>
+        <li><a href="doc/machine.html#dist_zero.machine.NodeManager.new_transport">(dist_zero.machine.NodeManager method)</a>
 </li>
       </ul></li>
   </ul></td>
@@ -388,14 +374,6 @@
       </ul></li>
       <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.send_to_node">send_to_node() (dist_zero.system_controller.SystemController method)</a>
 </li>
-      <li><a href="doc/machine.html#dist_zero.machine.MachineController.set_transport">set_transport() (dist_zero.machine.MachineController method)</a>
-
-      <ul>
-        <li><a href="doc/machine.html#dist_zero.machine.NodeManager.set_transport">(dist_zero.machine.NodeManager method)</a>
-</li>
-        <li><a href="doc/nodes.html#dist_zero.node.node.Node.set_transport">(dist_zero.node.node.Node method)</a>
-</li>
-      </ul></li>
       <li><a href="doc/demo.html#test.demo.Demo.simulated">simulated (test.demo.Demo attribute)</a>
 </li>
       <li><a href="doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner">SimulatedSpawner (class in dist_zero.spawners.simulator)</a>
@@ -452,10 +430,18 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/demo.html#test.demo.Demo.tear_down">tear_down() (test.demo.Demo method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/demo.html#module-test.demo">test.demo (module)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="doc/nodes.html#dist_zero.node.node.Node.transfer_handle">transfer_handle() (dist_zero.node.node.Node method)</a>
+</li>
+      <li><a href="doc/machine.html#dist_zero.machine.MachineController.transfer_transport">transfer_transport() (dist_zero.machine.MachineController method)</a>
+
+      <ul>
+        <li><a href="doc/machine.html#dist_zero.machine.NodeManager.transfer_transport">(dist_zero.machine.NodeManager method)</a>
+</li>
+      </ul></li>
   </ul></td>
 </tr></table>
 

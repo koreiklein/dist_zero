@@ -32,6 +32,7 @@
             
   <h1>Source code for dist_zero.machine_runner</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">signal</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">select</span>
@@ -110,6 +111,7 @@
             <span class="s1">&#39;machine_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
             <span class="s1">&#39;machine_name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_manager</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
         <span class="p">})</span>
+
     <span class="bp">self</span><span class="o">.</span><span class="n">_bind_udp</span><span class="p">()</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_bind_and_listen_tcp</span><span class="p">()</span>
 
