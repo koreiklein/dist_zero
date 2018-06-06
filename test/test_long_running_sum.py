@@ -28,7 +28,7 @@ class TestLongRunningSum(object):
     self._spawn_initial_nodes()
     self.demo.run_for(ms=500)
 
-    self.input_nodes = []
+    self.input_node_ids = []
     self._spawn_inputs_loop(n_inputs=15, total_time_ms=20 * 1000)
 
   def test_single_node_hits_sender_limit(self, demo):
@@ -47,43 +47,43 @@ class TestLongRunningSum(object):
     self._spawn_initial_nodes()
     self.demo.run_for(ms=500)
 
-    self.input_nodes = []
+    self.input_node_ids = []
     self._spawn_inputs_loop(n_inputs=20, total_time_ms=20 * 1000)
 
   def _spawn_initial_nodes(self):
     self.machine_handles = self.system.create_machines([
         messages.machine.machine_config(
-            machine_name='machine {}'.format(i), machine_controller_id=dist_zero.ids.new_id())
+            machine_name='machine {}'.format(i), machine_controller_id=dist_zero.ids.new_id('Machine'))
         for i in range(self.n_machines)
     ])
 
     machine_a_handle = self.machine_handles[0]
 
-    self.sum_node_handle = self.system.spawn_node(
+    self.sum_node_id = self.system.spawn_node(
         on_machine=machine_a_handle,
         node_config=messages.sum.sum_node_config(
-            node_id=dist_zero.ids.new_id(),
+            node_id=dist_zero.ids.new_id('SumNode'),
             senders=[],
-            sender_transports=[],
             receivers=[],
-            receiver_transports=[],
         ))
 
-    self.root_input_node_handle = self.system.spawn_node(
+    self.root_input_node_id = dist_zero.ids.new_id('InternalNode')
+    self.system.spawn_node(
         on_machine=machine_a_handle,
-        node_config=messages.io.internal_node_config(dist_zero.ids.new_id(), variant='input'))
-    self.root_output_node_handle = self.system.spawn_node(
+        node_config=messages.io.internal_node_config(
+            self.root_input_node_id,
+            adjacent=self.system.generate_new_handle(
+                new_node_id=self.root_input_node_id, existing_node_id=self.sum_node_id),
+            variant='input'))
+    self.root_output_node_id = dist_zero.ids.new_id('InternalNode')
+    self.system.spawn_node(
         on_machine=machine_a_handle,
-        node_config=messages.io.internal_node_config(dist_zero.ids.new_id(), variant='output', initial_state=0))
-
-    self.system.send_to_node(self.sum_node_handle,
-                             messages.migration.set_input(self.root_input_node_handle,
-                                                          self.system.create_transport_for(
-                                                              self.sum_node_handle, self.root_input_node_handle)))
-    self.system.send_to_node(self.sum_node_handle,
-                             messages.migration.set_output(self.root_output_node_handle,
-                                                           self.system.create_transport_for(
-                                                               self.sum_node_handle, self.root_output_node_handle)))
+        node_config=messages.io.internal_node_config(
+            self.root_output_node_id,
+            variant='output',
+            adjacent=self.system.generate_new_handle(
+                new_node_id=self.root_output_node_id, existing_node_id=self.sum_node_id),
+            initial_state=0))
 
   def _spawn_inputs_loop(self, n_inputs, total_time_ms):
     '''
@@ -104,9 +104,9 @@ class TestLongRunningSum(object):
       remaining_time_ms = (end_time_ms - cur_time_ms) - 30 # Send messages in almost the whole remaining time window.
       AVE_INTER_MESSAGE_TIME_MS = 1200
 
-      self.input_nodes.append(
+      self.input_node_ids.append(
           self.system.create_kid(
-              parent_node=self.root_input_node_handle,
+              parent_node_id=self.root_input_node_id,
               new_node_name='input_{}'.format(i),
               # Place the new nodes on machines in a round-robin manner.
               machine_controller_handle=self.machine_handles[i % len(self.machine_handles)],

@@ -18,8 +18,8 @@ from dist_zero.spawners.cloud.aws import Ec2Spawner
 def demo(request):
   result = Demo(mode=request.param)
   result.start()
-  yield result
-  result.tear_down()
+  request.addfinalizer(lambda: result.tear_down())
+  return result
 
 
 @pytest.fixture(params=[
@@ -29,8 +29,8 @@ def demo(request):
 def no_cloud_demo(request):
   result = Demo(mode=request.param)
   result.start()
-  yield result
-  result.tear_down()
+  request.addfinalizer(lambda: result.tear_down())
+  return result
 
 
 @pytest.fixture(params=[
@@ -83,7 +83,7 @@ class Demo(object):
       self.cloud_spawner.clean_all()
 
   def _set_system_by_mode(self):
-    self.system_id = dist_zero.ids.new_id()
+    self.system_id = dist_zero.ids.new_id('System')
     if self.mode == spawners.MODE_SIMULATED:
       self.spawner = self.simulated_spawner = SimulatedSpawner(
           system_id=self.system_id, random_seed='TestSimulatedSpawner')
@@ -127,7 +127,8 @@ class Demo(object):
     for i in range(n):
       name = 'machine {}'.format(self.nodes)
       self.nodes += 1
-      configs.append(messages.machine.machine_config(machine_name=name, machine_controller_id=dist_zero.ids.new_id()))
+      configs.append(
+          messages.machine.machine_config(machine_name=name, machine_controller_id=dist_zero.ids.new_id('Machine')))
 
     return self.system.create_machines(configs)
 

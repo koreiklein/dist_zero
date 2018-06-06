@@ -178,7 +178,7 @@ class Ec2Spawner(spawner.Spawner):
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     connected = False
     logger.debug("Connecting to aws instance {aws_instance_id} over ssh", extra=extra)
-    for i in range(5):
+    for i in range(8):
       try:
         ssh.connect(hostname=instance.public_dns_name, key_filename='.keys/dist_zero.pem', username='ec2-user')
         connected = True
@@ -248,7 +248,7 @@ class Ec2Spawner(spawner.Spawner):
     logger.info("Starting a MachineController process on an aws instance", extra=extra)
     _exec_command(command)
 
-    handle = messages.machine_controller_handle(machine_controller_id)
+    handle = messages.machine.machine_controller_handle(machine_controller_id)
     self._handle_by_id[machine_controller_id] = handle
     self._aws_instance_by_id[machine_controller_id] = instance
     return handle

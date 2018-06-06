@@ -35,7 +35,6 @@ class SimulatedSpawner(spawner.Spawner):
     :param str random_seed: A random seed for all randomness employed by this class.
     '''
 
-    self.id = dist_zero.ids.new_id()
     self._system_id = system_id
     self._start_datetime = datetime.datetime.now()
     self._controller_by_id = {}
@@ -67,7 +66,7 @@ class SimulatedSpawner(spawner.Spawner):
     logger.info("=================================================")
     logger.info("========== STARTING SIMULATOR LOGGING  ==========")
     logger.info("=================================================")
-    logger.info("Simulator = {simulator_id}", extra={'simulator_id': self.id})
+    logger.info("Simulator for system: {system_id}", extra={'system_id': self._system_id})
 
   def _format_node(self, node_handle):
     '''
@@ -81,16 +80,16 @@ class SimulatedSpawner(spawner.Spawner):
     if node_handle is None:
       return "null"
     else:
-      return "{}.{}".format(node_handle['type'], str(node_handle['id'])[-4:])
+      return node_handle['id'][:12]
 
   def _format_log(self, log_message):
     ms, msg = log_message
     message = msg['message']
     if message['type'] == 'machine_deliver_to_node':
       return "{} --{}--> {}".format(
-          self._format_node(message.get('sending_node', None)),
+          self._format_node(message.get('sending_node_id', None)),
           msg['message']['type'],
-          self._format_node(message.get('node', None)),
+          self._format_node(message.get('node_id', None)),
       )
     else:
       return "Control Message: {}".format(message['type'])

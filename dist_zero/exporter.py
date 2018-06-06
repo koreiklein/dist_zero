@@ -27,9 +27,7 @@ class Exporter(object):
   def initialize(self):
     self._node.send(self._receiver,
                     messages.migration.connect_internal(
-                        node=self._node.handle(),
-                        direction='sender',
-                        transport=self._node.new_transport_for(self._receiver['id'])))
+                        node=self._node.new_handle(self._receiver['id']), direction='sender'))
 
   @property
   def receiver_id(self):

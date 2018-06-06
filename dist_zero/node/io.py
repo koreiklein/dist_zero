@@ -33,13 +33,11 @@ class LeafNode(Node):
   so leaves are designed never to have to manage complex sets of senders or receivers.
   '''
 
-  def __init__(self, node_id, parent, parent_transport, controller, variant, update_state, recorded_user=None):
+  def __init__(self, node_id, parent, controller, variant, update_state, recorded_user=None):
     '''
     :param `MachineController` controller: the controller for this node's machine.
     :param parent: The :ref:`handle` of the parent `InternalNode` of this node.
     :type parent: :ref:`handle`
-    :param parent_transport: A :ref:`transport` for talking to this node's parent.
-    :type parent_transport: :ref:`transport`
     :param str variant: 'input' or 'output'
     :param func update_state: A function.
       Call it with a function that takes the current state and returns a new state.
@@ -54,7 +52,6 @@ class LeafNode(Node):
     self._recorded_user = recorded_user
 
     self.parent = parent
-    self._parent_transport = parent_transport
 
     # Messages received before becoming active.
     self._pre_active_messages = []
@@ -63,7 +60,7 @@ class LeafNode(Node):
 
     super(LeafNode, self).__init__(logger)
 
-  def _set_adjacent(self, node, transport):
+  def _set_adjacent(self, node):
     '''
     Called when a new adjacent has been added.
 
@@ -73,7 +70,6 @@ class LeafNode(Node):
     if self._adjacent is not None:
       raise errors.InternalError("LeafNodes have only a single adjacent."
                                  "  Can not add a new link once an adjacent exists")
-    self.set_transport(node, transport)
     self._adjacent = node
 
     self.logger.info("Activating Leaf Node {node_id}", extra={'node_id': self.id})
@@ -81,9 +77,9 @@ class LeafNode(Node):
     for m in self._pre_active_messages:
       self._receive_increment_message(m)
 
-  def receive(self, message, sender):
+  def receive(self, message, sender_id):
     if message['type'] == 'set_adjacent':
-      self._set_adjacent(message['node'], message['transport'])
+      self._set_adjacent(message['node'])
     elif message['type'] == 'increment':
       self._receive_increment_message(message)
     else:
@@ -126,24 +122,19 @@ class LeafNode(Node):
         controller=controller,
         node_id=node_config['id'],
         parent=node_config['parent'],
-        parent_transport=node_config['parent_transport'],
         update_state=update_state,
         variant=node_config['variant'],
         recorded_user=LeafNode._init_recorded_user_from_config(node_config['recorded_user_json']))
 
-  def handle(self):
-    return {'type': 'LeafNode', 'id': self.id, 'controller_id': self._controller.id}
-
   def initialize(self):
     self.logger.info("leaf node sending 'added_leaf' message to parent")
-    self.set_transport(self.parent, self._parent_transport)
-    self.send(self.parent, messages.io.added_leaf(self.handle(), transport=self.new_transport_for(self.parent['id'])))
+    self.send(self.parent, messages.io.added_leaf(self.new_handle(self.parent['id'])))
 
   def elapse(self, ms):
     if self._recorded_user is not None:
       for t, msg in self._recorded_user.elapse_and_get_messages(ms):
         self.logger.info("Simulated user generated a message", extra={'recorded_message': msg})
-        self.receive(msg, sender=None)
+        self.receive(msg, sender_id=None)
 
 
 class InternalNode(Node):
@@ -155,10 +146,12 @@ class InternalNode(Node):
   be called on the desired immediate parent to generate the node config for starting that child.
   '''
 
-  def __init__(self, node_id, variant, initial_state, controller):
+  def __init__(self, node_id, variant, adjacent, initial_state, controller):
     '''
     :param str node_id: The id to use for this node
     :param str variant: 'input' or 'output'
+    :param adjacent: The :ref:`handle` of the adjacent node.  It must be provided when this internal node starts.
+    :type adjacent: :ref:`handle`
     :param `MachineController` controller: The controller for this node.
     :param object initial_state: A json serializeable starting state for all leaves spawned from this node.
       This state is important for output leaves that update that state over time.
@@ -168,15 +161,22 @@ class InternalNode(Node):
     self.id = node_id
     self._kids = {} # A map from kid node id to either 'pending' or 'active'
     self._initial_state = initial_state
-    self._adjacent = None
+    self._adjacent = adjacent
     super(InternalNode, self).__init__(logger)
 
-  def receive(self, message, sender):
-    if message['type'] == 'set_adjacent':
-      self._adjacent = message['node']
-      self.set_transport(self._adjacent, message['transport'])
-    elif message['type'] == 'added_leaf':
-      self.added_leaf(message['kid'], message['transport'])
+  def initialize(self):
+    if self._variant == 'input':
+      self.logger.info("internal node sending 'set_input' message to adjacent node")
+      self.send(self._adjacent, messages.io.set_input(self.new_handle(self._adjacent['id'])))
+    elif self._variant == 'output':
+      self.logger.info("internal node sending 'set_output' message to adjacent node")
+      self.send(self._adjacent, messages.io.set_output(self.new_handle(self._adjacent['id'])))
+    else:
+      raise errors.InternalError("Unrecognized variant {}".format(self._variant))
+
+  def receive(self, message, sender_id):
+    if message['type'] == 'added_leaf':
+      self.added_leaf(message['kid'])
     else:
       self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
@@ -185,11 +185,9 @@ class InternalNode(Node):
     return InternalNode(
         node_id=node_config['id'],
         controller=controller,
+        adjacent=node_config['adjacent'],
         variant=node_config['variant'],
         initial_state=node_config['initial_state'])
-
-  def handle(self):
-    return {'type': 'InternalNode', 'id': self.id, 'controller_id': self._controller.id}
 
   def elapse(self, ms):
     pass
@@ -205,11 +203,11 @@ class InternalNode(Node):
     :return: A config for the new child node.
     :rtype: :ref:`message`
     '''
-    node_id = dist_zero.ids.new_id()
+    node_id = dist_zero.ids.new_id('LeafNode')
     self.logger.info(
         "Registering a new leaf node config for an internal node. name='{node_name}'",
         extra={
-            'internal_node': self.handle(),
+            'internal_node_id': self.id,
             'leaf_node_id': node_id,
             'node_name': name
         })
@@ -218,18 +216,15 @@ class InternalNode(Node):
     return messages.io.leaf_config(
         node_id=node_id,
         name=name,
-        parent=self.handle(),
-        parent_transport=self.new_transport_for(node_id),
+        parent=self.new_handle(node_id),
         variant=self._variant,
         initial_state=self._initial_state,
     )
 
-  def added_leaf(self, kid, transport):
+  def added_leaf(self, kid):
     '''
     :param kid: The :ref:`handle` of the leaf node that was just added.
     :type kid: :ref:`handle`
-    :param transport: The :ref:`transport` for the kid.
-    :type transport: :ref:`transport`
     '''
     if kid['id'] not in self._kids:
       self.logger.error(
@@ -240,10 +235,7 @@ class InternalNode(Node):
           "added_leaf: No adjacent was set in time.  Unable to forward an added_leaf message to the adjacent.")
     else:
       self._kids[kid['id']] = 'active'
-      self.set_transport(kid, transport)
 
       self.send(self._adjacent,
                 messages.io.added_adjacent_leaf(
-                    kid=kid,
-                    variant=self._variant,
-                    transport=self.convert_transport_for(sender_id=self._adjacent['id'], receiver_id=kid['id'])))
+                    kid=self.transfer_handle(handle=kid, for_node_id=self._adjacent['id']), variant=self._variant))

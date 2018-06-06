@@ -37,49 +37,45 @@ def machine_start_node(node_config):
   return {'type': 'machine_start_node', 'node_config': node_config}
 
 
-def machine_deliver_to_node(node, message, sending_node):
+def machine_deliver_to_node(node_id, message, sending_node_id):
   '''
   A message to a machine telling it to deliver an embedded message to a node.
 
-  :param node: A node to send to.
-  :type node: :ref:`handle`
+  :param str node_id: The id of a node to send to.
+  :param str sending_node_id: The id of the node that sent the message.
   :param message: The message to deliver
   :type message: :ref:`message`
-  :param sending_node: The node that was sending, or `None` if the message was not sent by a node.
-  :type sending_node: :ref:`handle`
   '''
-  return {'type': 'machine_deliver_to_node', 'message': message, 'node': node, 'sending_node': sending_node}
+  return {'type': 'machine_deliver_to_node', 'message': message, 'node_id': node_id, 'sending_node_id': sending_node_id}
 
 
 # API messages
-def api_new_transport(sender, receiver):
+def api_new_handle(local_node_id, new_node_id):
   '''
-  Get and return a transport that can be used to send from sender to receiver.
-  :param sender: The :ref:`handle` of a sending node.
-  :type sender: :ref:`handle`
-  :param receiver: The :ref:`handle` of a sending node.
-  :type receiver: :ref:`handle`
+  Get a new handle that can be used to send messages to a local node.  The handle will be used
+  by a node that has not yet been spawned.
+
+  :param str local_node_id: The id of an exsiting `Node` on this machine.
+  :param str new_node_id: The id of a `Node` that has not yet been spawned.
   '''
-  return {'type': 'api_new_transport', 'sender': sender, 'receiver': receiver}
+  return {'type': 'api_new_handle', 'local_node_id': local_node_id, 'new_node_id': new_node_id}
 
 
-def api_get_output_state(node):
+def api_get_output_state(node_id):
   '''
   Get and return the current output state for an output node.
-  :param node: The :ref:`handle` of an output leaf node.
-  :type node: :ref:`handle`
+  :param str node: The id of an output leaf node.
   :return: The current output state of that node.
   :rtype: object
   '''
-  return {'type': 'api_get_output_state', 'node': node}
+  return {'type': 'api_get_output_state', 'node_id': node_id}
 
 
-def api_create_kid_config(internal_node, new_node_name, machine_controller_handle):
+def api_create_kid_config(internal_node_id, new_node_name, machine_controller_handle):
   '''
   Create a node_config for a new kid node of an internal io node.
 
-  :param internal_node: The :ref:`handle` of the parent internalnode.
-  :type internal_node: :ref:`handle`
+  :param internal_node_id: The id of the parent `InternalNode`.
   :param str new_node_name: The name to use for the new node.
   :param machine_controller_handle: The :ref:`handle` of the machine on which the new node will run.
   :type machine_controller_handle: :ref:`handle`
@@ -89,7 +85,7 @@ def api_create_kid_config(internal_node, new_node_name, machine_controller_handl
   '''
   return {
       'type': 'api_create_kid_config',
-      'internal_node_id': internal_node['id'],
+      'internal_node_id': internal_node_id,
       'new_node_name': new_node_name,
       'machine_controller_handle': machine_controller_handle,
   }

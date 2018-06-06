@@ -35,10 +35,9 @@ class SystemController(object):
     '''The underlying spawner of this `SystemController`'''
     return self._spawner
 
-  def create_kid_config(self, internal_node, new_node_name, machine_controller_handle):
+  def create_kid_config(self, internal_node_id, new_node_name, machine_controller_handle):
     '''
-    :param internal_node: The :ref:`handle` of the parent internalnode.
-    :type internal_node: :ref:`handle`
+    :param internal_node_id: The id of the parent `InternalNode`.
     :param str new_node_name: The name to use for the new node.
     :param machine_controller_handle: The :ref:`handle` of the machine on which the new node will run.
     :type machine_controller_handle: :ref:`handle`
@@ -46,19 +45,31 @@ class SystemController(object):
     :return: A node_config for creating the new kid node.
     :rtype: :ref:`message`
     '''
-    machine_handle = self._node_id_to_machine_handle[internal_node['id']]
+    machine_handle = self._node_id_to_machine_handle[internal_node_id]
     return self._spawner.send_to_machine(
         machine=machine_handle,
         message=messages.machine.api_create_kid_config(
-            internal_node=internal_node,
+            internal_node_id=internal_node_id,
             new_node_name=new_node_name,
             machine_controller_handle=machine_controller_handle,
         ),
         sock_type='tcp')
 
-  def create_kid(self, parent_node, new_node_name, machine_controller_handle, recorded_user=None):
+  def create_kid(self, parent_node_id, new_node_name, machine_controller_handle, recorded_user=None):
+    '''
+    Create a new kid of an `InternalNode` in this system.
+
+    :param str parent_node_id: The id of the parent node.
+    :param str new_node_name: The name to use for the new node.
+    :param machine_controller_handle: The :ref:`handle` of the `MachineController` that should run the new node.
+    :type machine_controller_handle: :ref:`handle`
+    :param recorded_user: An optional recording of a user to be played back on the new node.
+    :type recorded_user: :RecordedUser`
+
+    :return: The id of the newly created node
+    '''
     node_config = self.create_kid_config(
-        internal_node=parent_node,
+        internal_node_id=parent_node_id,
         new_node_name=new_node_name,
         machine_controller_handle=machine_controller_handle,
     )
@@ -75,30 +86,12 @@ class SystemController(object):
     :param on_machine: The handle for a `MachineController`
     :type on_machine: :ref:`handle`
 
-    :return: The node :ref:`handle` of the spawned node.
+    :return: The node id of the spawned node.
     '''
     node_id = node_config['id']
     self._spawner.send_to_machine(machine=on_machine, message=messages.machine.machine_start_node(node_config))
     self._node_id_to_machine_handle[node_id] = on_machine
-    return {'type': node_config['type'], 'id': node_id, 'controller_id': on_machine['id']}
-
-  def create_transport_for(self, sender, receiver):
-    '''
-    Get and return a transport instance allowing sender to send to receiver.
-
-    :param sender: The :ref:`handle` of a sending node.
-    :type sender: :ref:`handle`
-    :param receiver: The :ref:`handle` of a sending node.
-    :type receiver: :ref:`handle`
-
-    :return: A :ref:`transport` authorizing sender to send to receiver.
-    :rtype: :ref:`transport`
-    '''
-    # Must get the transport from the intended receiver.
-    return self._spawner.send_to_machine(
-        machine=self._node_id_to_machine_handle[receiver['id']],
-        sock_type='tcp',
-        message=messages.machine.api_new_transport(sender, receiver))
+    return node_id
 
   def create_machine(self, machine_config):
     '''
@@ -122,35 +115,45 @@ class SystemController(object):
     '''
     return self._spawner.create_machines(machine_configs)
 
-  def get_output_state(self, output_node):
+  def get_output_state(self, output_node_id):
     '''
     Get the state associated with an output node.
 
-    :param output_node: The :ref:`handle` of a output node.
-    :type output_node: :ref:`handle`
+    :param str output_node: The id of a output node.
 
     :return: The state of that node at about the current time.
     '''
-    machine_handle = self._node_id_to_machine_handle[output_node['id']]
+    machine_handle = self._node_id_to_machine_handle[output_node_id]
     return self._spawner.send_to_machine(
-        machine=machine_handle, message=messages.machine.api_get_output_state(node=output_node), sock_type='tcp')
+        machine=machine_handle, message=messages.machine.api_get_output_state(node_id=output_node_id), sock_type='tcp')
 
-  def send_to_node(self, node_handle, message, sending_node_handle=None):
+  def generate_new_handle(self, new_node_id, existing_node_id):
+    '''
+    Generate a new handle to fill a config for a new node to send to an existing node.
+
+    :param str new_node_id: The id of a `Node` that has not yet been spawned.
+    :param str existing_node_id: The id of an exsiting `Node`
+
+    :return: A :ref:`handle` that the new `Node` (once spawned) can use to send to the existing `Node`.
+    :rtype: :ref:`handle`
+    '''
+    machine_handle = self._node_id_to_machine_handle[existing_node_id]
+    return self._spawner.send_to_machine(
+        machine=machine_handle,
+        message=messages.machine.api_new_handle(local_node_id=existing_node_id, new_node_id=new_node_id),
+        sock_type='tcp')
+
+  def send_to_node(self, node_id, message):
     '''
     Send a message to a node.
 
-    :param node_handle: The handle of some node.
-    :type node_handle: :ref:`handle`
+    :param str node_id: The id of some node.
 
     :param message: A message for that node.
     :type message: :ref:`message`
-
-    :param sending_node_handle: The :ref:`handle` of the sending node, or None if no node sent the message.
-    :type sending_node_handle: :ref:`handle`
     '''
-    machine_handle = self._node_handle_to_machine_handle(node_handle)
-    machine_message = messages.machine.machine_deliver_to_node(
-        node=node_handle, message=message, sending_node=sending_node_handle)
+    machine_handle = self._node_id_to_machine_handle[node_id]
+    machine_message = messages.machine.machine_deliver_to_node(node_id=node_id, message=message, sending_node_id=None)
     self._spawner.send_to_machine(machine=machine_handle, message=machine_message)
 
   def _node_handle_to_machine_handle(self, node_handle):
