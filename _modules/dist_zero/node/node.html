@@ -9,7 +9,7 @@
     <title>dist_zero.node.node &#8212; DistZero  documentation</title>
     <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
-    <script type="text/javascript" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
     <script type="text/javascript" src="../../../_static/jquery.js"></script>
     <script type="text/javascript" src="../../../_static/underscore.js"></script>
     <script type="text/javascript" src="../../../_static/doctools.js"></script>
@@ -31,7 +31,10 @@
           <div class="body" role="main">
             
   <h1>Source code for dist_zero.node.node</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">dist_zero.logging</span>
+<span></span><span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">from</span> <span class="nn">cryptography.fernet</span> <span class="k">import</span> <span class="n">Fernet</span>
+
+<span class="kn">import</span> <span class="nn">dist_zero.logging</span>
 
 <span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">messages</span>
 
@@ -42,8 +45,39 @@
   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">LoggerAdapter</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;cur_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">})</span>
 
-  <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">node_handle</span><span class="o">=</span><span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+    <span class="c1"># For encryption/decryption</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_fernet_key</span> <span class="o">=</span> <span class="n">Fernet</span><span class="o">.</span><span class="n">generate_key</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_fernet</span> <span class="o">=</span> <span class="n">Fernet</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fernet_key</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Node.send"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.send">[docs]</a>  <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Encrypt and send a message to a receiver.</span>
+
+<span class="sd">    :param receiver: A :ref:`handle` for the intended recipient `Node` of the message.</span>
+<span class="sd">    :type receiver: :ref:`handle`</span>
+<span class="sd">    :param message: The message.</span>
+<span class="sd">    :type message: :ref:`message`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">fernet</span> <span class="o">=</span> <span class="n">Fernet</span><span class="p">(</span><span class="n">receiver</span><span class="p">[</span><span class="s1">&#39;fernet_key&#39;</span><span class="p">])</span>
+    <span class="n">encoded_message</span> <span class="o">=</span> <span class="n">fernet</span><span class="o">.</span><span class="n">encrypt</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">node_handle</span><span class="o">=</span><span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">encoded_message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Node.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Decrypt and receive a message from a sender.</span>
+
+<span class="sd">    :param str message: The encoded message.</span>
+<span class="sd">    :param str sender_id: The id of the sender `Node`, or `None` if the message was not generated by a sender.</span>
+<span class="sd">      (pre-recorded messages will not have a sender).</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">decoded_message</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fernet</span><span class="o">.</span><span class="n">decrypt</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Node is receiving message of type </span><span class="si">{message_type}</span><span class="s2"> from </span><span class="si">{sender_id}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;message_type&#39;</span><span class="p">:</span> <span class="n">decoded_message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;sender_id&#39;</span><span class="p">:</span> <span class="n">sender_id</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">receive_internal</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">decoded_message</span><span class="p">,</span> <span class="n">sender_id</span><span class="o">=</span><span class="n">sender_id</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Node.new_handle"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.new_handle">[docs]</a>  <span class="k">def</span> <span class="nf">new_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">for_node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -68,6 +102,7 @@
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">return</span> <span class="p">{</span>
         <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+        <span class="s1">&#39;fernet_key&#39;</span><span class="p">:</span> <span class="n">handle</span><span class="p">[</span><span class="s1">&#39;fernet_key&#39;</span><span class="p">],</span>
         <span class="s1">&#39;controller_id&#39;</span><span class="p">:</span> <span class="n">handle</span><span class="p">[</span><span class="s1">&#39;controller_id&#39;</span><span class="p">],</span>
         <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">transfer_transport</span><span class="p">(</span><span class="n">transport</span><span class="o">=</span><span class="n">handle</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">],</span> <span class="n">for_node_id</span><span class="o">=</span><span class="n">for_node_id</span><span class="p">),</span>
     <span class="p">}</span></div>
@@ -77,6 +112,7 @@
         <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
         <span class="s1">&#39;controller_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
         <span class="s1">&#39;transport&#39;</span><span class="p">:</span> <span class="n">transport</span><span class="p">,</span>
+        <span class="s1">&#39;fernet_key&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fernet_key</span><span class="p">,</span>
     <span class="p">}</span>
 
 <div class="viewcode-block" id="Node.initialize"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -91,7 +127,7 @@
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;Abstract Superclass&#39;</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="Node.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
+<div class="viewcode-block" id="Node.receive_internal"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.receive_internal">[docs]</a>  <span class="k">def</span> <span class="nf">receive_internal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Receive a message from some sender.</span>
 
@@ -136,7 +172,7 @@
       &copy;2018, Korei Klein.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.4</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.5</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
       
     </div>
