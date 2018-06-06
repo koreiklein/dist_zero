@@ -177,6 +177,10 @@ class DockerSpawner(spawner.Spawner):
     os.makedirs(host_msg_dir)
     os.makedirs(log_dir)
 
+    config_filename = 'machine_config.json'
+    with open(os.path.join(host_msg_dir, config_filename), 'w') as f:
+      json.dump(machine_config, f)
+
     container = self._docker.containers.run(
         image=self.image,
         command=[
@@ -185,10 +189,7 @@ class DockerSpawner(spawner.Spawner):
             'python',
             '-m',
             'dist_zero.machine_init',
-            machine_controller_id,
-            machine_name,
-            spawners.MODE_VIRTUAL,
-            self._system_id,
+            os.path.join(DockerSpawner.CONTAINER_MESSAGE_DIR, config_filename),
         ],
         detach=True,
         labels={

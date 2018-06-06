@@ -15,14 +15,22 @@ def machine_controller_handle(machine_id):
 # Machine configs
 
 
-def machine_config(machine_controller_id, machine_name):
+def machine_config(machine_controller_id, machine_name, system_id, mode):
   '''
-  A machine config
+  A machine configuration.
 
   :param str machine_controller_id: The unique id for the new machine.
   :param str machine_name: A human readable name for the new machine.
+  :param str system_id: The unique id for the overall system.
+  :param str mode: A mode (from `dist_zero.spawners`) (simulated, virtual, or cloud)
   '''
-  return {'type': 'machine_config', 'machine_name': machine_name, 'id': machine_controller_id}
+  return {
+      'type': 'machine_config',
+      'machine_name': machine_name,
+      'id': machine_controller_id,
+      'mode': mode,
+      'system_id': system_id
+  }
 
 
 def machine_start_node(node_config):

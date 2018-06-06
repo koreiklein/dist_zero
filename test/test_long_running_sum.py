@@ -51,11 +51,7 @@ class TestLongRunningSum(object):
     self._spawn_inputs_loop(n_inputs=20, total_time_ms=20 * 1000)
 
   def _spawn_initial_nodes(self):
-    self.machine_handles = self.system.create_machines([
-        messages.machine.machine_config(
-            machine_name='machine {}'.format(i), machine_controller_id=dist_zero.ids.new_id('Machine'))
-        for i in range(self.n_machines)
-    ])
+    self.machine_handles = self.demo.new_machine_controllers(self.n_machines)
 
     machine_a_handle = self.machine_handles[0]
 

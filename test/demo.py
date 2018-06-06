@@ -128,7 +128,12 @@ class Demo(object):
       name = 'machine {}'.format(self.nodes)
       self.nodes += 1
       configs.append(
-          messages.machine.machine_config(machine_name=name, machine_controller_id=dist_zero.ids.new_id('Machine')))
+          messages.machine.machine_config(
+              machine_name=name,
+              machine_controller_id=dist_zero.ids.new_id('Machine'),
+              mode=self.mode,
+              system_id=self.system_id,
+          ))
 
     return self.system.create_machines(configs)
 

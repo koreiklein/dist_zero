@@ -78,21 +78,21 @@ class NodeManager(MachineController):
   and deliver ordinary messages and api messages.
   '''
 
-  def __init__(self, machine_id, machine_name, mode, system_id, ip_host, send_to_machine):
+  def __init__(self, machine_config, ip_host, send_to_machine):
     '''
-    :param str machine_id: The unique id of this machine.
-    :param str machine_name: A name to use for this machine.
-    :param str mode: A mode (from `dist_zero.spawners`) (simulated, virtual, or cloud)
-    :param str system_id: The id of the overall distributed system
+    :param machine_config: A configuration message of type 'machine_config'
+    :type machine_config: :ref:`message`
+
     :param str ip_host: The host parameter to use when generating transports that send to this machine.
     :param func send_to_machine: A function send_to_machine(message, transport)
       where message is a :ref:`message`, and transport is a :ref:`transport` for a receiving node.
     '''
-    self.id = machine_id
-    self.name = machine_name
-    self.mode = mode
 
-    self.system_id = system_id
+    self.id = machine_config['id']
+    self.name = machine_config['machine_name']
+    self.mode = machine_config['mode']
+
+    self.system_id = machine_config['system_id']
 
     self._ip_host = ip_host
 
@@ -103,10 +103,13 @@ class NodeManager(MachineController):
     self._send_to_machine = send_to_machine
 
   def send(self, node_handle, message, sending_node_id):
-    self._send_to_machine(
-        message=messages.machine.machine_deliver_to_node(
-            node_id=node_handle['id'], message=message, sending_node_id=sending_node_id),
-        transport=node_handle['transport'])
+    if self._should_simulate_outgoing_message_drop(message):
+      logger.info('Simulating a drop of an outgoing message', extra={'sender_id': sending_node_id})
+    else:
+      self._send_to_machine(
+          message=messages.machine.machine_deliver_to_node(
+              node_id=node_handle['id'], message=message, sending_node_id=sending_node_id),
+          transport=node_handle['transport'])
 
   def spawn_node(self, node_config):
     # TODO(KK): Rethink how the machine for each node is chosen.  Always running on the same machine
@@ -228,9 +231,12 @@ class NodeManager(MachineController):
     if message['type'] == 'machine_start_node':
       self.start_node(message['node_config'])
     elif message['type'] == 'machine_deliver_to_node':
-      node_id = message['node_id']
-      node = self._get_node_by_id(node_id)
-      node.receive(message=message['message'], sender_id=message['sending_node_id'])
+      if self._should_simulate_incomming_message_drop(message):
+        logger.info('Simulating a drop of an incomming message', extra={'sender_id': message['sending_node_id']})
+      else:
+        node_id = message['node_id']
+        node = self._get_node_by_id(node_id)
+        node.receive(message=message['message'], sender_id=message['sending_node_id'])
     else:
       logger.error("Unrecognized message type {unrecognized_type}", extra={'unrecognized_type': message['type']})
 
@@ -244,3 +250,25 @@ class NodeManager(MachineController):
     # Therefore, to avoid updating a dictionary while iterating over it, we make a copy
     for node in list(self._node_by_id.values()):
       node.elapse(ms)
+
+  def _should_simulate_incomming_message_drop(self, message):
+    '''
+    Determine whether we should simulate dropping an incomming message.
+
+    :param message: A message of type 'machine_deliver_to_node'
+    :type message: :ref:`message`
+    :return: True iff we should simulate a drop of this message.
+    :rtype: bool
+    '''
+    return False
+
+  def _should_simulate_outgoing_message_drop(self, message):
+    '''
+    Determine whether we should simulate dropping an outgoing message.
+
+    :param message: Any message that a `Node` on this machine is trying to send.
+    :type message: :ref:`message`
+    :return: True iff we should simulate a drop of this message.
+    :rtype: bool
+    '''
+    return False
