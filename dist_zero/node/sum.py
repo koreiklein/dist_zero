@@ -119,7 +119,7 @@ class SumNode(Node):
     if not self._pending_sender_ids:
       self.send(self._spawning_migration, messages.migration.middle_node_is_duplicated())
 
-  def receive(self, sender_id, message):
+  def receive_internal(self, sender_id, message):
     if message['type'] == 'increment':
       self._unsent_total += message['amount']
     elif message['type'] == 'set_input':

@@ -229,15 +229,6 @@ class NodeManager(MachineController):
       self.start_node(message['node_config'])
     elif message['type'] == 'machine_deliver_to_node':
       node_id = message['node_id']
-      logger.info(
-          "Delivering message of type {message_type} to node {to_node_pretty} from node {from_node_pretty}",
-          extra={
-              'message_type': message['message']['type'],
-              'to_node_id': node_id,
-              'from_node_id': message['sending_node_id'],
-              'to_node_pretty': self._format_node_id_for_logs(node_id),
-              'from_node_pretty': self._format_node_id_for_logs(message['sending_node_id']),
-          })
       node = self._get_node_by_id(node_id)
       node.receive(message=message['message'], sender_id=message['sending_node_id'])
     else:
