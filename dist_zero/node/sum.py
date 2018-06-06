@@ -129,7 +129,7 @@ class SumNode(Node):
     elif message['type'] == 'added_adjacent_leaf':
       if message['variant'] == 'input':
         if self._input_node is not None:
-          node_id = ids.new_id()
+          node_id = ids.new_id('SumNode')
           self_handle = self.new_handle(node_id)
           self._controller.spawn_node(
               messages.sum.sum_node_config(
@@ -140,7 +140,7 @@ class SumNode(Node):
               ))
       elif message['variant'] == 'output':
         if self._output_node is not None:
-          node_id = ids.new_id()
+          node_id = ids.new_id('SumNode')
           self_handle = self.new_handle(node_id)
           self._controller.spawn_node(
               messages.sum.sum_node_config(
@@ -233,7 +233,7 @@ class SumNode(Node):
     for exporter in self._exporters.values():
       message = messages.sum.increment(self._unsent_total)
       exporter.export(message)
-    if self._output_node and self._output_node['type'] == 'LeafNode':
+    if self._output_node and self._output_node['id'].startswith('LeafNode'):
       message = messages.sum.increment(self._unsent_total)
       self.send(self._output_node, message)
 
@@ -451,7 +451,7 @@ class SumNodeSenderSplitMigrator(object):
     importers = list(self.node._importers.values())
 
     for i in range(n_new_nodes):
-      new_id = ids.new_id()
+      new_id = ids.new_id('SumNode')
 
       # The first total_remainder nodes start with a slightly larger total
       self._totals[new_id] = total_quotient + 1 if i < total_remainder else total_quotient

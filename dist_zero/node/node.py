@@ -34,7 +34,6 @@ class Node(object):
     :rtype: :ref:`handle`
     '''
     return {
-        'type': handle['type'],
         'id': handle['id'],
         'controller_id': handle['controller_id'],
         'transport': self._controller.transfer_transport(transport=handle['transport'], for_node_id=for_node_id),
@@ -42,7 +41,6 @@ class Node(object):
 
   def _handle(self, transport):
     return {
-        'type': self.__class__.__name__,
         'id': self.id,
         'controller_id': self._controller.id,
         'transport': transport,

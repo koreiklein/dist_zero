@@ -5,7 +5,6 @@ import os
 import docker
 import docker.errors
 
-import dist_zero.ids
 from dist_zero import machine, settings, errors, messages, spawners
 from .. import spawner
 
@@ -39,8 +38,6 @@ class DockerSpawner(spawner.Spawner):
     self._started = False
     self._docker_client = None
     self._system_id = system_id
-
-    self.id = dist_zero.ids.new_id()
 
     self._dir = os.path.dirname(os.path.realpath(__file__))
     self._root_dir = os.path.realpath(os.path.join(self._dir, '../../..'))
@@ -134,7 +131,7 @@ class DockerSpawner(spawner.Spawner):
         rm=True, # Remove intermediate containers
         labels={
             DockerSpawner.LABEL_DOCKER_SIMULATED_HARDWARE: DockerSpawner.LABEL_TRUE,
-            DockerSpawner.LABEL_INSTANCE: self.id,
+            DockerSpawner.LABEL_INSTANCE: self._system_id,
         },
     )
     self._image = image
@@ -196,7 +193,7 @@ class DockerSpawner(spawner.Spawner):
         detach=True,
         labels={
             DockerSpawner.LABEL_DOCKER_SIMULATED_HARDWARE: DockerSpawner.LABEL_TRUE,
-            DockerSpawner.LABEL_INSTANCE: self.id,
+            DockerSpawner.LABEL_INSTANCE: self._system_id,
             DockerSpawner.LABEL_CONTAINER_UUID: machine_controller_id,
         },
         auto_remove=False,
@@ -229,7 +226,7 @@ class DockerSpawner(spawner.Spawner):
     :return: The list of all docker container objects associated with
       this particular instance of `DockerSpawner`
     '''
-    labels_query = "{}={}".format(DockerSpawner.LABEL_INSTANCE, self.id)
+    labels_query = "{}={}".format(DockerSpawner.LABEL_INSTANCE, self._system_id)
     return self._docker.containers.list(all=True, filters={'label': labels_query})
 
   def get_running_containers(self):

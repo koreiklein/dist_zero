@@ -11,7 +11,7 @@ from .demo import demo
 
 @pytest.fixture
 def simulated_system():
-  system_id = dist_zero.ids.new_id()
+  system_id = dist_zero.ids.new_id('System')
   simulated_spawner = SimulatedSpawner(system_id=system_id, random_seed='TestSimulatedSpawner')
   system = SystemController(system_id=system_id, spawner=simulated_spawner)
   system.configure_logging()
@@ -22,7 +22,7 @@ def simulated_system():
 
 @pytest.fixture
 def virtual_system():
-  system_id = dist_zero.ids.new_id()
+  system_id = dist_zero.ids.new_id('System')
   virtual_spawner = DockerSpawner(system_id=system_id)
   system = SystemController(system_id=system_id, spawner=virtual_spawner)
   system.configure_logging()
@@ -35,7 +35,7 @@ def virtual_system():
 
 @pytest.fixture
 def cloud_system():
-  system_id = dist_zero.ids.new_id()
+  system_id = dist_zero.ids.new_id('System')
   cloud_spawner = Ec2Spawner(system_id=system_id)
   system = SystemController(system_id=system_id, spawner=cloud_spawner)
   system.configure_logging()

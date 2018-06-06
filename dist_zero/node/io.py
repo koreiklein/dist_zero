@@ -203,7 +203,7 @@ class InternalNode(Node):
     :return: A config for the new child node.
     :rtype: :ref:`message`
     '''
-    node_id = dist_zero.ids.new_id()
+    node_id = dist_zero.ids.new_id('LeafNode')
     self.logger.info(
         "Registering a new leaf node config for an internal node. name='{node_name}'",
         extra={
