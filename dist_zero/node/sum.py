@@ -130,24 +130,24 @@ class SumNode(Node):
       if message['variant'] == 'input':
         if self._input_node is not None:
           node_id = ids.new_id()
-          self_handle = self.fresh_handle(node_id)
+          self_handle = self.new_handle(node_id)
           self._controller.spawn_node(
               messages.sum.sum_node_config(
                   node_id=node_id,
                   senders=[],
                   receivers=[self_handle],
-                  input_node=self.convert_handle_for_new_node(handle=message['kid'], new_node_id=node_id),
+                  input_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
               ))
       elif message['variant'] == 'output':
         if self._output_node is not None:
           node_id = ids.new_id()
-          self_handle = self.fresh_handle(node_id)
+          self_handle = self.new_handle(node_id)
           self._controller.spawn_node(
               messages.sum.sum_node_config(
                   node_id=node_id,
                   senders=[self_handle],
                   receivers=[],
-                  output_node=self.convert_handle_for_new_node(handle=message['kid'], new_node_id=node_id),
+                  output_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
               ))
       else:
         raise errors.InternalError("Unrecognized variant {}".format(message['variant']))
@@ -252,13 +252,13 @@ class SumNode(Node):
     if self._spawning_migration:
       self.send(
           self._spawning_migration,
-          messages.sum.sum_node_started(sum_node_handle=self.connect_handle(other_node=self._spawning_migration)))
+          messages.sum.sum_node_started(sum_node_handle=self.new_handle(self._spawning_migration['id'])))
 
     if self._output_node:
-      self.send(self._output_node, messages.io.set_adjacent(node=self.connect_handle(self._output_node)))
+      self.send(self._output_node, messages.io.set_adjacent(node=self.new_handle(self._output_node['id'])))
 
     if self._input_node:
-      self.send(self._input_node, messages.io.set_adjacent(node=self.connect_handle(self._input_node)))
+      self.send(self._input_node, messages.io.set_adjacent(node=self.new_handle(self._input_node['id'])))
 
     for importer in self._importers.values():
       importer.initialize()
@@ -472,7 +472,7 @@ class SumNodeSenderSplitMigrator(object):
             senders=[],
             receivers=[self_handle],
             spawning_migration=self_handle,
-        ) for node_id, importers in self._partition.items() for self_handle in [self.node.fresh_handle(node_id)]
+        ) for node_id, importers in self._partition.items() for self_handle in [self.node.new_handle(node_id)]
     ]
 
   @property

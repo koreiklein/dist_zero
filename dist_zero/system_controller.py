@@ -127,20 +127,20 @@ class SystemController(object):
     return self._spawner.send_to_machine(
         machine=machine_handle, message=messages.machine.api_get_output_state(node_id=output_node_id), sock_type='tcp')
 
-  def fresh_handle(self, new_node_id, existing_node_id):
+  def generate_new_handle(self, new_node_id, existing_node_id):
     '''
-    Generate a new handle to fill a config for a new node to talk to an existing node.
+    Generate a new handle to fill a config for a new node to send to an existing node.
 
     :param str new_node_id: The id of a `Node` that has not yet been spawned.
     :param str existing_node_id: The id of an exsiting `Node`
 
-    :return: A :ref:`handle` that the new `Node` (once spawned) can use to talk to the existing `Node`.
+    :return: A :ref:`handle` that the new `Node` (once spawned) can use to send to the existing `Node`.
     :rtype: :ref:`handle`
     '''
     machine_handle = self._node_id_to_machine_handle[existing_node_id]
     return self._spawner.send_to_machine(
         machine=machine_handle,
-        message=messages.machine.api_fresh_handle(local_node_id=existing_node_id, new_node_id=new_node_id),
+        message=messages.machine.api_new_handle(local_node_id=existing_node_id, new_node_id=new_node_id),
         sock_type='tcp')
 
   def send_to_node(self, node_id, message):

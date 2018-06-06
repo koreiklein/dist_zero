@@ -15,7 +15,7 @@ def activate(receiver, transport):
   :param receiver: The :ref:`handle` of the node to be the receiver.
   :type receiver: :ref:`handle`
 
-  :param transport: A :ref:`transport` for talking to receiver
+  :param transport: A :ref:`transport` for sending to receiver
   :type transport: :ref:`transport`
   '''
   return {'type': 'activate_input', 'receiver': receiver, 'transport': transport}
@@ -28,7 +28,7 @@ def activate_output(sender, transport):
   :param sender: The :ref:`handle` of the node to be the sender.
   :type sender: :ref:`handle`
 
-  :param transport: A :ref:`transport` for talking to sender
+  :param transport: A :ref:`transport` for sending to sender
   :type transport: :ref:`transport`
   '''
   return {'type': 'activate_output', 'sender': sender, 'transport': transport}

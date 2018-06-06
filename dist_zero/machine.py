@@ -17,7 +17,6 @@ class MachineController(object):
   def send(self, node_handle, message, sending_node_id):
     '''
     Send a message to a node either managed by self, or linked to self.
-    A transport must be set for the sender to send to the destination node.
 
     :param handle node_handle: The handle of a node
     :type node_handle: :ref:`handle`
@@ -29,7 +28,7 @@ class MachineController(object):
 
   def spawn_node(self, node_config):
     '''
-    Start creating a new node on a linked machine.
+    Asynchronously trigger the creation of a new node on a linked machine.
 
     :param json node_config: A JSON serializable message that describes how to run the node.
     :param on_machine: The handle of a :any:`MachineController`.
@@ -39,22 +38,28 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
-  def fresh_transport_for(self, local_node, new_node_id):
-    raise RuntimeError("Abstract Superclass")
-
-  def convert_transport_for(self, existing_node_id, remote_node_handle):
-    raise RuntimeError("Abstract Superclass")
-
-  def new_transport_for(self, local_node, remote_node_handle):
+  def new_transport(self, node, for_node_id):
     '''
-    Create a transport that a remote node can use to link to a node on this machine.
+    Create a new transport for sending to a local node.
 
-    :param local_node: A node on this machine.
-    :type local_noded: `Node`
-    :param remote_node_handle: The :ref:`handle` of the node that will be using the returned handle to talk to local_node.
-    :type remote_node_handle: :ref:`handle`
+    :param node: A `Node` managed by self.
+    :type node: `Node`
+    :param str for_node_id: The id of some other `Node`
 
-    :return: A transport that the remote node can use to send to the local node.
+    :return: A :ref:`transport` that the other `Node` can use to send to ``node``.
+    :rtype: :ref:`transport`
+    '''
+    raise RuntimeError("Abstract Superclass")
+
+  def transfer_transport(self, transport, for_node_id):
+    '''
+    Create a new transport suitable for a distinct sender.
+
+    :param transport: A :ref:`transport` that some local sender `Node` can use to send to some receiver `Node`.
+    :type transport: :ref:`transport`
+    :param str for_node_id: The id of some new sender `Node`.
+
+    :return: A :ref:`transport` that the new sender `Node` can use to send to the same receiver `Node`.
     :rtype: :ref:`transport`
     '''
     raise RuntimeError("Abstract Superclass")
@@ -113,14 +118,11 @@ class NodeManager(MachineController):
 
     return self.start_node(node_config).id
 
-  def fresh_transport_for(self, local_node, new_node_id):
+  def new_transport(self, node, for_node_id):
     return messages.machine.ip_transport(self._ip_host)
 
-  def new_transport_for(self, local_node, remote_node_handle):
-    return messages.machine.ip_transport(self._ip_host)
-
-  def convert_transport_for(self, existing_node_id, remote_node_handle):
-    return messages.machine.ip_transport(self._ip_host)
+  def transfer_transport(self, transport, for_node_id):
+    return dict(transport)
 
   def get_node(self, handle):
     return self._node_by_id[handle['id']]
@@ -180,17 +182,17 @@ class NodeManager(MachineController):
           'status': 'ok',
           'data': node.create_kid_config(message['new_node_name'], message['machine_controller_handle']),
       }
-    elif message['type'] == 'api_fresh_handle':
+    elif message['type'] == 'api_new_handle':
       node = self._node_by_id[message['local_node_id']]
       logger.debug(
-          "API is creating a fresh handle for a new node {new_node_id} to talk to the existing local node {local_node_id}",
+          "API is creating a new handle for a new node {new_node_id} to send to the existing local node {local_node_id}",
           extra={
               'local_node_id': message['local_node_id'],
               'new_node_id': message['new_node_id'],
           })
       return {
           'status': 'ok',
-          'data': node.fresh_handle(other_node_id=message['new_node_id']),
+          'data': node.new_handle(for_node_id=message['new_node_id']),
       }
     elif message['type'] == 'api_get_output_state':
       return {

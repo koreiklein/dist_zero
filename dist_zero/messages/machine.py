@@ -50,7 +50,7 @@ def machine_deliver_to_node(node_id, message, sending_node_id):
 
 
 # API messages
-def api_fresh_handle(local_node_id, new_node_id):
+def api_new_handle(local_node_id, new_node_id):
   '''
   Get a new handle that can be used to send messages to a local node.  The handle will be used
   by a node that has not yet been spawned.
@@ -58,7 +58,7 @@ def api_fresh_handle(local_node_id, new_node_id):
   :param str local_node_id: The id of an exsiting `Node` on this machine.
   :param str new_node_id: The id of a `Node` that has not yet been spawned.
   '''
-  return {'type': 'api_fresh_handle', 'local_node_id': local_node_id, 'new_node_id': new_node_id}
+  return {'type': 'api_new_handle', 'local_node_id': local_node_id, 'new_node_id': new_node_id}
 
 
 def api_get_output_state(node_id):

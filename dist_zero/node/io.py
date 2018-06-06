@@ -128,7 +128,7 @@ class LeafNode(Node):
 
   def initialize(self):
     self.logger.info("leaf node sending 'added_leaf' message to parent")
-    self.send(self.parent, messages.io.added_leaf(self.connect_handle(self.parent)))
+    self.send(self.parent, messages.io.added_leaf(self.new_handle(self.parent['id'])))
 
   def elapse(self, ms):
     if self._recorded_user is not None:
@@ -167,10 +167,10 @@ class InternalNode(Node):
   def initialize(self):
     if self._variant == 'input':
       self.logger.info("internal node sending 'set_input' message to adjacent node")
-      self.send(self._adjacent, messages.io.set_input(self.connect_handle(self._adjacent)))
+      self.send(self._adjacent, messages.io.set_input(self.new_handle(self._adjacent['id'])))
     elif self._variant == 'output':
       self.logger.info("internal node sending 'set_output' message to adjacent node")
-      self.send(self._adjacent, messages.io.set_output(self.connect_handle(self._adjacent)))
+      self.send(self._adjacent, messages.io.set_output(self.new_handle(self._adjacent['id'])))
     else:
       raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
@@ -216,7 +216,7 @@ class InternalNode(Node):
     return messages.io.leaf_config(
         node_id=node_id,
         name=name,
-        parent=self.fresh_handle(node_id),
+        parent=self.new_handle(node_id),
         variant=self._variant,
         initial_state=self._initial_state,
     )
@@ -238,5 +238,4 @@ class InternalNode(Node):
 
       self.send(self._adjacent,
                 messages.io.added_adjacent_leaf(
-                    kid=self.convert_handle_for_existing_node(existing_handle=kid, new_node_handle=self._adjacent),
-                    variant=self._variant))
+                    kid=self.transfer_handle(handle=kid, for_node_id=self._adjacent['id']), variant=self._variant))
