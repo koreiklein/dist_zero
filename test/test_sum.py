@@ -15,14 +15,14 @@ logger = logging.getLogger(__name__)
 @pytest.mark.simulated
 def test_times_in_order():
   RecordedUser('user b', [
-      (60, messages.sum.increment(1)),
-      (80, messages.sum.increment(2)),
+      (60, messages.io.input_action(1)),
+      (80, messages.io.input_action(2)),
   ])
 
   with pytest.raises(errors.InternalError):
     RecordedUser('user b', [
-        (80, messages.sum.increment(2)),
-        (60, messages.sum.increment(1)),
+        (80, messages.io.input_action(2)),
+        (60, messages.io.input_action(1)),
     ])
 
 
@@ -88,17 +88,17 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type):
       new_node_name='input_b',
       machine_controller_handle=machine_b_handle,
       recorded_user=RecordedUser('user b', [
-          (2030, messages.sum.increment(2)),
-          (2060, messages.sum.increment(1)),
+          (2030, messages.io.input_action(2)),
+          (2060, messages.io.input_action(1)),
       ]))
   user_c_input_id = demo.system.create_kid(
       parent_node_id=root_input_node_id,
       new_node_name='input_c',
       machine_controller_handle=machine_c_handle,
       recorded_user=RecordedUser('user c', [
-          (2033, messages.sum.increment(1)),
-          (2043, messages.sum.increment(1)),
-          (2073, messages.sum.increment(1)),
+          (2033, messages.io.input_action(1)),
+          (2043, messages.io.input_action(1)),
+          (2073, messages.io.input_action(1)),
       ]))
 
   demo.run_for(ms=5000)

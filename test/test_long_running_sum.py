@@ -110,7 +110,7 @@ class TestLongRunningSum(object):
               machine_controller_handle=self.machine_handles[i % len(self.machine_handles)],
               recorded_user=RecordedUser(
                   'user {}'.format(i),
-                  [(t, messages.sum.increment(int(rand.random() * 20)))
+                  [(t, messages.io.input_action(int(rand.random() * 20)))
                    for t in sorted(rand.random() * remaining_time_ms
                                    for x in range(int(remaining_time_ms / AVE_INTER_MESSAGE_TIME_MS)))])))
 
