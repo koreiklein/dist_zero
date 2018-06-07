@@ -164,7 +164,7 @@ class SumNode(Node):
         self._importers[node['id']] = self._new_importer(sender=node)
       elif direction == 'receiver':
         if node['id'] in self._exporters:
-          raise errors.InternalError("Received connect_internal for an importer that had already been added.")
+          raise errors.InternalError("Received connect_internal for an exporter that had already been added.")
         self._exporters[node['id']] = self._new_exporter(receiver=node)
       else:
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
