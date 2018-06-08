@@ -27,7 +27,7 @@ class MachineRunner(object):
 
   STEP_LENGTH_MS = 5 # Target number of milliseconds per iteration of the run loop.
 
-  def __init__(self, machine_id, machine_name, mode, system_id):
+  def __init__(self, machine_config):
 
     self._udp_port = settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT
     self._udp_dst = ('', self._udp_port)
@@ -39,12 +39,7 @@ class MachineRunner(object):
     self._tcp_socket = None
 
     self.node_manager = machine.NodeManager(
-        machine_id=machine_id,
-        machine_name=machine_name,
-        mode=mode,
-        system_id=system_id,
-        ip_host=socket.gethostname(),
-        send_to_machine=self._send_to_machine)
+        machine_config=machine_config, ip_host=socket.gethostname(), send_to_machine=self._send_to_machine)
     '''The `NodeManager` underlying this `MachineRunner`'''
 
   def _send_to_machine(self, message, transport):

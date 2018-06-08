@@ -27,6 +27,12 @@ class SumNode(Node):
   SEND_INTERVAL_MS = 30
   '''The number of ms between sends to receivers.'''
 
+  TIME_BETWEEN_ACKNOWLEDGEMENTS_MS = 30
+  '''The number of ms between acknowledgements sent to senders.'''
+
+  TIME_BETWEEN_RETRANSMISSION_CHECKS_MS = 20
+  '''The number of ms between checks for whether we should retransmit to receivers.'''
+
   def __init__(self, node_id, senders, receivers, spawning_migration, input_node, output_node, pending_sender_ids,
                controller):
     '''
@@ -58,6 +64,18 @@ class SumNode(Node):
 
     self.migrator = None
 
+    self._least_unused_sequence_number = 0
+    self._branching = []
+    '''
+    An ordered list of pairs
+    (sent_sequence_number, sender_id_to_least_unreceived_remote_sequence_number)
+
+    where sent_sequence_number is a sequence number that has been sent on all exporters
+    and sender_id_to_least_unreceived_remote_sequence_number is a map from each sender id
+        to the least_unreceived_remote_sequence_number of its associated `Importer` at the
+        time that sent_sequence_number was sent.
+    '''
+
     self._importers = {sender['id']: self._new_importer(sender) for sender in senders}
     self._exporters = {receiver['id']: self._new_exporter(receiver) for receiver in receivers}
 
@@ -73,6 +91,10 @@ class SumNode(Node):
     self._sent_total = 0
     self._unsent_total = 0
     self._unsent_time_ms = 0
+    self._now_ms = 0
+
+    self._time_since_sent_acknowledgements = 0
+    self._time_since_retransmitted_expired_pending_messages = 0
 
     super(SumNode, self).__init__(logger)
 
@@ -80,7 +102,12 @@ class SumNode(Node):
     return importer.Importer(node=self, sender=sender)
 
   def _new_exporter(self, receiver):
-    return exporter.Exporter(node=self, receiver=receiver)
+    return exporter.Exporter(
+        node=self,
+        receiver=receiver,
+        # NOTE(KK): When you implement robustness during a migration, you should think very very carefully
+        #   about how to set this parameter to guarantee correctness.
+        least_unacknowledged_sequence_number=self._least_unused_sequence_number)
 
   def migration_finished(self, remaining_sender_ids):
     '''
@@ -119,9 +146,24 @@ class SumNode(Node):
     if not self._pending_sender_ids:
       self.send(self._spawning_migration, messages.migration.middle_node_is_duplicated())
 
-  def receive_internal(self, sender_id, message):
+  def deliver(self, amount):
+    '''
+    Called by `Importer` instances in self._importers to deliver messages to self.
+    Also called for an edge sum node adjacent to an input_node when the input node triggers incrementing the sum.
+    '''
+    self._unsent_total += amount
+
+  def receive(self, sender_id, message):
     if message['type'] == 'increment':
-      self._unsent_total += message['amount']
+      # Don't necessary deliver the message yet, as it may be out of order.
+      # Instead, pass it to the appropriate importer and let the importer decide when to deliver the message.
+      self._importers[sender_id].import_message(message, sender_id)
+    elif message['type'] == 'acknowledge':
+      self._exporters[sender_id].acknowledge(message['sequence_number'])
+    elif message['type'] == 'input_action':
+      if self._input_node is None:
+        raise errors.InternalError("SumNode should not be receiving an input action without an input_node")
+      self.deliver(message['number'])
     elif message['type'] == 'set_input':
       self._input_node = message['input_node']
     elif message['type'] == 'set_output':
@@ -164,7 +206,7 @@ class SumNode(Node):
         self._importers[node['id']] = self._new_importer(sender=node)
       elif direction == 'receiver':
         if node['id'] in self._exporters:
-          raise errors.InternalError("Received connect_internal for an importer that had already been added.")
+          raise errors.InternalError("Received connect_internal for an exporter that had already been added.")
         self._exporters[node['id']] = self._new_exporter(receiver=node)
       else:
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
@@ -217,29 +259,87 @@ class SumNode(Node):
         self.logger.info("Hit sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
         if self.migrator is None:
           self._hit_sender_limit()
-      self._send_to_all()
+
+      self._send_forward_messages()
+
+    self._now_ms += ms
+
+    self._time_since_sent_acknowledgements += ms
+    self._time_since_retransmitted_expired_pending_messages += ms
+
+    if self._time_since_sent_acknowledgements > SumNode.TIME_BETWEEN_ACKNOWLEDGEMENTS_MS:
+      self._send_acknowledgement_messages()
+      self._time_since_sent_acknowledgements = 0
+
+    if self._time_since_retransmitted_expired_pending_messages > SumNode.TIME_BETWEEN_RETRANSMISSION_CHECKS_MS:
+      self._retransmit_expired_pending_messages()
+      self._time_since_retransmitted_expired_pending_messages = 0
 
   def _hit_sender_limit(self):
     self.migrator = SumNodeSenderSplitMigrator(self)
     self.migrator.start()
 
-  def _send_to_all(self):
+  def _least_unacknowledged_sequence_number(self):
+    '''
+    The least sequence number that has not been acknowledged by every Exporter responsible for it.
+    '''
+    result = self._least_unused_sequence_number
+    for exporter in self._exporters.values():
+      result = min(result, exporter.least_unacknowledged_sequence_number)
+    return result
+
+  def _send_acknowledgement_messages(self):
+    least_unacknowledged_sequence_number = self._least_unacknowledged_sequence_number()
+
+    branching_index = 0
+    while branching_index < len(
+        self._branching) and self._branching[branching_index][0] < least_unacknowledged_sequence_number:
+      # PERF(KK): binary search is possible here.
+      branching_index += 1
+
+    if branching_index == 0:
+      # No new messages need to be acknowledged.
+      pass
+    else:
+      # The last map of sender_id to least_unreceived_remote_sequence_number before branching_index
+      # will contain all the acknowledgements we need to send.
+      self.logger.debug("sum node sending acknowledgement message to importers")
+      for sender_id, least_unreceived_remote_sequence_number in self._branching[branching_index - 1][1].items():
+        self._importers[sender_id].acknowledge(least_unreceived_remote_sequence_number)
+
+      self._branching = self._branching[branching_index:]
+
+  def _send_forward_messages(self):
     self.logger.debug(
         "Sending new increment of {unsent_total} to all {n_receivers} receivers",
         extra={
             'unsent_total': self._unsent_total,
             'n_receivers': len(self._exporters)
         })
+
+    sequence_number = self._least_unused_sequence_number
     for exporter in self._exporters.values():
-      message = messages.sum.increment(self._unsent_total)
-      exporter.export(message)
+      exporter.export_message(
+          message=messages.sum.increment(amount=self._unsent_total, sequence_number=sequence_number),
+          time_ms=self._now_ms,
+      )
+    self._branching.append((sequence_number, {
+        sender_id: importer.least_unreceived_remote_sequence_number
+        for sender_id, importer in self._importers.items()
+    }))
+    self._least_unused_sequence_number += 1
+
     if self._output_node and self._output_node['id'].startswith('LeafNode'):
-      message = messages.sum.increment(self._unsent_total)
+      message = messages.io.output_action(self._unsent_total)
       self.send(self._output_node, message)
 
     self._unsent_time_ms = 0
     self._sent_total += self._unsent_total
     self._unsent_total = 0
+
+  def _retransmit_expired_pending_messages(self):
+    for exporter in self._exporters.values():
+      exporter.retransmit_expired_pending_messages(self._now_ms)
 
   def initialize(self):
     self.logger.info(

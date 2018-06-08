@@ -75,31 +75,36 @@ class LeafNode(Node):
     self.logger.info("Activating Leaf Node {node_id}", extra={'node_id': self.id})
     # Process all the postponed messages now
     for m in self._pre_active_messages:
-      self._receive_increment_message(m)
+      self._receive_input_action(m)
 
-  def receive_internal(self, message, sender_id):
+  def receive(self, message, sender_id):
     if message['type'] == 'set_adjacent':
       self._set_adjacent(message['node'])
-    elif message['type'] == 'increment':
-      self._receive_increment_message(message)
+    elif message['type'] == 'input_action':
+      self._receive_input_action(message)
+    elif message['type'] == 'output_action':
+      self._receive_output_action(message)
     else:
       raise RuntimeError("Unrecognized message type {}".format(message['type']))
 
-  def _receive_increment_message(self, message):
+  def _receive_input_action(self, message):
+    if self._variant != 'input':
+      raise errors.InternalError("Only 'input' variant nodes may receive input actions")
+
     if self._adjacent is not None:
-      if self._variant == 'input':
-        self.logger.debug("Forwarding input message to adjacent {adjacent}", extra={'adjacent': self._adjacent})
-        self.send(self._adjacent, message)
-      elif self._variant == 'output':
-        increment = message['amount']
-        self.logger.debug("Output incrementing state by {increment}", extra={'increment': increment})
-        self._update_state(lambda amount: amount + increment)
-      else:
-        raise errors.InternalError("Unrecognized variant {}".format(self._variant))
+      self.logger.debug("Forwarding input message to adjacent {adjacent}", extra={'adjacent': self._adjacent})
+      self.send(self._adjacent, message)
     else:
-      # Postpone message till later
-      self.logger.debug("Leaf node is postponing a message send since not all receivers are active.")
+      self.logger.debug("Leaf node is postponing an input_action message send since not all receivers are active.")
       self._pre_active_messages.append(message)
+
+  def _receive_output_action(self, message):
+    if self._variant != 'output':
+      raise errors.InternalError("Only 'output' variant nodes may receive output actions")
+
+    increment = message['number']
+    self.logger.debug("Output incrementing state by {increment}", extra={'increment': increment})
+    self._update_state(lambda amount: amount + increment)
 
   @staticmethod
   def _init_recorded_user_from_config(recorded_user_json):
@@ -134,7 +139,7 @@ class LeafNode(Node):
     if self._recorded_user is not None:
       for t, msg in self._recorded_user.elapse_and_get_messages(ms):
         self.logger.info("Simulated user generated a message", extra={'recorded_message': msg})
-        self.receive_internal(msg, sender_id=None)
+        self.receive(msg, sender_id=None)
 
 
 class InternalNode(Node):
@@ -174,7 +179,7 @@ class InternalNode(Node):
     else:
       raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
-  def receive_internal(self, message, sender_id):
+  def receive(self, message, sender_id):
     if message['type'] == 'added_leaf':
       self.added_leaf(message['kid'])
     else:

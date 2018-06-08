@@ -51,11 +51,7 @@ class TestLongRunningSum(object):
     self._spawn_inputs_loop(n_inputs=20, total_time_ms=20 * 1000)
 
   def _spawn_initial_nodes(self):
-    self.machine_handles = self.system.create_machines([
-        messages.machine.machine_config(
-            machine_name='machine {}'.format(i), machine_controller_id=dist_zero.ids.new_id('Machine'))
-        for i in range(self.n_machines)
-    ])
+    self.machine_handles = self.demo.new_machine_controllers(self.n_machines)
 
     machine_a_handle = self.machine_handles[0]
 
@@ -91,6 +87,8 @@ class TestLongRunningSum(object):
 
     Each input should randomly send some increment messages.
     '''
+    rand = random.Random('static seed')
+
     time_per_spawn_ms = total_time_ms / n_inputs
     start_time_ms = self.demo.now_ms()
     end_time_ms = start_time_ms + total_time_ms
@@ -112,8 +110,8 @@ class TestLongRunningSum(object):
               machine_controller_handle=self.machine_handles[i % len(self.machine_handles)],
               recorded_user=RecordedUser(
                   'user {}'.format(i),
-                  [(t, messages.sum.increment(int(random.random() * 20)))
-                   for t in sorted(random.random() * remaining_time_ms
+                  [(t, messages.io.input_action(int(rand.random() * 20)))
+                   for t in sorted(rand.random() * remaining_time_ms
                                    for x in range(int(remaining_time_ms / AVE_INTER_MESSAGE_TIME_MS)))])))
 
     # Let things settle down

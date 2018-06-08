@@ -1,4 +1,5 @@
 import logging
+import tempfile
 import os
 import time
 
@@ -204,6 +205,11 @@ class Ec2Spawner(spawner.Spawner):
 
     logger.info("Rsyncing dist_zero files to aws instance {aws_instance_id}", extra=extra)
 
+    # Create local machine config file
+    local_config_file = tempfile.NamedTemporaryFile(mode='w')
+    json.dump(machine_config, local_config_file)
+    local_config_file.close()
+
     # Do the rsync
     rsync_ssh_params = 'ssh -oStrictHostKeyChecking=no -i {keyfile}'
     rsync_excludes = '--exclude "*.pyc" --exclude "*__pycache__*" --exclude .pytest_cache'
@@ -211,6 +217,8 @@ class Ec2Spawner(spawner.Spawner):
         'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} dist_zero {user}@{instance}:/dist_zero/ >> {outfile}',
         'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} Pipfile {user}@{instance}:/dist_zero/Pipfile >> {outfile}',
         'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} Pipfile.lock {user}@{instance}:/dist_zero/Pipfile.lock >> {outfile}',
+        ('rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} ' + local_config_file.name +
+         ' {user}@{instance}:/dist_zero/machine_config.json >> {outfile}'),
     ]:
       command = precommand.format(
           rsync_ssh_params=rsync_ssh_params.format(keyfile='.keys/dist_zero.pem'),
@@ -238,15 +246,7 @@ class Ec2Spawner(spawner.Spawner):
     _exec_command("cd /dist_zero && pipenv --python 3.6.5 && pipenv sync")
 
     logger.info("Starting dist_zero.machine_init process on remote machine", extra=extra)
-    command = ("cd /dist_zero; "
-               "nohup pipenv run python -m "
-               "dist_zero.machine_init '{machine_controller_id}' '{machine_name}' '{mode}' '{system_id}' &").format(
-                   machine_controller_id=machine_controller_id,
-                   machine_name=machine_name,
-                   mode=spawners.MODE_CLOUD,
-                   system_id=self._system_id)
-    logger.info("Starting a MachineController process on an aws instance", extra=extra)
-    _exec_command(command)
+    _exec_command("cd /dist_zero; nohup pipenv run python -m dist_zero.machine_init /dist_zero/machine_config.json &")
 
     handle = messages.machine.machine_controller_handle(machine_controller_id)
     self._handle_by_id[machine_controller_id] = handle

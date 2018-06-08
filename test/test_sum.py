@@ -15,20 +15,40 @@ logger = logging.getLogger(__name__)
 @pytest.mark.simulated
 def test_times_in_order():
   RecordedUser('user b', [
-      (60, messages.sum.increment(1)),
-      (80, messages.sum.increment(2)),
+      (60, messages.io.input_action(1)),
+      (80, messages.io.input_action(2)),
   ])
 
   with pytest.raises(errors.InternalError):
     RecordedUser('user b', [
-        (80, messages.sum.increment(2)),
-        (60, messages.sum.increment(1)),
+        (80, messages.io.input_action(2)),
+        (60, messages.io.input_action(1)),
     ])
 
 
-def test_sum_two_nodes_on_three_machines(demo):
+@pytest.mark.parametrize('drop_rate,network_error_type,seed', [
+    (0.0, 'drop', 'a'),
+    (0.02, 'drop', 'a'),
+    (0.02, 'drop', 'b'),
+    (0.02, 'drop', 'c'),
+    (0.02, 'drop', 'd'),
+    (0.02, 'drop', 'e'),
+    (0.02, 'drop', 'f'),
+    (0.02, 'drop', 'g'),
+    (0.27, 'duplicate', 'a'),
+    (0.27, 'reorder', 'a'),
+])
+def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, seed):
   # Create node controllers (each simulates the behavior of a separate machine.
-  machine_a_handle, machine_b_handle, machine_c_handle = demo.new_machine_controllers(3)
+  network_errors_config = messages.machine.std_simulated_network_errors_config()
+  network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
+  network_errors_config['outgoing'][network_error_type]['regexp'] = '.*increment.*'
+
+  machine_a_handle, machine_b_handle, machine_c_handle = demo.new_machine_controllers(
+      3,
+      base_config={'network_errors_config': network_errors_config},
+      random_seed=seed,
+  )
 
   demo.run_for(ms=200)
 
@@ -75,20 +95,20 @@ def test_sum_two_nodes_on_three_machines(demo):
       new_node_name='input_b',
       machine_controller_handle=machine_b_handle,
       recorded_user=RecordedUser('user b', [
-          (2030, messages.sum.increment(2)),
-          (2060, messages.sum.increment(1)),
+          (2030, messages.io.input_action(2)),
+          (2060, messages.io.input_action(1)),
       ]))
   user_c_input_id = demo.system.create_kid(
       parent_node_id=root_input_node_id,
       new_node_name='input_c',
       machine_controller_handle=machine_c_handle,
       recorded_user=RecordedUser('user c', [
-          (2033, messages.sum.increment(1)),
-          (2043, messages.sum.increment(1)),
-          (2073, messages.sum.increment(1)),
+          (2033, messages.io.input_action(1)),
+          (2043, messages.io.input_action(1)),
+          (2073, messages.io.input_action(1)),
       ]))
 
-  demo.run_for(ms=3000)
+  demo.run_for(ms=5000)
 
   user_b_state = demo.system.get_output_state(user_b_output_id)
   user_c_state = demo.system.get_output_state(user_c_output_id)

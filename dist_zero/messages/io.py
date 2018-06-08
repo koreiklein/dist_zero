@@ -3,6 +3,24 @@ Messages to be received by input and output nodes.
 '''
 
 
+def input_action(number):
+  '''
+  A simple input action that generates a number
+
+  :param int number: A number
+  '''
+  return {'type': 'input_action', 'number': number}
+
+
+def output_action(number):
+  '''
+  A simple output action that generates a number
+
+  :param int number: A number
+  '''
+  return {'type': 'output_action', 'number': number}
+
+
 def set_adjacent(node):
   '''
   Inform a node of its adjacent node.

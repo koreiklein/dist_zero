@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 
 class SimulatedSpawner(spawner.Spawner):
   '''
-  A class for creating instances of `MachineRunner` each in its own container to simulate distinct machines in tests.
+  A spawner class for simulating all machines within the calling process.
+
+  This class is designed to be used only during tests in 'simulated' mode.
 
   Tests should typically create a single instance of this factory, and use it to generate
   all their `MachineController` instances.
@@ -167,10 +169,7 @@ class SimulatedSpawner(spawner.Spawner):
 
   def create_machine(self, machine_config):
     result = machine.NodeManager(
-        machine_id=machine_config['id'],
-        machine_name=machine_config['machine_name'],
-        mode=self.mode(),
-        system_id=self._system_id,
+        machine_config=machine_config,
         ip_host=machine_config['id'],
         send_to_machine=self._node_manager_send_to_machine,
     )

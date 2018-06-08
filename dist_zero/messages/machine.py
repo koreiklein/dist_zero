@@ -15,14 +15,67 @@ def machine_controller_handle(machine_id):
 # Machine configs
 
 
-def machine_config(machine_controller_id, machine_name):
+def std_simulated_network_errors_config():
   '''
-  A machine config
+  Configuration for simulating network errors.
+
+  This configuration produces no simulated errors at all.
+
+  ```
+  {
+    'outgoing': {
+      'drop': { 'rate': 0.0, 'regexp': '.*' },
+      'reorder': { 'rate': 0.0, 'regexp': '.*' },
+      'duplicate': { 'rate': 0.0, 'regexp': '.*' },
+    },
+    'incomming': {
+      'drop': { 'rate': 0.0, 'regexp': '.*' },
+      'reorder': { 'rate': 0.0, 'regexp': '.*' },
+      'duplicate': { 'rate': 0.0, 'regexp': '.*' },
+    },
+  }
+  ```
+  '''
+  return {
+      direction: {error_type: {
+          'rate': 0.0,
+          'regexp': '.*'
+      }
+                  for error_type in ['drop', 'reorder', 'duplicate']}
+      for direction in ['incomming', 'outgoing']
+  }
+
+
+def machine_config(
+    machine_controller_id,
+    machine_name,
+    system_id,
+    mode,
+    network_errors_config=None,
+    random_seed=None,
+):
+  '''
+  A machine configuration.
 
   :param str machine_controller_id: The unique id for the new machine.
   :param str machine_name: A human readable name for the new machine.
+  :param str system_id: The unique id for the overall system.
+  :param str mode: A mode (from `dist_zero.spawners`) (simulated, virtual, or cloud)
+
+  :param dict network_errors_config: Configuration for simulating network errors.
+    See `std_simulated_network_errors_config` for an example.
+  :param str random_seed: An optional seed to use for all this machine's randomness.  If it is not provided,
+    the machine will get a random seed from the underlying operating system.
   '''
-  return {'type': 'machine_config', 'machine_name': machine_name, 'id': machine_controller_id}
+  return {
+      'type': 'machine_config',
+      'machine_name': machine_name,
+      'id': machine_controller_id,
+      'mode': mode,
+      'system_id': system_id,
+      'network_errors_config': network_errors_config or std_simulated_network_errors_config(),
+      'random_seed': random_seed,
+  }
 
 
 def machine_start_node(node_config):

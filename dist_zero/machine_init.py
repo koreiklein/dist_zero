@@ -1,6 +1,7 @@
+import json
+import logging
 import sys
 import traceback
-import logging
 
 from dist_zero.machine_runner import MachineRunner
 
@@ -11,8 +12,9 @@ def run_new_machine_runner_from_args():
   '''
   Read arguments from `sys.argv` and enter the runloop of a new `MachineController` instance for the current host.
   '''
-  machine_id, machine_name, mode, system_id = sys.argv[1:]
-  machine_runner = MachineRunner(machine_id=machine_id, machine_name=machine_name, mode=mode, system_id=system_id)
+  config_filename = sys.argv[1]
+  with open(config_filename, 'r') as f:
+    machine_runner = MachineRunner(machine_config=json.load(f))
   machine_runner.configure_logging()
   machine_runner.runloop()
 

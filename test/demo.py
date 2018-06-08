@@ -1,3 +1,4 @@
+import json
 import pytest
 import time
 
@@ -50,7 +51,7 @@ class Demo(object):
   Demos may run in simulated, virtual, or cloud mode.
   '''
 
-  def __init__(self, mode=spawners.MODE_SIMULATED):
+  def __init__(self, mode=spawners.MODE_SIMULATED, random_seed=None):
     '''
     :param str mode: The mode in which to run the demo.
     '''
@@ -62,6 +63,8 @@ class Demo(object):
     self.simulated_spawner = None
     self.virtual_spawner = None
     self.cloud_spawner = None
+
+    self.random_seed = 'TestSimulatedSpawner' if random_seed is None else random_seed
 
   def start(self):
     '''Start the demo.'''
@@ -85,8 +88,7 @@ class Demo(object):
   def _set_system_by_mode(self):
     self.system_id = dist_zero.ids.new_id('System')
     if self.mode == spawners.MODE_SIMULATED:
-      self.spawner = self.simulated_spawner = SimulatedSpawner(
-          system_id=self.system_id, random_seed='TestSimulatedSpawner')
+      self.spawner = self.simulated_spawner = SimulatedSpawner(system_id=self.system_id, random_seed=self.random_seed)
     elif self.mode == spawners.MODE_VIRTUAL:
       self.spawner = self.virtual_spawner = DockerSpawner(system_id=self.system_id)
     elif self.mode == spawners.MODE_CLOUD:
@@ -115,11 +117,12 @@ class Demo(object):
     else:
       time.sleep(ms / 1000)
 
-  def new_machine_controllers(self, n):
+  def new_machine_controllers(self, n, base_config=None, random_seed=None):
     '''
     Create n new machine controllers
 
     :param int n: The number of new `MachineController` instances to create.
+    :param dict base_config: A dictionary of extra parameters to add to the configs for all the newly created machines or `None`.
     :return: The list of the new handles.
     :rtype: list
     '''
@@ -127,8 +130,16 @@ class Demo(object):
     for i in range(n):
       name = 'machine {}'.format(self.nodes)
       self.nodes += 1
-      configs.append(
-          messages.machine.machine_config(machine_name=name, machine_controller_id=dist_zero.ids.new_id('Machine')))
+
+      machine_config = json.loads(json.dumps(base_config)) if base_config else {}
+      machine_config['machine_name'] = name
+      machine_config['machine_controller_id'] = dist_zero.ids.new_id('Machine')
+      machine_config['mode'] = self.mode
+      machine_config['system_id'] = self.system_id
+      if random_seed is not None:
+        machine_config['random_seed'] = "{}:{}".format(random_seed, n)
+
+      configs.append(messages.machine.machine_config(**machine_config))
 
     return self.system.create_machines(configs)
 
