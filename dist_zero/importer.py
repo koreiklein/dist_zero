@@ -55,10 +55,9 @@ class Importer(object):
     if rsn < self._least_unreceived_remote_sequence_number or rsn in self._remote_sequence_number_to_early_message:
       self._node.logger.warning(
           ("Received duplicate message for sequence number {remote_sequence_number}"
-           " from sender {sender_id}: Message: {duplicate_message}"),
+           " from sender {sender_id}"),
           extra={
               'remote_sequence_number': rsn,
-              'duplicate_message': message,
               'sender_id': sender_id,
           })
     else:
