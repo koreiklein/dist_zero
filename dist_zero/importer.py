@@ -5,6 +5,10 @@ class Importer(object):
   '''
   Instances of Importer will be used by nodes internal to a computation to represent
   a source of input messages to that node.
+
+  As messages arrive from the sender, the underlying `Node` should pass them to the `Importer.import_message` method.
+  Internally, the `Importer` will de-duplicate and re-order messages, and eventually call `SumNode.deliver` on
+  each message, exactly once, and in the right order.
   '''
 
   def __init__(self, node, sender):
@@ -32,6 +36,13 @@ class Importer(object):
     return self._least_unreceived_remote_sequence_number
 
   def acknowledge(self, remote_sequence_number):
+    '''
+    Send an acknowledgement to the associated sender.
+
+    :param int remote_sequence_number: A sequence number from the sender.
+      When acknowledge is called, all messages with sequence numbers less than remote_sequence_number must
+      be acknowledged by the underlying `Node`.
+    '''
     self._node.send(self._sender, messages.sum.acknowledge(remote_sequence_number))
 
   def initialize(self):
@@ -39,7 +50,7 @@ class Importer(object):
                     messages.migration.connect_internal(
                         node=self._node.new_handle(self._sender['id']), direction='receiver'))
 
-  def receive(self, message, sender_id):
+  def import_message(self, message, sender_id):
     rsn = message['sequence_number']
     if rsn < self._least_unreceived_remote_sequence_number or rsn in self._remote_sequence_number_to_early_message:
       self._node.logger.warning(

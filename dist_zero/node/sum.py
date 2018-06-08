@@ -157,7 +157,7 @@ class SumNode(Node):
     if message['type'] == 'increment':
       # Don't necessary deliver the message yet, as it may be out of order.
       # Instead, pass it to the appropriate importer and let the importer decide when to deliver the message.
-      self._importers[sender_id].receive(message, sender_id)
+      self._importers[sender_id].import_message(message, sender_id)
     elif message['type'] == 'acknowledge':
       self._exporters[sender_id].acknowledge(message['sequence_number'])
     elif message['type'] == 'input_action':
@@ -319,7 +319,7 @@ class SumNode(Node):
 
     sequence_number = self._least_unused_sequence_number
     for exporter in self._exporters.values():
-      exporter.export(
+      exporter.export_message(
           message=messages.sum.increment(amount=self._unsent_total, sequence_number=sequence_number),
           time_ms=self._now_ms,
       )

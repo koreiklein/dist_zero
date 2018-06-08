@@ -7,6 +7,12 @@ class Exporter(object):
   a destination for messages leaving the node.
 
   During migrations, they are responsible for duplicating messages.
+
+  Retransmission:
+
+  When a node tries to export a message with the exporter, the exporter will send the message,
+  and watch to see whether the message is acknowleded.  If after enough time the message is not acknowledged,
+  it will resubmit it.
   '''
 
   PENDING_EXPIRATION_TIME_MS = 1 * 1000
@@ -53,7 +59,7 @@ class Exporter(object):
       t, message = self._pending_messages.pop(0)
       self._node.logger.warning(
           "Retransmitting message {sequence_number}", extra={'sequence_number': message['sequence_number']})
-      self.export(message=message, time_ms=time_ms)
+      self.export_message(message=message, time_ms=time_ms)
 
   @property
   def least_unacknowledged_sequence_number(self):
@@ -80,7 +86,7 @@ class Exporter(object):
     self._pending_messages = [(t, msg) for t, msg in self._pending_messages
                               if msg['sequence_number'] < self._least_unacknowledged_sequence_number]
 
-  def export(self, message, time_ms):
+  def export_message(self, message, time_ms):
     '''
     Export a message to the receiver.
 
