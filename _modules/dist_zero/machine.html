@@ -31,8 +31,13 @@
           <div class="body" role="main">
             
   <h1>Source code for dist_zero.machine</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">json</span>
+<span></span><span class="kn">import</span> <span class="nn">heapq</span>
+<span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="kn">from</span> <span class="nn">cryptography.fernet</span> <span class="k">import</span> <span class="n">Fernet</span>
+<span class="kn">from</span> <span class="nn">random</span> <span class="k">import</span> <span class="n">Random</span>
 
 <span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">errors</span><span class="p">,</span> <span class="n">messages</span>
 
@@ -111,35 +116,100 @@
 <span class="sd">  and deliver ordinary messages and api messages.</span>
 <span class="sd">  &#39;&#39;&#39;</span>
 
-  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_id</span><span class="p">,</span> <span class="n">machine_name</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="n">system_id</span><span class="p">,</span> <span class="n">ip_host</span><span class="p">,</span> <span class="n">send_to_machine</span><span class="p">):</span>
+  <span class="n">MIN_POSTPONE_TIME_MS</span> <span class="o">=</span> <span class="mi">10</span>
+  <span class="sd">&#39;&#39;&#39;Minimum time a message will be postpone when simulating a network drop or reorder&#39;&#39;&#39;</span>
+  <span class="n">MAX_POSTPONE_TIME_MS</span> <span class="o">=</span> <span class="mi">1200</span>
+  <span class="sd">&#39;&#39;&#39;Maximum time a message will be postpone when simulating a network drop or reorder&#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_config</span><span class="p">,</span> <span class="n">ip_host</span><span class="p">,</span> <span class="n">send_to_machine</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    :param str machine_id: The unique id of this machine.</span>
-<span class="sd">    :param str machine_name: A name to use for this machine.</span>
-<span class="sd">    :param str mode: A mode (from `dist_zero.spawners`) (simulated, virtual, or cloud)</span>
-<span class="sd">    :param str system_id: The id of the overall distributed system</span>
+<span class="sd">    :param machine_config: A configuration message of type &#39;machine_config&#39;</span>
+<span class="sd">    :type machine_config: :ref:`message`</span>
+
 <span class="sd">    :param str ip_host: The host parameter to use when generating transports that send to this machine.</span>
 <span class="sd">    :param func send_to_machine: A function send_to_machine(message, transport)</span>
 <span class="sd">      where message is a :ref:`message`, and transport is a :ref:`transport` for a receiving node.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">machine_id</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">machine_name</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="n">mode</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">system_id</span> <span class="o">=</span> <span class="n">system_id</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;machine_name&#39;</span><span class="p">]</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_random</span> <span class="o">=</span> <span class="n">Random</span><span class="p">(</span><span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;random_seed&#39;</span><span class="p">])</span> <span class="k">if</span> <span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;random_seed&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">Random</span><span class="p">()</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_network_errors_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_network_errors_config</span><span class="p">(</span><span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;network_errors_config&#39;</span><span class="p">])</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">system_id</span> <span class="o">=</span> <span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;system_id&#39;</span><span class="p">]</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_ip_host</span> <span class="o">=</span> <span class="n">ip_host</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_node_by_id</span> <span class="o">=</span> <span class="p">{}</span>
 
+    <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">=</span> <span class="mi">0</span> <span class="c1"># Current elapsed time in milliseconds</span>
+    <span class="c1"># a heap (as in heapq) of tuples (ms_of_occurence, send_receive, args)</span>
+    <span class="c1"># where args are the args to self._send_without_error_simulation or self._receive_without_error_simulation</span>
+    <span class="c1"># depending on whether send_or_receive is &#39;send&#39; or &#39;receive&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_pending_events</span> <span class="o">=</span> <span class="p">[]</span>
+
     <span class="bp">self</span><span class="o">.</span><span class="n">_output_node_state_by_id</span> <span class="o">=</span> <span class="p">{}</span> <span class="c1"># dict from output node id to it&#39;s current state</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span> <span class="o">=</span> <span class="n">send_to_machine</span>
 
-<div class="viewcode-block" id="NodeManager.send"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.send">[docs]</a>  <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">_parse_network_errors_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">network_errors_config</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="n">direction</span><span class="p">:</span> <span class="p">{</span>
+            <span class="n">key</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;rate&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">[</span><span class="s1">&#39;rate&#39;</span><span class="p">],</span>
+                <span class="s1">&#39;regexp&#39;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="s1">&#39;regexp&#39;</span><span class="p">])</span>
+            <span class="p">}</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">direction_config</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">}</span>
+        <span class="k">for</span> <span class="n">direction</span><span class="p">,</span> <span class="n">direction_config</span> <span class="ow">in</span> <span class="n">network_errors_config</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="NodeManager.send"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.send">[docs]</a>  <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node</span><span class="p">):</span>
+    <span class="n">sending_node_id</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">sending_node</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">sending_node</span><span class="o">.</span><span class="n">id</span>
+    <span class="n">error_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_simulated_network_error</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;outgoing&#39;</span><span class="p">)</span>
+    <span class="n">send_args</span> <span class="o">=</span> <span class="p">(</span><span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">error_type</span><span class="p">:</span>
+      <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+          <span class="s1">&#39;Simulating </span><span class="si">{error_type}</span><span class="s1"> of an outgoing message&#39;</span><span class="p">,</span>
+          <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+              <span class="s1">&#39;sender_id&#39;</span><span class="p">:</span> <span class="n">sending_node_id</span><span class="p">,</span>
+              <span class="s1">&#39;error_type&#39;</span><span class="p">:</span> <span class="n">error_type</span>
+          <span class="p">})</span>
+      <span class="k">if</span> <span class="n">error_type</span> <span class="o">==</span> <span class="s1">&#39;drop&#39;</span><span class="p">:</span>
+        <span class="k">pass</span>
+      <span class="k">elif</span> <span class="n">error_type</span> <span class="o">==</span> <span class="s1">&#39;reorder&#39;</span><span class="p">:</span>
+        <span class="n">heapq</span><span class="o">.</span><span class="n">heappush</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_events</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_postpone_ms</span><span class="p">(),</span> <span class="s1">&#39;send&#39;</span><span class="p">,</span> <span class="n">send_args</span><span class="p">))</span>
+      <span class="k">elif</span> <span class="n">error_type</span> <span class="o">==</span> <span class="s1">&#39;duplicate&#39;</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_without_error_simulation</span><span class="p">(</span><span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="p">)</span>
+        <span class="n">heapq</span><span class="o">.</span><span class="n">heappush</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_events</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_postpone_ms</span><span class="p">(),</span> <span class="s1">&#39;send&#39;</span><span class="p">,</span> <span class="n">send_args</span><span class="p">))</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Unrecognized error type &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">error_type</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_send_without_error_simulation</span><span class="p">(</span><span class="o">*</span><span class="n">send_args</span><span class="p">)</span></div>
+
+  <span class="k">def</span> <span class="nf">_postpone_ms</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">+</span> <span class="n">NodeManager</span><span class="o">.</span><span class="n">MIN_POSTPONE_TIME_MS</span> <span class="o">+</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">NodeManager</span><span class="o">.</span><span class="n">MAX_POSTPONE_TIME_MS</span> <span class="o">-</span> <span class="n">NodeManager</span><span class="o">.</span><span class="n">MIN_POSTPONE_TIME_MS</span><span class="p">)))</span>
+
+  <span class="k">def</span> <span class="nf">_send_without_error_simulation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Like `NodeManager.send`, but without checking for simulated errors&#39;&#39;&#39;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+        <span class="s2">&quot;Sending message from </span><span class="si">{sending_node_id}</span><span class="s2"> to </span><span class="si">{recipient_handle}</span><span class="s2">: </span><span class="si">{message}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;sending_node_id&#39;</span><span class="p">:</span> <span class="n">sending_node_id</span><span class="p">,</span>
+            <span class="s1">&#39;recipient_handle&#39;</span><span class="p">:</span> <span class="n">node_handle</span><span class="p">,</span>
+            <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">message</span>
+        <span class="p">})</span>
+
+    <span class="n">fernet</span> <span class="o">=</span> <span class="n">Fernet</span><span class="p">(</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;fernet_key&#39;</span><span class="p">])</span>
+    <span class="n">encoded_message</span> <span class="o">=</span> <span class="n">fernet</span><span class="o">.</span><span class="n">encrypt</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">messages</span><span class="o">.</span><span class="n">ENCODING</span><span class="p">))</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">messages</span><span class="o">.</span><span class="n">ENCODING</span><span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span><span class="p">(</span>
         <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">machine_deliver_to_node</span><span class="p">(</span>
-            <span class="n">node_id</span><span class="o">=</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="o">=</span><span class="n">sending_node_id</span><span class="p">),</span>
-        <span class="n">transport</span><span class="o">=</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">])</span></div>
+            <span class="n">node_id</span><span class="o">=</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">message</span><span class="o">=</span><span class="n">encoded_message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="o">=</span><span class="n">sending_node_id</span><span class="p">),</span>
+        <span class="n">transport</span><span class="o">=</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;transport&#39;</span><span class="p">])</span>
 
 <div class="viewcode-block" id="NodeManager.spawn_node"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.spawn_node">[docs]</a>  <span class="k">def</span> <span class="nf">spawn_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_config</span><span class="p">):</span>
     <span class="c1"># TODO(KK): Rethink how the machine for each node is chosen.  Always running on the same machine</span>
@@ -261,22 +331,98 @@
     <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;machine_start_node&#39;</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">start_node</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;node_config&#39;</span><span class="p">])</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;machine_deliver_to_node&#39;</span><span class="p">:</span>
+      <span class="n">sender_id</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;sending_node_id&#39;</span><span class="p">]</span>
       <span class="n">node_id</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;node_id&#39;</span><span class="p">]</span>
       <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_node_by_id</span><span class="p">(</span><span class="n">node_id</span><span class="p">)</span>
-      <span class="n">node</span><span class="o">.</span><span class="n">receive</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">],</span> <span class="n">sender_id</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sending_node_id&#39;</span><span class="p">])</span>
+
+      <span class="n">decoded_message</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span>
+          <span class="n">node</span><span class="o">.</span><span class="n">fernet</span><span class="o">.</span><span class="n">decrypt</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">messages</span><span class="o">.</span><span class="n">ENCODING</span><span class="p">))</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">messages</span><span class="o">.</span><span class="n">ENCODING</span><span class="p">))</span>
+
+      <span class="n">error_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_simulated_network_error</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;outgoing&#39;</span><span class="p">)</span>
+      <span class="n">receive_args</span> <span class="o">=</span> <span class="p">(</span><span class="n">node_id</span><span class="p">,</span> <span class="n">decoded_message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">error_type</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s1">&#39;Simulating </span><span class="si">{error_type}</span><span class="s1"> of an outgoing message&#39;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+                <span class="s1">&#39;sender_id&#39;</span><span class="p">:</span> <span class="n">sender_id</span><span class="p">,</span>
+                <span class="s1">&#39;error_type&#39;</span><span class="p">:</span> <span class="n">error_type</span>
+            <span class="p">})</span>
+        <span class="k">if</span> <span class="n">error_type</span> <span class="o">==</span> <span class="s1">&#39;drop&#39;</span><span class="p">:</span>
+          <span class="k">pass</span>
+        <span class="k">elif</span> <span class="n">error_type</span> <span class="o">==</span> <span class="s1">&#39;reorder&#39;</span><span class="p">:</span>
+          <span class="n">heapq</span><span class="o">.</span><span class="n">heappush</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_events</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_postpone_ms</span><span class="p">(),</span> <span class="s1">&#39;receive&#39;</span><span class="p">,</span> <span class="n">receive_args</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">error_type</span> <span class="o">==</span> <span class="s1">&#39;duplicate&#39;</span><span class="p">:</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">_receive_without_error_simulation</span><span class="p">(</span><span class="n">node_id</span><span class="p">,</span> <span class="n">decoded_message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">)</span>
+          <span class="n">heapq</span><span class="o">.</span><span class="n">heappush</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_events</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_postpone_ms</span><span class="p">(),</span> <span class="s1">&#39;receive&#39;</span><span class="p">,</span> <span class="n">receive_args</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+          <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Unrecognized error type &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">error_type</span><span class="p">))</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_receive_without_error_simulation</span><span class="p">(</span><span class="o">*</span><span class="n">receive_args</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
       <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Unrecognized message type </span><span class="si">{unrecognized_type}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;unrecognized_type&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]})</span></div>
+
+  <span class="k">def</span> <span class="nf">_receive_without_error_simulation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;receive a message to the proper node without any network error simulations&#39;&#39;&#39;</span>
+    <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_node_by_id</span><span class="p">(</span><span class="n">node_id</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Node is receiving message of type </span><span class="si">{message_type}</span><span class="s2"> from </span><span class="si">{sender_id}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;message_type&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;sender_id&#39;</span><span class="p">:</span> <span class="n">sender_id</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="n">node</span><span class="o">.</span><span class="n">receive</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="o">=</span><span class="n">sender_id</span><span class="p">)</span>
 
 <div class="viewcode-block" id="NodeManager.elapse_nodes"><a class="viewcode-back" href="../../doc/machine.html#dist_zero.machine.NodeManager.elapse_nodes">[docs]</a>  <span class="k">def</span> <span class="nf">elapse_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Elapse ms milliseconds of time on all nodes managed by self.</span>
 
+<span class="sd">    Also, simulate any postponed network activity from network errors generated earlier.</span>
+
 <span class="sd">    :param int ms: The number of milliseconds to elapse.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="n">final_time_ms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">+</span> <span class="n">ms</span>
+
+    <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_events</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_events</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">final_time_ms</span><span class="p">:</span>
+      <span class="n">t</span><span class="p">,</span> <span class="n">send_or_receive</span><span class="p">,</span> <span class="n">args</span> <span class="o">=</span> <span class="n">heapq</span><span class="o">.</span><span class="n">heappop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_events</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">send_or_receive</span> <span class="o">==</span> <span class="s1">&#39;send&#39;</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_without_error_simulation</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="n">send_or_receive</span> <span class="o">==</span> <span class="s1">&#39;receive&#39;</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_receive_without_error_simulation</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Unrecognized &#39;send&#39; or &#39;receive&#39;: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">send_or_receive</span><span class="p">))</span>
+
+      <span class="bp">self</span><span class="o">.</span><span class="n">_elapse_nodes_without_simulated_network_messages</span><span class="p">(</span><span class="n">t</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">=</span> <span class="n">t</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_elapse_nodes_without_simulated_network_messages</span><span class="p">(</span><span class="n">final_time_ms</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">=</span> <span class="n">final_time_ms</span></div>
+
+  <span class="k">def</span> <span class="nf">_elapse_nodes_without_simulated_network_messages</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Like elapse_nodes, but do no simulate any postponed network activity.&#39;&#39;&#39;</span>
     <span class="c1"># Elapsing time on nodes can create new nodes, thus changing the list of nodes.</span>
     <span class="c1"># Therefore, to avoid updating a dictionary while iterating over it, we make a copy</span>
     <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_node_by_id</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
-      <span class="n">node</span><span class="o">.</span><span class="n">elapse</span><span class="p">(</span><span class="n">ms</span><span class="p">)</span></div></div>
+      <span class="n">node</span><span class="o">.</span><span class="n">elapse</span><span class="p">(</span><span class="n">ms</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">_get_simulated_network_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">direction</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Determine whether we should simulate a network error on a message.</span>
+
+<span class="sd">    :param message: Any message that a `Node` on this machine is trying to send.</span>
+<span class="sd">    :type message: :ref:`message`</span>
+<span class="sd">    :param str direction: &#39;incomming&#39; or &#39;outgoing&#39;. Indicates whether the message is being received or sent respectively.</span>
+
+<span class="sd">    :return: The error type to simulate, or `None` if we should not simulate a network error at all.</span>
+<span class="sd">    :rtype: str</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">network_errors_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_network_errors_config</span><span class="p">[</span><span class="n">direction</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">error_type</span><span class="p">,</span> <span class="n">match_parameters</span> <span class="ow">in</span> <span class="n">network_errors_config</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+      <span class="n">rate</span> <span class="o">=</span> <span class="n">match_parameters</span><span class="p">[</span><span class="s1">&#39;rate&#39;</span><span class="p">]</span>
+      <span class="n">regexp</span> <span class="o">=</span> <span class="n">match_parameters</span><span class="p">[</span><span class="s1">&#39;regexp&#39;</span><span class="p">]</span>
+      <span class="k">if</span> <span class="n">rate</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">rate</span> <span class="ow">and</span> <span class="n">regexp</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">message</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="n">error_type</span>
+
+    <span class="k">return</span> <span class="kc">False</span></div>
 </pre></div>
 
           </div>

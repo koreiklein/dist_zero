@@ -35,7 +35,7 @@
 <span id="demos"></span><h1>Demos<a class="headerlink" href="#module-test.demo" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="test.demo.Demo">
-<em class="property">class </em><code class="descclassname">test.demo.</code><code class="descname">Demo</code><span class="sig-paren">(</span><em>mode='simulated'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">test.demo.</code><code class="descname">Demo</code><span class="sig-paren">(</span><em>mode='simulated'</em>, <em>random_seed=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo" title="Permalink to this definition">¶</a></dt>
 <dd><p>For running Demos of a full distributed system.</p>
 <p>Demos may run in simulated, virtual, or cloud mode.</p>
 <table class="docutils field-list" frame="void" rules="none">
@@ -54,17 +54,23 @@
 
 <dl class="method">
 <dt id="test.demo.Demo.new_machine_controllers">
-<code class="descname">new_machine_controllers</code><span class="sig-paren">(</span><em>n</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo.new_machine_controllers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo.new_machine_controllers" title="Permalink to this definition">¶</a></dt>
+<code class="descname">new_machine_controllers</code><span class="sig-paren">(</span><em>n</em>, <em>base_config=None</em>, <em>random_seed=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/test/demo.html#Demo.new_machine_controllers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#test.demo.Demo.new_machine_controllers" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create n new machine controllers</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>n</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – The number of new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> instances to create.</td>
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>n</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – The number of new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> instances to create.</li>
+<li><strong>base_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.6)"><em>dict</em></a>) – A dictionary of extra parameters to add to the configs for all the newly created machines or <a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.6)"><code class="xref any docutils literal notranslate"><span class="pre">None</span></code></a>.</li>
+</ul>
+</td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The list of the new handles.</td>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The list of the new handles.</p>
+</td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)">list</a></td>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)">list</a></p>
+</td>
 </tr>
 </tbody>
 </table>

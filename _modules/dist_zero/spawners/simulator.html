@@ -50,7 +50,9 @@
 
 <div class="viewcode-block" id="SimulatedSpawner"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner">[docs]</a><span class="k">class</span> <span class="nc">SimulatedSpawner</span><span class="p">(</span><span class="n">spawner</span><span class="o">.</span><span class="n">Spawner</span><span class="p">):</span>
   <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">  A class for creating instances of `MachineRunner` each in its own container to simulate distinct machines in tests.</span>
+<span class="sd">  A spawner class for simulating all machines within the calling process.</span>
+
+<span class="sd">  This class is designed to be used only during tests in &#39;simulated&#39; mode.</span>
 
 <span class="sd">  Tests should typically create a single instance of this factory, and use it to generate</span>
 <span class="sd">  all their `MachineController` instances.</span>
@@ -200,10 +202,7 @@
 
 <div class="viewcode-block" id="SimulatedSpawner.create_machine"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.create_machine">[docs]</a>  <span class="k">def</span> <span class="nf">create_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_config</span><span class="p">):</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">machine</span><span class="o">.</span><span class="n">NodeManager</span><span class="p">(</span>
-        <span class="n">machine_id</span><span class="o">=</span><span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
-        <span class="n">machine_name</span><span class="o">=</span><span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;machine_name&#39;</span><span class="p">],</span>
-        <span class="n">mode</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">(),</span>
-        <span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span><span class="p">,</span>
+        <span class="n">machine_config</span><span class="o">=</span><span class="n">machine_config</span><span class="p">,</span>
         <span class="n">ip_host</span><span class="o">=</span><span class="n">machine_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
         <span class="n">send_to_machine</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_node_manager_send_to_machine</span><span class="p">,</span>
     <span class="p">)</span>

@@ -32,6 +32,7 @@
             
   <h1>Source code for dist_zero.spawners.cloud.aws</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
@@ -237,6 +238,11 @@
 
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Rsyncing dist_zero files to aws instance </span><span class="si">{aws_instance_id}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
 
+    <span class="c1"># Create local machine config file</span>
+    <span class="n">local_config_file</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">)</span>
+    <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">machine_config</span><span class="p">,</span> <span class="n">local_config_file</span><span class="p">)</span>
+    <span class="n">local_config_file</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
     <span class="c1"># Do the rsync</span>
     <span class="n">rsync_ssh_params</span> <span class="o">=</span> <span class="s1">&#39;ssh -oStrictHostKeyChecking=no -i </span><span class="si">{keyfile}</span><span class="s1">&#39;</span>
     <span class="n">rsync_excludes</span> <span class="o">=</span> <span class="s1">&#39;--exclude &quot;*.pyc&quot; --exclude &quot;*__pycache__*&quot; --exclude .pytest_cache&#39;</span>
@@ -244,6 +250,8 @@
         <span class="s1">&#39;rsync -avz -e &quot;</span><span class="si">{rsync_ssh_params}</span><span class="s1">&quot; </span><span class="si">{rsync_excludes}</span><span class="s1"> dist_zero </span><span class="si">{user}</span><span class="s1">@</span><span class="si">{instance}</span><span class="s1">:/dist_zero/ &gt;&gt; </span><span class="si">{outfile}</span><span class="s1">&#39;</span><span class="p">,</span>
         <span class="s1">&#39;rsync -avz -e &quot;</span><span class="si">{rsync_ssh_params}</span><span class="s1">&quot; </span><span class="si">{rsync_excludes}</span><span class="s1"> Pipfile </span><span class="si">{user}</span><span class="s1">@</span><span class="si">{instance}</span><span class="s1">:/dist_zero/Pipfile &gt;&gt; </span><span class="si">{outfile}</span><span class="s1">&#39;</span><span class="p">,</span>
         <span class="s1">&#39;rsync -avz -e &quot;</span><span class="si">{rsync_ssh_params}</span><span class="s1">&quot; </span><span class="si">{rsync_excludes}</span><span class="s1"> Pipfile.lock </span><span class="si">{user}</span><span class="s1">@</span><span class="si">{instance}</span><span class="s1">:/dist_zero/Pipfile.lock &gt;&gt; </span><span class="si">{outfile}</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="p">(</span><span class="s1">&#39;rsync -avz -e &quot;</span><span class="si">{rsync_ssh_params}</span><span class="s1">&quot; </span><span class="si">{rsync_excludes}</span><span class="s1"> &#39;</span> <span class="o">+</span> <span class="n">local_config_file</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span>
+         <span class="s1">&#39; </span><span class="si">{user}</span><span class="s1">@</span><span class="si">{instance}</span><span class="s1">:/dist_zero/machine_config.json &gt;&gt; </span><span class="si">{outfile}</span><span class="s1">&#39;</span><span class="p">),</span>
     <span class="p">]:</span>
       <span class="n">command</span> <span class="o">=</span> <span class="n">precommand</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
           <span class="n">rsync_ssh_params</span><span class="o">=</span><span class="n">rsync_ssh_params</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">keyfile</span><span class="o">=</span><span class="s1">&#39;.keys/dist_zero.pem&#39;</span><span class="p">),</span>
@@ -271,15 +279,7 @@
     <span class="n">_exec_command</span><span class="p">(</span><span class="s2">&quot;cd /dist_zero &amp;&amp; pipenv --python 3.6.5 &amp;&amp; pipenv sync&quot;</span><span class="p">)</span>
 
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting dist_zero.machine_init process on remote machine&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
-    <span class="n">command</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;cd /dist_zero; &quot;</span>
-               <span class="s2">&quot;nohup pipenv run python -m &quot;</span>
-               <span class="s2">&quot;dist_zero.machine_init &#39;</span><span class="si">{machine_controller_id}</span><span class="s2">&#39; &#39;</span><span class="si">{machine_name}</span><span class="s2">&#39; &#39;</span><span class="si">{mode}</span><span class="s2">&#39; &#39;</span><span class="si">{system_id}</span><span class="s2">&#39; &amp;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                   <span class="n">machine_controller_id</span><span class="o">=</span><span class="n">machine_controller_id</span><span class="p">,</span>
-                   <span class="n">machine_name</span><span class="o">=</span><span class="n">machine_name</span><span class="p">,</span>
-                   <span class="n">mode</span><span class="o">=</span><span class="n">spawners</span><span class="o">.</span><span class="n">MODE_CLOUD</span><span class="p">,</span>
-                   <span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span><span class="p">)</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting a MachineController process on an aws instance&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="n">extra</span><span class="p">)</span>
-    <span class="n">_exec_command</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+    <span class="n">_exec_command</span><span class="p">(</span><span class="s2">&quot;cd /dist_zero; nohup pipenv run python -m dist_zero.machine_init /dist_zero/machine_config.json &amp;&quot;</span><span class="p">)</span>
 
     <span class="n">handle</span> <span class="o">=</span> <span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">machine_controller_handle</span><span class="p">(</span><span class="n">machine_controller_id</span><span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_handle_by_id</span><span class="p">[</span><span class="n">machine_controller_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">handle</span>

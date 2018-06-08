@@ -210,6 +210,10 @@
     <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">host_msg_dir</span><span class="p">)</span>
     <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">log_dir</span><span class="p">)</span>
 
+    <span class="n">config_filename</span> <span class="o">=</span> <span class="s1">&#39;machine_config.json&#39;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">host_msg_dir</span><span class="p">,</span> <span class="n">config_filename</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+      <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">machine_config</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
     <span class="n">container</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_docker</span><span class="o">.</span><span class="n">containers</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
         <span class="n">image</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="p">,</span>
         <span class="n">command</span><span class="o">=</span><span class="p">[</span>
@@ -218,10 +222,7 @@
             <span class="s1">&#39;python&#39;</span><span class="p">,</span>
             <span class="s1">&#39;-m&#39;</span><span class="p">,</span>
             <span class="s1">&#39;dist_zero.machine_init&#39;</span><span class="p">,</span>
-            <span class="n">machine_controller_id</span><span class="p">,</span>
-            <span class="n">machine_name</span><span class="p">,</span>
-            <span class="n">spawners</span><span class="o">.</span><span class="n">MODE_VIRTUAL</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span><span class="p">,</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">DockerSpawner</span><span class="o">.</span><span class="n">CONTAINER_MESSAGE_DIR</span><span class="p">,</span> <span class="n">config_filename</span><span class="p">),</span>
         <span class="p">],</span>
         <span class="n">detach</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="n">labels</span><span class="o">=</span><span class="p">{</span>

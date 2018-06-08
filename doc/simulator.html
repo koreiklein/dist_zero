@@ -39,7 +39,8 @@ entirely within the parent python process.</p>
 <span class="target" id="module-dist_zero.spawners.simulator"></span><dl class="class">
 <dt id="dist_zero.spawners.simulator.SimulatedSpawner">
 <em class="property">class </em><code class="descclassname">dist_zero.spawners.simulator.</code><code class="descname">SimulatedSpawner</code><span class="sig-paren">(</span><em>system_id</em>, <em>random_seed='random_seed'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/simulator.html#SimulatedSpawner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.simulator.SimulatedSpawner" title="Permalink to this definition">¶</a></dt>
-<dd><p>A class for creating instances of <a class="reference internal" href="machine_runner.html#dist_zero.machine_runner.MachineRunner" title="dist_zero.machine_runner.MachineRunner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineRunner</span></code></a> each in its own container to simulate distinct machines in tests.</p>
+<dd><p>A spawner class for simulating all machines within the calling process.</p>
+<p>This class is designed to be used only during tests in ‘simulated’ mode.</p>
 <p>Tests should typically create a single instance of this factory, and use it to generate
 all their <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> instances.
 Then, this factory class will simulate the behavior of a real-life network during the test.</p>
