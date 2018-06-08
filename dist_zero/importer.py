@@ -39,15 +39,16 @@ class Importer(object):
                     messages.migration.connect_internal(
                         node=self._node.new_handle(self._sender['id']), direction='receiver'))
 
-  def receive(self, message):
+  def receive(self, message, sender_id):
     rsn = message['sequence_number']
     if rsn < self._least_unreceived_remote_sequence_number or rsn in self._remote_sequence_number_to_early_message:
       self._node.logger.warning(
-          ("Received duplicate message for sequence number {remote_sequence_number}."
-           " Message {duplicate_message}"),
+          ("Received duplicate message for sequence number {remote_sequence_number}"
+           " from sender {sender_id}: Message: {duplicate_message}"),
           extra={
               'remote_sequence_number': rsn,
               'duplicate_message': message,
+              'sender_id': sender_id,
           })
     else:
       self._remote_sequence_number_to_early_message[rsn] = message

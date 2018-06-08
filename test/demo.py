@@ -117,7 +117,7 @@ class Demo(object):
     else:
       time.sleep(ms / 1000)
 
-  def new_machine_controllers(self, n, base_config=None):
+  def new_machine_controllers(self, n, base_config=None, random_seed=None):
     '''
     Create n new machine controllers
 
@@ -136,6 +136,8 @@ class Demo(object):
       machine_config['machine_controller_id'] = dist_zero.ids.new_id('Machine')
       machine_config['mode'] = self.mode
       machine_config['system_id'] = self.system_id
+      if random_seed is not None:
+        machine_config['random_seed'] = "{}:{}".format(random_seed, n)
 
       configs.append(messages.machine.machine_config(**machine_config))
 

@@ -172,7 +172,6 @@ class SimulatedSpawner(spawner.Spawner):
         machine_config=machine_config,
         ip_host=machine_config['id'],
         send_to_machine=self._node_manager_send_to_machine,
-        random=self._random,
     )
     self._controller_by_id[result.id] = result
     return result.handle()

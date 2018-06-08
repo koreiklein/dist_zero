@@ -88,7 +88,7 @@ class NodeManager(MachineController):
   MAX_POSTPONE_TIME_MS = 1200
   '''Maximum time a message will be postpone when simulating a network drop or reorder'''
 
-  def __init__(self, machine_config, ip_host, send_to_machine, random=None):
+  def __init__(self, machine_config, ip_host, send_to_machine):
     '''
     :param machine_config: A configuration message of type 'machine_config'
     :type machine_config: :ref:`message`
@@ -96,15 +96,13 @@ class NodeManager(MachineController):
     :param str ip_host: The host parameter to use when generating transports that send to this machine.
     :param func send_to_machine: A function send_to_machine(message, transport)
       where message is a :ref:`message`, and transport is a :ref:`transport` for a receiving node.
-    :param random: A source of randomness.
-    :type random: `random`
     '''
 
     self.id = machine_config['id']
     self.name = machine_config['machine_name']
     self.mode = machine_config['mode']
 
-    self._random = Random() if random is None else random
+    self._random = Random(machine_config['random_seed']) if machine_config['random_seed'] is not None else Random()
 
     self._network_errors_config = self._parse_network_errors_config(machine_config['network_errors_config'])
 

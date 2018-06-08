@@ -52,6 +52,7 @@ def machine_config(
     system_id,
     mode,
     network_errors_config=None,
+    random_seed=None,
 ):
   '''
   A machine configuration.
@@ -63,6 +64,8 @@ def machine_config(
 
   :param dict network_errors_config: Configuration for simulating network errors.
     See `std_simulated_network_errors_config` for an example.
+  :param str random_seed: An optional seed to use for all this machine's randomness.  If it is not provided,
+    the machine will get a random seed from the underlying operating system.
   '''
   return {
       'type': 'machine_config',
@@ -71,6 +74,7 @@ def machine_config(
       'mode': mode,
       'system_id': system_id,
       'network_errors_config': network_errors_config or std_simulated_network_errors_config(),
+      'random_seed': random_seed,
   }
 
 

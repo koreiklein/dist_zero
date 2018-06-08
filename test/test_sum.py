@@ -26,22 +26,29 @@ def test_times_in_order():
     ])
 
 
-@pytest.mark.parametrize('drop_rate,network_error_type', [
-    (0.0, 'drop'),
-    (0.27, 'drop'),
-    (0.27, 'duplicate'),
-    (0.27, 'reorder'),
+@pytest.mark.parametrize('drop_rate,network_error_type,seed', [
+    (0.0, 'drop', 'a'),
+    (0.02, 'drop', 'a'),
+    (0.02, 'drop', 'b'),
+    (0.02, 'drop', 'c'),
+    (0.02, 'drop', 'd'),
+    (0.02, 'drop', 'e'),
+    (0.02, 'drop', 'f'),
+    (0.02, 'drop', 'g'),
+    (0.27, 'duplicate', 'a'),
+    (0.27, 'reorder', 'a'),
 ])
-def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type):
+def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, seed):
   # Create node controllers (each simulates the behavior of a separate machine.
   network_errors_config = messages.machine.std_simulated_network_errors_config()
   network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
   network_errors_config['outgoing'][network_error_type]['regexp'] = '.*increment.*'
 
   machine_a_handle, machine_b_handle, machine_c_handle = demo.new_machine_controllers(
-      3, base_config={
-          'network_errors_config': network_errors_config,
-      })
+      3,
+      base_config={'network_errors_config': network_errors_config},
+      random_seed=seed,
+  )
 
   demo.run_for(ms=200)
 

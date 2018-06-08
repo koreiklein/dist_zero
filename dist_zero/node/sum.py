@@ -27,6 +27,12 @@ class SumNode(Node):
   SEND_INTERVAL_MS = 30
   '''The number of ms between sends to receivers.'''
 
+  TIME_BETWEEN_ACKNOWLEDGEMENTS_MS = 30
+  '''The number of ms between acknowledgements sent to senders.'''
+
+  TIME_BETWEEN_RETRANSMISSION_CHECKS_MS = 20
+  '''The number of ms between checks for whether we should retransmit to receivers.'''
+
   def __init__(self, node_id, senders, receivers, spawning_migration, input_node, output_node, pending_sender_ids,
                controller):
     '''
@@ -85,6 +91,10 @@ class SumNode(Node):
     self._sent_total = 0
     self._unsent_total = 0
     self._unsent_time_ms = 0
+    self._now_ms = 0
+
+    self._time_since_sent_acknowledgements = 0
+    self._time_since_retransmitted_expired_pending_messages = 0
 
     super(SumNode, self).__init__(logger)
 
@@ -95,7 +105,6 @@ class SumNode(Node):
     return exporter.Exporter(
         node=self,
         receiver=receiver,
-        retransmit=True,
         # NOTE(KK): When you implement robustness during a migration, you should think very very carefully
         #   about how to set this parameter to guarantee correctness.
         least_unacknowledged_sequence_number=self._least_unused_sequence_number)
@@ -148,7 +157,7 @@ class SumNode(Node):
     if message['type'] == 'increment':
       # Don't necessary deliver the message yet, as it may be out of order.
       # Instead, pass it to the appropriate importer and let the importer decide when to deliver the message.
-      self._importers[sender_id].receive(message)
+      self._importers[sender_id].receive(message, sender_id)
     elif message['type'] == 'acknowledge':
       self._exporters[sender_id].acknowledge(message['sequence_number'])
     elif message['type'] == 'input_action':
@@ -250,8 +259,21 @@ class SumNode(Node):
         self.logger.info("Hit sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
         if self.migrator is None:
           self._hit_sender_limit()
+
       self._send_forward_messages()
+
+    self._now_ms += ms
+
+    self._time_since_sent_acknowledgements += ms
+    self._time_since_retransmitted_expired_pending_messages += ms
+
+    if self._time_since_sent_acknowledgements > SumNode.TIME_BETWEEN_ACKNOWLEDGEMENTS_MS:
       self._send_acknowledgement_messages()
+      self._time_since_sent_acknowledgements = 0
+
+    if self._time_since_retransmitted_expired_pending_messages > SumNode.TIME_BETWEEN_RETRANSMISSION_CHECKS_MS:
+      self._retransmit_expired_pending_messages()
+      self._time_since_retransmitted_expired_pending_messages = 0
 
   def _hit_sender_limit(self):
     self.migrator = SumNodeSenderSplitMigrator(self)
@@ -281,6 +303,7 @@ class SumNode(Node):
     else:
       # The last map of sender_id to least_unreceived_remote_sequence_number before branching_index
       # will contain all the acknowledgements we need to send.
+      self.logger.debug("sum node sending acknowledgement message to importers")
       for sender_id, least_unreceived_remote_sequence_number in self._branching[branching_index - 1][1].items():
         self._importers[sender_id].acknowledge(least_unreceived_remote_sequence_number)
 
@@ -296,7 +319,10 @@ class SumNode(Node):
 
     sequence_number = self._least_unused_sequence_number
     for exporter in self._exporters.values():
-      exporter.export(messages.sum.increment(amount=self._unsent_total, sequence_number=sequence_number))
+      exporter.export(
+          message=messages.sum.increment(amount=self._unsent_total, sequence_number=sequence_number),
+          time_ms=self._now_ms,
+      )
     self._branching.append((sequence_number, {
         sender_id: importer.least_unreceived_remote_sequence_number
         for sender_id, importer in self._importers.items()
@@ -310,6 +336,10 @@ class SumNode(Node):
     self._unsent_time_ms = 0
     self._sent_total += self._unsent_total
     self._unsent_total = 0
+
+  def _retransmit_expired_pending_messages(self):
+    for exporter in self._exporters.values():
+      exporter.retransmit_expired_pending_messages(self._now_ms)
 
   def initialize(self):
     self.logger.info(
