@@ -109,21 +109,36 @@ class SumNode(Node):
         #   about how to set this parameter to guarantee correctness.
         least_unacknowledged_sequence_number=self._least_unused_sequence_number)
 
-  def migration_finished(self, remaining_sender_ids):
+  def restrict_importers(self, remaining_sender_ids):
+    '''
+    Deactivate importers.
+
+    :param set remaining_sender_ids: The set of senders that are still sending.  All other senders should be deactivated.
+    '''
+    n_deactivated_importers = 0
+    for sender_id, importer in self._importers.items():
+      if sender_id not in remaining_sender_ids:
+        importer.deactivate()
+        n_deactivated_importers += 1
+
+    self.logger.info(
+        "Deactivating {n_deactivated_importers} importers",
+        extra={
+            'n_deactivated_importers': n_deactivated_importers,
+        })
+
+  def remove_deactivated_importers(self):
+    self._importers = {
+        sender_id: importer
+        for sender_id, importer in self._importers.items() if not importer._deactivated
+    }
+
+  def migration_finished(self):
     '''
     Called when the current migrator has finished migrating.
 
-    :param set remaining_sender_ids: The set of senders that are still sending.  All other senders can be removed.
     '''
     self.migrator = None
-    old_importers = self._importers
-    self._importers = {sender_id: i for sender_id, i in self._importers.items() if sender_id in remaining_sender_ids}
-    self.logger.info(
-        "Finished migration, cutting back number of senders from {n_old_senders} to {n_new_senders}",
-        extra={
-            'n_old_senders': len(old_importers),
-            'n_new_senders': len(self._importers),
-        })
 
   @staticmethod
   def from_config(node_config, controller):
@@ -384,30 +399,61 @@ class SumNodeSenderSplitMigrator(object):
   and the current node.
   '''
 
+  # Below are the states of a migrator.
+  # The migrator will move linearly from each state to the next state.
+  # Each state has some trigger, the condition that must be met in order to transition.  As soon as the transition
+  # is met, the migrator will move into the next state.
+  # Each state has an action, something that the migrator is responsible for doing while in that state.
+  # Each state also has a description, which explains the state of affairs of the overall migration while the
+  # migrator is in that state.
+
   STATE_NEW = 'NEW'
   '''The initial state of the migrator.'''
 
   STATE_INITIALIZING_NEW_NODES = 'INITIALIZING_NEW_NODES'
-  '''In this state, the migrator is waiting for new nodes to start running.'''
+  '''
+  Trigger: none.  The migrator can enter this state immediately.
+  Action: The migrator tries to spawn new nodes.
+  Description: The migrator is waiting for new nodes to start running.
+  '''
 
   STATE_DUPLICATING_INPUTS = 'DUPLICATING_INPUTS'
-  '''In this state, all the new nodes are confirmed to have started running,
-  and the migrator is waiting for the inputs to start duplicating to them.'''
+  '''
+  Trigger: The migrator has received confirmations that each new node is now running.
+  Action: The migrator tries to get input nodes to duplicate their exports.
+  Description: The migrator is waiting for confirmations that the input nodes are duplicating.
+  '''
 
   STATE_SYNCING_NEW_NODES = 'SYNCING_NEW_NODES'
-  '''In this state, all the inputs have been confirmed to be duplicating their messages,
-  and the migrator is waiting for the new nodes to sync up with the current node they will be replacing.'''
+  '''
+  Trigger: The migrator has received confirmations that all input nodes are duplicating.
+  Action: The migrator attempts to bring the new nodes up to speed so that they can be treated as live.
+  Description: The migrator is waiting for the new nodes to sync up with the current node they will be replacing.
+  '''
 
-  # NOTE(KK): One might imagine including the state: SWAPPING_OUTPUTS for migrators that involve outputs.
+  STATE_SWAPPING_OUTPUTS = 'SWAPPING_OUTPUTS'
+  '''
+  Trigger: The migrator has received confirmations that the new nodes are live, and can be safely relied on
+  in place of the input nodes.
+  Action: The migrator converts all the output nodes to rely on the new nodes instead of the input nodes.
+  Description: The migrator is waiting for confirmation that all output nodes have finished relying on the input nodes
+  and are safely using the new nodes instead.
+  '''
 
   STATE_TRIMMING_INPUTS = 'TRIMMING_INPUTS'
-  '''In this state, the entire downstream system is listening to the new models,
-  and the migrator is waiting for the inputs to stop sending their old messages and report that they
-  are sending only to the new models.'''
+  '''
+  Trigger: The migrator has received confirmations that no nodes currently depend on the old output of the input nodes.
+  Action: The migrator attempts to trim the input nodes (i.e. to stop them from sending their original messages,
+  and send only to the new nodes they were duplicating to).
+  Description: The migrator is waiting to be sure that all input nodes have been trimmed.
+  '''
 
   STATE_FINISHED = 'FINISHED'
-  '''In this state, none of the inputs are sending their original messages, and send only to the new nodes.
-  The migrator's job is finished.'''
+  '''
+  Trigger: The migrator has received confirmations that all the input nodes are trimmed.
+  Action: None.
+  Description: The migration is over.
+  '''
 
   def __init__(self, sum_node):
     '''
@@ -477,8 +523,17 @@ class SumNodeSenderSplitMigrator(object):
     for middle_node in self._middle_nodes:
       self.node.send(middle_node, messages.sum.set_sum_total(self._totals[middle_node['id']]))
 
-  def _transition_to_trimming(self):
+  def _transition_to_swapping_outputs(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES,
+                           SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS)
+
+    # Since the current node is right here, we can swap the outputs immediately and
+    # transition directly into the trimming state.
+    self.node.restrict_importers(set(self._partition.keys()))
+    self._transition_to_trimming()
+
+  def _transition_to_trimming(self):
+    self._transition_state(SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS,
                            SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS)
 
     for importers in self._partition.values():
@@ -488,7 +543,9 @@ class SumNodeSenderSplitMigrator(object):
   def _transition_to_finished(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS, SumNodeSenderSplitMigrator.STATE_FINISHED)
 
-    self.node.migration_finished(set(self._partition.keys()))
+    self.node.remove_deactivated_importers()
+
+    self.node.migration_finished()
 
   def middle_node_live(self, middle_node_id):
     '''Called when a middle node has been confirmed to be live.'''
@@ -496,7 +553,7 @@ class SumNodeSenderSplitMigrator(object):
     self._middle_node_states[middle_node_id] = 'live'
 
     if all(state == 'live' for state in self._middle_node_states.values()):
-      self._transition_to_trimming()
+      self._transition_to_swapping_outputs()
 
   def middle_node_started(self, middle_node_handle):
     '''

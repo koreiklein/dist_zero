@@ -22,6 +22,9 @@ class Importer(object):
     self._node = node
     self._sender = sender
 
+    # Set to try when this importer should ignore all inputs.
+    self._deactivated = False
+
     self._least_unreceived_remote_sequence_number = 0 # see `Importer.least_unreceived_remote_sequence_number`
 
     self._remote_sequence_number_to_early_message = {}
@@ -51,25 +54,39 @@ class Importer(object):
                         node=self._node.new_handle(self._sender['id']), direction='receiver'))
 
   def import_message(self, message, sender_id):
-    rsn = message['sequence_number']
-    if rsn < self._least_unreceived_remote_sequence_number or rsn in self._remote_sequence_number_to_early_message:
-      self._node.logger.warning(
-          ("Received duplicate message for sequence number {remote_sequence_number}"
-           " from sender {sender_id}"),
-          extra={
-              'remote_sequence_number': rsn,
-              'sender_id': sender_id,
-          })
+    '''
+    Receive a message from the linked `Node`
+
+    :param message: The newly received message.
+    :type message: :ref:`message`
+    :param str sender_id: The id of the `Node` that sent the message.
+    '''
+    if self._deactivated:
+      self._node.logger.info("Deactivated importer is ignoring a new message")
     else:
-      self._remote_sequence_number_to_early_message[rsn] = message
-      while self._least_unreceived_remote_sequence_number in self._remote_sequence_number_to_early_message:
-        message = self._remote_sequence_number_to_early_message.pop(self._least_unreceived_remote_sequence_number)
-        self._node.deliver(message['amount'])
-        self._least_unreceived_remote_sequence_number += 1
+      rsn = message['sequence_number']
+      if rsn < self._least_unreceived_remote_sequence_number or rsn in self._remote_sequence_number_to_early_message:
+        self._node.logger.warning(
+            ("Received duplicate message for sequence number {remote_sequence_number}"
+             " from sender {sender_id}"),
+            extra={
+                'remote_sequence_number': rsn,
+                'sender_id': sender_id,
+            })
+      else:
+        self._remote_sequence_number_to_early_message[rsn] = message
+        while self._least_unreceived_remote_sequence_number in self._remote_sequence_number_to_early_message:
+          message = self._remote_sequence_number_to_early_message.pop(self._least_unreceived_remote_sequence_number)
+          self._node.deliver(message['amount'])
+          self._least_unreceived_remote_sequence_number += 1
 
   @property
   def sender_id(self):
     return self._sender['id']
+
+  @property
+  def active(self):
+    return not self._deactivated
 
   def duplicate_paired_exporters_to(self, other_node):
     self._node.send(self._sender,
@@ -80,3 +97,6 @@ class Importer(object):
 
   def finish_duplicating_paired_exporters(self):
     self._node.send(self._sender, messages.migration.finish_duplicating(receiver_id=self._node.id))
+
+  def deactivate(self):
+    self._deactivated = True

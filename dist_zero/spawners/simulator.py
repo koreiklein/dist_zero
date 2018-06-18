@@ -70,28 +70,27 @@ class SimulatedSpawner(spawner.Spawner):
     logger.info("=================================================")
     logger.info("Simulator for system: {system_id}", extra={'system_id': self._system_id})
 
-  def _format_node(self, node_handle):
+  def _format_node_id(self, node_id):
     '''
-    Format a node handle as a human readable string to look nice in logs.
-    :param node_handle: None, or a node handle.
-    :type node_handle: :ref:`handle`
+    Format a node id as a human readable string to look nice in logs.
+    :param str node_id: None, or a node id
 
     :return: A human readable string represending that node handle.
     :rtype: str
     '''
-    if node_handle is None:
+    if node_id is None:
       return "null"
     else:
-      return node_handle['id'][:12]
+      return node_id[:12]
 
   def _format_log(self, log_message):
     ms, msg = log_message
     message = msg['message']
     if message['type'] == 'machine_deliver_to_node':
       return "{} --{}--> {}".format(
-          self._format_node(message.get('sending_node_id', None)),
+          self._format_node_id(message.get('sending_node_id', None)),
           msg['message']['type'],
-          self._format_node(message.get('node_id', None)),
+          self._format_node_id(message.get('node_id', None)),
       )
     else:
       return "Control Message: {}".format(message['type'])
