@@ -103,28 +103,27 @@
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;=================================================&quot;</span><span class="p">)</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Simulator for system: </span><span class="si">{system_id}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;system_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span><span class="p">})</span></div>
 
-  <span class="k">def</span> <span class="nf">_format_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">_format_node_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Format a node handle as a human readable string to look nice in logs.</span>
-<span class="sd">    :param node_handle: None, or a node handle.</span>
-<span class="sd">    :type node_handle: :ref:`handle`</span>
+<span class="sd">    Format a node id as a human readable string to look nice in logs.</span>
+<span class="sd">    :param str node_id: None, or a node id</span>
 
 <span class="sd">    :return: A human readable string represending that node handle.</span>
 <span class="sd">    :rtype: str</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">if</span> <span class="n">node_handle</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">node_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
       <span class="k">return</span> <span class="s2">&quot;null&quot;</span>
     <span class="k">else</span><span class="p">:</span>
-      <span class="k">return</span> <span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">][:</span><span class="mi">12</span><span class="p">]</span>
+      <span class="k">return</span> <span class="n">node_id</span><span class="p">[:</span><span class="mi">12</span><span class="p">]</span>
 
   <span class="k">def</span> <span class="nf">_format_log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_message</span><span class="p">):</span>
     <span class="n">ms</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">log_message</span>
     <span class="n">message</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">]</span>
     <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;machine_deliver_to_node&#39;</span><span class="p">:</span>
       <span class="k">return</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> --</span><span class="si">{}</span><span class="s2">--&gt; </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">_format_node</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sending_node_id&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">_format_node_id</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sending_node_id&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
           <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">][</span><span class="s1">&#39;type&#39;</span><span class="p">],</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">_format_node</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;node_id&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">_format_node_id</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;node_id&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
       <span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
       <span class="k">return</span> <span class="s2">&quot;Control Message: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">])</span>

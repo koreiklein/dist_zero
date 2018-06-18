@@ -148,7 +148,7 @@ that run on that machine.</p>
 <em class="property">class </em><code class="descclassname">dist_zero.importer.</code><code class="descname">Importer</code><span class="sig-paren">(</span><em>node</em>, <em>sender</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/importer.html#Importer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.importer.Importer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Instances of Importer will be used by nodes internal to a computation to represent
 a source of input messages to that node.</p>
-<p>As messages arrive from the sender, the underlying <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> should pass them to the <code class="xref any docutils literal notranslate"><span class="pre">Importer.import_message</span></code> method.
+<p>As messages arrive from the sender, the underlying <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> should pass them to the <a class="reference internal" href="#dist_zero.importer.Importer.import_message" title="dist_zero.importer.Importer.import_message"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Importer.import_message</span></code></a> method.
 Internally, the <a class="reference internal" href="#dist_zero.importer.Importer" title="dist_zero.importer.Importer"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Importer</span></code></a> will de-duplicate and re-order messages, and eventually call <a class="reference internal" href="#dist_zero.node.sum.SumNode.deliver" title="dist_zero.node.sum.SumNode.deliver"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">SumNode.deliver</span></code></a> on
 each message, exactly once, and in the right order.</p>
 <table class="docutils field-list" frame="void" rules="none">
@@ -174,6 +174,24 @@ each message, exactly once, and in the right order.</p>
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>remote_sequence_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – A sequence number from the sender.
 When acknowledge is called, all messages with sequence numbers less than remote_sequence_number must
 be acknowledged by the underlying <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.importer.Importer.import_message">
+<code class="descname">import_message</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/importer.html#Importer.import_message"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.importer.Importer.import_message" title="Permalink to this definition">¶</a></dt>
+<dd><p>Receive a message from the linked <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – The newly received message.</li>
+<li><strong>sender_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> that sent the message.</li>
+</ul>
+</td>
 </tr>
 </tbody>
 </table>
@@ -541,16 +559,8 @@ Also called for an edge sum node adjacent to an input_node when the input node t
 
 <dl class="method">
 <dt id="dist_zero.node.sum.SumNode.migration_finished">
-<code class="descname">migration_finished</code><span class="sig-paren">(</span><em>remaining_sender_ids</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.migration_finished"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.migration_finished" title="Permalink to this definition">¶</a></dt>
+<code class="descname">migration_finished</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.migration_finished"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.migration_finished" title="Permalink to this definition">¶</a></dt>
 <dd><p>Called when the current migrator has finished migrating.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>remaining_sender_ids</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#set" title="(in Python v3.6)"><em>set</em></a>) – The set of senders that are still sending.  All other senders can be removed.</td>
-</tr>
-</tbody>
-</table>
 </dd></dl>
 
 <dl class="method">
@@ -567,6 +577,20 @@ Also called for an edge sum node adjacent to an input_node when the input node t
 (pre-recorded messages will not have a sender).</li>
 </ul>
 </td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.node.sum.SumNode.restrict_importers">
+<code class="descname">restrict_importers</code><span class="sig-paren">(</span><em>remaining_sender_ids</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.restrict_importers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.restrict_importers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Deactivate importers.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>remaining_sender_ids</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#set" title="(in Python v3.6)"><em>set</em></a>) – The set of senders that are still sending.  All other senders should be deactivated.</td>
 </tr>
 </tbody>
 </table>
@@ -599,21 +623,25 @@ and the current node.</p>
 <dl class="attribute">
 <dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS">
 <code class="descname">STATE_DUPLICATING_INPUTS</code><em class="property"> = 'DUPLICATING_INPUTS'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS" title="Permalink to this definition">¶</a></dt>
-<dd><p>In this state, all the new nodes are confirmed to have started running,
-and the migrator is waiting for the inputs to start duplicating to them.</p>
+<dd><p>Trigger: The migrator has received confirmations that each new node is now running.
+Action: The migrator tries to get input nodes to duplicate their exports.
+Description: The migrator is waiting for confirmations that the input nodes are duplicating.</p>
 </dd></dl>
 
 <dl class="attribute">
 <dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_FINISHED">
 <code class="descname">STATE_FINISHED</code><em class="property"> = 'FINISHED'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_FINISHED" title="Permalink to this definition">¶</a></dt>
-<dd><p>In this state, none of the inputs are sending their original messages, and send only to the new nodes.
-The migrator’s job is finished.</p>
+<dd><p>Trigger: The migrator has received confirmations that all the input nodes are trimmed.
+Action: None.
+Description: The migration is over.</p>
 </dd></dl>
 
 <dl class="attribute">
 <dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_INITIALIZING_NEW_NODES">
 <code class="descname">STATE_INITIALIZING_NEW_NODES</code><em class="property"> = 'INITIALIZING_NEW_NODES'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_INITIALIZING_NEW_NODES" title="Permalink to this definition">¶</a></dt>
-<dd><p>In this state, the migrator is waiting for new nodes to start running.</p>
+<dd><p>Trigger: none.  The migrator can enter this state immediately.
+Action: The migrator tries to spawn new nodes.
+Description: The migrator is waiting for new nodes to start running.</p>
 </dd></dl>
 
 <dl class="attribute">
@@ -623,18 +651,30 @@ The migrator’s job is finished.</p>
 </dd></dl>
 
 <dl class="attribute">
+<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS">
+<code class="descname">STATE_SWAPPING_OUTPUTS</code><em class="property"> = 'SWAPPING_OUTPUTS'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trigger: The migrator has received confirmations that the new nodes are live, and can be safely relied on
+in place of the input nodes.
+Action: The migrator converts all the output nodes to rely on the new nodes instead of the input nodes.
+Description: The migrator is waiting for confirmation that all output nodes have finished relying on the input nodes
+and are safely using the new nodes instead.</p>
+</dd></dl>
+
+<dl class="attribute">
 <dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES">
 <code class="descname">STATE_SYNCING_NEW_NODES</code><em class="property"> = 'SYNCING_NEW_NODES'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES" title="Permalink to this definition">¶</a></dt>
-<dd><p>In this state, all the inputs have been confirmed to be duplicating their messages,
-and the migrator is waiting for the new nodes to sync up with the current node they will be replacing.</p>
+<dd><p>Trigger: The migrator has received confirmations that all input nodes are duplicating.
+Action: The migrator attempts to bring the new nodes up to speed so that they can be treated as live.
+Description: The migrator is waiting for the new nodes to sync up with the current node they will be replacing.</p>
 </dd></dl>
 
 <dl class="attribute">
 <dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS">
 <code class="descname">STATE_TRIMMING_INPUTS</code><em class="property"> = 'TRIMMING_INPUTS'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS" title="Permalink to this definition">¶</a></dt>
-<dd><p>In this state, the entire downstream system is listening to the new models,
-and the migrator is waiting for the inputs to stop sending their old messages and report that they
-are sending only to the new models.</p>
+<dd><p>Trigger: The migrator has received confirmations that no nodes currently depend on the old output of the input nodes.
+Action: The migrator attempts to trim the input nodes (i.e. to stop them from sending their original messages,
+and send only to the new nodes they were duplicating to).
+Description: The migrator is waiting to be sure that all input nodes have been trimmed.</p>
 </dd></dl>
 
 <dl class="method">

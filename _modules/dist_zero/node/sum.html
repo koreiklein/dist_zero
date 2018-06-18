@@ -142,21 +142,36 @@
         <span class="c1">#   about how to set this parameter to guarantee correctness.</span>
         <span class="n">least_unacknowledged_sequence_number</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_least_unused_sequence_number</span><span class="p">)</span>
 
-<div class="viewcode-block" id="SumNode.migration_finished"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.migration_finished">[docs]</a>  <span class="k">def</span> <span class="nf">migration_finished</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remaining_sender_ids</span><span class="p">):</span>
+<div class="viewcode-block" id="SumNode.restrict_importers"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.restrict_importers">[docs]</a>  <span class="k">def</span> <span class="nf">restrict_importers</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remaining_sender_ids</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Deactivate importers.</span>
+
+<span class="sd">    :param set remaining_sender_ids: The set of senders that are still sending.  All other senders should be deactivated.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">n_deactivated_importers</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+      <span class="k">if</span> <span class="n">sender_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">remaining_sender_ids</span><span class="p">:</span>
+        <span class="n">importer</span><span class="o">.</span><span class="n">deactivate</span><span class="p">()</span>
+        <span class="n">n_deactivated_importers</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Deactivating </span><span class="si">{n_deactivated_importers}</span><span class="s2"> importers&quot;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;n_deactivated_importers&#39;</span><span class="p">:</span> <span class="n">n_deactivated_importers</span><span class="p">,</span>
+        <span class="p">})</span></div>
+
+  <span class="k">def</span> <span class="nf">remove_deactivated_importers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">sender_id</span><span class="p">:</span> <span class="n">importer</span>
+        <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">importer</span><span class="o">.</span><span class="n">_deactivated</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="SumNode.migration_finished"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.migration_finished">[docs]</a>  <span class="k">def</span> <span class="nf">migration_finished</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Called when the current migrator has finished migrating.</span>
 
-<span class="sd">    :param set remaining_sender_ids: The set of senders that are still sending.  All other senders can be removed.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="n">old_importers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span> <span class="o">=</span> <span class="p">{</span><span class="n">sender_id</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">sender_id</span> <span class="ow">in</span> <span class="n">remaining_sender_ids</span><span class="p">}</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-        <span class="s2">&quot;Finished migration, cutting back number of senders from </span><span class="si">{n_old_senders}</span><span class="s2"> to </span><span class="si">{n_new_senders}</span><span class="s2">&quot;</span><span class="p">,</span>
-        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
-            <span class="s1">&#39;n_old_senders&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">old_importers</span><span class="p">),</span>
-            <span class="s1">&#39;n_new_senders&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">),</span>
-        <span class="p">})</span></div>
+    <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span> <span class="o">=</span> <span class="kc">None</span></div>
 
   <span class="nd">@staticmethod</span>
   <span class="k">def</span> <span class="nf">from_config</span><span class="p">(</span><span class="n">node_config</span><span class="p">,</span> <span class="n">controller</span><span class="p">):</span>
@@ -417,30 +432,61 @@
 <span class="sd">  and the current node.</span>
 <span class="sd">  &#39;&#39;&#39;</span>
 
+  <span class="c1"># Below are the states of a migrator.</span>
+  <span class="c1"># The migrator will move linearly from each state to the next state.</span>
+  <span class="c1"># Each state has some trigger, the condition that must be met in order to transition.  As soon as the transition</span>
+  <span class="c1"># is met, the migrator will move into the next state.</span>
+  <span class="c1"># Each state has an action, something that the migrator is responsible for doing while in that state.</span>
+  <span class="c1"># Each state also has a description, which explains the state of affairs of the overall migration while the</span>
+  <span class="c1"># migrator is in that state.</span>
+
   <span class="n">STATE_NEW</span> <span class="o">=</span> <span class="s1">&#39;NEW&#39;</span>
   <span class="sd">&#39;&#39;&#39;The initial state of the migrator.&#39;&#39;&#39;</span>
 
   <span class="n">STATE_INITIALIZING_NEW_NODES</span> <span class="o">=</span> <span class="s1">&#39;INITIALIZING_NEW_NODES&#39;</span>
-  <span class="sd">&#39;&#39;&#39;In this state, the migrator is waiting for new nodes to start running.&#39;&#39;&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: none.  The migrator can enter this state immediately.</span>
+<span class="sd">  Action: The migrator tries to spawn new nodes.</span>
+<span class="sd">  Description: The migrator is waiting for new nodes to start running.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
 
   <span class="n">STATE_DUPLICATING_INPUTS</span> <span class="o">=</span> <span class="s1">&#39;DUPLICATING_INPUTS&#39;</span>
-  <span class="sd">&#39;&#39;&#39;In this state, all the new nodes are confirmed to have started running,</span>
-<span class="sd">  and the migrator is waiting for the inputs to start duplicating to them.&#39;&#39;&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The migrator has received confirmations that each new node is now running.</span>
+<span class="sd">  Action: The migrator tries to get input nodes to duplicate their exports.</span>
+<span class="sd">  Description: The migrator is waiting for confirmations that the input nodes are duplicating.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
 
   <span class="n">STATE_SYNCING_NEW_NODES</span> <span class="o">=</span> <span class="s1">&#39;SYNCING_NEW_NODES&#39;</span>
-  <span class="sd">&#39;&#39;&#39;In this state, all the inputs have been confirmed to be duplicating their messages,</span>
-<span class="sd">  and the migrator is waiting for the new nodes to sync up with the current node they will be replacing.&#39;&#39;&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The migrator has received confirmations that all input nodes are duplicating.</span>
+<span class="sd">  Action: The migrator attempts to bring the new nodes up to speed so that they can be treated as live.</span>
+<span class="sd">  Description: The migrator is waiting for the new nodes to sync up with the current node they will be replacing.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
 
-  <span class="c1"># NOTE(KK): One might imagine including the state: SWAPPING_OUTPUTS for migrators that involve outputs.</span>
+  <span class="n">STATE_SWAPPING_OUTPUTS</span> <span class="o">=</span> <span class="s1">&#39;SWAPPING_OUTPUTS&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The migrator has received confirmations that the new nodes are live, and can be safely relied on</span>
+<span class="sd">  in place of the input nodes.</span>
+<span class="sd">  Action: The migrator converts all the output nodes to rely on the new nodes instead of the input nodes.</span>
+<span class="sd">  Description: The migrator is waiting for confirmation that all output nodes have finished relying on the input nodes</span>
+<span class="sd">  and are safely using the new nodes instead.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
 
   <span class="n">STATE_TRIMMING_INPUTS</span> <span class="o">=</span> <span class="s1">&#39;TRIMMING_INPUTS&#39;</span>
-  <span class="sd">&#39;&#39;&#39;In this state, the entire downstream system is listening to the new models,</span>
-<span class="sd">  and the migrator is waiting for the inputs to stop sending their old messages and report that they</span>
-<span class="sd">  are sending only to the new models.&#39;&#39;&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The migrator has received confirmations that no nodes currently depend on the old output of the input nodes.</span>
+<span class="sd">  Action: The migrator attempts to trim the input nodes (i.e. to stop them from sending their original messages,</span>
+<span class="sd">  and send only to the new nodes they were duplicating to).</span>
+<span class="sd">  Description: The migrator is waiting to be sure that all input nodes have been trimmed.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
 
   <span class="n">STATE_FINISHED</span> <span class="o">=</span> <span class="s1">&#39;FINISHED&#39;</span>
-  <span class="sd">&#39;&#39;&#39;In this state, none of the inputs are sending their original messages, and send only to the new nodes.</span>
-<span class="sd">  The migrator&#39;s job is finished.&#39;&#39;&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The migrator has received confirmations that all the input nodes are trimmed.</span>
+<span class="sd">  Action: None.</span>
+<span class="sd">  Description: The migration is over.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
 
   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sum_node</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -510,8 +556,17 @@
     <span class="k">for</span> <span class="n">middle_node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_middle_nodes</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">middle_node</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">sum</span><span class="o">.</span><span class="n">set_sum_total</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_totals</span><span class="p">[</span><span class="n">middle_node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]))</span>
 
-  <span class="k">def</span> <span class="nf">_transition_to_trimming</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">_transition_to_swapping_outputs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_SYNCING_NEW_NODES</span><span class="p">,</span>
+                           <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_SWAPPING_OUTPUTS</span><span class="p">)</span>
+
+    <span class="c1"># Since the current node is right here, we can swap the outputs immediately and</span>
+    <span class="c1"># transition directly into the trimming state.</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">restrict_importers</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_to_trimming</span><span class="p">()</span>
+
+  <span class="k">def</span> <span class="nf">_transition_to_trimming</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_SWAPPING_OUTPUTS</span><span class="p">,</span>
                            <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_TRIMMING_INPUTS</span><span class="p">)</span>
 
     <span class="k">for</span> <span class="n">importers</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
@@ -521,7 +576,9 @@
   <span class="k">def</span> <span class="nf">_transition_to_finished</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_TRIMMING_INPUTS</span><span class="p">,</span> <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_FINISHED</span><span class="p">)</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">migration_finished</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">remove_deactivated_importers</span><span class="p">()</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">migration_finished</span><span class="p">()</span>
 
 <div class="viewcode-block" id="SumNodeSenderSplitMigrator.middle_node_live"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_live">[docs]</a>  <span class="k">def</span> <span class="nf">middle_node_live</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">middle_node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;Called when a middle node has been confirmed to be live.&#39;&#39;&#39;</span>
@@ -529,7 +586,7 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="p">[</span><span class="n">middle_node_id</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;live&#39;</span>
 
     <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;live&#39;</span> <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_transition_to_trimming</span><span class="p">()</span></div>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_transition_to_swapping_outputs</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="SumNodeSenderSplitMigrator.middle_node_started"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_started">[docs]</a>  <span class="k">def</span> <span class="nf">middle_node_started</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">middle_node_handle</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
