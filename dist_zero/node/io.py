@@ -60,6 +60,9 @@ class LeafNode(Node):
 
     super(LeafNode, self).__init__(logger)
 
+  def get_adjacent_id(self):
+    return None if self._adjacent is None else self._adjacent['id']
+
   def _set_adjacent(self, node):
     '''
     Called when a new adjacent has been added.
@@ -168,6 +171,9 @@ class InternalNode(Node):
     self._initial_state = initial_state
     self._adjacent = adjacent
     super(InternalNode, self).__init__(logger)
+
+  def get_adjacent_id(self):
+    return None if self._adjacent is None else self._adjacent['id']
 
   def initialize(self):
     if self._variant == 'input':

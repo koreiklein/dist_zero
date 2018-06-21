@@ -110,7 +110,30 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
 
   demo.run_for(ms=5000)
 
+  # Smoke test that at least one message was acknowledged by the middle sum node.
+  sum_node_stats = demo.system.get_stats(sum_node_id)
+  assert sum_node_stats['acknowledged_messages'] > 0
+  if network_error_type == 'duplicate':
+    assert sum_node_stats['n_duplicates'] > 0
+
+  # Check that the output nodes receive the correct sum
   user_b_state = demo.system.get_output_state(user_b_output_id)
   user_c_state = demo.system.get_output_state(user_c_output_id)
   assert 6 == user_b_state
   assert 6 == user_c_state
+
+  # At this point, the nodes should be done sending meaningful messages, run for some more time
+  # and assert that certain stats have not changed.
+  demo.run_for(ms=2000)
+  later_sum_node_stats = demo.system.get_stats(sum_node_id)
+  for stat in ['n_retransmissions', 'n_reorders', 'n_duplicates', 'sent_messages', 'acknowledged_messages']:
+    assert sum_node_stats[stat] == later_sum_node_stats[stat]
+
+  # Check stats on the input edge SumNode instances.
+  user_b_edge_sum_node_id = demo.system.get_adjacent_id(user_b_input_id)
+  user_c_edge_sum_node_id = demo.system.get_adjacent_id(user_c_input_id)
+
+  b_edge_sum_node_stats = demo.system.get_stats(user_b_edge_sum_node_id)
+  c_edge_sum_node_stats = demo.system.get_stats(user_c_edge_sum_node_id)
+
+  raise RuntimeError("FINISH checking things about these stats!")

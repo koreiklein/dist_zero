@@ -57,6 +57,7 @@ class Exporter(object):
     cutoff_send_time_ms = time_ms - Exporter.PENDING_EXPIRATION_TIME_MS
     while self._pending_messages and self._pending_messages[0][0] <= cutoff_send_time_ms:
       t, message = self._pending_messages.pop(0)
+      self._node.n_retransmissions += 1
       self._node.logger.warning(
           "Retransmitting message {sequence_number}", extra={'sequence_number': message['sequence_number']})
       self.export_message(message=message, time_ms=time_ms)
@@ -84,7 +85,7 @@ class Exporter(object):
 
     # PERF(KK): binary search is possible here.
     self._pending_messages = [(t, msg) for t, msg in self._pending_messages
-                              if msg['sequence_number'] < self._least_unacknowledged_sequence_number]
+                              if msg['sequence_number'] >= self._least_unacknowledged_sequence_number]
 
   def export_message(self, message, time_ms):
     '''

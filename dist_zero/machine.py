@@ -185,6 +185,7 @@ class NodeManager(MachineController):
     # In general, the config should be serialized and deserialized at some point.
     # Do it here so that simulated tests don't accidentally share data.
     node_config = json.loads(json.dumps(node_config))
+    # PERF(KK): This serialization/deserialization can be taken out when not in simulated mode.
 
     return self.start_node(node_config).id
 
@@ -269,6 +270,16 @@ class NodeManager(MachineController):
           'status': 'ok',
           'data': self.get_output_state(message['node_id']),
       }
+    elif message['type'] == 'api_get_stats':
+      return {
+          'status': 'ok',
+          'data': self.get_stats(message['node_id']),
+      }
+    elif message['type'] == 'api_get_adjacent_id':
+      return {
+          'status': 'ok',
+          'data': self.get_adjacent_id(message['node_id']),
+      }
     else:
       logger.error("Unrecognized API message type {message_type}", extra={'message_type': message['type']})
       return {
@@ -278,6 +289,12 @@ class NodeManager(MachineController):
 
   def get_output_state(self, node_id):
     return self._output_node_state_by_id[node_id]
+
+  def get_stats(self, node_id):
+    return self._node_by_id[node_id].stats()
+
+  def get_adjacent_id(self, node_id):
+    return self._node_by_id[node_id].get_adjacent_id()
 
   def handle(self):
     return {'type': 'MachineController', 'id': self.id}

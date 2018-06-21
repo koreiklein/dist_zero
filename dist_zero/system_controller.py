@@ -127,6 +127,31 @@ class SystemController(object):
     return self._spawner.send_to_machine(
         machine=machine_handle, message=messages.machine.api_get_output_state(node_id=output_node_id), sock_type='tcp')
 
+  def get_stats(self, node_id):
+    '''
+    Get the stats associated with a node that collects stats.
+
+    :param str node_id: The id of a `Node` in the system that is collecting stats.
+
+    :return: The stats of that node at about the current time.
+    '''
+    machine_handle = self._node_id_to_machine_handle[node_id]
+    return self._spawner.send_to_machine(
+        machine=machine_handle, message=messages.machine.api_get_stats(node_id=node_id), sock_type='tcp')
+
+  def get_adjacent_id(self, node_id):
+    '''
+    Get the id of an adjacent `Node`.
+
+    :param str node_id: The id of a `Node` in the system that has an adjacent `Node`.
+      It must be either a `LeafNode` or an `InternalNode`
+
+    :return: The id of the adjacent `Node`, or `None` if no such `Node` exists.
+    '''
+    machine_handle = self._node_id_to_machine_handle[node_id]
+    return self._spawner.send_to_machine(
+        machine=machine_handle, message=messages.machine.api_get_adjacent_id(node_id=node_id), sock_type='tcp')
+
   def generate_new_handle(self, new_node_id, existing_node_id):
     '''
     Generate a new handle to fill a config for a new node to send to an existing node.

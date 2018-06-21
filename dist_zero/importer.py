@@ -66,6 +66,7 @@ class Importer(object):
     else:
       rsn = message['sequence_number']
       if rsn < self._least_unreceived_remote_sequence_number or rsn in self._remote_sequence_number_to_early_message:
+        self._node.n_duplicates += 1
         self._node.logger.warning(
             ("Received duplicate message for sequence number {remote_sequence_number}"
              " from sender {sender_id}"),
@@ -75,10 +76,16 @@ class Importer(object):
             })
       else:
         self._remote_sequence_number_to_early_message[rsn] = message
+
+        message = None
         while self._least_unreceived_remote_sequence_number in self._remote_sequence_number_to_early_message:
           message = self._remote_sequence_number_to_early_message.pop(self._least_unreceived_remote_sequence_number)
           self._node.deliver(message['amount'])
           self._least_unreceived_remote_sequence_number += 1
+
+        if message is None:
+          # This message was not processed immediately, consider it reordered.
+          self._node.n_reorders += 1
 
   @property
   def sender_id(self):

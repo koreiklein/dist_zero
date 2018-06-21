@@ -124,6 +124,26 @@ def api_get_output_state(node_id):
   return {'type': 'api_get_output_state', 'node_id': node_id}
 
 
+def api_get_stats(node_id):
+  '''
+  Get and return the stats for a `Node` in the network.
+  :param str node: The id of a `Node` that collects stats.
+  :return: The current stats of that node.
+  :rtype: dict
+  '''
+  return {'type': 'api_get_stats', 'node_id': node_id}
+
+
+def api_get_adjacent_id(node_id):
+  '''
+  Get and return the adjacent `Node` for a `LeafNode` or 'InternalNode` in the network.
+  :param str node: The id of a `LeafNode` or `InternalNode'.
+  :return: The id of the adjacent `Node` if it exists, otherwise `None`
+  :rtype: str or None
+  '''
+  return {'type': 'api_get_adjacent_id', 'node_id': node_id}
+
+
 def api_create_kid_config(internal_node_id, new_node_name, machine_controller_handle):
   '''
   Create a node_config for a new kid node of an internal io node.

@@ -1,7 +1,8 @@
-import dist_zero.logging
+from collections import defaultdict
 
 from cryptography.fernet import Fernet
 
+import dist_zero.logging
 from dist_zero import messages
 
 
