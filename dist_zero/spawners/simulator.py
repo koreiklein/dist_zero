@@ -188,7 +188,19 @@ class SimulatedSpawner(spawner.Spawner):
   def now_ms(self):
     return self._elapsed_time_ms
 
-  def send_to_machine(self, machine_id, message, sock_type='udp'):
+  def simulate_send_to_machine(self, machine_id, message, sock_type='udp'):
+    '''
+    Simulate a send of a message to the identified `MachineController`
+
+    :param str machine_id: The id of the `MachineController` for one of the managed machines.
+    :param message: Some json serializable message to send to that machine.
+    :type message: :ref:`message`
+    :param str sock_type: Either 'udp' or 'tcp'.  Indicating the type of connection.
+
+    :return: None if sock_type == 'udp'.
+      If sock_type == 'tcp', then return the response from the `MachineController` tcp API.
+    :rtype: object
+    '''
     # Simulate the serializing and deserializing that happens in other Spawners.
     # This behavior is important so that simulated tests don't accidentally share data.
     message = json.loads(json.dumps(message))

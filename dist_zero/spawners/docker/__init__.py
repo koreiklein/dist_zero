@@ -78,25 +78,19 @@ class DockerSpawner(spawner.Spawner):
   def mode(self):
     return spawners.MODE_VIRTUAL
 
-  def send_to_machine(self, machine_id, message, sock_type='udp'):
-    if self._inside_container:
-      return self._send_to_machine_from_container(machine_id=machine_id, message=message, sock_type=sock_type)
-    else:
-      return self._send_to_machine_from_host(machine_id=machine_id, message=message, sock_type=sock_type)
+  def send_to_container_from_host(self, machine_id, message, sock_type='udp'):
+    '''
+    Simulate a virtual send of a message to the container running the identified `MachineController`
 
-  def _send_to_machine_from_container(self, machine_id, message, sock_type='udp'):
-    #FIXME(KK): Figure out how to know the appropriate host.
-    raise errors.InternalError("FIXME(KK): Figure out how to know the appropriate host.")
-    dst = (transport['host'], settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
-    if sock_type == 'udp':
-      dist_zero.transport.send_udp(message, dst)
-      return None
-    elif sock_type == 'tcp':
-      return dist_zero.transport.send_tcp(message, dst)
-    else:
-      raise errors.InternalError('Unrecognized sock_type "{}"'.format(sock_type))
+    :param str machine_id: The id of the `MachineController` for one of the managed machines.
+    :param message: Some json serializable message to send to that machine.
+    :type message: :ref:`message`
+    :param str sock_type: Either 'udp' or 'tcp'.  Indicating the type of connection.
 
-  def _send_to_machine_from_host(self, machine_id, message, sock_type='udp'):
+    :return: None if sock_type == 'udp'.
+      If sock_type == 'tcp', then return the response from the `MachineController` tcp API.
+    :rtype: object
+    '''
     host_msg_dir = self._container_msg_dir_on_host(machine_id)
     filename = "message_{}.json".format(self._n_sent_messages)
     self._n_sent_messages += 1

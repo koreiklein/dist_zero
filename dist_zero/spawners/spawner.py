@@ -46,19 +46,3 @@ class Spawner(object):
     :rtype: list[str]
     '''
     raise RuntimeError("Abstract Superclass")
-
-  def send_to_machine(self, machine_id, message, sock_type='udp'):
-    '''
-    Send a message from the current process to a `MachineController` listening
-    on a port on a spawned machine.
-
-    :param str machine_id: The id of the `MachineController` for one of the managed machines.
-    :param message: Some json serializable message to send to that machine.
-    :type message: :ref:`message`
-    :param str sock_type: Either 'udp' or 'tcp'.  Indicating the type of connection.
-
-    :return: None if sock_type == 'udp'.
-      If sock_type == 'tcp', then return the response from the `MachineController` tcp API.
-    :rtype: object
-    '''
-    raise RuntimeError("Abstract Superclass")

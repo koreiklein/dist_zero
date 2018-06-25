@@ -107,7 +107,7 @@ class TestLongRunningSum(object):
               parent_node_id=self.root_input_node_id,
               new_node_name='input_{}'.format(i),
               # Place the new nodes on machines in a round-robin manner.
-              machine_controller_handle=self.machine_ids[i % len(self.machine_ids)],
+              machine_id=self.machine_ids[i % len(self.machine_ids)],
               recorded_user=RecordedUser(
                   'user {}'.format(i),
                   [(t, messages.io.input_action(int(rand.random() * 20)))

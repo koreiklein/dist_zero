@@ -36,7 +36,7 @@ class Ec2Spawner(spawner.Spawner):
     :param str instance_type: The aws instance type (e.g. 't2.micro')
     '''
     self._system_id = system_id
-    self._aws_instance_by_id = {} # id to the boto instance object
+    self.aws_instance_by_id = {} # id to the boto instance object
 
     self._aws_region = aws_region
     self._base_ami = base_ami
@@ -88,8 +88,8 @@ class Ec2Spawner(spawner.Spawner):
     return spawners.MODE_CLOUD
 
   def clean_all(self):
-    if self._aws_instance_by_id:
-      self._ec2.terminate_instances(InstanceIds=[instance.id for instance in self._aws_instance_by_id.values()], )
+    if self.aws_instance_by_id:
+      self._ec2.terminate_instances(InstanceIds=[instance.id for instance in self.aws_instance_by_id.values()], )
 
   def create_machine(self, machine_config):
     return self.create_machines([machine_config])[0]
@@ -270,7 +270,7 @@ class Ec2Spawner(spawner.Spawner):
     logger.info("Starting dist_zero.machine_init process on remote machine", extra=extra)
     _exec_command("cd /dist_zero; nohup pipenv run python -m dist_zero.machine_init /dist_zero/machine_config.json &")
 
-    self._aws_instance_by_id[machine_controller_id] = instance
+    self.aws_instance_by_id[machine_controller_id] = instance
     return machine_controller_id
 
   def _instance_status_is_reachable(self, status):
@@ -354,15 +354,3 @@ class Ec2Spawner(spawner.Spawner):
         return True
       else:
         return False
-
-  def send_to_machine(self, machine_id, message, sock_type='udp'):
-    instance = self._aws_instance_by_id[machine_id]
-
-    if sock_type == 'udp':
-      dst = (instance.public_ip_address, settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
-      return transport.send_udp(message, dst)
-    elif sock_type == 'tcp':
-      dst = (instance.public_ip_address, settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT)
-      return transport.send_tcp(message, dst)
-    else:
-      raise RuntimeError("Unrecognized sock_type {}".format(sock_type))

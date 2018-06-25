@@ -83,9 +83,9 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   demo.run_for(ms=1000)
 
   user_b_output_id = demo.system.create_kid(
-      parent_node_id=root_output_node_id, new_node_name='output_b', machine_controller_handle=machine_b)
+      parent_node_id=root_output_node_id, new_node_name='output_b', machine_id=machine_b)
   user_c_output_id = demo.system.create_kid(
-      parent_node_id=root_output_node_id, new_node_name='output_c', machine_controller_handle=machine_c)
+      parent_node_id=root_output_node_id, new_node_name='output_c', machine_id=machine_c)
 
   # Wait for the output nodes to start up
   demo.run_for(ms=200)
@@ -93,7 +93,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   user_b_input_id = demo.system.create_kid(
       parent_node_id=root_input_node_id,
       new_node_name='input_b',
-      machine_controller_handle=machine_b,
+      machine_id=machine_b,
       recorded_user=RecordedUser('user b', [
           (2030, messages.io.input_action(2)),
           (2060, messages.io.input_action(1)),
@@ -101,7 +101,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   user_c_input_id = demo.system.create_kid(
       parent_node_id=root_input_node_id,
       new_node_name='input_c',
-      machine_controller_handle=machine_c,
+      machine_id=machine_c,
       recorded_user=RecordedUser('user c', [
           (2033, messages.io.input_action(1)),
           (2043, messages.io.input_action(1)),

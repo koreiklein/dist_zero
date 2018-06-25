@@ -167,7 +167,7 @@ class NodeManager(MachineController):
             int(self._random.random() * (NodeManager.MAX_POSTPONE_TIME_MS - NodeManager.MIN_POSTPONE_TIME_MS)))
 
   def _send_without_error_simulation(self, node_handle, message, sending_node_id):
-    '''Like `NodeManager.send`, but without checking for simulated errors'''
+    '''Like `NodeManager.send`, but do not simulate any errors'''
     logger.debug(
         "Sending message from {sending_node_id} to {recipient_handle}: {message}",
         extra={
@@ -189,16 +189,11 @@ class NodeManager(MachineController):
     node_config = json.loads(json.dumps(node_config))
     # PERF(KK): This serialization/deserialization can be taken out when not in simulated mode.
 
-    node_id = node_config['id']
-
     # TODO(KK): Always running the new Node on the same controller that spawns it is clearly
     #   broken.  Come up with test cases that nodes are spawned in more reasonable placed and fix it.
-    controller_id = self.id
-    node_id = node_config['id']
+    self.start_node(node_config)
 
-    self._spawner.send_to_machine(machine_id=controller_id, message=messages.machine.machine_start_node(node_config))
-
-    return node_id
+    return node_config['id']
 
   def new_transport(self, node, for_node_id):
     return messages.machine.ip_transport(self._ip_host)
@@ -262,7 +257,7 @@ class NodeManager(MachineController):
           })
       return {
           'status': 'ok',
-          'data': node.create_kid_config(message['new_node_name'], message['machine_controller_handle']),
+          'data': node.create_kid_config(message['new_node_name'], message['machine_id']),
       }
     elif message['type'] == 'api_new_handle':
       node = self._node_by_id[message['local_node_id']]

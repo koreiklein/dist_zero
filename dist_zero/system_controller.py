@@ -6,12 +6,19 @@ from logstash_async.handler import AsynchronousLogstashHandler
 
 import dist_zero.logging
 
-from dist_zero import machine, settings, errors, messages
+from dist_zero import machine, settings, errors, messages, spawners, transport
 
 
 class SystemController(object):
   '''
   Class to manage the entire distributed system for tests.
+
+  Because this class is for testing, it has special behavior in each of the three modes.
+  In simulated mode, each instance of this class will contain the entire distributed system inside its `SimulatedSpawner`.
+  In virtual mode, each instance will be running on the host, and have access to a docker daemon for managing
+  the containers.
+  In cloud mode, each instance of this class will have network access to the cloud instance, and be able
+  have access to cloud credentials.
   '''
 
   # NOTE(KK): This class is entirely for tests at the moment.
@@ -35,34 +42,32 @@ class SystemController(object):
     '''The underlying spawner of this `SystemController`'''
     return self._spawner
 
-  def create_kid_config(self, internal_node_id, new_node_name, machine_controller_handle):
+  def create_kid_config(self, internal_node_id, new_node_name, machine_id):
     '''
     :param internal_node_id: The id of the parent `InternalNode`.
     :param str new_node_name: The name to use for the new node.
-    :param machine_controller_handle: The :ref:`handle` of the machine on which the new node will run.
-    :type machine_controller_handle: :ref:`handle`
+    :param str machine_id: The id of the machine on which the new node will run.
 
     :return: A node_config for creating the new kid node.
     :rtype: :ref:`message`
     '''
     machine_id = self._node_id_to_machine_id[internal_node_id]
-    return self._spawner.send_to_machine(
+    return self._send_to_machine(
         machine_id=machine_id,
         message=messages.machine.api_create_kid_config(
             internal_node_id=internal_node_id,
             new_node_name=new_node_name,
-            machine_controller_handle=machine_controller_handle,
+            machine_id=machine_id,
         ),
         sock_type='tcp')
 
-  def create_kid(self, parent_node_id, new_node_name, machine_controller_handle, recorded_user=None):
+  def create_kid(self, parent_node_id, new_node_name, machine_id, recorded_user=None):
     '''
     Create a new kid of an `InternalNode` in this system.
 
     :param str parent_node_id: The id of the parent node.
     :param str new_node_name: The name to use for the new node.
-    :param machine_controller_handle: The :ref:`handle` of the `MachineController` that should run the new node.
-    :type machine_controller_handle: :ref:`handle`
+    :param str machine_id: The id of the `MachineController` that should run the new node.
     :param recorded_user: An optional recording of a user to be played back on the new node.
     :type recorded_user: :RecordedUser`
 
@@ -71,11 +76,11 @@ class SystemController(object):
     node_config = self.create_kid_config(
         internal_node_id=parent_node_id,
         new_node_name=new_node_name,
-        machine_controller_handle=machine_controller_handle,
+        machine_id=machine_id,
     )
     if recorded_user is not None:
       node_config['recorded_user_json'] = recorded_user.to_json()
-    return self.spawn_node(on_machine=machine_controller_handle, node_config=node_config)
+    return self.spawn_node(on_machine=machine_id, node_config=node_config)
 
   def spawn_node(self, node_config, on_machine):
     '''
@@ -88,9 +93,35 @@ class SystemController(object):
     :return: The node id of the spawned node.
     '''
     node_id = node_config['id']
-    self._spawner.send_to_machine(machine_id=on_machine, message=messages.machine.machine_start_node(node_config))
+    self._send_to_machine(machine_id=on_machine, message=messages.machine.machine_start_node(node_config))
     self._node_id_to_machine_id[node_id] = on_machine
     return node_id
+
+  def _send_to_machine(self, machine_id, message, sock_type='udp'):
+    '''
+    Send a message to the identified `MachineController` using whatever method is appropriate
+    for the current environment.
+
+    :param str machine_id: The id of the `MachineController` for one of the managed machines.
+    :param message: Some json serializable message to send to that machine.
+    :type message: :ref:`message`
+    :param str sock_type: Either 'udp' or 'tcp'.  Indicating the type of connection.
+
+    :return: None if sock_type == 'udp'.
+      If sock_type == 'tcp', then return the response from the `MachineController` tcp API.
+    :rtype: object
+    '''
+    if self._spawner.mode() == spawners.MODE_SIMULATED:
+      return self._spawner.simulate_send_to_machine(machine_id=machine_id, message=message, sock_type=sock_type)
+    elif self._spawner.mode() == spawners.MODE_VIRTUAL:
+      return self._spawner.send_to_container_from_host(machine_id=machine_id, message=message, sock_type=sock_type)
+    elif self._spawner.mode() == spawners.MODE_CLOUD:
+      return transport.send(
+          message=message,
+          ip_address=self._spawner.aws_instance_by_id[machine_id].public_ip_address,
+          sock_type=sock_type)
+    else:
+      raise errors.InternalError('Unrecognized mode "{}"'.format(self._spawner.mode()))
 
   def create_machine(self, machine_config):
     '''
@@ -123,7 +154,7 @@ class SystemController(object):
     :return: The state of that node at about the current time.
     '''
     machine_id = self._node_id_to_machine_id[output_node_id]
-    return self._spawner.send_to_machine(
+    return self._send_to_machine(
         machine_id=machine_id, message=messages.machine.api_get_output_state(node_id=output_node_id), sock_type='tcp')
 
   def get_stats(self, node_id):
@@ -135,7 +166,7 @@ class SystemController(object):
     :return: The stats of that node at about the current time.
     '''
     machine_id = self._node_id_to_machine_id[node_id]
-    return self._spawner.send_to_machine(
+    return self._send_to_machine(
         machine_id=machine_id, message=messages.machine.api_get_stats(node_id=node_id), sock_type='tcp')
 
   def generate_new_handle(self, new_node_id, existing_node_id):
@@ -149,7 +180,7 @@ class SystemController(object):
     :rtype: :ref:`handle`
     '''
     machine_id = self._node_id_to_machine_id[existing_node_id]
-    return self._spawner.send_to_machine(
+    return self._send_to_machine(
         machine_id=machine_id,
         message=messages.machine.api_new_handle(local_node_id=existing_node_id, new_node_id=new_node_id),
         sock_type='tcp')
@@ -165,7 +196,7 @@ class SystemController(object):
     '''
     machine_id = self._node_id_to_machine_id[node_id]
     machine_message = messages.machine.machine_deliver_to_node(node_id=node_id, message=message, sending_node_id=None)
-    self._spawner.send_to_machine(machine_id=machine_id, message=machine_message)
+    self._send_to_machine(machine_id=machine_id, message=machine_message)
 
   def _node_handle_to_machine_id(self, node_handle):
     return self._node_id_to_machine_id[node_handle['id']]

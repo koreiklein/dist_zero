@@ -6,9 +6,20 @@ import socket
 import json
 import logging
 
-from dist_zero import messages, settings
+from dist_zero import messages, settings, errors
 
 logger = logging.getLogger(__name__)
+
+
+def send(message, ip_address, sock_type):
+  if sock_type == 'udp':
+    dst = (ip_address, settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
+    return transport.send_udp(message, dst)
+  elif sock_type == 'tcp':
+    dst = (ip_address, settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT)
+    return transport.send_tcp(message, dst)
+  else:
+    raise errors.InternalError("Unrecognized sock_type {}".format(sock_type))
 
 
 def send_udp(message, dst):
