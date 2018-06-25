@@ -5,6 +5,17 @@ class Spawner(object):
   with them once they have started running.
   '''
 
+  @staticmethod
+  def from_spawner_json(self, spawner_config):
+    '''
+    Build a new `Spawner` instance from spawner configuration json.
+
+    :param object j: A python object, deserialized from spawner json
+    :return: A spawner instance, configured from ``j``.
+    :rtype: `Spawner`
+    '''
+    raise RuntimeError("Abstract Superclass")
+
   def mode(self):
     '''
     This spawner's mode.
@@ -20,8 +31,8 @@ class Spawner(object):
 
     :param object machine_config: A machine configuration object.
 
-    :return: The :ref:`handle` of the new `MachineController`
-    :rtype: :ref:`handle`
+    :return: The id of the new `MachineController`
+    :rtype: str
     '''
     raise RuntimeError("Abstract Superclass")
 
@@ -31,24 +42,7 @@ class Spawner(object):
 
     :param list machine_configs: A list of machine configuration objects.
 
-    :return: The list of :ref:`handle` of the new `MachineController` in the same order as the matching 
-    :rtype: list[:ref:`handle`]
-    '''
-    raise RuntimeError("Abstract Superclass")
-
-  def send_to_machine(self, machine, message, sock_type='udp'):
-    '''
-    Send a message from the current process to a `MachineController` listening
-    on a port on a spawned machine.
-
-    :param machine: The :ref:`handle` of the `MachineController` for one of the managed machines.
-    :type machine: :ref:`handle`
-    :param message: Some json serializable message to send to that machine.
-    :type message: :ref:`message`
-    :param str sock_type: Either 'udp' or 'tcp'.  Indicating the type of connection.
-
-    :return: None if sock_type == 'udp'.
-      If sock_type == 'tcp', then return the response from the `MachineController` tcp API.
-    :rtype: object
+    :return: The list of ids of the new `MachineController` in the same order as the matching 
+    :rtype: list[str]
     '''
     raise RuntimeError("Abstract Superclass")

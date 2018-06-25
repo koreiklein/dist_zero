@@ -44,7 +44,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
   network_errors_config['outgoing'][network_error_type]['regexp'] = '.*increment.*'
 
-  machine_a_handle, machine_b_handle, machine_c_handle = demo.new_machine_controllers(
+  machine_a, machine_b, machine_c = demo.new_machine_controllers(
       3,
       base_config={'network_errors_config': network_errors_config},
       random_seed=seed,
@@ -53,7 +53,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   demo.run_for(ms=200)
 
   sum_node_id = demo.system.spawn_node(
-      on_machine=machine_a_handle,
+      on_machine=machine_a,
       node_config=messages.sum.sum_node_config(
           node_id=dist_zero.ids.new_id('SumNode'),
           senders=[],
@@ -65,7 +65,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   # Configure the starting network topology
   root_input_node_id = dist_zero.ids.new_id('InternalNode')
   demo.system.spawn_node(
-      on_machine=machine_a_handle,
+      on_machine=machine_a,
       node_config=messages.io.internal_node_config(
           root_input_node_id,
           variant='input',
@@ -73,7 +73,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
 
   root_output_node_id = dist_zero.ids.new_id('InternalNode')
   demo.system.spawn_node(
-      on_machine=machine_a_handle,
+      on_machine=machine_a,
       node_config=messages.io.internal_node_config(
           root_output_node_id,
           variant='output',
@@ -83,9 +83,9 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   demo.run_for(ms=1000)
 
   user_b_output_id = demo.system.create_kid(
-      parent_node_id=root_output_node_id, new_node_name='output_b', machine_controller_handle=machine_b_handle)
+      parent_node_id=root_output_node_id, new_node_name='output_b', machine_id=machine_b)
   user_c_output_id = demo.system.create_kid(
-      parent_node_id=root_output_node_id, new_node_name='output_c', machine_controller_handle=machine_c_handle)
+      parent_node_id=root_output_node_id, new_node_name='output_c', machine_id=machine_c)
 
   # Wait for the output nodes to start up
   demo.run_for(ms=200)
@@ -93,7 +93,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   user_b_input_id = demo.system.create_kid(
       parent_node_id=root_input_node_id,
       new_node_name='input_b',
-      machine_controller_handle=machine_b_handle,
+      machine_id=machine_b,
       recorded_user=RecordedUser('user b', [
           (2030, messages.io.input_action(2)),
           (2060, messages.io.input_action(1)),
@@ -101,7 +101,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   user_c_input_id = demo.system.create_kid(
       parent_node_id=root_input_node_id,
       new_node_name='input_c',
-      machine_controller_handle=machine_c_handle,
+      machine_id=machine_c,
       recorded_user=RecordedUser('user c', [
           (2033, messages.io.input_action(1)),
           (2043, messages.io.input_action(1)),
@@ -110,7 +110,24 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
 
   demo.run_for(ms=5000)
 
+  # Smoke test that at least one message was acknowledged by the middle sum node.
+  sum_node_stats = demo.system.get_stats(sum_node_id)
+  assert sum_node_stats['acknowledged_messages'] > 0
+  if network_error_type == 'duplicate':
+    assert sum_node_stats['n_duplicates'] > 0
+
+  # Check that the output nodes receive the correct sum
   user_b_state = demo.system.get_output_state(user_b_output_id)
   user_c_state = demo.system.get_output_state(user_c_output_id)
   assert 6 == user_b_state
   assert 6 == user_c_state
+
+  # At this point, the nodes should be done sending meaningful messages, run for some more time
+  # and assert that certain stats have not changed.
+  demo.run_for(ms=2000)
+  later_sum_node_stats = demo.system.get_stats(sum_node_id)
+  for stat in ['n_retransmissions', 'n_reorders', 'n_duplicates', 'sent_messages', 'acknowledged_messages']:
+    assert sum_node_stats[stat] == later_sum_node_stats[stat]
+
+  # TODO(KK): Once io nodes generate acknowledgements, this would be an excellent place to assert
+  #   that they have acknowledged their messages.

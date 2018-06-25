@@ -1,4 +1,5 @@
 import logging
+import json
 import tempfile
 import os
 import time
@@ -36,8 +37,7 @@ class Ec2Spawner(spawner.Spawner):
     :param str instance_type: The aws instance type (e.g. 't2.micro')
     '''
     self._system_id = system_id
-    self._handle_by_id = {} # id to machine controller handle
-    self._aws_instance_by_id = {} # id to the boto instance object
+    self.aws_instance_by_id = {} # id to the boto instance object
 
     self._aws_region = aws_region
     self._base_ami = base_ami
@@ -64,12 +64,33 @@ class Ec2Spawner(spawner.Spawner):
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
 
+  def _remote_spawner_json(self):
+    '''Generate an `Ec2Spawner` config for a new machine.'''
+    return {
+        'system_id': self._system_id,
+        'aws_region': self._aws_region,
+        'base_ami': self._base_ami,
+        'security_group': self._security_group,
+        'instance_type': self._instance_type,
+    }
+
+  @staticmethod
+  def from_spawner_json(spawner_config):
+    logger.info("Creating {parsed_spawner_type} from spawner_config", extra={'parsed_spawner_type': 'Ec2Spawner'})
+    return Ec2Spawner(
+        system_id=spawner_config['system_id'],
+        aws_region=spawner_config['aws_region'],
+        base_ami=spawner_config['base_ami'],
+        security_group=spawner_config['security_group'],
+        instance_type=spawner_config['instance_type'],
+    )
+
   def mode(self):
     return spawners.MODE_CLOUD
 
   def clean_all(self):
-    if self._aws_instance_by_id:
-      self._ec2.terminate_instances(InstanceIds=[instance.id for instance in self._aws_instance_by_id.values()], )
+    if self.aws_instance_by_id:
+      self._ec2.terminate_instances(InstanceIds=[instance.id for instance in self.aws_instance_by_id.values()], )
 
   def create_machine(self, machine_config):
     return self.create_machines([machine_config])[0]
@@ -205,14 +226,23 @@ class Ec2Spawner(spawner.Spawner):
 
     logger.info("Rsyncing dist_zero files to aws instance {aws_instance_id}", extra=extra)
 
+    machine_config_with_spawner = {'spawner': {'type': 'aws', 'value': self._remote_spawner_json()}}
+    machine_config_with_spawner.update(machine_config)
     # Create local machine config file
-    local_config_file = tempfile.NamedTemporaryFile(mode='w')
-    json.dump(machine_config, local_config_file)
+    local_config_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
+    json.dump(machine_config_with_spawner, local_config_file)
     local_config_file.close()
 
     # Do the rsync
     rsync_ssh_params = 'ssh -oStrictHostKeyChecking=no -i {keyfile}'
-    rsync_excludes = '--exclude "*.pyc" --exclude "*__pycache__*" --exclude .pytest_cache'
+    rsync_excludes = ''.join(' --exclude "{}"'.format(exp) for exp in [
+        "*.pyc",
+        "*__pycache__*",
+        ".pytest_cache*",
+        ".tmp*",
+        ".git*",
+        ".keys*",
+    ])
     for precommand in [
         'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} dist_zero {user}@{instance}:/dist_zero/ >> {outfile}',
         'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} Pipfile {user}@{instance}:/dist_zero/Pipfile >> {outfile}',
@@ -248,10 +278,8 @@ class Ec2Spawner(spawner.Spawner):
     logger.info("Starting dist_zero.machine_init process on remote machine", extra=extra)
     _exec_command("cd /dist_zero; nohup pipenv run python -m dist_zero.machine_init /dist_zero/machine_config.json &")
 
-    handle = messages.machine.machine_controller_handle(machine_controller_id)
-    self._handle_by_id[machine_controller_id] = handle
-    self._aws_instance_by_id[machine_controller_id] = instance
-    return handle
+    self.aws_instance_by_id[machine_controller_id] = instance
+    return machine_controller_id
 
   def _instance_status_is_reachable(self, status):
     '''
@@ -334,15 +362,3 @@ class Ec2Spawner(spawner.Spawner):
         return True
       else:
         return False
-
-  def send_to_machine(self, machine, message, sock_type='udp'):
-    instance = self._aws_instance_by_id[machine['id']]
-
-    if sock_type == 'udp':
-      dst = (instance.public_ip_address, settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
-      return transport.send_udp(message, dst)
-    elif sock_type == 'tcp':
-      dst = (instance.public_ip_address, settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT)
-      return transport.send_tcp(message, dst)
-    else:
-      raise RuntimeError("Unrecognized sock_type {}".format(sock_type))

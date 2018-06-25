@@ -88,10 +88,13 @@ class NodeManager(MachineController):
   MAX_POSTPONE_TIME_MS = 1200
   '''Maximum time a message will be postpone when simulating a network drop or reorder'''
 
-  def __init__(self, machine_config, ip_host, send_to_machine):
+  def __init__(self, machine_config, spawner, ip_host, send_to_machine):
     '''
     :param machine_config: A configuration message of type 'machine_config'
     :type machine_config: :ref:`message`
+
+    :param spawner: A `Spawner` instance to use when creating new nodes.
+    :type spawner: `Spawner`
 
     :param str ip_host: The host parameter to use when generating transports that send to this machine.
     :param func send_to_machine: A function send_to_machine(message, transport)
@@ -107,6 +110,8 @@ class NodeManager(MachineController):
     self._network_errors_config = self._parse_network_errors_config(machine_config['network_errors_config'])
 
     self.system_id = machine_config['system_id']
+
+    self._spawner = spawner
 
     self._ip_host = ip_host
 
@@ -162,7 +167,7 @@ class NodeManager(MachineController):
             int(self._random.random() * (NodeManager.MAX_POSTPONE_TIME_MS - NodeManager.MIN_POSTPONE_TIME_MS)))
 
   def _send_without_error_simulation(self, node_handle, message, sending_node_id):
-    '''Like `NodeManager.send`, but without checking for simulated errors'''
+    '''Like `NodeManager.send`, but do not simulate any errors'''
     logger.debug(
         "Sending message from {sending_node_id} to {recipient_handle}: {message}",
         extra={
@@ -179,14 +184,16 @@ class NodeManager(MachineController):
         transport=node_handle['transport'])
 
   def spawn_node(self, node_config):
-    # TODO(KK): Rethink how the machine for each node is chosen.  Always running on the same machine
-    #   is easy, but an obviously flawed approach.
-
     # In general, the config should be serialized and deserialized at some point.
     # Do it here so that simulated tests don't accidentally share data.
     node_config = json.loads(json.dumps(node_config))
+    # PERF(KK): This serialization/deserialization can be taken out when not in simulated mode.
 
-    return self.start_node(node_config).id
+    # TODO(KK): Always running the new Node on the same controller that spawns it is clearly
+    #   broken.  Come up with test cases that nodes are spawned in more reasonable placed and fix it.
+    self.start_node(node_config)
+
+    return node_config['id']
 
   def new_transport(self, node, for_node_id):
     return messages.machine.ip_transport(self._ip_host)
@@ -250,7 +257,7 @@ class NodeManager(MachineController):
           })
       return {
           'status': 'ok',
-          'data': node.create_kid_config(message['new_node_name'], message['machine_controller_handle']),
+          'data': node.create_kid_config(message['new_node_name'], message['machine_id']),
       }
     elif message['type'] == 'api_new_handle':
       node = self._node_by_id[message['local_node_id']]
@@ -269,6 +276,11 @@ class NodeManager(MachineController):
           'status': 'ok',
           'data': self.get_output_state(message['node_id']),
       }
+    elif message['type'] == 'api_get_stats':
+      return {
+          'status': 'ok',
+          'data': self.get_stats(message['node_id']),
+      }
     else:
       logger.error("Unrecognized API message type {message_type}", extra={'message_type': message['type']})
       return {
@@ -279,8 +291,8 @@ class NodeManager(MachineController):
   def get_output_state(self, node_id):
     return self._output_node_state_by_id[node_id]
 
-  def handle(self):
-    return {'type': 'MachineController', 'id': self.id}
+  def get_stats(self, node_id):
+    return self._node_by_id[node_id].stats()
 
   def _format_node_id_for_logs(self, node_id):
     if node_id is None:

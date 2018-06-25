@@ -90,7 +90,7 @@ class Demo(object):
     if self.mode == spawners.MODE_SIMULATED:
       self.spawner = self.simulated_spawner = SimulatedSpawner(system_id=self.system_id, random_seed=self.random_seed)
     elif self.mode == spawners.MODE_VIRTUAL:
-      self.spawner = self.virtual_spawner = DockerSpawner(system_id=self.system_id)
+      self.spawner = self.virtual_spawner = DockerSpawner(system_id=self.system_id, inside_container=False)
     elif self.mode == spawners.MODE_CLOUD:
       self.spawner = self.cloud_spawner = Ec2Spawner(system_id=self.system_id)
     else:
@@ -136,8 +136,7 @@ class Demo(object):
       machine_config['machine_controller_id'] = dist_zero.ids.new_id('Machine')
       machine_config['mode'] = self.mode
       machine_config['system_id'] = self.system_id
-      if random_seed is not None:
-        machine_config['random_seed'] = "{}:{}".format(random_seed, n)
+      machine_config['random_seed'] = "{}:{}".format(random_seed if random_seed is not None else self.random_seed, n)
 
       configs.append(messages.machine.machine_config(**machine_config))
 

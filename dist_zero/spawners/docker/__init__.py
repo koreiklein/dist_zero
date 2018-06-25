@@ -34,10 +34,16 @@ class DockerSpawner(spawner.Spawner):
 
   STD_DOCKER_IMAGE_TAG = 'dist_zero_std_docker_image'
 
-  def __init__(self, system_id):
+  def __init__(self, system_id, inside_container):
+    '''
+    :param str system_id: The id of the overall distributed system.
+    :param bool inside_container: True iff this spawner is running from within one of the docker containers.
+      False iff running on the host.
+    '''
     self._started = False
     self._docker_client = None
     self._system_id = system_id
+    self._inside_container = inside_container
 
     self._dir = os.path.dirname(os.path.realpath(__file__))
     self._root_dir = os.path.realpath(os.path.join(self._dir, '../../..'))
@@ -47,7 +53,6 @@ class DockerSpawner(spawner.Spawner):
     self._image = None
     self._image_tag = DockerSpawner.STD_DOCKER_IMAGE_TAG
     self._build_logs = None
-    self._handle_by_id = {}
     self._container_by_id = {}
 
     self._all_containers_msg_dir = os.path.join(self._root_dir, '.tmp', 'containers')
@@ -58,11 +63,35 @@ class DockerSpawner(spawner.Spawner):
     The total number of messages sent to all `MachineController`s.
     '''
 
+  def _remote_spawner_json(self):
+    '''Generate a `DockerSpawner` config for a new container.'''
+    return {
+        'system_id': self._system_id,
+        'inside_container': True,
+    }
+
+  @staticmethod
+  def from_spawner_json(spawner_config):
+    logger.info("Creating {parsed_spawner_type} from spawner_config", extra={'parsed_spawner_type': 'DockerSpawner'})
+    return DockerSpawner(system_id=spawner_config['system_id'], inside_container=spawner_config['inside_container'])
+
   def mode(self):
     return spawners.MODE_VIRTUAL
 
-  def send_to_machine(self, machine, message, sock_type='udp'):
-    host_msg_dir = self._container_msg_dir_on_host(machine['id'])
+  def send_to_container_from_host(self, machine_id, message, sock_type='udp'):
+    '''
+    Simulate a virtual send of a message to the container running the identified `MachineController`
+
+    :param str machine_id: The id of the `MachineController` for one of the managed machines.
+    :param message: Some json serializable message to send to that machine.
+    :type message: :ref:`message`
+    :param str sock_type: Either 'udp' or 'tcp'.  Indicating the type of connection.
+
+    :return: None if sock_type == 'udp'.
+      If sock_type == 'tcp', then return the response from the `MachineController` tcp API.
+    :rtype: object
+    '''
+    host_msg_dir = self._container_msg_dir_on_host(machine_id)
     filename = "message_{}.json".format(self._n_sent_messages)
     self._n_sent_messages += 1
 
@@ -72,7 +101,7 @@ class DockerSpawner(spawner.Spawner):
     with open(full_path, 'w') as f:
       json.dump(message, f)
 
-    exit_code, output = self._container_by_id[machine['id']].exec_run([
+    exit_code, output = self._container_by_id[machine_id].exec_run([
         'pipenv',
         'run',
         'python',
@@ -177,9 +206,12 @@ class DockerSpawner(spawner.Spawner):
     os.makedirs(host_msg_dir)
     os.makedirs(log_dir)
 
+    machine_config_with_spawner = {'spawner': {'type': 'docker', 'value': self._remote_spawner_json()}}
+    machine_config_with_spawner.update(machine_config)
+
     config_filename = 'machine_config.json'
     with open(os.path.join(host_msg_dir, config_filename), 'w') as f:
-      json.dump(machine_config, f)
+      json.dump(machine_config_with_spawner, f)
 
     container = self._docker.containers.run(
         image=self.image,
@@ -215,10 +247,8 @@ class DockerSpawner(spawner.Spawner):
     )
     self._network.connect(container)
 
-    handle = messages.machine.machine_controller_handle(machine_controller_id)
-    self._handle_by_id[machine_controller_id] = handle
     self._container_by_id[machine_controller_id] = container
-    return handle
+    return machine_controller_id
 
   def _get_containers_from_docker(self):
     '''
@@ -234,11 +264,11 @@ class DockerSpawner(spawner.Spawner):
     '''
     Get the list of this `DockerSpawner` instance's running containers from the docker daemon.
 
-    :return: A list of container handles for all running containers spawned by this `DockerSpawner`
+    :return: A list of container ids for all running containers spawned by this `DockerSpawner`
+    :rtype: list[str]
     '''
     return [
-        self._handle_by_id[container.labels[DockerSpawner.LABEL_CONTAINER_UUID]]
-        for container in self._get_containers_from_docker()
+        container.labels[DockerSpawner.LABEL_CONTAINER_UUID] for container in self._get_containers_from_docker()
         if container.status == DockerSpawner.CONTAINER_STATUS_RUNNING
     ]
 
@@ -246,19 +276,20 @@ class DockerSpawner(spawner.Spawner):
     '''
     Get the list of this `DockerSpawner` instance's non-running containers from the docker daemon.
 
-    :return: A list of container handles for all running containers spawned by this `DockerSpawner`
+    :return: A list of container ids for all running containers spawned by this `DockerSpawner`
+    :rtype: list[str]
     '''
     return [
-        self._handle_by_id[container.labels[DockerSpawner.LABEL_CONTAINER_UUID]]
-        for container in self._get_containers_from_docker()
+        container.labels[DockerSpawner.LABEL_CONTAINER_UUID] for container in self._get_containers_from_docker()
         if container.status == DockerSpawner.CONTAINER_STATUS_RUNNING
     ]
 
   def all_spawned_containers(self):
     '''
-    :return: The list of all container handles for containers this `DockerSpawner` has ever spawned.
+    :return: The list of all container ids for containers this `DockerSpawner` has ever spawned.
+    :rtype: list[str]
     '''
-    return list(self._handle_by_id.values())
+    return list(self._container_by_id.keys())
 
   def clean_all(self):
     '''

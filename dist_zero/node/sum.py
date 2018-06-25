@@ -64,7 +64,7 @@ class SumNode(Node):
 
     self.migrator = None
 
-    self._least_unused_sequence_number = 0
+    self._least_unsent_sequence_number = 0
     self._branching = []
     '''
     An ordered list of pairs
@@ -93,10 +93,30 @@ class SumNode(Node):
     self._unsent_time_ms = 0
     self._now_ms = 0
 
+    self.n_retransmissions = 0
+    '''Number of times this node has retransmitted a message'''
+    self.n_reorders = 0
+    '''Number of times this node has received an out-of-order message'''
+    self.n_duplicates = 0
+    '''Number of times this node has received a message that was already received'''
+
     self._time_since_sent_acknowledgements = 0
     self._time_since_retransmitted_expired_pending_messages = 0
 
     super(SumNode, self).__init__(logger)
+
+  def stats(self):
+    '''
+    :return: A dictionary of statistics about this `Node`
+    :rtype: dict
+    '''
+    return {
+        'n_retransmissions': self.n_retransmissions,
+        'n_reorders': self.n_reorders,
+        'n_duplicates': self.n_duplicates,
+        'sent_messages': self._least_unsent_sequence_number,
+        'acknowledged_messages': self._least_unacknowledged_sequence_number(),
+    }
 
   def _new_importer(self, sender):
     return importer.Importer(node=self, sender=sender)
@@ -107,7 +127,7 @@ class SumNode(Node):
         receiver=receiver,
         # NOTE(KK): When you implement robustness during a migration, you should think very very carefully
         #   about how to set this parameter to guarantee correctness.
-        least_unacknowledged_sequence_number=self._least_unused_sequence_number)
+        least_unacknowledged_sequence_number=self._least_unsent_sequence_number)
 
   def restrict_importers(self, remaining_sender_ids):
     '''
@@ -298,7 +318,7 @@ class SumNode(Node):
     '''
     The least sequence number that has not been acknowledged by every Exporter responsible for it.
     '''
-    result = self._least_unused_sequence_number
+    result = self._least_unsent_sequence_number
     for exporter in self._exporters.values():
       result = min(result, exporter.least_unacknowledged_sequence_number)
     return result
@@ -332,7 +352,7 @@ class SumNode(Node):
             'n_receivers': len(self._exporters)
         })
 
-    sequence_number = self._least_unused_sequence_number
+    sequence_number = self._least_unsent_sequence_number
     for exporter in self._exporters.values():
       exporter.export_message(
           message=messages.sum.increment(amount=self._unsent_total, sequence_number=sequence_number),
@@ -342,7 +362,7 @@ class SumNode(Node):
         sender_id: importer.least_unreceived_remote_sequence_number
         for sender_id, importer in self._importers.items()
     }))
-    self._least_unused_sequence_number += 1
+    self._least_unsent_sequence_number += 1
 
     if self._output_node and self._output_node['id'].startswith('LeafNode'):
       message = messages.io.output_action(self._unsent_total)

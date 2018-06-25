@@ -57,6 +57,7 @@ class Exporter(object):
     cutoff_send_time_ms = time_ms - Exporter.PENDING_EXPIRATION_TIME_MS
     while self._pending_messages and self._pending_messages[0][0] <= cutoff_send_time_ms:
       t, message = self._pending_messages.pop(0)
+      self._node.n_retransmissions += 1
       self._node.logger.warning(
           "Retransmitting message {sequence_number}", extra={'sequence_number': message['sequence_number']})
       self.export_message(message=message, time_ms=time_ms)
@@ -77,14 +78,20 @@ class Exporter(object):
 
   @property
   def receiver_id(self):
+    '''The id of the node receiving from this exporter'''
     return self._receiver['id']
 
   def acknowledge(self, sequence_number):
+    '''
+    Acknowledge the receipt of all sequence numbers less than sequence_number.
+
+    :param int sequence_number: Some sequence number for which all smaller sequence numbers should now be acknowledged.
+    '''
     self._least_unacknowledged_sequence_number = max(self._least_unacknowledged_sequence_number, sequence_number)
 
     # PERF(KK): binary search is possible here.
     self._pending_messages = [(t, msg) for t, msg in self._pending_messages
-                              if msg['sequence_number'] < self._least_unacknowledged_sequence_number]
+                              if msg['sequence_number'] >= self._least_unacknowledged_sequence_number]
 
   def export_message(self, message, time_ms):
     '''
@@ -99,9 +106,9 @@ class Exporter(object):
 
   def duplicate(self, exporters):
     '''
-    Start duplicating this exporter.
+    Start duplicating this exporter to a new receiver.
 
-    prerequisite: The exporter may not already be duplicating.
+    prerequisite: The exporter must not already be duplicating.
 
     :param list exporters: A list of uninitialized `Exporter` instances to duplicate to.
     '''
@@ -118,6 +125,17 @@ class Exporter(object):
     return self._node.logger
 
   def finish_duplicating(self):
+    '''
+    End duplication to the original receiver.
+
+    prerequisite: The exporter must in the process of duplicating.
+
+    Typically, when an `Exporter` finishes duplicating, it will never be used again and should be left
+    for cleanup by the garbage collector.
+
+    :return: The list of exporters this node was duplicating to.
+    :rtype: list[`Exporter`]
+    '''
     self.logger.info(
         "Finishing duplication phase for {cur_node_id} ."
         "  Cutting back from {n_old_receivers} receivers to 1.",

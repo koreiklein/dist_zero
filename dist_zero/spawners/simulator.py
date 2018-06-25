@@ -170,10 +170,11 @@ class SimulatedSpawner(spawner.Spawner):
     result = machine.NodeManager(
         machine_config=machine_config,
         ip_host=machine_config['id'],
+        spawner=self,
         send_to_machine=self._node_manager_send_to_machine,
     )
     self._controller_by_id[result.id] = result
-    return result.handle()
+    return result.id
 
   def _add_to_heap(self, heapitem):
     '''
@@ -187,7 +188,19 @@ class SimulatedSpawner(spawner.Spawner):
   def now_ms(self):
     return self._elapsed_time_ms
 
-  def send_to_machine(self, machine, message, sock_type='udp'):
+  def simulate_send_to_machine(self, machine_id, message, sock_type='udp'):
+    '''
+    Simulate a send of a message to the identified `MachineController`
+
+    :param str machine_id: The id of the `MachineController` for one of the managed machines.
+    :param message: Some json serializable message to send to that machine.
+    :type message: :ref:`message`
+    :param str sock_type: Either 'udp' or 'tcp'.  Indicating the type of connection.
+
+    :return: None if sock_type == 'udp'.
+      If sock_type == 'tcp', then return the response from the `MachineController` tcp API.
+    :rtype: object
+    '''
     # Simulate the serializing and deserializing that happens in other Spawners.
     # This behavior is important so that simulated tests don't accidentally share data.
     message = json.loads(json.dumps(message))
@@ -198,12 +211,12 @@ class SimulatedSpawner(spawner.Spawner):
     sending_time_ms = self._random_ms_for_send()
     if sock_type == 'udp':
       self._add_to_heap((self._elapsed_time_ms + sending_time_ms, {
-          'machine_id': machine['id'],
+          'machine_id': machine_id,
           'message': message,
       }))
     elif sock_type == 'tcp':
       self.run_for(ms=sending_time_ms)
-      receiving_controller = self._controller_by_id[machine['id']]
+      receiving_controller = self._controller_by_id[machine_id]
       response = receiving_controller.handle_api_message(message)
       if response['status'] == 'ok':
         return response['data']

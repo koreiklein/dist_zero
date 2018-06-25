@@ -169,6 +169,9 @@ class InternalNode(Node):
     self._adjacent = adjacent
     super(InternalNode, self).__init__(logger)
 
+  def get_adjacent_id(self):
+    return None if self._adjacent is None else self._adjacent['id']
+
   def initialize(self):
     if self._variant == 'input':
       self.logger.info("internal node sending 'set_input' message to adjacent node")
@@ -197,14 +200,13 @@ class InternalNode(Node):
   def elapse(self, ms):
     pass
 
-  def create_kid_config(self, name, machine_controller_handle):
+  def create_kid_config(self, name, machine_id):
     '''
     Generate a config for a new child leaf node, and mark it as a pending child on this parent node.
 
     :param str name: The name to use for the new node.
 
-    :param machine_controller_handle: The :ref:`handle` of the MachineController which will run the new node.
-    :type machine_controller_handle: :ref:`handle`
+    :param str machine_id: The id of the MachineController which will run the new node.
     :return: A config for the new child node.
     :rtype: :ref:`message`
     '''
