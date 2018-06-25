@@ -1,4 +1,5 @@
 import logging
+import json
 import tempfile
 import os
 import time
@@ -68,9 +69,9 @@ class Ec2Spawner(spawner.Spawner):
     return {
         'system_id': self._system_id,
         'aws_region': self._aws_region,
-        base_ami: self._base_ami,
-        security_group: self._security_group,
-        instance_type: self._instance_type,
+        'base_ami': self._base_ami,
+        'security_group': self._security_group,
+        'instance_type': self._instance_type,
     }
 
   @staticmethod
@@ -228,13 +229,20 @@ class Ec2Spawner(spawner.Spawner):
     machine_config_with_spawner = {'spawner': {'type': 'aws', 'value': self._remote_spawner_json()}}
     machine_config_with_spawner.update(machine_config)
     # Create local machine config file
-    local_config_file = tempfile.NamedTemporaryFile(mode='w')
+    local_config_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
     json.dump(machine_config_with_spawner, local_config_file)
     local_config_file.close()
 
     # Do the rsync
     rsync_ssh_params = 'ssh -oStrictHostKeyChecking=no -i {keyfile}'
-    rsync_excludes = '--exclude "*.pyc" --exclude "*__pycache__*" --exclude .pytest_cache'
+    rsync_excludes = ''.join(' --exclude "{}"'.format(exp) for exp in [
+        "*.pyc",
+        "*__pycache__*",
+        ".pytest_cache*",
+        ".tmp*",
+        ".git*",
+        ".keys*",
+    ])
     for precommand in [
         'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} dist_zero {user}@{instance}:/dist_zero/ >> {outfile}',
         'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} Pipfile {user}@{instance}:/dist_zero/Pipfile >> {outfile}',

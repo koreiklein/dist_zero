@@ -129,13 +129,5 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   for stat in ['n_retransmissions', 'n_reorders', 'n_duplicates', 'sent_messages', 'acknowledged_messages']:
     assert sum_node_stats[stat] == later_sum_node_stats[stat]
 
-  # FIXME(KK): Really?
-  return
-  b_input_node_stats = demo.system.get_stats(user_b_input_id)
-  c_input_node_stats = demo.system.get_stats(user_c_input_id)
-
-  assert 2 == b_input_node_stats['sent_messages']
-  assert 2 == b_input_node_stats['acknowledged_messages']
-
-  assert 3 == c_input_node_stats['sent_messages']
-  assert 3 == c_input_node_stats['acknowledged_messages']
+  # TODO(KK): Once io nodes generate acknowledgements, this would be an excellent place to assert
+  #   that they have acknowledged their messages.

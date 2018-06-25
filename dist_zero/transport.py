@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 def send(message, ip_address, sock_type):
   if sock_type == 'udp':
     dst = (ip_address, settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
-    return transport.send_udp(message, dst)
+    return send_udp(message, dst)
   elif sock_type == 'tcp':
     dst = (ip_address, settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT)
-    return transport.send_tcp(message, dst)
+    return send_tcp(message, dst)
   else:
     raise errors.InternalError("Unrecognized sock_type {}".format(sock_type))
 
