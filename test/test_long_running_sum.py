@@ -51,12 +51,12 @@ class TestLongRunningSum(object):
     self._spawn_inputs_loop(n_inputs=20, total_time_ms=20 * 1000)
 
   def _spawn_initial_nodes(self):
-    self.machine_handles = self.demo.new_machine_controllers(self.n_machines)
+    self.machine_ids = self.demo.new_machine_controllers(self.n_machines)
 
-    machine_a_handle = self.machine_handles[0]
+    machine_a = self.machine_ids[0]
 
     self.sum_node_id = self.system.spawn_node(
-        on_machine=machine_a_handle,
+        on_machine=machine_a,
         node_config=messages.sum.sum_node_config(
             node_id=dist_zero.ids.new_id('SumNode'),
             senders=[],
@@ -65,7 +65,7 @@ class TestLongRunningSum(object):
 
     self.root_input_node_id = dist_zero.ids.new_id('InternalNode')
     self.system.spawn_node(
-        on_machine=machine_a_handle,
+        on_machine=machine_a,
         node_config=messages.io.internal_node_config(
             self.root_input_node_id,
             adjacent=self.system.generate_new_handle(
@@ -73,7 +73,7 @@ class TestLongRunningSum(object):
             variant='input'))
     self.root_output_node_id = dist_zero.ids.new_id('InternalNode')
     self.system.spawn_node(
-        on_machine=machine_a_handle,
+        on_machine=machine_a,
         node_config=messages.io.internal_node_config(
             self.root_output_node_id,
             variant='output',
@@ -107,7 +107,7 @@ class TestLongRunningSum(object):
               parent_node_id=self.root_input_node_id,
               new_node_name='input_{}'.format(i),
               # Place the new nodes on machines in a round-robin manner.
-              machine_controller_handle=self.machine_handles[i % len(self.machine_handles)],
+              machine_controller_handle=self.machine_ids[i % len(self.machine_ids)],
               recorded_user=RecordedUser(
                   'user {}'.format(i),
                   [(t, messages.io.input_action(int(rand.random() * 20)))

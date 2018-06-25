@@ -36,7 +36,6 @@ class Ec2Spawner(spawner.Spawner):
     :param str instance_type: The aws instance type (e.g. 't2.micro')
     '''
     self._system_id = system_id
-    self._handle_by_id = {} # id to machine controller handle
     self._aws_instance_by_id = {} # id to the boto instance object
 
     self._aws_region = aws_region
@@ -63,6 +62,27 @@ class Ec2Spawner(spawner.Spawner):
         region_name=self._aws_region,
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
+
+  def _remote_spawner_json(self):
+    '''Generate an `Ec2Spawner` config for a new machine.'''
+    return {
+        'system_id': self._system_id,
+        'aws_region': self._aws_region,
+        base_ami: self._base_ami,
+        security_group: self._security_group,
+        instance_type: self._instance_type,
+    }
+
+  @staticmethod
+  def from_spawner_json(spawner_config):
+    logger.info("Creating {parsed_spawner_type} from spawner_config", extra={'parsed_spawner_type': 'Ec2Spawner'})
+    return Ec2Spawner(
+        system_id=spawner_config['system_id'],
+        aws_region=spawner_config['aws_region'],
+        base_ami=spawner_config['base_ami'],
+        security_group=spawner_config['security_group'],
+        instance_type=spawner_config['instance_type'],
+    )
 
   def mode(self):
     return spawners.MODE_CLOUD
@@ -205,9 +225,11 @@ class Ec2Spawner(spawner.Spawner):
 
     logger.info("Rsyncing dist_zero files to aws instance {aws_instance_id}", extra=extra)
 
+    machine_config_with_spawner = {'spawner': {'type': 'aws', 'value': self._remote_spawner_json()}}
+    machine_config_with_spawner.update(machine_config)
     # Create local machine config file
     local_config_file = tempfile.NamedTemporaryFile(mode='w')
-    json.dump(machine_config, local_config_file)
+    json.dump(machine_config_with_spawner, local_config_file)
     local_config_file.close()
 
     # Do the rsync
@@ -248,10 +270,8 @@ class Ec2Spawner(spawner.Spawner):
     logger.info("Starting dist_zero.machine_init process on remote machine", extra=extra)
     _exec_command("cd /dist_zero; nohup pipenv run python -m dist_zero.machine_init /dist_zero/machine_config.json &")
 
-    handle = messages.machine.machine_controller_handle(machine_controller_id)
-    self._handle_by_id[machine_controller_id] = handle
     self._aws_instance_by_id[machine_controller_id] = instance
-    return handle
+    return machine_controller_id
 
   def _instance_status_is_reachable(self, status):
     '''
@@ -335,8 +355,8 @@ class Ec2Spawner(spawner.Spawner):
       else:
         return False
 
-  def send_to_machine(self, machine, message, sock_type='udp'):
-    instance = self._aws_instance_by_id[machine['id']]
+  def send_to_machine(self, machine_id, message, sock_type='udp'):
+    instance = self._aws_instance_by_id[machine_id]
 
     if sock_type == 'udp':
       dst = (instance.public_ip_address, settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)

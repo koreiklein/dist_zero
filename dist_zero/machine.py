@@ -88,10 +88,13 @@ class NodeManager(MachineController):
   MAX_POSTPONE_TIME_MS = 1200
   '''Maximum time a message will be postpone when simulating a network drop or reorder'''
 
-  def __init__(self, machine_config, ip_host, send_to_machine):
+  def __init__(self, machine_config, spawner, ip_host, send_to_machine):
     '''
     :param machine_config: A configuration message of type 'machine_config'
     :type machine_config: :ref:`message`
+
+    :param spawner: A `Spawner` instance to use when creating new nodes.
+    :type spawner: `Spawner`
 
     :param str ip_host: The host parameter to use when generating transports that send to this machine.
     :param func send_to_machine: A function send_to_machine(message, transport)
@@ -107,6 +110,8 @@ class NodeManager(MachineController):
     self._network_errors_config = self._parse_network_errors_config(machine_config['network_errors_config'])
 
     self.system_id = machine_config['system_id']
+
+    self._spawner = spawner
 
     self._ip_host = ip_host
 
@@ -179,15 +184,21 @@ class NodeManager(MachineController):
         transport=node_handle['transport'])
 
   def spawn_node(self, node_config):
-    # TODO(KK): Rethink how the machine for each node is chosen.  Always running on the same machine
-    #   is easy, but an obviously flawed approach.
-
     # In general, the config should be serialized and deserialized at some point.
     # Do it here so that simulated tests don't accidentally share data.
     node_config = json.loads(json.dumps(node_config))
     # PERF(KK): This serialization/deserialization can be taken out when not in simulated mode.
 
-    return self.start_node(node_config).id
+    node_id = node_config['id']
+
+    # TODO(KK): Always running the new Node on the same controller that spawns it is clearly
+    #   broken.  Come up with test cases that nodes are spawned in more reasonable placed and fix it.
+    controller_id = self.id
+    node_id = node_config['id']
+
+    self._spawner.send_to_machine(machine_id=controller_id, message=messages.machine.machine_start_node(node_config))
+
+    return node_id
 
   def new_transport(self, node, for_node_id):
     return messages.machine.ip_transport(self._ip_host)
@@ -275,10 +286,10 @@ class NodeManager(MachineController):
           'status': 'ok',
           'data': self.get_stats(message['node_id']),
       }
-    elif message['type'] == 'api_get_adjacent_id':
+    elif message['type'] == 'api_get_adjacent':
       return {
           'status': 'ok',
-          'data': self.get_adjacent_id(message['node_id']),
+          'data': self.get_adjacent(message['node_id']),
       }
     else:
       logger.error("Unrecognized API message type {message_type}", extra={'message_type': message['type']})
@@ -293,11 +304,8 @@ class NodeManager(MachineController):
   def get_stats(self, node_id):
     return self._node_by_id[node_id].stats()
 
-  def get_adjacent_id(self, node_id):
-    return self._node_by_id[node_id].get_adjacent_id()
-
-  def handle(self):
-    return {'type': 'MachineController', 'id': self.id}
+  def get_adjacent(self, node_id):
+    return self._node_by_id[node_id].get_adjacent()
 
   def _format_node_id_for_logs(self, node_id):
     if node_id is None:

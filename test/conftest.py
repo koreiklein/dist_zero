@@ -23,7 +23,7 @@ def simulated_system():
 @pytest.fixture
 def virtual_system():
   system_id = dist_zero.ids.new_id('System')
-  virtual_spawner = DockerSpawner(system_id=system_id)
+  virtual_spawner = DockerSpawner(system_id=system_id, inside_container=False)
   system = SystemController(system_id=system_id, spawner=virtual_spawner)
   system.configure_logging()
   virtual_spawner.start()

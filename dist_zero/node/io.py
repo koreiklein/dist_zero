@@ -60,8 +60,11 @@ class LeafNode(Node):
 
     super(LeafNode, self).__init__(logger)
 
-  def get_adjacent_id(self):
-    return None if self._adjacent is None else self._adjacent['id']
+  def get_adjacent(self):
+    return None if self._adjacent is None else {
+        'id': self._adjacent['id'],
+        'controller_id': self._adjacent['controller_id']
+    }
 
   def _set_adjacent(self, node):
     '''

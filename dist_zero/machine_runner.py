@@ -13,6 +13,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 import dist_zero.transport
 import dist_zero.logging
 
+import dist_zero.spawners.parse
 from dist_zero import settings, machine, messages
 from dist_zero.spawners import docker
 
@@ -39,7 +40,10 @@ class MachineRunner(object):
     self._tcp_socket = None
 
     self.node_manager = machine.NodeManager(
-        machine_config=machine_config, ip_host=socket.gethostname(), send_to_machine=self._send_to_machine)
+        machine_config=machine_config,
+        spawner=dist_zero.spawners.parse.from_config(machine_config['spawner']),
+        ip_host=socket.gethostname(),
+        send_to_machine=self._send_to_machine)
     '''The `NodeManager` underlying this `MachineRunner`'''
 
   def _send_to_machine(self, message, transport):

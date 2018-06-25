@@ -90,7 +90,7 @@ class Demo(object):
     if self.mode == spawners.MODE_SIMULATED:
       self.spawner = self.simulated_spawner = SimulatedSpawner(system_id=self.system_id, random_seed=self.random_seed)
     elif self.mode == spawners.MODE_VIRTUAL:
-      self.spawner = self.virtual_spawner = DockerSpawner(system_id=self.system_id)
+      self.spawner = self.virtual_spawner = DockerSpawner(system_id=self.system_id, inside_container=False)
     elif self.mode == spawners.MODE_CLOUD:
       self.spawner = self.cloud_spawner = Ec2Spawner(system_id=self.system_id)
     else:
