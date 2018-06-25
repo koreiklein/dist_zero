@@ -38,6 +38,17 @@
 <span class="sd">  with them once they have started running.</span>
 <span class="sd">  &#39;&#39;&#39;</span>
 
+<div class="viewcode-block" id="Spawner.from_spawner_json"><a class="viewcode-back" href="../../../doc/spawners.html#dist_zero.spawners.spawner.Spawner.from_spawner_json">[docs]</a>  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">from_spawner_json</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">spawner_config</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Build a new `Spawner` instance from spawner configuration json.</span>
+
+<span class="sd">    :param object j: A python object, deserialized from spawner json</span>
+<span class="sd">    :return: A spawner instance, configured from ``j``.</span>
+<span class="sd">    :rtype: `Spawner`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div>
+
 <div class="viewcode-block" id="Spawner.mode"><a class="viewcode-back" href="../../../doc/spawners.html#dist_zero.spawners.spawner.Spawner.mode">[docs]</a>  <span class="k">def</span> <span class="nf">mode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    This spawner&#39;s mode.</span>
@@ -53,8 +64,8 @@
 
 <span class="sd">    :param object machine_config: A machine configuration object.</span>
 
-<span class="sd">    :return: The :ref:`handle` of the new `MachineController`</span>
-<span class="sd">    :rtype: :ref:`handle`</span>
+<span class="sd">    :return: The id of the new `MachineController`</span>
+<span class="sd">    :rtype: str</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div>
 
@@ -64,25 +75,8 @@
 
 <span class="sd">    :param list machine_configs: A list of machine configuration objects.</span>
 
-<span class="sd">    :return: The list of :ref:`handle` of the new `MachineController` in the same order as the matching </span>
-<span class="sd">    :rtype: list[:ref:`handle`]</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div>
-
-<div class="viewcode-block" id="Spawner.send_to_machine"><a class="viewcode-back" href="../../../doc/spawners.html#dist_zero.spawners.spawner.Spawner.send_to_machine">[docs]</a>  <span class="k">def</span> <span class="nf">send_to_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;udp&#39;</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Send a message from the current process to a `MachineController` listening</span>
-<span class="sd">    on a port on a spawned machine.</span>
-
-<span class="sd">    :param machine: The :ref:`handle` of the `MachineController` for one of the managed machines.</span>
-<span class="sd">    :type machine: :ref:`handle`</span>
-<span class="sd">    :param message: Some json serializable message to send to that machine.</span>
-<span class="sd">    :type message: :ref:`message`</span>
-<span class="sd">    :param str sock_type: Either &#39;udp&#39; or &#39;tcp&#39;.  Indicating the type of connection.</span>
-
-<span class="sd">    :return: None if sock_type == &#39;udp&#39;.</span>
-<span class="sd">      If sock_type == &#39;tcp&#39;, then return the response from the `MachineController` tcp API.</span>
-<span class="sd">    :rtype: object</span>
+<span class="sd">    :return: The list of ids of the new `MachineController` in the same order as the matching </span>
+<span class="sd">    :rtype: list[str]</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div></div>
 </pre></div>

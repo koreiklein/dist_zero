@@ -202,6 +202,9 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span> <span class="o">=</span> <span class="n">adjacent</span>
     <span class="nb">super</span><span class="p">(</span><span class="n">InternalNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
 
+  <span class="k">def</span> <span class="nf">get_adjacent_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="kc">None</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span>
+
 <div class="viewcode-block" id="InternalNode.initialize"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InternalNode.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variant</span> <span class="o">==</span> <span class="s1">&#39;input&#39;</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;internal node sending &#39;set_input&#39; message to adjacent node&quot;</span><span class="p">)</span>
@@ -230,14 +233,13 @@
 <div class="viewcode-block" id="InternalNode.elapse"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InternalNode.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
     <span class="k">pass</span></div>
 
-<div class="viewcode-block" id="InternalNode.create_kid_config"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InternalNode.create_kid_config">[docs]</a>  <span class="k">def</span> <span class="nf">create_kid_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">machine_controller_handle</span><span class="p">):</span>
+<div class="viewcode-block" id="InternalNode.create_kid_config"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.io.InternalNode.create_kid_config">[docs]</a>  <span class="k">def</span> <span class="nf">create_kid_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">machine_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Generate a config for a new child leaf node, and mark it as a pending child on this parent node.</span>
 
 <span class="sd">    :param str name: The name to use for the new node.</span>
 
-<span class="sd">    :param machine_controller_handle: The :ref:`handle` of the MachineController which will run the new node.</span>
-<span class="sd">    :type machine_controller_handle: :ref:`handle`</span>
+<span class="sd">    :param str machine_id: The id of the MachineController which will run the new node.</span>
 <span class="sd">    :return: A config for the new child node.</span>
 <span class="sd">    :rtype: :ref:`message`</span>
 <span class="sd">    &#39;&#39;&#39;</span>

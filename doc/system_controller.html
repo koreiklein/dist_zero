@@ -38,6 +38,12 @@
 <dt id="dist_zero.system_controller.SystemController">
 <em class="property">class </em><code class="descclassname">dist_zero.system_controller.</code><code class="descname">SystemController</code><span class="sig-paren">(</span><em>system_id</em>, <em>spawner</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/system_controller.html#SystemController"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.system_controller.SystemController" title="Permalink to this definition">¶</a></dt>
 <dd><p>Class to manage the entire distributed system for tests.</p>
+<p>Because this class is for testing, it has special behavior in each of the three modes.
+In simulated mode, each instance of this class will contain the entire distributed system inside its <a class="reference internal" href="simulator.html#dist_zero.spawners.simulator.SimulatedSpawner" title="dist_zero.spawners.simulator.SimulatedSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SimulatedSpawner</span></code></a>.
+In virtual mode, each instance will be running on the host, and have access to a docker daemon for managing
+the containers.
+In cloud mode, each instance of this class will have network access to the cloud instance, and be able
+have access to cloud credentials.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -52,7 +58,7 @@
 </table>
 <dl class="method">
 <dt id="dist_zero.system_controller.SystemController.create_kid">
-<code class="descname">create_kid</code><span class="sig-paren">(</span><em>parent_node_id</em>, <em>new_node_name</em>, <em>machine_controller_handle</em>, <em>recorded_user=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/system_controller.html#SystemController.create_kid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.system_controller.SystemController.create_kid" title="Permalink to this definition">¶</a></dt>
+<code class="descname">create_kid</code><span class="sig-paren">(</span><em>parent_node_id</em>, <em>new_node_name</em>, <em>machine_id</em>, <em>recorded_user=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/system_controller.html#SystemController.create_kid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.system_controller.SystemController.create_kid" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a new kid of an <a class="reference internal" href="nodes.html#dist_zero.node.io.InternalNode" title="dist_zero.node.io.InternalNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InternalNode</span></code></a> in this system.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
@@ -61,7 +67,7 @@
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
 <li><strong>parent_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the parent node.</li>
 <li><strong>new_node_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The name to use for the new node.</li>
-<li><strong>machine_controller_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> that should run the new node.</li>
+<li><strong>machine_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> that should run the new node.</li>
 <li><strong>recorded_user</strong> (<em>:RecordedUser`</em>) – An optional recording of a user to be played back on the new node.</li>
 </ul>
 </td>
@@ -75,7 +81,7 @@
 
 <dl class="method">
 <dt id="dist_zero.system_controller.SystemController.create_kid_config">
-<code class="descname">create_kid_config</code><span class="sig-paren">(</span><em>internal_node_id</em>, <em>new_node_name</em>, <em>machine_controller_handle</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/system_controller.html#SystemController.create_kid_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.system_controller.SystemController.create_kid_config" title="Permalink to this definition">¶</a></dt>
+<code class="descname">create_kid_config</code><span class="sig-paren">(</span><em>internal_node_id</em>, <em>new_node_name</em>, <em>machine_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/system_controller.html#SystemController.create_kid_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.system_controller.SystemController.create_kid_config" title="Permalink to this definition">¶</a></dt>
 <dd><table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -83,7 +89,7 @@
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
 <li><strong>internal_node_id</strong> – The id of the parent <a class="reference internal" href="nodes.html#dist_zero.node.io.InternalNode" title="dist_zero.node.io.InternalNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InternalNode</span></code></a>.</li>
 <li><strong>new_node_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The name to use for the new node.</li>
-<li><strong>machine_controller_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the machine on which the new node will run.</li>
+<li><strong>machine_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the machine on which the new node will run.</li>
 </ul>
 </td>
 </tr>
@@ -107,9 +113,9 @@
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>machine_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A machine configuration object.</td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></td>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The id of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a></td>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a></td>
 </tr>
 </tbody>
 </table>
@@ -125,9 +131,9 @@
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>machine_configs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)"><em>list</em></a>) – A list of machine configuration objects.</td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> in the same order as the matching</td>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The list of ids of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> in the same order as the matching</td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">list[<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>]</td>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a>]</td>
 </tr>
 </tbody>
 </table>
@@ -174,6 +180,22 @@
 </dd></dl>
 
 <dl class="method">
+<dt id="dist_zero.system_controller.SystemController.get_stats">
+<code class="descname">get_stats</code><span class="sig-paren">(</span><em>node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/system_controller.html#SystemController.get_stats"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.system_controller.SystemController.get_stats" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the stats associated with a node that collects stats.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of a <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> in the system that is collecting stats.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The stats of that node at about the current time.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
 <dt id="dist_zero.system_controller.SystemController.send_to_node">
 <code class="descname">send_to_node</code><span class="sig-paren">(</span><em>node_id</em>, <em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/system_controller.html#SystemController.send_to_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.system_controller.SystemController.send_to_node" title="Permalink to this definition">¶</a></dt>
 <dd><p>Send a message to a node.</p>
@@ -201,7 +223,7 @@
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
 <li><strong>node_config</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A node config for a new node.</li>
-<li><strong>on_machine</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle for a <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></li>
+<li><strong>on_machine</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of a <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></li>
 </ul>
 </td>
 </tr>

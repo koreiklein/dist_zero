@@ -67,10 +67,16 @@
 
   <span class="n">STD_DOCKER_IMAGE_TAG</span> <span class="o">=</span> <span class="s1">&#39;dist_zero_std_docker_image&#39;</span>
 
-  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">system_id</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">system_id</span><span class="p">,</span> <span class="n">inside_container</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param str system_id: The id of the overall distributed system.</span>
+<span class="sd">    :param bool inside_container: True iff this spawner is running from within one of the docker containers.</span>
+<span class="sd">      False iff running on the host.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_started</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_docker_client</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span> <span class="o">=</span> <span class="n">system_id</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_inside_container</span> <span class="o">=</span> <span class="n">inside_container</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">))</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_root_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dir</span><span class="p">,</span> <span class="s1">&#39;../../..&#39;</span><span class="p">))</span>
@@ -80,7 +86,6 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">_image</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_image_tag</span> <span class="o">=</span> <span class="n">DockerSpawner</span><span class="o">.</span><span class="n">STD_DOCKER_IMAGE_TAG</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_build_logs</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_handle_by_id</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_container_by_id</span> <span class="o">=</span> <span class="p">{}</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_all_containers_msg_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root_dir</span><span class="p">,</span> <span class="s1">&#39;.tmp&#39;</span><span class="p">,</span> <span class="s1">&#39;containers&#39;</span><span class="p">)</span>
@@ -91,11 +96,35 @@
 <span class="sd">    The total number of messages sent to all `MachineController`s.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
 
+  <span class="k">def</span> <span class="nf">_remote_spawner_json</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Generate a `DockerSpawner` config for a new container.&#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;system_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_system_id</span><span class="p">,</span>
+        <span class="s1">&#39;inside_container&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="DockerSpawner.from_spawner_json"><a class="viewcode-back" href="../../../doc/virtual.html#dist_zero.spawners.docker.DockerSpawner.from_spawner_json">[docs]</a>  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">from_spawner_json</span><span class="p">(</span><span class="n">spawner_config</span><span class="p">):</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating </span><span class="si">{parsed_spawner_type}</span><span class="s2"> from spawner_config&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;parsed_spawner_type&#39;</span><span class="p">:</span> <span class="s1">&#39;DockerSpawner&#39;</span><span class="p">})</span>
+    <span class="k">return</span> <span class="n">DockerSpawner</span><span class="p">(</span><span class="n">system_id</span><span class="o">=</span><span class="n">spawner_config</span><span class="p">[</span><span class="s1">&#39;system_id&#39;</span><span class="p">],</span> <span class="n">inside_container</span><span class="o">=</span><span class="n">spawner_config</span><span class="p">[</span><span class="s1">&#39;inside_container&#39;</span><span class="p">])</span></div>
+
 <div class="viewcode-block" id="DockerSpawner.mode"><a class="viewcode-back" href="../../../doc/virtual.html#dist_zero.spawners.docker.DockerSpawner.mode">[docs]</a>  <span class="k">def</span> <span class="nf">mode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">spawners</span><span class="o">.</span><span class="n">MODE_VIRTUAL</span></div>
 
-<div class="viewcode-block" id="DockerSpawner.send_to_machine"><a class="viewcode-back" href="../../../doc/virtual.html#dist_zero.spawners.docker.DockerSpawner.send_to_machine">[docs]</a>  <span class="k">def</span> <span class="nf">send_to_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;udp&#39;</span><span class="p">):</span>
-    <span class="n">host_msg_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_container_msg_dir_on_host</span><span class="p">(</span><span class="n">machine</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])</span>
+<div class="viewcode-block" id="DockerSpawner.send_to_container_from_host"><a class="viewcode-back" href="../../../doc/virtual.html#dist_zero.spawners.docker.DockerSpawner.send_to_container_from_host">[docs]</a>  <span class="k">def</span> <span class="nf">send_to_container_from_host</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_id</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;udp&#39;</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Simulate a virtual send of a message to the container running the identified `MachineController`</span>
+
+<span class="sd">    :param str machine_id: The id of the `MachineController` for one of the managed machines.</span>
+<span class="sd">    :param message: Some json serializable message to send to that machine.</span>
+<span class="sd">    :type message: :ref:`message`</span>
+<span class="sd">    :param str sock_type: Either &#39;udp&#39; or &#39;tcp&#39;.  Indicating the type of connection.</span>
+
+<span class="sd">    :return: None if sock_type == &#39;udp&#39;.</span>
+<span class="sd">      If sock_type == &#39;tcp&#39;, then return the response from the `MachineController` tcp API.</span>
+<span class="sd">    :rtype: object</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">host_msg_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_container_msg_dir_on_host</span><span class="p">(</span><span class="n">machine_id</span><span class="p">)</span>
     <span class="n">filename</span> <span class="o">=</span> <span class="s2">&quot;message_</span><span class="si">{}</span><span class="s2">.json&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_sent_messages</span><span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_n_sent_messages</span> <span class="o">+=</span> <span class="mi">1</span>
 
@@ -105,7 +134,7 @@
     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">full_path</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
       <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
 
-    <span class="n">exit_code</span><span class="p">,</span> <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_container_by_id</span><span class="p">[</span><span class="n">machine</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">exec_run</span><span class="p">([</span>
+    <span class="n">exit_code</span><span class="p">,</span> <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_container_by_id</span><span class="p">[</span><span class="n">machine_id</span><span class="p">]</span><span class="o">.</span><span class="n">exec_run</span><span class="p">([</span>
         <span class="s1">&#39;pipenv&#39;</span><span class="p">,</span>
         <span class="s1">&#39;run&#39;</span><span class="p">,</span>
         <span class="s1">&#39;python&#39;</span><span class="p">,</span>
@@ -210,9 +239,12 @@
     <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">host_msg_dir</span><span class="p">)</span>
     <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">log_dir</span><span class="p">)</span>
 
+    <span class="n">machine_config_with_spawner</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;spawner&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;docker&#39;</span><span class="p">,</span> <span class="s1">&#39;value&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remote_spawner_json</span><span class="p">()}}</span>
+    <span class="n">machine_config_with_spawner</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">machine_config</span><span class="p">)</span>
+
     <span class="n">config_filename</span> <span class="o">=</span> <span class="s1">&#39;machine_config.json&#39;</span>
     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">host_msg_dir</span><span class="p">,</span> <span class="n">config_filename</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-      <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">machine_config</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+      <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">machine_config_with_spawner</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
 
     <span class="n">container</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_docker</span><span class="o">.</span><span class="n">containers</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
         <span class="n">image</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="p">,</span>
@@ -248,10 +280,8 @@
     <span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_network</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">container</span><span class="p">)</span>
 
-    <span class="n">handle</span> <span class="o">=</span> <span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">machine_controller_handle</span><span class="p">(</span><span class="n">machine_controller_id</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_handle_by_id</span><span class="p">[</span><span class="n">machine_controller_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">handle</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_container_by_id</span><span class="p">[</span><span class="n">machine_controller_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">container</span>
-    <span class="k">return</span> <span class="n">handle</span></div>
+    <span class="k">return</span> <span class="n">machine_controller_id</span></div>
 
   <span class="k">def</span> <span class="nf">_get_containers_from_docker</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -267,11 +297,11 @@
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Get the list of this `DockerSpawner` instance&#39;s running containers from the docker daemon.</span>
 
-<span class="sd">    :return: A list of container handles for all running containers spawned by this `DockerSpawner`</span>
+<span class="sd">    :return: A list of container ids for all running containers spawned by this `DockerSpawner`</span>
+<span class="sd">    :rtype: list[str]</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">return</span> <span class="p">[</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_handle_by_id</span><span class="p">[</span><span class="n">container</span><span class="o">.</span><span class="n">labels</span><span class="p">[</span><span class="n">DockerSpawner</span><span class="o">.</span><span class="n">LABEL_CONTAINER_UUID</span><span class="p">]]</span>
-        <span class="k">for</span> <span class="n">container</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_containers_from_docker</span><span class="p">()</span>
+        <span class="n">container</span><span class="o">.</span><span class="n">labels</span><span class="p">[</span><span class="n">DockerSpawner</span><span class="o">.</span><span class="n">LABEL_CONTAINER_UUID</span><span class="p">]</span> <span class="k">for</span> <span class="n">container</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_containers_from_docker</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">container</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">DockerSpawner</span><span class="o">.</span><span class="n">CONTAINER_STATUS_RUNNING</span>
     <span class="p">]</span></div>
 
@@ -279,19 +309,20 @@
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Get the list of this `DockerSpawner` instance&#39;s non-running containers from the docker daemon.</span>
 
-<span class="sd">    :return: A list of container handles for all running containers spawned by this `DockerSpawner`</span>
+<span class="sd">    :return: A list of container ids for all running containers spawned by this `DockerSpawner`</span>
+<span class="sd">    :rtype: list[str]</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">return</span> <span class="p">[</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_handle_by_id</span><span class="p">[</span><span class="n">container</span><span class="o">.</span><span class="n">labels</span><span class="p">[</span><span class="n">DockerSpawner</span><span class="o">.</span><span class="n">LABEL_CONTAINER_UUID</span><span class="p">]]</span>
-        <span class="k">for</span> <span class="n">container</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_containers_from_docker</span><span class="p">()</span>
+        <span class="n">container</span><span class="o">.</span><span class="n">labels</span><span class="p">[</span><span class="n">DockerSpawner</span><span class="o">.</span><span class="n">LABEL_CONTAINER_UUID</span><span class="p">]</span> <span class="k">for</span> <span class="n">container</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_containers_from_docker</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">container</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">DockerSpawner</span><span class="o">.</span><span class="n">CONTAINER_STATUS_RUNNING</span>
     <span class="p">]</span></div>
 
 <div class="viewcode-block" id="DockerSpawner.all_spawned_containers"><a class="viewcode-back" href="../../../doc/virtual.html#dist_zero.spawners.docker.DockerSpawner.all_spawned_containers">[docs]</a>  <span class="k">def</span> <span class="nf">all_spawned_containers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    :return: The list of all container handles for containers this `DockerSpawner` has ever spawned.</span>
+<span class="sd">    :return: The list of all container ids for containers this `DockerSpawner` has ever spawned.</span>
+<span class="sd">    :rtype: list[str]</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle_by_id</span><span class="o">.</span><span class="n">values</span><span class="p">())</span></div>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_container_by_id</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span></div>
 
 <div class="viewcode-block" id="DockerSpawner.clean_all"><a class="viewcode-back" href="../../../doc/virtual.html#dist_zero.spawners.docker.DockerSpawner.clean_all">[docs]</a>  <span class="k">def</span> <span class="nf">clean_all</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>

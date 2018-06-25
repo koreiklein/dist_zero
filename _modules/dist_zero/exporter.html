@@ -90,6 +90,7 @@
     <span class="n">cutoff_send_time_ms</span> <span class="o">=</span> <span class="n">time_ms</span> <span class="o">-</span> <span class="n">Exporter</span><span class="o">.</span><span class="n">PENDING_EXPIRATION_TIME_MS</span>
     <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_messages</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_messages</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">cutoff_send_time_ms</span><span class="p">:</span>
       <span class="n">t</span><span class="p">,</span> <span class="n">message</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_messages</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">n_retransmissions</span> <span class="o">+=</span> <span class="mi">1</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
           <span class="s2">&quot;Retransmitting message </span><span class="si">{sequence_number}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">]})</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">export_message</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">time_ms</span><span class="o">=</span><span class="n">time_ms</span><span class="p">)</span></div>
@@ -110,14 +111,20 @@
 
   <span class="nd">@property</span>
   <span class="k">def</span> <span class="nf">receiver_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;The id of the node receiving from this exporter&#39;&#39;&#39;</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_receiver</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span>
 
-  <span class="k">def</span> <span class="nf">acknowledge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sequence_number</span><span class="p">):</span>
+<div class="viewcode-block" id="Exporter.acknowledge"><a class="viewcode-back" href="../../doc/nodes.html#dist_zero.exporter.Exporter.acknowledge">[docs]</a>  <span class="k">def</span> <span class="nf">acknowledge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sequence_number</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Acknowledge the receipt of all sequence numbers less than sequence_number.</span>
+
+<span class="sd">    :param int sequence_number: Some sequence number for which all smaller sequence numbers should now be acknowledged.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_least_unacknowledged_sequence_number</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_least_unacknowledged_sequence_number</span><span class="p">,</span> <span class="n">sequence_number</span><span class="p">)</span>
 
     <span class="c1"># PERF(KK): binary search is possible here.</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_pending_messages</span> <span class="o">=</span> <span class="p">[(</span><span class="n">t</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">msg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_messages</span>
-                              <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unacknowledged_sequence_number</span><span class="p">]</span>
+                              <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unacknowledged_sequence_number</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="Exporter.export_message"><a class="viewcode-back" href="../../doc/nodes.html#dist_zero.exporter.Exporter.export_message">[docs]</a>  <span class="k">def</span> <span class="nf">export_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">time_ms</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -132,9 +139,9 @@
 
 <div class="viewcode-block" id="Exporter.duplicate"><a class="viewcode-back" href="../../doc/nodes.html#dist_zero.exporter.Exporter.duplicate">[docs]</a>  <span class="k">def</span> <span class="nf">duplicate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exporters</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Start duplicating this exporter.</span>
+<span class="sd">    Start duplicating this exporter to a new receiver.</span>
 
-<span class="sd">    prerequisite: The exporter may not already be duplicating.</span>
+<span class="sd">    prerequisite: The exporter must not already be duplicating.</span>
 
 <span class="sd">    :param list exporters: A list of uninitialized `Exporter` instances to duplicate to.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
@@ -150,7 +157,18 @@
   <span class="k">def</span> <span class="nf">logger</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">logger</span>
 
-  <span class="k">def</span> <span class="nf">finish_duplicating</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Exporter.finish_duplicating"><a class="viewcode-back" href="../../doc/nodes.html#dist_zero.exporter.Exporter.finish_duplicating">[docs]</a>  <span class="k">def</span> <span class="nf">finish_duplicating</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    End duplication to the original receiver.</span>
+
+<span class="sd">    prerequisite: The exporter must in the process of duplicating.</span>
+
+<span class="sd">    Typically, when an `Exporter` finishes duplicating, it will never be used again and should be left</span>
+<span class="sd">    for cleanup by the garbage collector.</span>
+
+<span class="sd">    :return: The list of exporters this node was duplicating to.</span>
+<span class="sd">    :rtype: list[`Exporter`]</span>
+<span class="sd">    &#39;&#39;&#39;</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
         <span class="s2">&quot;Finishing duplication phase for </span><span class="si">{cur_node_id}</span><span class="s2"> .&quot;</span>
         <span class="s2">&quot;  Cutting back from </span><span class="si">{n_old_receivers}</span><span class="s2"> receivers to 1.&quot;</span><span class="p">,</span>
@@ -158,7 +176,7 @@
             <span class="s1">&#39;n_old_receivers&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_duplicated_exporters</span><span class="p">),</span>
         <span class="p">})</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_receiver</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">finished_duplicating</span><span class="p">())</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_duplicated_exporters</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_duplicated_exporters</span></div></div>
 </pre></div>
 
           </div>

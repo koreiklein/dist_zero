@@ -66,9 +66,9 @@ Then, this factory class will simulate the behavior of a real-life network durin
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>machine_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A machine configuration object.</td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></td>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The id of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a></td>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a></td>
 </tr>
 </tbody>
 </table>
@@ -84,9 +84,9 @@ Then, this factory class will simulate the behavior of a real-life network durin
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>machine_configs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)"><em>list</em></a>) – A list of machine configuration objects.</td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> in the same order as the matching</td>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The list of ids of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> in the same order as the matching</td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">list[<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>]</td>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a>]</td>
 </tr>
 </tbody>
 </table>
@@ -139,16 +139,15 @@ Wrap exceptions thrown by the underlying nodes in a <a class="reference internal
 </dd></dl>
 
 <dl class="method">
-<dt id="dist_zero.spawners.simulator.SimulatedSpawner.send_to_machine">
-<code class="descname">send_to_machine</code><span class="sig-paren">(</span><em>machine</em>, <em>message</em>, <em>sock_type='udp'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/simulator.html#SimulatedSpawner.send_to_machine"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.simulator.SimulatedSpawner.send_to_machine" title="Permalink to this definition">¶</a></dt>
-<dd><p>Send a message from the current process to a <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> listening
-on a port on a spawned machine.</p>
+<dt id="dist_zero.spawners.simulator.SimulatedSpawner.simulate_send_to_machine">
+<code class="descname">simulate_send_to_machine</code><span class="sig-paren">(</span><em>machine_id</em>, <em>message</em>, <em>sock_type='udp'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/simulator.html#SimulatedSpawner.simulate_send_to_machine"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.simulator.SimulatedSpawner.simulate_send_to_machine" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simulate a send of a message to the identified <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
-<li><strong>machine</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> for one of the managed machines.</li>
+<li><strong>machine_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> for one of the managed machines.</li>
 <li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – Some json serializable message to send to that machine.</li>
 <li><strong>sock_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Either ‘udp’ or ‘tcp’.  Indicating the type of connection.</li>
 </ul>

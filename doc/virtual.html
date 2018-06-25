@@ -40,9 +40,22 @@ all residing on the same physical host.</p>
 should be run with the docker spawner.</p>
 <span class="target" id="module-dist_zero.spawners.docker"></span><dl class="class">
 <dt id="dist_zero.spawners.docker.DockerSpawner">
-<em class="property">class </em><code class="descclassname">dist_zero.spawners.docker.</code><code class="descname">DockerSpawner</code><span class="sig-paren">(</span><em>system_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">dist_zero.spawners.docker.</code><code class="descname">DockerSpawner</code><span class="sig-paren">(</span><em>system_id</em>, <em>inside_container</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner" title="Permalink to this definition">¶</a></dt>
 <dd><p>A class for simulating new hardware by spinning up docker containers on a host and
 running a ‘production’ <a class="reference internal" href="machine_runner.html#dist_zero.machine_runner.MachineRunner" title="dist_zero.machine_runner.MachineRunner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineRunner</span></code></a> on each.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>system_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the overall distributed system.</li>
+<li><strong>inside_container</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.6)"><em>bool</em></a>) – True iff this spawner is running from within one of the docker containers.
+False iff running on the host.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
 <dl class="method">
 <dt id="dist_zero.spawners.docker.DockerSpawner.all_spawned_containers">
 <code class="descname">all_spawned_containers</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.all_spawned_containers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.all_spawned_containers" title="Permalink to this definition">¶</a></dt>
@@ -50,7 +63,9 @@ running a ‘production’ <a class="reference internal" href="machine_runner.ht
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The list of all container handles for containers this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a> has ever spawned.</td>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The list of all container ids for containers this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a> has ever spawned.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a>]</td>
 </tr>
 </tbody>
 </table>
@@ -73,9 +88,9 @@ running a ‘production’ <a class="reference internal" href="machine_runner.ht
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>machine_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A machine configuration object.</td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></td>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The id of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a></td>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a></td>
 </tr>
 </tbody>
 </table>
@@ -91,9 +106,27 @@ running a ‘production’ <a class="reference internal" href="machine_runner.ht
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>machine_configs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)"><em>list</em></a>) – A list of machine configuration objects.</td>
 </tr>
-<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> in the same order as the matching</td>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The list of ids of the new <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> in the same order as the matching</td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">list[<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>]</td>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a>]</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="staticmethod">
+<dt id="dist_zero.spawners.docker.DockerSpawner.from_spawner_json">
+<em class="property">static </em><code class="descname">from_spawner_json</code><span class="sig-paren">(</span><em>spawner_config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.from_spawner_json"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.from_spawner_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Build a new <a class="reference internal" href="spawners.html#dist_zero.spawners.spawner.Spawner" title="dist_zero.spawners.spawner.Spawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Spawner</span></code></a> instance from spawner configuration json.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>j</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A python object, deserialized from spawner json</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">A spawner instance, configured from <code class="docutils literal notranslate"><span class="pre">j</span></code>.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference internal" href="spawners.html#dist_zero.spawners.spawner.Spawner" title="dist_zero.spawners.spawner.Spawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Spawner</span></code></a></td>
 </tr>
 </tbody>
 </table>
@@ -107,7 +140,9 @@ running a ‘production’ <a class="reference internal" href="machine_runner.ht
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of container handles for all running containers spawned by this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a></td>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of container ids for all running containers spawned by this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a></td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a>]</td>
 </tr>
 </tbody>
 </table>
@@ -121,7 +156,9 @@ running a ‘production’ <a class="reference internal" href="machine_runner.ht
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of container handles for all running containers spawned by this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a></td>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of container ids for all running containers spawned by this <a class="reference internal" href="#dist_zero.spawners.docker.DockerSpawner" title="dist_zero.spawners.docker.DockerSpawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">DockerSpawner</span></code></a></td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.6)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a>]</td>
 </tr>
 </tbody>
 </table>
@@ -144,16 +181,15 @@ running a ‘production’ <a class="reference internal" href="machine_runner.ht
 </dd></dl>
 
 <dl class="method">
-<dt id="dist_zero.spawners.docker.DockerSpawner.send_to_machine">
-<code class="descname">send_to_machine</code><span class="sig-paren">(</span><em>machine</em>, <em>message</em>, <em>sock_type='udp'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.send_to_machine"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.send_to_machine" title="Permalink to this definition">¶</a></dt>
-<dd><p>Send a message from the current process to a <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> listening
-on a port on a spawned machine.</p>
+<dt id="dist_zero.spawners.docker.DockerSpawner.send_to_container_from_host">
+<code class="descname">send_to_container_from_host</code><span class="sig-paren">(</span><em>machine_id</em>, <em>message</em>, <em>sock_type='udp'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/spawners/docker.html#DockerSpawner.send_to_container_from_host"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.spawners.docker.DockerSpawner.send_to_container_from_host" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simulate a virtual send of a message to the container running the identified <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a></p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
-<li><strong>machine</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> for one of the managed machines.</li>
+<li><strong>machine_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the <a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MachineController</span></code></a> for one of the managed machines.</li>
 <li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – Some json serializable message to send to that machine.</li>
 <li><strong>sock_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – Either ‘udp’ or ‘tcp’.  Indicating the type of connection.</li>
 </ul>

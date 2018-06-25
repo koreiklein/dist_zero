@@ -238,10 +238,24 @@ it will be considered expired.</p>
 </dd></dl>
 
 <dl class="method">
+<dt id="dist_zero.exporter.Exporter.acknowledge">
+<code class="descname">acknowledge</code><span class="sig-paren">(</span><em>sequence_number</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter.acknowledge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter.acknowledge" title="Permalink to this definition">¶</a></dt>
+<dd><p>Acknowledge the receipt of all sequence numbers less than sequence_number.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>sequence_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – Some sequence number for which all smaller sequence numbers should now be acknowledged.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
 <dt id="dist_zero.exporter.Exporter.duplicate">
 <code class="descname">duplicate</code><span class="sig-paren">(</span><em>exporters</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter.duplicate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter.duplicate" title="Permalink to this definition">¶</a></dt>
-<dd><p>Start duplicating this exporter.</p>
-<p>prerequisite: The exporter may not already be duplicating.</p>
+<dd><p>Start duplicating this exporter to a new receiver.</p>
+<p>prerequisite: The exporter must not already be duplicating.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -270,6 +284,25 @@ it will be considered expired.</p>
 </table>
 </dd></dl>
 
+<dl class="method">
+<dt id="dist_zero.exporter.Exporter.finish_duplicating">
+<code class="descname">finish_duplicating</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter.finish_duplicating"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter.finish_duplicating" title="Permalink to this definition">¶</a></dt>
+<dd><p>End duplication to the original receiver.</p>
+<p>prerequisite: The exporter must in the process of duplicating.</p>
+<p>Typically, when an <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a> finishes duplicating, it will never be used again and should be left
+for cleanup by the garbage collector.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The list of exporters this node was duplicating to.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">list[<a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a>]</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
 <dl class="attribute">
 <dt id="dist_zero.exporter.Exporter.least_unacknowledged_sequence_number">
 <code class="descname">least_unacknowledged_sequence_number</code><a class="headerlink" href="#dist_zero.exporter.Exporter.least_unacknowledged_sequence_number" title="Permalink to this definition">¶</a></dt>
@@ -281,6 +314,12 @@ it will be considered expired.</p>
 </ul>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.exporter.Exporter.receiver_id">
+<code class="descname">receiver_id</code><a class="headerlink" href="#dist_zero.exporter.Exporter.receiver_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The id of the node receiving from this exporter</p>
 </dd></dl>
 
 <dl class="method">
@@ -337,7 +376,7 @@ This state is important for output leaves that update that state over time.</li>
 
 <dl class="method">
 <dt id="dist_zero.node.io.InternalNode.create_kid_config">
-<code class="descname">create_kid_config</code><span class="sig-paren">(</span><em>name</em>, <em>machine_controller_handle</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io.html#InternalNode.create_kid_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.InternalNode.create_kid_config" title="Permalink to this definition">¶</a></dt>
+<code class="descname">create_kid_config</code><span class="sig-paren">(</span><em>name</em>, <em>machine_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io.html#InternalNode.create_kid_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.InternalNode.create_kid_config" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate a config for a new child leaf node, and mark it as a pending child on this parent node.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
@@ -345,7 +384,7 @@ This state is important for output leaves that update that state over time.</li>
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
 <li><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The name to use for the new node.</li>
-<li><strong>machine_controller_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the MachineController which will run the new node.</li>
+<li><strong>machine_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the MachineController which will run the new node.</li>
 </ul>
 </td>
 </tr>
@@ -563,6 +602,24 @@ Also called for an edge sum node adjacent to an input_node when the input node t
 <dd><p>Called when the current migrator has finished migrating.</p>
 </dd></dl>
 
+<dl class="attribute">
+<dt id="dist_zero.node.sum.SumNode.n_duplicates">
+<code class="descname">n_duplicates</code><em class="property"> = None</em><a class="headerlink" href="#dist_zero.node.sum.SumNode.n_duplicates" title="Permalink to this definition">¶</a></dt>
+<dd><p>Number of times this node has received a message that was already received</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.node.sum.SumNode.n_reorders">
+<code class="descname">n_reorders</code><em class="property"> = None</em><a class="headerlink" href="#dist_zero.node.sum.SumNode.n_reorders" title="Permalink to this definition">¶</a></dt>
+<dd><p>Number of times this node has received an out-of-order message</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.node.sum.SumNode.n_retransmissions">
+<code class="descname">n_retransmissions</code><em class="property"> = None</em><a class="headerlink" href="#dist_zero.node.sum.SumNode.n_retransmissions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Number of times this node has retransmitted a message</p>
+</dd></dl>
+
 <dl class="method">
 <dt id="dist_zero.node.sum.SumNode.receive">
 <code class="descname">receive</code><span class="sig-paren">(</span><em>sender_id</em>, <em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.receive" title="Permalink to this definition">¶</a></dt>
@@ -591,6 +648,21 @@ Also called for an edge sum node adjacent to an input_node when the input node t
 <col class="field-body" />
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>remaining_sender_ids</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#set" title="(in Python v3.6)"><em>set</em></a>) – The set of senders that are still sending.  All other senders should be deactivated.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.node.sum.SumNode.stats">
+<code class="descname">stats</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.stats"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.stats" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A dictionary of statistics about this <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a></td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.6)">dict</a></td>
 </tr>
 </tbody>
 </table>

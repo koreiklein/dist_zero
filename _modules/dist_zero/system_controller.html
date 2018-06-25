@@ -39,12 +39,19 @@
 
 <span class="kn">import</span> <span class="nn">dist_zero.logging</span>
 
-<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">machine</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">errors</span><span class="p">,</span> <span class="n">messages</span>
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">machine</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">errors</span><span class="p">,</span> <span class="n">messages</span><span class="p">,</span> <span class="n">spawners</span><span class="p">,</span> <span class="n">transport</span>
 
 
 <div class="viewcode-block" id="SystemController"><a class="viewcode-back" href="../../doc/system_controller.html#dist_zero.system_controller.SystemController">[docs]</a><span class="k">class</span> <span class="nc">SystemController</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
   <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">  Class to manage the entire distributed system for tests.</span>
+
+<span class="sd">  Because this class is for testing, it has special behavior in each of the three modes.</span>
+<span class="sd">  In simulated mode, each instance of this class will contain the entire distributed system inside its `SimulatedSpawner`.</span>
+<span class="sd">  In virtual mode, each instance will be running on the host, and have access to a docker daemon for managing</span>
+<span class="sd">  the containers.</span>
+<span class="sd">  In cloud mode, each instance of this class will have network access to the cloud instance, and be able</span>
+<span class="sd">  have access to cloud credentials.</span>
 <span class="sd">  &#39;&#39;&#39;</span>
 
   <span class="c1"># NOTE(KK): This class is entirely for tests at the moment.</span>
@@ -60,42 +67,40 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">system_id</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span> <span class="o">=</span> <span class="n">spawner</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_handle</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="sd">&#39;&#39;&#39;For nodes spawned by this instance, map the node id to the handle of the machine it was spawned on.&#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_id</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="sd">&#39;&#39;&#39;For nodes spawned by this instance, map the node id to the id of the machine it was spawned on.&#39;&#39;&#39;</span>
 
   <span class="nd">@property</span>
   <span class="k">def</span> <span class="nf">spawner</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;The underlying spawner of this `SystemController`&#39;&#39;&#39;</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span>
 
-<div class="viewcode-block" id="SystemController.create_kid_config"><a class="viewcode-back" href="../../doc/system_controller.html#dist_zero.system_controller.SystemController.create_kid_config">[docs]</a>  <span class="k">def</span> <span class="nf">create_kid_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">internal_node_id</span><span class="p">,</span> <span class="n">new_node_name</span><span class="p">,</span> <span class="n">machine_controller_handle</span><span class="p">):</span>
+<div class="viewcode-block" id="SystemController.create_kid_config"><a class="viewcode-back" href="../../doc/system_controller.html#dist_zero.system_controller.SystemController.create_kid_config">[docs]</a>  <span class="k">def</span> <span class="nf">create_kid_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">internal_node_id</span><span class="p">,</span> <span class="n">new_node_name</span><span class="p">,</span> <span class="n">machine_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    :param internal_node_id: The id of the parent `InternalNode`.</span>
 <span class="sd">    :param str new_node_name: The name to use for the new node.</span>
-<span class="sd">    :param machine_controller_handle: The :ref:`handle` of the machine on which the new node will run.</span>
-<span class="sd">    :type machine_controller_handle: :ref:`handle`</span>
+<span class="sd">    :param str machine_id: The id of the machine on which the new node will run.</span>
 
 <span class="sd">    :return: A node_config for creating the new kid node.</span>
 <span class="sd">    :rtype: :ref:`message`</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="n">machine_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_handle</span><span class="p">[</span><span class="n">internal_node_id</span><span class="p">]</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">send_to_machine</span><span class="p">(</span>
-        <span class="n">machine</span><span class="o">=</span><span class="n">machine_handle</span><span class="p">,</span>
+    <span class="n">machine_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_id</span><span class="p">[</span><span class="n">internal_node_id</span><span class="p">]</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span><span class="p">(</span>
+        <span class="n">machine_id</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span>
         <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">api_create_kid_config</span><span class="p">(</span>
             <span class="n">internal_node_id</span><span class="o">=</span><span class="n">internal_node_id</span><span class="p">,</span>
             <span class="n">new_node_name</span><span class="o">=</span><span class="n">new_node_name</span><span class="p">,</span>
-            <span class="n">machine_controller_handle</span><span class="o">=</span><span class="n">machine_controller_handle</span><span class="p">,</span>
+            <span class="n">machine_id</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span>
         <span class="p">),</span>
         <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;tcp&#39;</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="SystemController.create_kid"><a class="viewcode-back" href="../../doc/system_controller.html#dist_zero.system_controller.SystemController.create_kid">[docs]</a>  <span class="k">def</span> <span class="nf">create_kid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent_node_id</span><span class="p">,</span> <span class="n">new_node_name</span><span class="p">,</span> <span class="n">machine_controller_handle</span><span class="p">,</span> <span class="n">recorded_user</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="SystemController.create_kid"><a class="viewcode-back" href="../../doc/system_controller.html#dist_zero.system_controller.SystemController.create_kid">[docs]</a>  <span class="k">def</span> <span class="nf">create_kid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent_node_id</span><span class="p">,</span> <span class="n">new_node_name</span><span class="p">,</span> <span class="n">machine_id</span><span class="p">,</span> <span class="n">recorded_user</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Create a new kid of an `InternalNode` in this system.</span>
 
 <span class="sd">    :param str parent_node_id: The id of the parent node.</span>
 <span class="sd">    :param str new_node_name: The name to use for the new node.</span>
-<span class="sd">    :param machine_controller_handle: The :ref:`handle` of the `MachineController` that should run the new node.</span>
-<span class="sd">    :type machine_controller_handle: :ref:`handle`</span>
+<span class="sd">    :param str machine_id: The id of the `MachineController` that should run the new node.</span>
 <span class="sd">    :param recorded_user: An optional recording of a user to be played back on the new node.</span>
 <span class="sd">    :type recorded_user: :RecordedUser`</span>
 
@@ -104,11 +109,11 @@
     <span class="n">node_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_kid_config</span><span class="p">(</span>
         <span class="n">internal_node_id</span><span class="o">=</span><span class="n">parent_node_id</span><span class="p">,</span>
         <span class="n">new_node_name</span><span class="o">=</span><span class="n">new_node_name</span><span class="p">,</span>
-        <span class="n">machine_controller_handle</span><span class="o">=</span><span class="n">machine_controller_handle</span><span class="p">,</span>
+        <span class="n">machine_id</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="k">if</span> <span class="n">recorded_user</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
       <span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;recorded_user_json&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">recorded_user</span><span class="o">.</span><span class="n">to_json</span><span class="p">()</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span><span class="n">on_machine</span><span class="o">=</span><span class="n">machine_controller_handle</span><span class="p">,</span> <span class="n">node_config</span><span class="o">=</span><span class="n">node_config</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span><span class="n">on_machine</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span> <span class="n">node_config</span><span class="o">=</span><span class="n">node_config</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="SystemController.spawn_node"><a class="viewcode-back" href="../../doc/system_controller.html#dist_zero.system_controller.SystemController.spawn_node">[docs]</a>  <span class="k">def</span> <span class="nf">spawn_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_config</span><span class="p">,</span> <span class="n">on_machine</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -116,15 +121,40 @@
 
 <span class="sd">    :param node_config: A node config for a new node.</span>
 <span class="sd">    :type node_config: :ref:`message`</span>
-<span class="sd">    :param on_machine: The handle for a `MachineController`</span>
-<span class="sd">    :type on_machine: :ref:`handle`</span>
+<span class="sd">    :param str on_machine: The id of a `MachineController`</span>
 
 <span class="sd">    :return: The node id of the spawned node.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="n">node_id</span> <span class="o">=</span> <span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">send_to_machine</span><span class="p">(</span><span class="n">machine</span><span class="o">=</span><span class="n">on_machine</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">machine_start_node</span><span class="p">(</span><span class="n">node_config</span><span class="p">))</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_handle</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">on_machine</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span><span class="p">(</span><span class="n">machine_id</span><span class="o">=</span><span class="n">on_machine</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">machine_start_node</span><span class="p">(</span><span class="n">node_config</span><span class="p">))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_id</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">on_machine</span>
     <span class="k">return</span> <span class="n">node_id</span></div>
+
+  <span class="k">def</span> <span class="nf">_send_to_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_id</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;udp&#39;</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Send a message to the identified `MachineController` using whatever method is appropriate</span>
+<span class="sd">    for the current environment.</span>
+
+<span class="sd">    :param str machine_id: The id of the `MachineController` for one of the managed machines.</span>
+<span class="sd">    :param message: Some json serializable message to send to that machine.</span>
+<span class="sd">    :type message: :ref:`message`</span>
+<span class="sd">    :param str sock_type: Either &#39;udp&#39; or &#39;tcp&#39;.  Indicating the type of connection.</span>
+
+<span class="sd">    :return: None if sock_type == &#39;udp&#39;.</span>
+<span class="sd">      If sock_type == &#39;tcp&#39;, then return the response from the `MachineController` tcp API.</span>
+<span class="sd">    :rtype: object</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">mode</span><span class="p">()</span> <span class="o">==</span> <span class="n">spawners</span><span class="o">.</span><span class="n">MODE_SIMULATED</span><span class="p">:</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">simulate_send_to_machine</span><span class="p">(</span><span class="n">machine_id</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sock_type</span><span class="o">=</span><span class="n">sock_type</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">mode</span><span class="p">()</span> <span class="o">==</span> <span class="n">spawners</span><span class="o">.</span><span class="n">MODE_VIRTUAL</span><span class="p">:</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">send_to_container_from_host</span><span class="p">(</span><span class="n">machine_id</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sock_type</span><span class="o">=</span><span class="n">sock_type</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">mode</span><span class="p">()</span> <span class="o">==</span> <span class="n">spawners</span><span class="o">.</span><span class="n">MODE_CLOUD</span><span class="p">:</span>
+      <span class="k">return</span> <span class="n">transport</span><span class="o">.</span><span class="n">send</span><span class="p">(</span>
+          <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span>
+          <span class="n">ip_address</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">aws_instance_by_id</span><span class="p">[</span><span class="n">machine_id</span><span class="p">]</span><span class="o">.</span><span class="n">public_ip_address</span><span class="p">,</span>
+          <span class="n">sock_type</span><span class="o">=</span><span class="n">sock_type</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s1">&#39;Unrecognized mode &quot;</span><span class="si">{}</span><span class="s1">&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">mode</span><span class="p">()))</span>
 
 <div class="viewcode-block" id="SystemController.create_machine"><a class="viewcode-back" href="../../doc/system_controller.html#dist_zero.system_controller.SystemController.create_machine">[docs]</a>  <span class="k">def</span> <span class="nf">create_machine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_config</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -132,10 +162,10 @@
 
 <span class="sd">    :param object machine_config: A machine configuration object.</span>
 
-<span class="sd">    :return: The :ref:`handle` of the new `MachineController`</span>
-<span class="sd">    :rtype: :ref:`handle`</span>
+<span class="sd">    :return: The id of the new `MachineController`</span>
+<span class="sd">    :rtype: str</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">create_machine</span><span class="p">(</span><span class="n">machine_config</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_machines</span><span class="p">([</span><span class="n">machine_config</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="SystemController.create_machines"><a class="viewcode-back" href="../../doc/system_controller.html#dist_zero.system_controller.SystemController.create_machines">[docs]</a>  <span class="k">def</span> <span class="nf">create_machines</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_configs</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -143,8 +173,8 @@
 
 <span class="sd">    :param list machine_configs: A list of machine configuration objects.</span>
 
-<span class="sd">    :return: The list of :ref:`handle` of the new `MachineController` in the same order as the matching </span>
-<span class="sd">    :rtype: list[:ref:`handle`]</span>
+<span class="sd">    :return: The list of ids of the new `MachineController` in the same order as the matching </span>
+<span class="sd">    :rtype: list[str]</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">create_machines</span><span class="p">(</span><span class="n">machine_configs</span><span class="p">)</span></div>
 
@@ -156,9 +186,21 @@
 
 <span class="sd">    :return: The state of that node at about the current time.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="n">machine_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_handle</span><span class="p">[</span><span class="n">output_node_id</span><span class="p">]</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">send_to_machine</span><span class="p">(</span>
-        <span class="n">machine</span><span class="o">=</span><span class="n">machine_handle</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">api_get_output_state</span><span class="p">(</span><span class="n">node_id</span><span class="o">=</span><span class="n">output_node_id</span><span class="p">),</span> <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;tcp&#39;</span><span class="p">)</span></div>
+    <span class="n">machine_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_id</span><span class="p">[</span><span class="n">output_node_id</span><span class="p">]</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span><span class="p">(</span>
+        <span class="n">machine_id</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">api_get_output_state</span><span class="p">(</span><span class="n">node_id</span><span class="o">=</span><span class="n">output_node_id</span><span class="p">),</span> <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;tcp&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SystemController.get_stats"><a class="viewcode-back" href="../../doc/system_controller.html#dist_zero.system_controller.SystemController.get_stats">[docs]</a>  <span class="k">def</span> <span class="nf">get_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Get the stats associated with a node that collects stats.</span>
+
+<span class="sd">    :param str node_id: The id of a `Node` in the system that is collecting stats.</span>
+
+<span class="sd">    :return: The stats of that node at about the current time.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">machine_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_id</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span><span class="p">(</span>
+        <span class="n">machine_id</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">api_get_stats</span><span class="p">(</span><span class="n">node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">),</span> <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;tcp&#39;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="SystemController.generate_new_handle"><a class="viewcode-back" href="../../doc/system_controller.html#dist_zero.system_controller.SystemController.generate_new_handle">[docs]</a>  <span class="k">def</span> <span class="nf">generate_new_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_node_id</span><span class="p">,</span> <span class="n">existing_node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -170,9 +212,9 @@
 <span class="sd">    :return: A :ref:`handle` that the new `Node` (once spawned) can use to send to the existing `Node`.</span>
 <span class="sd">    :rtype: :ref:`handle`</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="n">machine_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_handle</span><span class="p">[</span><span class="n">existing_node_id</span><span class="p">]</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">send_to_machine</span><span class="p">(</span>
-        <span class="n">machine</span><span class="o">=</span><span class="n">machine_handle</span><span class="p">,</span>
+    <span class="n">machine_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_id</span><span class="p">[</span><span class="n">existing_node_id</span><span class="p">]</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span><span class="p">(</span>
+        <span class="n">machine_id</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span>
         <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">api_new_handle</span><span class="p">(</span><span class="n">local_node_id</span><span class="o">=</span><span class="n">existing_node_id</span><span class="p">,</span> <span class="n">new_node_id</span><span class="o">=</span><span class="n">new_node_id</span><span class="p">),</span>
         <span class="n">sock_type</span><span class="o">=</span><span class="s1">&#39;tcp&#39;</span><span class="p">)</span></div>
 
@@ -185,12 +227,12 @@
 <span class="sd">    :param message: A message for that node.</span>
 <span class="sd">    :type message: :ref:`message`</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="n">machine_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_handle</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span>
+    <span class="n">machine_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_id</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span>
     <span class="n">machine_message</span> <span class="o">=</span> <span class="n">messages</span><span class="o">.</span><span class="n">machine</span><span class="o">.</span><span class="n">machine_deliver_to_node</span><span class="p">(</span><span class="n">node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_spawner</span><span class="o">.</span><span class="n">send_to_machine</span><span class="p">(</span><span class="n">machine</span><span class="o">=</span><span class="n">machine_handle</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">machine_message</span><span class="p">)</span></div>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_send_to_machine</span><span class="p">(</span><span class="n">machine_id</span><span class="o">=</span><span class="n">machine_id</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">machine_message</span><span class="p">)</span></div>
 
-  <span class="k">def</span> <span class="nf">_node_handle_to_machine_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">):</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_handle</span><span class="p">[</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span>
+  <span class="k">def</span> <span class="nf">_node_handle_to_machine_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">):</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_id_to_machine_id</span><span class="p">[</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span>
 
   <span class="k">def</span> <span class="nf">configure_logging</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="c1"># Filters</span>

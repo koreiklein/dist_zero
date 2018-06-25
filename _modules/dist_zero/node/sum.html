@@ -97,7 +97,7 @@
 
     <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span> <span class="o">=</span> <span class="kc">None</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">_least_unused_sequence_number</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_branching</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    An ordered list of pairs</span>
@@ -126,10 +126,30 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">=</span> <span class="mi">0</span>
 
+    <span class="bp">self</span><span class="o">.</span><span class="n">n_retransmissions</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="sd">&#39;&#39;&#39;Number of times this node has retransmitted a message&#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">n_reorders</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="sd">&#39;&#39;&#39;Number of times this node has received an out-of-order message&#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">n_duplicates</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="sd">&#39;&#39;&#39;Number of times this node has received a message that was already received&#39;&#39;&#39;</span>
+
     <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_sent_acknowledgements</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_retransmitted_expired_pending_messages</span> <span class="o">=</span> <span class="mi">0</span>
 
     <span class="nb">super</span><span class="p">(</span><span class="n">SumNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SumNode.stats"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.stats">[docs]</a>  <span class="k">def</span> <span class="nf">stats</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :return: A dictionary of statistics about this `Node`</span>
+<span class="sd">    :rtype: dict</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;n_retransmissions&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_retransmissions</span><span class="p">,</span>
+        <span class="s1">&#39;n_reorders&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_reorders</span><span class="p">,</span>
+        <span class="s1">&#39;n_duplicates&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_duplicates</span><span class="p">,</span>
+        <span class="s1">&#39;sent_messages&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span><span class="p">,</span>
+        <span class="s1">&#39;acknowledged_messages&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unacknowledged_sequence_number</span><span class="p">(),</span>
+    <span class="p">}</span></div>
 
   <span class="k">def</span> <span class="nf">_new_importer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">importer</span><span class="o">.</span><span class="n">Importer</span><span class="p">(</span><span class="n">node</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="n">sender</span><span class="p">)</span>
@@ -140,7 +160,7 @@
         <span class="n">receiver</span><span class="o">=</span><span class="n">receiver</span><span class="p">,</span>
         <span class="c1"># NOTE(KK): When you implement robustness during a migration, you should think very very carefully</span>
         <span class="c1">#   about how to set this parameter to guarantee correctness.</span>
-        <span class="n">least_unacknowledged_sequence_number</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_least_unused_sequence_number</span><span class="p">)</span>
+        <span class="n">least_unacknowledged_sequence_number</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span><span class="p">)</span>
 
 <div class="viewcode-block" id="SumNode.restrict_importers"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.restrict_importers">[docs]</a>  <span class="k">def</span> <span class="nf">restrict_importers</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remaining_sender_ids</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -331,7 +351,7 @@
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    The least sequence number that has not been acknowledged by every Exporter responsible for it.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unused_sequence_number</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span>
     <span class="k">for</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
       <span class="n">result</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">exporter</span><span class="o">.</span><span class="n">least_unacknowledged_sequence_number</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">result</span>
@@ -365,7 +385,7 @@
             <span class="s1">&#39;n_receivers&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">)</span>
         <span class="p">})</span>
 
-    <span class="n">sequence_number</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unused_sequence_number</span>
+    <span class="n">sequence_number</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span>
     <span class="k">for</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
       <span class="n">exporter</span><span class="o">.</span><span class="n">export_message</span><span class="p">(</span>
           <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">sum</span><span class="o">.</span><span class="n">increment</span><span class="p">(</span><span class="n">amount</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_unsent_total</span><span class="p">,</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">sequence_number</span><span class="p">),</span>
@@ -375,7 +395,7 @@
         <span class="n">sender_id</span><span class="p">:</span> <span class="n">importer</span><span class="o">.</span><span class="n">least_unreceived_remote_sequence_number</span>
         <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
     <span class="p">}))</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_least_unused_sequence_number</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span> <span class="o">+=</span> <span class="mi">1</span>
 
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;LeafNode&#39;</span><span class="p">):</span>
       <span class="n">message</span> <span class="o">=</span> <span class="n">messages</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">output_action</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_unsent_total</span><span class="p">)</span>
