@@ -129,10 +129,6 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   for stat in ['n_retransmissions', 'n_reorders', 'n_duplicates', 'sent_messages', 'acknowledged_messages']:
     assert sum_node_stats[stat] == later_sum_node_stats[stat]
 
-  # Check stats on the input edge SumNode instances.
-  user_b_edge_sum_node_id = demo.system.get_adjacent_id(user_b_input_id)
-  user_c_edge_sum_node_id = demo.system.get_adjacent_id(user_c_input_id)
-
   # FIXME(KK): Really?
   return
   b_input_node_stats = demo.system.get_stats(user_b_input_id)

@@ -286,11 +286,6 @@ class NodeManager(MachineController):
           'status': 'ok',
           'data': self.get_stats(message['node_id']),
       }
-    elif message['type'] == 'api_get_adjacent':
-      return {
-          'status': 'ok',
-          'data': self.get_adjacent(message['node_id']),
-      }
     else:
       logger.error("Unrecognized API message type {message_type}", extra={'message_type': message['type']})
       return {
@@ -303,9 +298,6 @@ class NodeManager(MachineController):
 
   def get_stats(self, node_id):
     return self._node_by_id[node_id].stats()
-
-  def get_adjacent(self, node_id):
-    return self._node_by_id[node_id].get_adjacent()
 
   def _format_node_id_for_logs(self, node_id):
     if node_id is None:
