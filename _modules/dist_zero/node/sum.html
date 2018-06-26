@@ -148,11 +148,11 @@
         <span class="n">spawning_migration</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;spawning_migration&#39;</span><span class="p">],</span>
         <span class="n">controller</span><span class="o">=</span><span class="n">controller</span><span class="p">)</span>
 
-  <span class="k">def</span> <span class="nf">_maybe_finish_middle_node_startup</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">_maybe_finish_middle_node_duplication</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    For middle nodes that need to be migrated into their new state,</span>
-<span class="sd">    check whether all the appropriate model state and messages have arrived, and if so inform the spawning_migration that</span>
-<span class="sd">    this node is totally synced up.</span>
+<span class="sd">    For middle nodes that are still getting duplication messages.</span>
+<span class="sd">    Check whether all the appropriate inputs are successfully duplicating their messages, and if so,</span>
+<span class="sd">    inform the spawning_migration that the duplication is complete.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_sender_ids</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">middle_node_is_duplicated</span><span class="p">())</span>
@@ -231,7 +231,7 @@
         <span class="c1"># Doing a migration</span>
         <span class="k">if</span> <span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_sender_ids</span><span class="p">:</span>
           <span class="bp">self</span><span class="o">.</span><span class="n">_pending_sender_ids</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">sender_id</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_finish_middle_node_startup</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_finish_middle_node_duplication</span><span class="p">()</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;sum_node_started&#39;</span><span class="p">:</span>
       <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="o">.</span><span class="n">middle_node_started</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sum_node_handle&#39;</span><span class="p">])</span>
