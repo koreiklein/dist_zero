@@ -109,7 +109,7 @@ class LeafNode(Node):
       self.logger.debug("Leaf node is postponing an input_action message send since it does not yet have an exporter.")
       self._pre_active_messages.append(message)
 
-  def deliver(self, message):
+  def deliver(self, message, sequence_number, sender_id):
     if self._variant != 'output':
       raise errors.InternalError("Only 'output' variant nodes may receive output actions")
 

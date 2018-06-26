@@ -60,21 +60,28 @@ class SumNode(Node):
     # Invariants:
     #   At certain points in time, a increment message is sent to every receiver.
     #   self._unsent_time_ms is the number of elapsed milliseconds since the last such point in time
-    #   self._sent_total is the total amount of increment sent to receivers as of that point in time
+    #   self._current_state is the total amount of increment sent to receivers as of that point in time
     #     (note: the amonut is always identical for every receiver)
-    #   self._unsent_total is the total amonut of increment received since that point in time.
-    #   None of the increment in self._unsent_total has been sent.
-    self._sent_total = 0
-    self._unsent_total = 0
+    #   self._deltas is the complete set of updates received since that point in time.  None of the deltas
+    #     have been added to self._current_state or sent to receivers.
+    self._current_state = 0
+    # Map from sender_id to a list of pairs (remote_sequence_number, message)
+    self._deltas = {}
     self._unsent_time_ms = 0
     self._now_ms = 0
 
     super(SumNode, self).__init__(logger)
 
-    self._input_importer = None if input_node is None else self.linker.new_importer(input_node)
+    if input_node is None:
+      self._input_importer = None
+    else:
+      self._input_importer = self.linker.new_importer(input_node)
+      self._deltas[self._input_importer.sender_id] = []
     self._output_exporter = None if output_node is None else self.linker.new_exporter(output_node)
 
     self._importers = {sender['id']: self.linker.new_importer(sender) for sender in senders}
+    for sender_id in self._importers.keys():
+      self._deltas[sender_id] = []
     self._exporters = {receiver['id']: self.linker.new_exporter(receiver) for receiver in receivers}
 
   def restrict_importers(self, remaining_sender_ids):
@@ -124,29 +131,21 @@ class SumNode(Node):
     if not self._pending_sender_ids:
       self.send(self._spawning_migration, messages.migration.middle_node_is_duplicated())
 
-  def deliver(self, message):
+  def deliver(self, message, sequence_number, sender_id):
     '''
     Called by `Importer` instances in self._importers to deliver messages to self.
     Also called for an edge sum node adjacent to an input_node when the input node triggers incrementing the sum.
     '''
-    if message['type'] == 'input_action':
-      self._unsent_total += message['number']
-    elif message['type'] == 'increment':
-      self._unsent_total += message['amount']
-    else:
-      raise errors.InternalError('Unrecognized message type "{}"'.format(message['type']))
+    self._deltas[sender_id].append((sequence_number, message))
 
   def receive(self, sender_id, message):
     if message['type'] == 'sequence_message':
       self.linker.receive_sequence_message(message['value'], sender_id)
-    elif message['type'] == 'input_action':
-      if self._input_importer is None:
-        raise errors.InternalError("SumNode should not be receiving an input action without an input_node")
-      self.deliver(message['number'])
     elif message['type'] == 'set_input':
       if self._input_importer is not None:
         raise errors.InternalError("Can not set a new input node when one already exists.")
       self._input_importer = self.linker.new_importer(message['input_node'])
+      self._deltas[self._input_importer.sender_id] = []
     elif message['type'] == 'set_output':
       if self._output_exporter is not None:
         raise errors.InternalError("Can not set a new output node when one already exists.")
@@ -187,6 +186,7 @@ class SumNode(Node):
         if node['id'] in self._importers:
           raise errors.InternalError("Received connect_node for an importer that had already been added.")
         self._importers[node['id']] = self.linker.new_importer(sender=node)
+        self._deltas[node['id']] = []
       elif direction == 'receiver':
         if node['id'] in self._exporters:
           raise errors.InternalError("Received connect_node for an exporter that had already been added.")
@@ -204,8 +204,7 @@ class SumNode(Node):
         self.migrator.middle_node_started(message['sum_node_handle'])
     elif message['type'] == 'set_sum_total':
       # FIXME(KK): Think through how to set these parameters appropriately during startup.
-      self._sent_total = message['total']
-      self._unsent_total = 0
+      self._current_state = message['total']
       self._unsent_time_ms = 0
       self.send(self._spawning_migration, messages.migration.middle_node_is_live())
     elif message['type'] == 'middle_node_is_duplicated':
@@ -234,7 +233,7 @@ class SumNode(Node):
 
   def elapse(self, ms):
     self._unsent_time_ms += ms
-    if self._unsent_total > 0 and self._unsent_time_ms > SumNode.SEND_INTERVAL_MS:
+    if any(self._deltas.values()) and self._unsent_time_ms > SumNode.SEND_INTERVAL_MS:
       self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
       SENDER_LIMIT = 15
@@ -253,11 +252,30 @@ class SumNode(Node):
     self.migrator = SumNodeSenderSplitMigrator(self)
     self.migrator.start()
 
+  def _combine_and_remove_deltas(self):
+    '''
+    Sum all the amounts in the deltas, remove them, and return the result.
+    '''
+    result = 0
+    for sender_id, pairs in list(self._deltas.items()):
+      for sequence_number, message in pairs:
+        if message['type'] == 'input_action':
+          result += message['number']
+        elif message['type'] == 'increment':
+          result += message['amount']
+        else:
+          raise errors.InternalError('Unrecognized message type "{}"'.format(message['type']))
+      self._deltas[sender_id] = []
+
+    return result
+
   def _send_forward_messages(self):
+    unsent_total = self._combine_and_remove_deltas()
+
     self.logger.debug(
         "Sending new increment of {unsent_total} to all {n_receivers} receivers",
         extra={
-            'unsent_total': self._unsent_total,
+            'unsent_total': unsent_total,
             'n_receivers': len(self._exporters)
         })
 
@@ -265,17 +283,16 @@ class SumNode(Node):
 
     for exporter in self._exporters.values():
       exporter.export_message(
-          message=messages.sum.increment(amount=self._unsent_total),
+          message=messages.sum.increment(amount=unsent_total),
           sequence_number=sequence_number,
       )
 
     if self._output_exporter and self._output_exporter.receiver_id.startswith('LeafNode'):
-      message = messages.io.output_action(self._unsent_total)
+      message = messages.io.output_action(unsent_total)
       self._output_exporter.export_message(message=message, sequence_number=sequence_number)
 
     self._unsent_time_ms = 0
-    self._sent_total += self._unsent_total
-    self._unsent_total = 0
+    self._current_state += unsent_total
 
   def initialize(self):
     self.logger.info(
@@ -517,7 +534,7 @@ class SumNodeSenderSplitMigrator(object):
     n_new_nodes = 2
     n_senders_per_node = len(self.node._importers) // n_new_nodes
 
-    total = self.node._sent_total
+    total = self.node._current_state
     total_quotient, total_remainder = total % n_new_nodes, total // n_new_nodes
 
     importers = list(self.node._importers.values())

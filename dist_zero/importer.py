@@ -90,7 +90,8 @@ class Importer(object):
           # The deliver code should run with a correct least_unreceived_remote_sequence_number.
           # Make sure to update it BEFORE calling deliver.
           self._least_unreceived_remote_sequence_number += 1
-          self._node.deliver(message['message'])
+          self._node.deliver(
+              message=message['message'], sequence_number=message['sequence_number'], sender_id=self.sender_id)
 
         if message is None:
           # This message was not processed immediately, consider it reordered.

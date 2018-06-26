@@ -113,6 +113,8 @@ class Linker(object):
 
   def receive_sequence_message(self, message, sender_id):
     if message['type'] == 'acknowledge':
+      # In past cases where the exporter for a given sender id is not present, it was often
+      # the case that the exporter was removed prematurely.
       self._exporters[sender_id].acknowledge(message['sequence_number'])
     elif message['type'] == 'receive':
       self._importers[sender_id].import_message(message, sender_id)
