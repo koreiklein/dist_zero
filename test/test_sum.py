@@ -26,23 +26,24 @@ def test_times_in_order():
     ])
 
 
-@pytest.mark.parametrize('drop_rate,network_error_type,seed', [
-    (0.0, 'drop', 'a'),
-    (0.02, 'drop', 'a'),
-    (0.02, 'drop', 'b'),
-    (0.02, 'drop', 'c'),
-    (0.02, 'drop', 'd'),
-    (0.02, 'drop', 'e'),
-    (0.02, 'drop', 'f'),
-    (0.02, 'drop', 'g'),
-    (0.27, 'duplicate', 'a'),
-    (0.27, 'reorder', 'a'),
+@pytest.mark.parametrize('error_regexp,drop_rate,network_error_type,seed', [
+    ('.*increment.*', 0.0, 'drop', 'a'),
+    ('.*increment.*', 0.02, 'drop', 'a'),
+    ('.*increment.*', 0.02, 'drop', 'b'),
+    ('.*increment.*', 0.02, 'drop', 'c'),
+    ('.*increment.*', 0.02, 'drop', 'd'),
+    ('.*increment.*', 0.02, 'drop', 'e'),
+    ('.*increment.*', 0.02, 'drop', 'f'),
+    ('.*increment.*', 0.02, 'drop', 'g'),
+    ('.*increment.*', 0.27, 'duplicate', 'a'),
+    ('.*increment.*', 0.27, 'reorder', 'a'),
+    ('.*input_action.*', 0.4, 'drop', 'h'),
 ])
-def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, seed):
+def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, seed, error_regexp):
   # Create node controllers (each simulates the behavior of a separate machine.
   network_errors_config = messages.machine.std_simulated_network_errors_config()
   network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
-  network_errors_config['outgoing'][network_error_type]['regexp'] = '.*increment.*'
+  network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
 
   machine_a, machine_b, machine_c = demo.new_machine_controllers(
       3,
@@ -127,7 +128,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   demo.run_for(ms=2000)
   later_sum_node_stats = demo.system.get_stats(sum_node_id)
   for stat in ['n_retransmissions', 'n_reorders', 'n_duplicates', 'sent_messages', 'acknowledged_messages']:
-    assert sum_node_stats[stat] == later_sum_node_stats[stat]
+    assert (sum_node_stats[stat] == later_sum_node_stats[stat]), 'Values were unequal for the stat "{}"'.format(stat)
 
   # TODO(KK): Once io nodes generate acknowledgements, this would be an excellent place to assert
   #   that they have acknowledged their messages.

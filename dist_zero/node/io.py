@@ -1,7 +1,7 @@
 import logging
 
 import dist_zero.ids
-from dist_zero import settings, messages, errors, recorded
+from dist_zero import settings, messages, errors, recorded, importer, exporter
 from .node import Node
 
 logger = logging.getLogger(__name__)
@@ -47,9 +47,13 @@ class LeafNode(Node):
     self._controller = controller
     self.id = node_id
     self._adjacent = None
+    self._exporter = None
+    self._importer = None
     self._variant = variant
 
     self._recorded_user = recorded_user
+
+    self._now_ms = 0
 
     self.parent = parent
 
@@ -60,30 +64,38 @@ class LeafNode(Node):
 
     super(LeafNode, self).__init__(logger)
 
-  def _set_adjacent(self, node):
-    '''
-    Called when a new adjacent has been added.
+  def _set_input(self, node):
+    if self._importer is not None:
+      raise errors.InternalError("LeafNodes have only a single input node."
+                                 "  Can not add a new one once an input already exists")
 
-    :param node: The :ref:`handle` of the new adjacent node.
-    :type sender: :ref:`handle`
-    '''
-    if self._adjacent is not None:
-      raise errors.InternalError("LeafNodes have only a single adjacent."
-                                 "  Can not add a new link once an adjacent exists")
-    self._adjacent = node
+    self._importer = self.linker.new_importer(node)
 
-    self.logger.info("Activating Leaf Node {node_id}", extra={'node_id': self.id})
-    # Process all the postponed messages now
-    for m in self._pre_active_messages:
-      self._receive_input_action(m)
+  def _set_output(self, node):
+    if self._exporter is not None:
+      raise errors.InternalError("LeafNodes have only a single output node."
+                                 "  Can not add a new one once an output already exists")
+
+    self._exporter = self.linker.new_exporter(node)
 
   def receive(self, message, sender_id):
-    if message['type'] == 'set_adjacent':
-      self._set_adjacent(message['node'])
+    if message['type'] == 'connect_internal':
+      if message['direction'] == 'receiver':
+        self._set_output(message['node'])
+      elif message['direction'] == 'sender':
+        self._set_input(message['node'])
+      else:
+        raise errors.InternalError('Unrecognized direction "{}"'.format(message['direction']))
+
+      # Handle the postponed messages now.
+      self.logger.info("Activating Leaf Node {node_id}", extra={'node_id': self.id})
+      for m in self._pre_active_messages:
+        self._receive_input_action(m)
+
     elif message['type'] == 'input_action':
       self._receive_input_action(message)
-    elif message['type'] == 'output_action':
-      self._receive_output_action(message)
+    elif message['type'] == 'sequence_message':
+      self.linker.receive_sequence_message(message['value'], sender_id)
     else:
       raise RuntimeError("Unrecognized message type {}".format(message['type']))
 
@@ -91,20 +103,22 @@ class LeafNode(Node):
     if self._variant != 'input':
       raise errors.InternalError("Only 'input' variant nodes may receive input actions")
 
-    if self._adjacent is not None:
-      self.logger.debug("Forwarding input message to adjacent {adjacent}", extra={'adjacent': self._adjacent})
-      self.send(self._adjacent, message)
+    if self._exporter is not None:
+      self.logger.debug("Forwarding input message via exporter")
+      self._exporter.export_message(message=message, sequence_number=self.linker.advance_sequence_number())
     else:
-      self.logger.debug("Leaf node is postponing an input_action message send since not all receivers are active.")
+      self.logger.debug("Leaf node is postponing an input_action message send since it does not yet have an exporter.")
       self._pre_active_messages.append(message)
 
-  def _receive_output_action(self, message):
+  def deliver(self, message):
     if self._variant != 'output':
       raise errors.InternalError("Only 'output' variant nodes may receive output actions")
 
     increment = message['number']
     self.logger.debug("Output incrementing state by {increment}", extra={'increment': increment})
     self._update_state(lambda amount: amount + increment)
+
+    self.linker.advance_sequence_number()
 
   @staticmethod
   def _init_recorded_user_from_config(recorded_user_json):
@@ -136,6 +150,10 @@ class LeafNode(Node):
     self.send(self.parent, messages.io.added_leaf(self.new_handle(self.parent['id'])))
 
   def elapse(self, ms):
+    self._now_ms += ms
+
+    self.linker.elapse(ms)
+
     if self._recorded_user is not None:
       for t, msg in self._recorded_user.elapse_and_get_messages(ms):
         self.logger.info("Simulated user generated a message", extra={'recorded_message': msg})
@@ -183,7 +201,9 @@ class InternalNode(Node):
       raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
   def receive(self, message, sender_id):
-    if message['type'] == 'added_leaf':
+    if message['type'] == 'sequence_message':
+      self.linker.receive_sequence_message(message['value'], sender_id)
+    elif message['type'] == 'added_leaf':
       self.added_leaf(message['kid'])
     else:
       self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})

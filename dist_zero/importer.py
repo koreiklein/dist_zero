@@ -11,15 +11,19 @@ class Importer(object):
   each message, exactly once, and in the right order.
   '''
 
-  def __init__(self, node, sender):
+  def __init__(self, node, linker, sender):
     '''
     :param node: The internal node.
     :type node: `Node`
+
+    :param linker: The linker associated with this importer
+    :type linker: `Linker`
 
     :param sender: The :ref:`handle` of the node sending to this internal node.
     :type sender: :ref:`handle`
     '''
     self._node = node
+    self._linker = linker
     self._sender = sender
 
     # Set to try when this importer should ignore all inputs.
@@ -46,7 +50,10 @@ class Importer(object):
       When acknowledge is called, all messages with sequence numbers less than remote_sequence_number must
       be acknowledged by the underlying `Node`.
     '''
-    self._node.send(self._sender, messages.sum.acknowledge(remote_sequence_number))
+    self._node.logger.debug(
+        "importer sending remote acknowledgement message. remote sequence number: {remote_sequence_number}",
+        extra={'remote_sequence_number': remote_sequence_number})
+    self._node.send(self._sender, messages.linker.sequence_message_acknowledge(remote_sequence_number))
 
   def initialize(self):
     self._node.send(self._sender,
@@ -66,7 +73,7 @@ class Importer(object):
     else:
       rsn = message['sequence_number']
       if rsn < self._least_unreceived_remote_sequence_number or rsn in self._remote_sequence_number_to_early_message:
-        self._node.n_duplicates += 1
+        self._linker.n_duplicates += 1
         self._node.logger.warning(
             ("Received duplicate message for sequence number {remote_sequence_number}"
              " from sender {sender_id}"),
@@ -80,12 +87,14 @@ class Importer(object):
         message = None
         while self._least_unreceived_remote_sequence_number in self._remote_sequence_number_to_early_message:
           message = self._remote_sequence_number_to_early_message.pop(self._least_unreceived_remote_sequence_number)
-          self._node.deliver(message['amount'])
+          # The deliver code should run with a correct least_unreceived_remote_sequence_number.
+          # Make sure to update it BEFORE calling deliver.
           self._least_unreceived_remote_sequence_number += 1
+          self._node.deliver(message['message'])
 
         if message is None:
           # This message was not processed immediately, consider it reordered.
-          self._node.n_reorders += 1
+          self._linker.n_reorders += 1
 
   @property
   def sender_id(self):

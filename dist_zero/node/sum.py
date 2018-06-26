@@ -1,6 +1,6 @@
 import logging
 
-from dist_zero import messages, errors, ids, importer, exporter
+from dist_zero import messages, errors, ids
 from .node import Node
 
 logger = logging.getLogger(__name__)
@@ -26,12 +26,6 @@ class SumNode(Node):
 
   SEND_INTERVAL_MS = 30
   '''The number of ms between sends to receivers.'''
-
-  TIME_BETWEEN_ACKNOWLEDGEMENTS_MS = 30
-  '''The number of ms between acknowledgements sent to senders.'''
-
-  TIME_BETWEEN_RETRANSMISSION_CHECKS_MS = 20
-  '''The number of ms between checks for whether we should retransmit to receivers.'''
 
   def __init__(self, node_id, senders, receivers, spawning_migration, input_node, output_node, pending_sender_ids,
                controller):
@@ -59,25 +53,7 @@ class SumNode(Node):
 
     self._spawning_migration = spawning_migration
 
-    self._input_node = input_node
-    self._output_node = output_node
-
     self.migrator = None
-
-    self._least_unsent_sequence_number = 0
-    self._branching = []
-    '''
-    An ordered list of pairs
-    (sent_sequence_number, sender_id_to_least_unreceived_remote_sequence_number)
-
-    where sent_sequence_number is a sequence number that has been sent on all exporters
-    and sender_id_to_least_unreceived_remote_sequence_number is a map from each sender id
-        to the least_unreceived_remote_sequence_number of its associated `Importer` at the
-        time that sent_sequence_number was sent.
-    '''
-
-    self._importers = {sender['id']: self._new_importer(sender) for sender in senders}
-    self._exporters = {receiver['id']: self._new_exporter(receiver) for receiver in receivers}
 
     self._pending_sender_ids = set(pending_sender_ids)
 
@@ -93,41 +69,13 @@ class SumNode(Node):
     self._unsent_time_ms = 0
     self._now_ms = 0
 
-    self.n_retransmissions = 0
-    '''Number of times this node has retransmitted a message'''
-    self.n_reorders = 0
-    '''Number of times this node has received an out-of-order message'''
-    self.n_duplicates = 0
-    '''Number of times this node has received a message that was already received'''
-
-    self._time_since_sent_acknowledgements = 0
-    self._time_since_retransmitted_expired_pending_messages = 0
-
     super(SumNode, self).__init__(logger)
 
-  def stats(self):
-    '''
-    :return: A dictionary of statistics about this `Node`
-    :rtype: dict
-    '''
-    return {
-        'n_retransmissions': self.n_retransmissions,
-        'n_reorders': self.n_reorders,
-        'n_duplicates': self.n_duplicates,
-        'sent_messages': self._least_unsent_sequence_number,
-        'acknowledged_messages': self._least_unacknowledged_sequence_number(),
-    }
+    self._input_importer = None if input_node is None else self.linker.new_importer(input_node)
+    self._output_exporter = None if output_node is None else self.linker.new_exporter(output_node)
 
-  def _new_importer(self, sender):
-    return importer.Importer(node=self, sender=sender)
-
-  def _new_exporter(self, receiver):
-    return exporter.Exporter(
-        node=self,
-        receiver=receiver,
-        # NOTE(KK): When you implement robustness during a migration, you should think very very carefully
-        #   about how to set this parameter to guarantee correctness.
-        least_unacknowledged_sequence_number=self._least_unsent_sequence_number)
+    self._importers = {sender['id']: self.linker.new_importer(sender) for sender in senders}
+    self._exporters = {receiver['id']: self.linker.new_exporter(receiver) for receiver in receivers}
 
   def restrict_importers(self, remaining_sender_ids):
     '''
@@ -136,6 +84,7 @@ class SumNode(Node):
     :param set remaining_sender_ids: The set of senders that are still sending.  All other senders should be deactivated.
     '''
     n_deactivated_importers = 0
+    remaining_importers = {}
     for sender_id, importer in self._importers.items():
       if sender_id not in remaining_sender_ids:
         importer.deactivate()
@@ -146,12 +95,6 @@ class SumNode(Node):
         extra={
             'n_deactivated_importers': n_deactivated_importers,
         })
-
-  def remove_deactivated_importers(self):
-    self._importers = {
-        sender_id: importer
-        for sender_id, importer in self._importers.items() if not importer._deactivated
-    }
 
   def migration_finished(self):
     '''
@@ -181,31 +124,36 @@ class SumNode(Node):
     if not self._pending_sender_ids:
       self.send(self._spawning_migration, messages.migration.middle_node_is_duplicated())
 
-  def deliver(self, amount):
+  def deliver(self, message):
     '''
     Called by `Importer` instances in self._importers to deliver messages to self.
     Also called for an edge sum node adjacent to an input_node when the input node triggers incrementing the sum.
     '''
-    self._unsent_total += amount
+    if message['type'] == 'input_action':
+      self._unsent_total += message['number']
+    elif message['type'] == 'increment':
+      self._unsent_total += message['amount']
+    else:
+      raise errors.InternalError('Unrecognized message type "{}"'.format(message['type']))
 
   def receive(self, sender_id, message):
-    if message['type'] == 'increment':
-      # Don't necessary deliver the message yet, as it may be out of order.
-      # Instead, pass it to the appropriate importer and let the importer decide when to deliver the message.
-      self._importers[sender_id].import_message(message, sender_id)
-    elif message['type'] == 'acknowledge':
-      self._exporters[sender_id].acknowledge(message['sequence_number'])
+    if message['type'] == 'sequence_message':
+      self.linker.receive_sequence_message(message['value'], sender_id)
     elif message['type'] == 'input_action':
-      if self._input_node is None:
+      if self._input_importer is None:
         raise errors.InternalError("SumNode should not be receiving an input action without an input_node")
       self.deliver(message['number'])
     elif message['type'] == 'set_input':
-      self._input_node = message['input_node']
+      if self._input_importer is not None:
+        raise errors.InternalError("Can not set a new input node when one already exists.")
+      self._input_importer = self.linker.new_importer(message['input_node'])
     elif message['type'] == 'set_output':
-      self._output_node = message['output_node']
+      if self._output_exporter is not None:
+        raise errors.InternalError("Can not set a new output node when one already exists.")
+      self._output_exporter = self.linker.new_exporter(message['output_node'])
     elif message['type'] == 'added_adjacent_leaf':
       if message['variant'] == 'input':
-        if self._input_node is not None:
+        if self._input_importer is not None:
           node_id = ids.new_id('SumNode')
           self_handle = self.new_handle(node_id)
           self._controller.spawn_node(
@@ -216,7 +164,7 @@ class SumNode(Node):
                   input_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
               ))
       elif message['variant'] == 'output':
-        if self._output_node is not None:
+        if self._output_exporter is not None:
           node_id = ids.new_id('SumNode')
           self_handle = self.new_handle(node_id)
           self._controller.spawn_node(
@@ -238,11 +186,11 @@ class SumNode(Node):
       if direction == 'sender':
         if node['id'] in self._importers:
           raise errors.InternalError("Received connect_internal for an importer that had already been added.")
-        self._importers[node['id']] = self._new_importer(sender=node)
+        self._importers[node['id']] = self.linker.new_importer(sender=node)
       elif direction == 'receiver':
         if node['id'] in self._exporters:
           raise errors.InternalError("Received connect_internal for an exporter that had already been added.")
-        self._exporters[node['id']] = self._new_exporter(receiver=node)
+        self._exporters[node['id']] = self.linker.new_exporter(receiver=node)
       else:
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
 
@@ -274,7 +222,7 @@ class SumNode(Node):
               'old_receiver_id': old_receiver_id,
           })
       exporter = self._exporters[old_receiver_id]
-      exporter.duplicate([self._new_exporter(new_receiver)])
+      exporter.duplicate([self.linker.new_exporter(new_receiver)])
     elif message['type'] == 'finish_duplicating':
       receiver_id = message['receiver_id']
       exporter = self._exporters[receiver_id]
@@ -299,50 +247,11 @@ class SumNode(Node):
 
     self._now_ms += ms
 
-    self._time_since_sent_acknowledgements += ms
-    self._time_since_retransmitted_expired_pending_messages += ms
-
-    if self._time_since_sent_acknowledgements > SumNode.TIME_BETWEEN_ACKNOWLEDGEMENTS_MS:
-      self._send_acknowledgement_messages()
-      self._time_since_sent_acknowledgements = 0
-
-    if self._time_since_retransmitted_expired_pending_messages > SumNode.TIME_BETWEEN_RETRANSMISSION_CHECKS_MS:
-      self._retransmit_expired_pending_messages()
-      self._time_since_retransmitted_expired_pending_messages = 0
+    self.linker.elapse(ms)
 
   def _hit_sender_limit(self):
     self.migrator = SumNodeSenderSplitMigrator(self)
     self.migrator.start()
-
-  def _least_unacknowledged_sequence_number(self):
-    '''
-    The least sequence number that has not been acknowledged by every Exporter responsible for it.
-    '''
-    result = self._least_unsent_sequence_number
-    for exporter in self._exporters.values():
-      result = min(result, exporter.least_unacknowledged_sequence_number)
-    return result
-
-  def _send_acknowledgement_messages(self):
-    least_unacknowledged_sequence_number = self._least_unacknowledged_sequence_number()
-
-    branching_index = 0
-    while branching_index < len(
-        self._branching) and self._branching[branching_index][0] < least_unacknowledged_sequence_number:
-      # PERF(KK): binary search is possible here.
-      branching_index += 1
-
-    if branching_index == 0:
-      # No new messages need to be acknowledged.
-      pass
-    else:
-      # The last map of sender_id to least_unreceived_remote_sequence_number before branching_index
-      # will contain all the acknowledgements we need to send.
-      self.logger.debug("sum node sending acknowledgement message to importers")
-      for sender_id, least_unreceived_remote_sequence_number in self._branching[branching_index - 1][1].items():
-        self._importers[sender_id].acknowledge(least_unreceived_remote_sequence_number)
-
-      self._branching = self._branching[branching_index:]
 
   def _send_forward_messages(self):
     self.logger.debug(
@@ -352,54 +261,36 @@ class SumNode(Node):
             'n_receivers': len(self._exporters)
         })
 
-    sequence_number = self._least_unsent_sequence_number
+    sequence_number = self.linker.advance_sequence_number()
+
     for exporter in self._exporters.values():
       exporter.export_message(
-          message=messages.sum.increment(amount=self._unsent_total, sequence_number=sequence_number),
-          time_ms=self._now_ms,
+          message=messages.sum.increment(amount=self._unsent_total),
+          sequence_number=sequence_number,
       )
-    self._branching.append((sequence_number, {
-        sender_id: importer.least_unreceived_remote_sequence_number
-        for sender_id, importer in self._importers.items()
-    }))
-    self._least_unsent_sequence_number += 1
 
-    if self._output_node and self._output_node['id'].startswith('LeafNode'):
+    if self._output_exporter and self._output_exporter.receiver_id.startswith('LeafNode'):
       message = messages.io.output_action(self._unsent_total)
-      self.send(self._output_node, message)
+      self._output_exporter.export_message(message=message, sequence_number=sequence_number)
 
     self._unsent_time_ms = 0
     self._sent_total += self._unsent_total
     self._unsent_total = 0
 
-  def _retransmit_expired_pending_messages(self):
-    for exporter in self._exporters.values():
-      exporter.retransmit_expired_pending_messages(self._now_ms)
-
   def initialize(self):
     self.logger.info(
-        'Starting sum node {sum_node_id}. input={input_node}, output={output_node}',
+        'Starting sum node {sum_node_id}. input={input_node_id}, output={output_node_id}',
         extra={
             'sum_node_id': self.id,
-            'input_node': self._input_node,
-            'output_node': self._output_node,
+            'input_node_id': self._input_importer.sender_id if self._input_importer is not None else None,
+            'output_node_id': self._output_exporter.receiver_id if self._output_exporter is not None else None,
         })
     if self._spawning_migration:
       self.send(
           self._spawning_migration,
           messages.sum.sum_node_started(sum_node_handle=self.new_handle(self._spawning_migration['id'])))
 
-    if self._output_node:
-      self.send(self._output_node, messages.io.set_adjacent(node=self.new_handle(self._output_node['id'])))
-
-    if self._input_node:
-      self.send(self._input_node, messages.io.set_adjacent(node=self.new_handle(self._input_node['id'])))
-
-    for importer in self._importers.values():
-      importer.initialize()
-
-    for receiver_id, exporter in self._exporters.items():
-      exporter.initialize()
+    self.linker.initialize()
 
 
 class SumNodeSenderSplitMigrator(object):
@@ -563,7 +454,11 @@ class SumNodeSenderSplitMigrator(object):
   def _transition_to_finished(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS, SumNodeSenderSplitMigrator.STATE_FINISHED)
 
-    self.node.remove_deactivated_importers()
+    self.linker.remove_deactivated_importers()
+    self._importers = {
+        sender_id: importer
+        for sender_id, importer in self._importers.items() if not importer._deactivated
+    }
 
     self.node.migration_finished()
 

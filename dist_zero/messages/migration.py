@@ -5,7 +5,7 @@ Messages to be received by migration nodes.
 
 def connect_internal(node, direction):
   '''
-  Inform a node internal to a computation that it is now linked to a new node either
+  Inform a node that it is now linked to a new node either
   as a sender or a receiver.
 
   :param node: The handle of the new node

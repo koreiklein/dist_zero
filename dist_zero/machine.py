@@ -169,11 +169,11 @@ class NodeManager(MachineController):
   def _send_without_error_simulation(self, node_handle, message, sending_node_id):
     '''Like `NodeManager.send`, but do not simulate any errors'''
     logger.debug(
-        "Sending message from {sending_node_id} to {recipient_handle}: {message}",
+        "Sending message from {sending_node_id} to {recipient_handle}: {message_type}",
         extra={
             'sending_node_id': sending_node_id,
             'recipient_handle': node_handle,
-            'message': message
+            'message_type': message['type'],
         })
 
     fernet = Fernet(node_handle['fernet_key'])

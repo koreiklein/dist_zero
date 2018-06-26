@@ -3,7 +3,7 @@ from collections import defaultdict
 from cryptography.fernet import Fernet
 
 import dist_zero.logging
-from dist_zero import messages
+from dist_zero import messages, linker
 
 
 class Node(object):
@@ -15,6 +15,8 @@ class Node(object):
     # For encryption/decryption
     self._fernet_key = Fernet.generate_key().decode(messages.ENCODING)
     self.fernet = Fernet(self._fernet_key)
+
+    self.linker = linker.Linker(self)
 
   def send(self, receiver, message):
     '''
@@ -84,3 +86,16 @@ class Node(object):
       (pre-recorded messages will not have a sender).
     '''
     raise RuntimeError('Abstract Superclass')
+
+  def stats(self):
+    '''
+    :return: A dictionary of statistics about this `Node`
+    :rtype: dict
+    '''
+    return {
+        'n_retransmissions': self.linker.n_retransmissions,
+        'n_reorders': self.linker.n_reorders,
+        'n_duplicates': self.linker.n_duplicates,
+        'sent_messages': self.linker.n_used_sequence_numbers(),
+        'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
+    }
