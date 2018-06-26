@@ -202,11 +202,11 @@
   <span class="k">def</span> <span class="nf">_send_without_error_simulation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_handle</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sending_node_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;Like `NodeManager.send`, but do not simulate any errors&#39;&#39;&#39;</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-        <span class="s2">&quot;Sending message from </span><span class="si">{sending_node_id}</span><span class="s2"> to </span><span class="si">{recipient_handle}</span><span class="s2">: </span><span class="si">{message}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Sending message from </span><span class="si">{sending_node_id}</span><span class="s2"> to </span><span class="si">{recipient_handle}</span><span class="s2">: </span><span class="si">{message_type}</span><span class="s2">&quot;</span><span class="p">,</span>
         <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
             <span class="s1">&#39;sending_node_id&#39;</span><span class="p">:</span> <span class="n">sending_node_id</span><span class="p">,</span>
             <span class="s1">&#39;recipient_handle&#39;</span><span class="p">:</span> <span class="n">node_handle</span><span class="p">,</span>
-            <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">message</span>
+            <span class="s1">&#39;message_type&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">],</span>
         <span class="p">})</span>
 
     <span class="n">fernet</span> <span class="o">=</span> <span class="n">Fernet</span><span class="p">(</span><span class="n">node_handle</span><span class="p">[</span><span class="s1">&#39;fernet_key&#39;</span><span class="p">])</span>

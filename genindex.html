@@ -67,7 +67,7 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/messages.html#dist_zero.messages.activate_output">activate_output() (in module dist_zero.messages)</a>
 </li>
-      <li><a href="doc/nodes.html#dist_zero.node.io.InternalNode.added_leaf">added_leaf() (dist_zero.node.io.InternalNode method)</a>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker.advance_sequence_number">advance_sequence_number() (dist_zero.linker.Linker method)</a>
 </li>
       <li><a href="doc/spawners.html#dist_zero.spawners.ALL_MODES">ALL_MODES (in module dist_zero.spawners)</a>
 </li>
@@ -85,12 +85,8 @@
 </li>
       <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.create_kid">create_kid() (dist_zero.system_controller.SystemController method)</a>
 </li>
-      <li><a href="doc/nodes.html#dist_zero.node.io.InternalNode.create_kid_config">create_kid_config() (dist_zero.node.io.InternalNode method)</a>
-
-      <ul>
-        <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.create_kid_config">(dist_zero.system_controller.SystemController method)</a>
+      <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.create_kid_config">create_kid_config() (dist_zero.system_controller.SystemController method)</a>
 </li>
-      </ul></li>
       <li><a href="doc/cloud.html#dist_zero.spawners.cloud.aws.Ec2Spawner.create_machine">create_machine() (dist_zero.spawners.cloud.aws.Ec2Spawner method)</a>
 
       <ul>
@@ -135,6 +131,8 @@
 </li>
       <li><a href="doc/nodes.html#module-dist_zero.importer">dist_zero.importer (module)</a>
 </li>
+      <li><a href="doc/nodes.html#module-dist_zero.linker">dist_zero.linker (module)</a>
+</li>
       <li><a href="doc/machine.html#module-dist_zero.machine">dist_zero.machine (module)</a>
 </li>
       <li><a href="doc/spawners.html#module-dist_zero.machine_init">dist_zero.machine_init (module)</a>
@@ -145,10 +143,10 @@
 </li>
       <li><a href="doc/nodes.html#module-dist_zero.node.io">dist_zero.node.io (module)</a>
 </li>
-      <li><a href="doc/nodes.html#module-dist_zero.node.node">dist_zero.node.node (module)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="doc/nodes.html#module-dist_zero.node.node">dist_zero.node.node (module)</a>
+</li>
       <li><a href="doc/nodes.html#module-dist_zero.node.sum">dist_zero.node.sum (module)</a>
 </li>
       <li><a href="doc/recorded.html#module-dist_zero.recorded">dist_zero.recorded (module)</a>
@@ -181,11 +179,9 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/cloud.html#dist_zero.spawners.cloud.aws.Ec2Spawner">Ec2Spawner (class in dist_zero.spawners.cloud.aws)</a>
 </li>
-      <li><a href="doc/nodes.html#dist_zero.node.io.InternalNode.elapse">elapse() (dist_zero.node.io.InternalNode method)</a>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker.elapse">elapse() (dist_zero.linker.Linker method)</a>
 
       <ul>
-        <li><a href="doc/nodes.html#dist_zero.node.io.LeafNode.elapse">(dist_zero.node.io.LeafNode method)</a>
-</li>
         <li><a href="doc/nodes.html#dist_zero.node.node.Node.elapse">(dist_zero.node.node.Node method)</a>
 </li>
         <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.elapse">(dist_zero.node.sum.SumNode method)</a>
@@ -253,6 +249,8 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/machine.html#dist_zero.machine.NodeManager.handle_message">handle_message() (dist_zero.machine.NodeManager method)</a>
 </li>
+      <li><a href="doc/nodes.html#dist_zero.exporter.Exporter.has_pending_messages">has_pending_messages() (dist_zero.exporter.Exporter method)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -263,21 +261,15 @@
 </li>
       <li><a href="doc/nodes.html#dist_zero.importer.Importer">Importer (class in dist_zero.importer)</a>
 </li>
-      <li><a href="doc/nodes.html#dist_zero.node.io.InternalNode.initialize">initialize() (dist_zero.node.io.InternalNode method)</a>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="doc/nodes.html#dist_zero.node.node.Node.initialize">initialize() (dist_zero.node.node.Node method)</a>
 
       <ul>
-        <li><a href="doc/nodes.html#dist_zero.node.io.LeafNode.initialize">(dist_zero.node.io.LeafNode method)</a>
-</li>
-        <li><a href="doc/nodes.html#dist_zero.node.node.Node.initialize">(dist_zero.node.node.Node method)</a>
-</li>
         <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.initialize">(dist_zero.node.sum.SumNode method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/errors.html#dist_zero.errors.InternalError">InternalError</a>
-</li>
-      <li><a href="doc/nodes.html#dist_zero.node.io.InternalNode">InternalNode (class in dist_zero.node.io)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -285,13 +277,15 @@
 <h2 id="L">L</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="doc/nodes.html#dist_zero.node.io.LeafNode">LeafNode (class in dist_zero.node.io)</a>
+      <li><a href="doc/nodes.html#dist_zero.exporter.Exporter.least_unacknowledged_sequence_number">least_unacknowledged_sequence_number (dist_zero.exporter.Exporter attribute)</a>
+</li>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker.least_unacknowledged_sequence_number">least_unacknowledged_sequence_number() (dist_zero.linker.Linker method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="doc/nodes.html#dist_zero.exporter.Exporter.least_unacknowledged_sequence_number">least_unacknowledged_sequence_number (dist_zero.exporter.Exporter attribute)</a>
-</li>
       <li><a href="doc/nodes.html#dist_zero.importer.Importer.least_unreceived_remote_sequence_number">least_unreceived_remote_sequence_number (dist_zero.importer.Importer attribute)</a>
+</li>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker">Linker (class in dist_zero.linker)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -339,22 +333,26 @@
 <h2 id="N">N</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.n_duplicates">n_duplicates (dist_zero.node.sum.SumNode attribute)</a>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker.n_duplicates">n_duplicates (dist_zero.linker.Linker attribute)</a>
 </li>
-      <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.n_reorders">n_reorders (dist_zero.node.sum.SumNode attribute)</a>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker.n_reorders">n_reorders (dist_zero.linker.Linker attribute)</a>
 </li>
-      <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.n_retransmissions">n_retransmissions (dist_zero.node.sum.SumNode attribute)</a>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker.n_retransmissions">n_retransmissions (dist_zero.linker.Linker attribute)</a>
+</li>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker.new_exporter">new_exporter() (dist_zero.linker.Linker method)</a>
 </li>
       <li><a href="doc/nodes.html#dist_zero.node.node.Node.new_handle">new_handle() (dist_zero.node.node.Node method)</a>
 </li>
       <li><a href="doc/ids.html#dist_zero.ids.new_id">new_id() (in module dist_zero.ids)</a>
 </li>
-      <li><a href="doc/demo.html#test.demo.Demo.new_machine_controller">new_machine_controller() (test.demo.Demo method)</a>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker.new_importer">new_importer() (dist_zero.linker.Linker method)</a>
 </li>
-      <li><a href="doc/demo.html#test.demo.Demo.new_machine_controllers">new_machine_controllers() (test.demo.Demo method)</a>
+      <li><a href="doc/demo.html#test.demo.Demo.new_machine_controller">new_machine_controller() (test.demo.Demo method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="doc/demo.html#test.demo.Demo.new_machine_controllers">new_machine_controllers() (test.demo.Demo method)</a>
+</li>
       <li><a href="doc/machine.html#dist_zero.machine.MachineController.new_transport">new_transport() (dist_zero.machine.MachineController method)</a>
 
       <ul>
@@ -385,13 +383,9 @@
 <h2 id="R">R</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="doc/nodes.html#dist_zero.node.io.InternalNode.receive">receive() (dist_zero.node.io.InternalNode method)</a>
+      <li><a href="doc/nodes.html#dist_zero.node.node.Node.receive">receive() (dist_zero.node.node.Node method)</a>
 
       <ul>
-        <li><a href="doc/nodes.html#dist_zero.node.io.LeafNode.receive">(dist_zero.node.io.LeafNode method)</a>
-</li>
-        <li><a href="doc/nodes.html#dist_zero.node.node.Node.receive">(dist_zero.node.node.Node method)</a>
-</li>
         <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.receive">(dist_zero.node.sum.SumNode method)</a>
 </li>
       </ul></li>
@@ -399,10 +393,10 @@
 </li>
       <li><a href="doc/recorded.html#dist_zero.recorded.RecordedUser">RecordedUser (class in dist_zero.recorded)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.restrict_importers">restrict_importers() (dist_zero.node.sum.SumNode method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/nodes.html#dist_zero.exporter.Exporter.retransmit_expired_pending_messages">retransmit_expired_pending_messages() (dist_zero.exporter.Exporter method)</a>
 </li>
       <li><a href="doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.run_for">run_for() (dist_zero.spawners.simulator.SimulatedSpawner method)</a>
@@ -481,7 +475,7 @@
 </li>
       <li><a href="doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS">STATE_TRIMMING_INPUTS (dist_zero.node.sum.SumNodeSenderSplitMigrator attribute)</a>
 </li>
-      <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.stats">stats() (dist_zero.node.sum.SumNode method)</a>
+      <li><a href="doc/nodes.html#dist_zero.node.node.Node.stats">stats() (dist_zero.node.node.Node method)</a>
 </li>
       <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode">SumNode (class in dist_zero.node.sum)</a>
 </li>
@@ -499,11 +493,11 @@
 </li>
       <li><a href="doc/demo.html#module-test.demo">test.demo (module)</a>
 </li>
-      <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.TIME_BETWEEN_ACKNOWLEDGEMENTS_MS">TIME_BETWEEN_ACKNOWLEDGEMENTS_MS (dist_zero.node.sum.SumNode attribute)</a>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker.TIME_BETWEEN_ACKNOWLEDGEMENTS_MS">TIME_BETWEEN_ACKNOWLEDGEMENTS_MS (dist_zero.linker.Linker attribute)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.TIME_BETWEEN_RETRANSMISSION_CHECKS_MS">TIME_BETWEEN_RETRANSMISSION_CHECKS_MS (dist_zero.node.sum.SumNode attribute)</a>
+      <li><a href="doc/nodes.html#dist_zero.linker.Linker.TIME_BETWEEN_RETRANSMISSION_CHECKS_MS">TIME_BETWEEN_RETRANSMISSION_CHECKS_MS (dist_zero.linker.Linker attribute)</a>
 </li>
       <li><a href="doc/nodes.html#dist_zero.node.node.Node.transfer_handle">transfer_handle() (dist_zero.node.node.Node method)</a>
 </li>

@@ -33,7 +33,7 @@
   <h1>Source code for dist_zero.node.sum</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span> <span class="nn">logging</span>
 
-<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">messages</span><span class="p">,</span> <span class="n">errors</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">importer</span><span class="p">,</span> <span class="n">exporter</span>
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">messages</span><span class="p">,</span> <span class="n">errors</span><span class="p">,</span> <span class="n">ids</span>
 <span class="kn">from</span> <span class="nn">.node</span> <span class="k">import</span> <span class="n">Node</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
@@ -59,12 +59,6 @@
 
   <span class="n">SEND_INTERVAL_MS</span> <span class="o">=</span> <span class="mi">30</span>
   <span class="sd">&#39;&#39;&#39;The number of ms between sends to receivers.&#39;&#39;&#39;</span>
-
-  <span class="n">TIME_BETWEEN_ACKNOWLEDGEMENTS_MS</span> <span class="o">=</span> <span class="mi">30</span>
-  <span class="sd">&#39;&#39;&#39;The number of ms between acknowledgements sent to senders.&#39;&#39;&#39;</span>
-
-  <span class="n">TIME_BETWEEN_RETRANSMISSION_CHECKS_MS</span> <span class="o">=</span> <span class="mi">20</span>
-  <span class="sd">&#39;&#39;&#39;The number of ms between checks for whether we should retransmit to receivers.&#39;&#39;&#39;</span>
 
   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">senders</span><span class="p">,</span> <span class="n">receivers</span><span class="p">,</span> <span class="n">spawning_migration</span><span class="p">,</span> <span class="n">input_node</span><span class="p">,</span> <span class="n">output_node</span><span class="p">,</span> <span class="n">pending_sender_ids</span><span class="p">,</span>
                <span class="n">controller</span><span class="p">):</span>
@@ -92,25 +86,7 @@
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span> <span class="o">=</span> <span class="n">spawning_migration</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">_input_node</span> <span class="o">=</span> <span class="n">input_node</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span> <span class="o">=</span> <span class="n">output_node</span>
-
     <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span> <span class="o">=</span> <span class="kc">None</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_branching</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    An ordered list of pairs</span>
-<span class="sd">    (sent_sequence_number, sender_id_to_least_unreceived_remote_sequence_number)</span>
-
-<span class="sd">    where sent_sequence_number is a sequence number that has been sent on all exporters</span>
-<span class="sd">    and sender_id_to_least_unreceived_remote_sequence_number is a map from each sender id</span>
-<span class="sd">        to the least_unreceived_remote_sequence_number of its associated `Importer` at the</span>
-<span class="sd">        time that sent_sequence_number was sent.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span> <span class="o">=</span> <span class="p">{</span><span class="n">sender</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_importer</span><span class="p">(</span><span class="n">sender</span><span class="p">)</span> <span class="k">for</span> <span class="n">sender</span> <span class="ow">in</span> <span class="n">senders</span><span class="p">}</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span> <span class="o">=</span> <span class="p">{</span><span class="n">receiver</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_exporter</span><span class="p">(</span><span class="n">receiver</span><span class="p">)</span> <span class="k">for</span> <span class="n">receiver</span> <span class="ow">in</span> <span class="n">receivers</span><span class="p">}</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_pending_sender_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">pending_sender_ids</span><span class="p">)</span>
 
@@ -126,41 +102,13 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">=</span> <span class="mi">0</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">n_retransmissions</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="sd">&#39;&#39;&#39;Number of times this node has retransmitted a message&#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">n_reorders</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="sd">&#39;&#39;&#39;Number of times this node has received an out-of-order message&#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">n_duplicates</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="sd">&#39;&#39;&#39;Number of times this node has received a message that was already received&#39;&#39;&#39;</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_sent_acknowledgements</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_retransmitted_expired_pending_messages</span> <span class="o">=</span> <span class="mi">0</span>
-
     <span class="nb">super</span><span class="p">(</span><span class="n">SumNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
 
-<div class="viewcode-block" id="SumNode.stats"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.stats">[docs]</a>  <span class="k">def</span> <span class="nf">stats</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    :return: A dictionary of statistics about this `Node`</span>
-<span class="sd">    :rtype: dict</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">return</span> <span class="p">{</span>
-        <span class="s1">&#39;n_retransmissions&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_retransmissions</span><span class="p">,</span>
-        <span class="s1">&#39;n_reorders&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_reorders</span><span class="p">,</span>
-        <span class="s1">&#39;n_duplicates&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_duplicates</span><span class="p">,</span>
-        <span class="s1">&#39;sent_messages&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span><span class="p">,</span>
-        <span class="s1">&#39;acknowledged_messages&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unacknowledged_sequence_number</span><span class="p">(),</span>
-    <span class="p">}</span></div>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">input_node</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_importer</span><span class="p">(</span><span class="n">input_node</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">output_node</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_exporter</span><span class="p">(</span><span class="n">output_node</span><span class="p">)</span>
 
-  <span class="k">def</span> <span class="nf">_new_importer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">importer</span><span class="o">.</span><span class="n">Importer</span><span class="p">(</span><span class="n">node</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="n">sender</span><span class="p">)</span>
-
-  <span class="k">def</span> <span class="nf">_new_exporter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">receiver</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">exporter</span><span class="o">.</span><span class="n">Exporter</span><span class="p">(</span>
-        <span class="n">node</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
-        <span class="n">receiver</span><span class="o">=</span><span class="n">receiver</span><span class="p">,</span>
-        <span class="c1"># NOTE(KK): When you implement robustness during a migration, you should think very very carefully</span>
-        <span class="c1">#   about how to set this parameter to guarantee correctness.</span>
-        <span class="n">least_unacknowledged_sequence_number</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span> <span class="o">=</span> <span class="p">{</span><span class="n">sender</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_importer</span><span class="p">(</span><span class="n">sender</span><span class="p">)</span> <span class="k">for</span> <span class="n">sender</span> <span class="ow">in</span> <span class="n">senders</span><span class="p">}</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span> <span class="o">=</span> <span class="p">{</span><span class="n">receiver</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_exporter</span><span class="p">(</span><span class="n">receiver</span><span class="p">)</span> <span class="k">for</span> <span class="n">receiver</span> <span class="ow">in</span> <span class="n">receivers</span><span class="p">}</span>
 
 <div class="viewcode-block" id="SumNode.restrict_importers"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.restrict_importers">[docs]</a>  <span class="k">def</span> <span class="nf">restrict_importers</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remaining_sender_ids</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -169,6 +117,7 @@
 <span class="sd">    :param set remaining_sender_ids: The set of senders that are still sending.  All other senders should be deactivated.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="n">n_deactivated_importers</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">remaining_importers</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
       <span class="k">if</span> <span class="n">sender_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">remaining_sender_ids</span><span class="p">:</span>
         <span class="n">importer</span><span class="o">.</span><span class="n">deactivate</span><span class="p">()</span>
@@ -179,12 +128,6 @@
         <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
             <span class="s1">&#39;n_deactivated_importers&#39;</span><span class="p">:</span> <span class="n">n_deactivated_importers</span><span class="p">,</span>
         <span class="p">})</span></div>
-
-  <span class="k">def</span> <span class="nf">remove_deactivated_importers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="n">sender_id</span><span class="p">:</span> <span class="n">importer</span>
-        <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">importer</span><span class="o">.</span><span class="n">_deactivated</span>
-    <span class="p">}</span>
 
 <div class="viewcode-block" id="SumNode.migration_finished"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.migration_finished">[docs]</a>  <span class="k">def</span> <span class="nf">migration_finished</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -214,31 +157,36 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_sender_ids</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">middle_node_is_duplicated</span><span class="p">())</span>
 
-<div class="viewcode-block" id="SumNode.deliver"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.deliver">[docs]</a>  <span class="k">def</span> <span class="nf">deliver</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">amount</span><span class="p">):</span>
+<div class="viewcode-block" id="SumNode.deliver"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.deliver">[docs]</a>  <span class="k">def</span> <span class="nf">deliver</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Called by `Importer` instances in self._importers to deliver messages to self.</span>
 <span class="sd">    Also called for an edge sum node adjacent to an input_node when the input node triggers incrementing the sum.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_total</span> <span class="o">+=</span> <span class="n">amount</span></div>
+    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;input_action&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_total</span> <span class="o">+=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;number&#39;</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;increment&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_total</span> <span class="o">+=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;amount&#39;</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s1">&#39;Unrecognized message type &quot;</span><span class="si">{}</span><span class="s1">&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]))</span></div>
 
 <div class="viewcode-block" id="SumNode.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
-    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;increment&#39;</span><span class="p">:</span>
-      <span class="c1"># Don&#39;t necessary deliver the message yet, as it may be out of order.</span>
-      <span class="c1"># Instead, pass it to the appropriate importer and let the importer decide when to deliver the message.</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span><span class="o">.</span><span class="n">import_message</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;acknowledge&#39;</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span><span class="o">.</span><span class="n">acknowledge</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;sequence_message&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">receive_sequence_message</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">],</span> <span class="n">sender_id</span><span class="p">)</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;input_action&#39;</span><span class="p">:</span>
-      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_node</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;SumNode should not be receiving an input action without an input_node&quot;</span><span class="p">)</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">deliver</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;number&#39;</span><span class="p">])</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;set_input&#39;</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_input_node</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;input_node&#39;</span><span class="p">]</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Can not set a new input node when one already exists.&quot;</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_importer</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;input_node&#39;</span><span class="p">])</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;set_output&#39;</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;output_node&#39;</span><span class="p">]</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Can not set a new output node when one already exists.&quot;</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_exporter</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;output_node&#39;</span><span class="p">])</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;added_adjacent_leaf&#39;</span><span class="p">:</span>
       <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;variant&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;input&#39;</span><span class="p">:</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_node</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
           <span class="n">node_id</span> <span class="o">=</span> <span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;SumNode&#39;</span><span class="p">)</span>
           <span class="n">self_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="n">node_id</span><span class="p">)</span>
           <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span>
@@ -249,7 +197,7 @@
                   <span class="n">input_node</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">transfer_handle</span><span class="p">(</span><span class="n">handle</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;kid&#39;</span><span class="p">],</span> <span class="n">for_node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">),</span>
               <span class="p">))</span>
       <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;variant&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;output&#39;</span><span class="p">:</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
           <span class="n">node_id</span> <span class="o">=</span> <span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;SumNode&#39;</span><span class="p">)</span>
           <span class="n">self_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="n">node_id</span><span class="p">)</span>
           <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span>
@@ -264,18 +212,18 @@
 
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;finished_duplicating&#39;</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="o">.</span><span class="n">finished_duplicating</span><span class="p">(</span><span class="n">sender_id</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;connect_internal&#39;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;connect_node&#39;</span><span class="p">:</span>
       <span class="n">node</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;node&#39;</span><span class="p">]</span>
       <span class="n">direction</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;direction&#39;</span><span class="p">]</span>
 
       <span class="k">if</span> <span class="n">direction</span> <span class="o">==</span> <span class="s1">&#39;sender&#39;</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">:</span>
-          <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Received connect_internal for an importer that had already been added.&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_importer</span><span class="p">(</span><span class="n">sender</span><span class="o">=</span><span class="n">node</span><span class="p">)</span>
+          <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Received connect_node for an importer that had already been added.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_importer</span><span class="p">(</span><span class="n">sender</span><span class="o">=</span><span class="n">node</span><span class="p">)</span>
       <span class="k">elif</span> <span class="n">direction</span> <span class="o">==</span> <span class="s1">&#39;receiver&#39;</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">:</span>
-          <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Received connect_internal for an exporter that had already been added.&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_exporter</span><span class="p">(</span><span class="n">receiver</span><span class="o">=</span><span class="n">node</span><span class="p">)</span>
+          <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Received connect_node for an exporter that had already been added.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_exporter</span><span class="p">(</span><span class="n">receiver</span><span class="o">=</span><span class="n">node</span><span class="p">)</span>
       <span class="k">else</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Unrecognized direction parameter &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">direction</span><span class="p">))</span>
 
@@ -307,7 +255,7 @@
               <span class="s1">&#39;old_receiver_id&#39;</span><span class="p">:</span> <span class="n">old_receiver_id</span><span class="p">,</span>
           <span class="p">})</span>
       <span class="n">exporter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">old_receiver_id</span><span class="p">]</span>
-      <span class="n">exporter</span><span class="o">.</span><span class="n">duplicate</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_new_exporter</span><span class="p">(</span><span class="n">new_receiver</span><span class="p">)])</span>
+      <span class="n">exporter</span><span class="o">.</span><span class="n">duplicate</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_exporter</span><span class="p">(</span><span class="n">new_receiver</span><span class="p">)])</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;finish_duplicating&#39;</span><span class="p">:</span>
       <span class="n">receiver_id</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;receiver_id&#39;</span><span class="p">]</span>
       <span class="n">exporter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">receiver_id</span><span class="p">]</span>
@@ -332,50 +280,11 @@
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">+=</span> <span class="n">ms</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_sent_acknowledgements</span> <span class="o">+=</span> <span class="n">ms</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_retransmitted_expired_pending_messages</span> <span class="o">+=</span> <span class="n">ms</span>
-
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_sent_acknowledgements</span> <span class="o">&gt;</span> <span class="n">SumNode</span><span class="o">.</span><span class="n">TIME_BETWEEN_ACKNOWLEDGEMENTS_MS</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_send_acknowledgement_messages</span><span class="p">()</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_sent_acknowledgements</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_retransmitted_expired_pending_messages</span> <span class="o">&gt;</span> <span class="n">SumNode</span><span class="o">.</span><span class="n">TIME_BETWEEN_RETRANSMISSION_CHECKS_MS</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_retransmit_expired_pending_messages</span><span class="p">()</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_retransmitted_expired_pending_messages</span> <span class="o">=</span> <span class="mi">0</span></div>
+    <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">elapse</span><span class="p">(</span><span class="n">ms</span><span class="p">)</span></div>
 
   <span class="k">def</span> <span class="nf">_hit_sender_limit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span> <span class="o">=</span> <span class="n">SumNodeSenderSplitMigrator</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-
-  <span class="k">def</span> <span class="nf">_least_unacknowledged_sequence_number</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    The least sequence number that has not been acknowledged by every Exporter responsible for it.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span>
-    <span class="k">for</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
-      <span class="n">result</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">exporter</span><span class="o">.</span><span class="n">least_unacknowledged_sequence_number</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">result</span>
-
-  <span class="k">def</span> <span class="nf">_send_acknowledgement_messages</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="n">least_unacknowledged_sequence_number</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unacknowledged_sequence_number</span><span class="p">()</span>
-
-    <span class="n">branching_index</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">while</span> <span class="n">branching_index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_branching</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_branching</span><span class="p">[</span><span class="n">branching_index</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">least_unacknowledged_sequence_number</span><span class="p">:</span>
-      <span class="c1"># PERF(KK): binary search is possible here.</span>
-      <span class="n">branching_index</span> <span class="o">+=</span> <span class="mi">1</span>
-
-    <span class="k">if</span> <span class="n">branching_index</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-      <span class="c1"># No new messages need to be acknowledged.</span>
-      <span class="k">pass</span>
-    <span class="k">else</span><span class="p">:</span>
-      <span class="c1"># The last map of sender_id to least_unreceived_remote_sequence_number before branching_index</span>
-      <span class="c1"># will contain all the acknowledgements we need to send.</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;sum node sending acknowledgement message to importers&quot;</span><span class="p">)</span>
-      <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">least_unreceived_remote_sequence_number</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_branching</span><span class="p">[</span><span class="n">branching_index</span> <span class="o">-</span> <span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span><span class="o">.</span><span class="n">acknowledge</span><span class="p">(</span><span class="n">least_unreceived_remote_sequence_number</span><span class="p">)</span>
-
-      <span class="bp">self</span><span class="o">.</span><span class="n">_branching</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_branching</span><span class="p">[</span><span class="n">branching_index</span><span class="p">:]</span>
 
   <span class="k">def</span> <span class="nf">_send_forward_messages</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
@@ -385,54 +294,36 @@
             <span class="s1">&#39;n_receivers&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">)</span>
         <span class="p">})</span>
 
-    <span class="n">sequence_number</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span>
+    <span class="n">sequence_number</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">advance_sequence_number</span><span class="p">()</span>
+
     <span class="k">for</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
       <span class="n">exporter</span><span class="o">.</span><span class="n">export_message</span><span class="p">(</span>
-          <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">sum</span><span class="o">.</span><span class="n">increment</span><span class="p">(</span><span class="n">amount</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_unsent_total</span><span class="p">,</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">sequence_number</span><span class="p">),</span>
-          <span class="n">time_ms</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span><span class="p">,</span>
+          <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">sum</span><span class="o">.</span><span class="n">increment</span><span class="p">(</span><span class="n">amount</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_unsent_total</span><span class="p">),</span>
+          <span class="n">sequence_number</span><span class="o">=</span><span class="n">sequence_number</span><span class="p">,</span>
       <span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_branching</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">sequence_number</span><span class="p">,</span> <span class="p">{</span>
-        <span class="n">sender_id</span><span class="p">:</span> <span class="n">importer</span><span class="o">.</span><span class="n">least_unreceived_remote_sequence_number</span>
-        <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
-    <span class="p">}))</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_least_unsent_sequence_number</span> <span class="o">+=</span> <span class="mi">1</span>
 
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;LeafNode&#39;</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span><span class="o">.</span><span class="n">receiver_id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;LeafNode&#39;</span><span class="p">):</span>
       <span class="n">message</span> <span class="o">=</span> <span class="n">messages</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">output_action</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_unsent_total</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span><span class="o">.</span><span class="n">export_message</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">sequence_number</span><span class="p">)</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_sent_total</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_total</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_total</span> <span class="o">=</span> <span class="mi">0</span>
 
-  <span class="k">def</span> <span class="nf">_retransmit_expired_pending_messages</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
-      <span class="n">exporter</span><span class="o">.</span><span class="n">retransmit_expired_pending_messages</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span><span class="p">)</span>
-
 <div class="viewcode-block" id="SumNode.initialize"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-        <span class="s1">&#39;Starting sum node </span><span class="si">{sum_node_id}</span><span class="s1">. input=</span><span class="si">{input_node}</span><span class="s1">, output=</span><span class="si">{output_node}</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;Starting sum node </span><span class="si">{sum_node_id}</span><span class="s1">. input=</span><span class="si">{input_node_id}</span><span class="s1">, output=</span><span class="si">{output_node_id}</span><span class="s1">&#39;</span><span class="p">,</span>
         <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
             <span class="s1">&#39;sum_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
-            <span class="s1">&#39;input_node&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_node</span><span class="p">,</span>
-            <span class="s1">&#39;output_node&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span><span class="p">,</span>
+            <span class="s1">&#39;input_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span><span class="o">.</span><span class="n">sender_id</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s1">&#39;output_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span><span class="o">.</span><span class="n">receiver_id</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
         <span class="p">})</span>
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span>
           <span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">,</span>
           <span class="n">messages</span><span class="o">.</span><span class="n">sum</span><span class="o">.</span><span class="n">sum_node_started</span><span class="p">(</span><span class="n">sum_node_handle</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])))</span>
 
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">set_adjacent</span><span class="p">(</span><span class="n">node</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_output_node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])))</span>
-
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_node</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_input_node</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">set_adjacent</span><span class="p">(</span><span class="n">node</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_input_node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])))</span>
-
-    <span class="k">for</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
-      <span class="n">importer</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
-
-    <span class="k">for</span> <span class="n">receiver_id</span><span class="p">,</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-      <span class="n">exporter</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span></div></div>
+    <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span></div></div>
 
 
 <div class="viewcode-block" id="SumNodeSenderSplitMigrator"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator">[docs]</a><span class="k">class</span> <span class="nc">SumNodeSenderSplitMigrator</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -596,7 +487,11 @@
   <span class="k">def</span> <span class="nf">_transition_to_finished</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_TRIMMING_INPUTS</span><span class="p">,</span> <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_FINISHED</span><span class="p">)</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">remove_deactivated_importers</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">remove_deactivated_importers</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_importers</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">sender_id</span><span class="p">:</span> <span class="n">importer</span>
+        <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">importer</span><span class="o">.</span><span class="n">_deactivated</span>
+    <span class="p">}</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">migration_finished</span><span class="p">()</span>
 

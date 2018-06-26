@@ -36,19 +36,34 @@
 <span class="sd">id.  This module centralized all the functions for creating and working with unique ids.</span>
 <span class="sd">&#39;&#39;&#39;</span>
 
+<span class="kn">import</span> <span class="nn">random</span>
 <span class="kn">import</span> <span class="nn">uuid</span>
 
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">settings</span>
 
-<div class="viewcode-block" id="new_id"><a class="viewcode-back" href="../../doc/ids.html#dist_zero.ids.new_id">[docs]</a><span class="k">def</span> <span class="nf">new_id</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
-  <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">  Generate unique ids for things.</span>
+<span class="n">rand</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="s1">&#39;testing seed&#39;</span><span class="p">)</span>
 
-<span class="sd">  :param str prefix: A prefix to prepend to the new id.</span>
+<span class="n">RAND_CHARS</span> <span class="o">=</span> <span class="s1">&#39;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&#39;</span>
+<span class="n">RAND_LENGTH</span> <span class="o">=</span> <span class="mi">12</span>
 
-<span class="sd">  :return: A unique id.</span>
-<span class="sd">  :rtype: str</span>
-<span class="sd">  &#39;&#39;&#39;</span>
-  <span class="k">return</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">_</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()))</span></div>
+
+<span class="k">def</span> <span class="nf">_new_id_random</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
+  <span class="k">return</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">_</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rand</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">RAND_CHARS</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">RAND_LENGTH</span><span class="p">)))</span>
+
+
+<span class="k">def</span> <span class="nf">_new_id_uuid</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
+  <span class="k">return</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">_</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()))</span>
+
+
+<span class="n">new_id</span> <span class="o">=</span> <span class="n">_new_id_random</span> <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">DIST_ZERO_ENV</span> <span class="o">==</span> <span class="s1">&#39;test&#39;</span> <span class="k">else</span> <span class="n">_new_id_uuid</span>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Generate unique ids for things.</span>
+
+<span class="sd">:param str prefix: A prefix to prepend to the new id.</span>
+
+<span class="sd">:return: A unique id.</span>
+<span class="sd">:rtype: str</span>
+<span class="sd">&#39;&#39;&#39;</span>
 </pre></div>
 
           </div>
