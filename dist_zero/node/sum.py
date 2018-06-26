@@ -12,14 +12,14 @@ class SumNode(Node):
 
   Each `SumNode` is of one of three types
 
-  * input `SumNode`, which receive as the adjacent node to an `io.LeafNode` or `io.InternalNode` and send to ``receivers``.
+  * input `SumNode`, which receive as the adjacent node to an `LeafNode` or `InternalNode` and send to ``receivers``.
     These nodes have an ``input_node`` but no ``output_node`` and some nonempty list of ``receivers``.
-  * output `SumNode`, which send as the adjacent node to an `io.LeafNode` or `io.InternalNode` and receive from ``senders``.
+  * output `SumNode`, which send as the adjacent node to an `LeafNode` or `InternalNode` and receive from ``senders``.
     These nodes have an ``output_node`` but no ``input_node`` and some nonempty list of ``senders``.
   * internal `SumNode`, which receive from senders and send to receivers.  These nodes have ``input_node is None``
     and ``output_node is None``
 
-  Note that input/output `SumNode` could be for either `io.LeafNode` or `io.InternalNode`.  A `SumNode` adjacent to an 
+  Note that input/output `SumNode` could be for either `LeafNode` or `InternalNode`.  A `SumNode` adjacent to an 
   `InternalNode` is primarily responsible for helping to spin up new leaves, whereas a `SumNode` adjacent to a
   `LeafNode` will actually receive input messages from (or send output messages to) its adjacent leaf.
   '''
