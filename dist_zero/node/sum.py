@@ -115,11 +115,11 @@ class SumNode(Node):
         spawning_migration=node_config['spawning_migration'],
         controller=controller)
 
-  def _maybe_finish_middle_node_startup(self):
+  def _maybe_finish_middle_node_duplication(self):
     '''
-    For middle nodes that need to be migrated into their new state,
-    check whether all the appropriate model state and messages have arrived, and if so inform the spawning_migration that
-    this node is totally synced up.
+    For middle nodes that are still getting duplication messages.
+    Check whether all the appropriate inputs are successfully duplicating their messages, and if so,
+    inform the spawning_migration that the duplication is complete.
     '''
     if not self._pending_sender_ids:
       self.send(self._spawning_migration, messages.migration.middle_node_is_duplicated())
@@ -198,7 +198,7 @@ class SumNode(Node):
         # Doing a migration
         if node['id'] in self._pending_sender_ids:
           self._pending_sender_ids.remove(sender_id)
-        self._maybe_finish_middle_node_startup()
+        self._maybe_finish_middle_node_duplication()
     elif message['type'] == 'sum_node_started':
       if self.migrator:
         self.migrator.middle_node_started(message['sum_node_handle'])
