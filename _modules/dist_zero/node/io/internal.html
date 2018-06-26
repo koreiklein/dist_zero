@@ -1,0 +1,193 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>dist_zero.node.io.internal &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for dist_zero.node.io.internal</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">import</span> <span class="nn">dist_zero.ids</span>
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">settings</span><span class="p">,</span> <span class="n">messages</span><span class="p">,</span> <span class="n">errors</span><span class="p">,</span> <span class="n">recorded</span><span class="p">,</span> <span class="n">importer</span><span class="p">,</span> <span class="n">exporter</span>
+<span class="kn">from</span> <span class="nn">dist_zero.node.node</span> <span class="k">import</span> <span class="n">Node</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="InternalNode"><a class="viewcode-back" href="../../../../doc/nodes.html#dist_zero.node.io.internal.InternalNode">[docs]</a><span class="k">class</span> <span class="nc">InternalNode</span><span class="p">(</span><span class="n">Node</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  The root of a tree of `LeafNode` instances of the same ``variant``.</span>
+
+<span class="sd">  Each `InternalNode` instance is responsible for keeping track of the state of its subtree, and for growing</span>
+<span class="sd">  or shrinking it as necessary.  In particular, when new leaves are created, `InternalNode.create_kid_config` must</span>
+<span class="sd">  be called on the desired immediate parent to generate the node config for starting that child.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">variant</span><span class="p">,</span> <span class="n">adjacent</span><span class="p">,</span> <span class="n">initial_state</span><span class="p">,</span> <span class="n">controller</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param str node_id: The id to use for this node</span>
+<span class="sd">    :param str variant: &#39;input&#39; or &#39;output&#39;</span>
+<span class="sd">    :param adjacent: The :ref:`handle` of the adjacent node.  It must be provided when this internal node starts.</span>
+<span class="sd">    :type adjacent: :ref:`handle`</span>
+<span class="sd">    :param `MachineController` controller: The controller for this node.</span>
+<span class="sd">    :param object initial_state: A json serializeable starting state for all leaves spawned from this node.</span>
+<span class="sd">      This state is important for output leaves that update that state over time.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span> <span class="o">=</span> <span class="n">controller</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_variant</span> <span class="o">=</span> <span class="n">variant</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">node_id</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span> <span class="o">=</span> <span class="p">{}</span> <span class="c1"># A map from kid node id to either &#39;pending&#39; or &#39;active&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_initial_state</span> <span class="o">=</span> <span class="n">initial_state</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span> <span class="o">=</span> <span class="n">adjacent</span>
+    <span class="nb">super</span><span class="p">(</span><span class="n">InternalNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">get_adjacent_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="kc">None</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span>
+
+<div class="viewcode-block" id="InternalNode.initialize"><a class="viewcode-back" href="../../../../doc/nodes.html#dist_zero.node.io.internal.InternalNode.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variant</span> <span class="o">==</span> <span class="s1">&#39;input&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;internal node sending &#39;set_input&#39; message to adjacent node&quot;</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">set_input</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])))</span>
+    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variant</span> <span class="o">==</span> <span class="s1">&#39;output&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;internal node sending &#39;set_output&#39; message to adjacent node&quot;</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">set_output</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])))</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Unrecognized variant </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_variant</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="InternalNode.receive"><a class="viewcode-back" href="../../../../doc/nodes.html#dist_zero.node.io.internal.InternalNode.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;sequence_message&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">receive_sequence_message</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">],</span> <span class="n">sender_id</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;added_leaf&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">added_leaf</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;kid&#39;</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Unrecognized message </span><span class="si">{bad_msg}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;bad_msg&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">})</span></div>
+
+  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">from_config</span><span class="p">(</span><span class="n">node_config</span><span class="p">,</span> <span class="n">controller</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">InternalNode</span><span class="p">(</span>
+        <span class="n">node_id</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+        <span class="n">controller</span><span class="o">=</span><span class="n">controller</span><span class="p">,</span>
+        <span class="n">adjacent</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;adjacent&#39;</span><span class="p">],</span>
+        <span class="n">variant</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;variant&#39;</span><span class="p">],</span>
+        <span class="n">initial_state</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;initial_state&#39;</span><span class="p">])</span>
+
+<div class="viewcode-block" id="InternalNode.elapse"><a class="viewcode-back" href="../../../../doc/nodes.html#dist_zero.node.io.internal.InternalNode.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="InternalNode.create_kid_config"><a class="viewcode-back" href="../../../../doc/nodes.html#dist_zero.node.io.internal.InternalNode.create_kid_config">[docs]</a>  <span class="k">def</span> <span class="nf">create_kid_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">machine_id</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Generate a config for a new child leaf node, and mark it as a pending child on this parent node.</span>
+
+<span class="sd">    :param str name: The name to use for the new node.</span>
+
+<span class="sd">    :param str machine_id: The id of the MachineController which will run the new node.</span>
+<span class="sd">    :return: A config for the new child node.</span>
+<span class="sd">    :rtype: :ref:`message`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">node_id</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;LeafNode&#39;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Registering a new leaf node config for an internal node. name=&#39;</span><span class="si">{node_name}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;internal_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="s1">&#39;leaf_node_id&#39;</span><span class="p">:</span> <span class="n">node_id</span><span class="p">,</span>
+            <span class="s1">&#39;node_name&#39;</span><span class="p">:</span> <span class="n">name</span>
+        <span class="p">})</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;pending&#39;</span>
+
+    <span class="k">return</span> <span class="n">messages</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">leaf_config</span><span class="p">(</span>
+        <span class="n">node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+        <span class="n">parent</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="n">node_id</span><span class="p">),</span>
+        <span class="n">variant</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_variant</span><span class="p">,</span>
+        <span class="n">initial_state</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_initial_state</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+<div class="viewcode-block" id="InternalNode.added_leaf"><a class="viewcode-back" href="../../../../doc/nodes.html#dist_zero.node.io.internal.InternalNode.added_leaf">[docs]</a>  <span class="k">def</span> <span class="nf">added_leaf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kid</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param kid: The :ref:`handle` of the leaf node that was just added.</span>
+<span class="sd">    :type kid: :ref:`handle`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">kid</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+          <span class="s2">&quot;added_leaf: Could not find node matching id </span><span class="si">{missing_child_node_id}</span><span class="s2">&quot;</span><span class="p">,</span>
+          <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;missing_child_node_id&#39;</span><span class="p">:</span> <span class="n">kid</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]})</span>
+    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+          <span class="s2">&quot;added_leaf: No adjacent was set in time.  Unable to forward an added_leaf message to the adjacent.&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_kids</span><span class="p">[</span><span class="n">kid</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="s1">&#39;active&#39;</span>
+
+      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span><span class="p">,</span>
+                <span class="n">messages</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">added_adjacent_leaf</span><span class="p">(</span>
+                    <span class="n">kid</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">transfer_handle</span><span class="p">(</span><span class="n">handle</span><span class="o">=</span><span class="n">kid</span><span class="p">,</span> <span class="n">for_node_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_adjacent</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]),</span> <span class="n">variant</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_variant</span><span class="p">))</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -18,7 +18,10 @@ that run on that machine.
 .. automodule:: dist_zero.exporter
    :members:
 
-.. automodule:: dist_zero.node.io
+.. automodule:: dist_zero.node.io.internal
+   :members:
+
+.. automodule:: dist_zero.node.io.leaf
    :members:
 
 .. automodule:: dist_zero.node.sum

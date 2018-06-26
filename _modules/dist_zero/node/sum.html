@@ -45,14 +45,14 @@
 
 <span class="sd">  Each `SumNode` is of one of three types</span>
 
-<span class="sd">  * input `SumNode`, which receive as the adjacent node to an `io.LeafNode` or `io.InternalNode` and send to ``receivers``.</span>
+<span class="sd">  * input `SumNode`, which receive as the adjacent node to an `LeafNode` or `InternalNode` and send to ``receivers``.</span>
 <span class="sd">    These nodes have an ``input_node`` but no ``output_node`` and some nonempty list of ``receivers``.</span>
-<span class="sd">  * output `SumNode`, which send as the adjacent node to an `io.LeafNode` or `io.InternalNode` and receive from ``senders``.</span>
+<span class="sd">  * output `SumNode`, which send as the adjacent node to an `LeafNode` or `InternalNode` and receive from ``senders``.</span>
 <span class="sd">    These nodes have an ``output_node`` but no ``input_node`` and some nonempty list of ``senders``.</span>
 <span class="sd">  * internal `SumNode`, which receive from senders and send to receivers.  These nodes have ``input_node is None``</span>
 <span class="sd">    and ``output_node is None``</span>
 
-<span class="sd">  Note that input/output `SumNode` could be for either `io.LeafNode` or `io.InternalNode`.  A `SumNode` adjacent to an </span>
+<span class="sd">  Note that input/output `SumNode` could be for either `LeafNode` or `InternalNode`.  A `SumNode` adjacent to an </span>
 <span class="sd">  `InternalNode` is primarily responsible for helping to spin up new leaves, whereas a `SumNode` adjacent to a</span>
 <span class="sd">  `LeafNode` will actually receive input messages from (or send output messages to) its adjacent leaf.</span>
 <span class="sd">  &#39;&#39;&#39;</span>

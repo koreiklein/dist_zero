@@ -461,22 +461,201 @@ for cleanup by the garbage collector.</p>
 
 </dd></dl>
 
-<span class="target" id="module-dist_zero.node.io"></span><span class="target" id="module-dist_zero.node.sum"></span><dl class="class">
+<span class="target" id="module-dist_zero.node.io.internal"></span><dl class="class">
+<dt id="dist_zero.node.io.internal.InternalNode">
+<em class="property">class </em><code class="descclassname">dist_zero.node.io.internal.</code><code class="descname">InternalNode</code><span class="sig-paren">(</span><em>node_id</em>, <em>variant</em>, <em>adjacent</em>, <em>initial_state</em>, <em>controller</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/internal.html#InternalNode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.internal.InternalNode" title="Permalink to this definition">¶</a></dt>
+<dd><p>The root of a tree of <a class="reference internal" href="#dist_zero.node.io.leaf.LeafNode" title="dist_zero.node.io.leaf.LeafNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">LeafNode</span></code></a> instances of the same <code class="docutils literal notranslate"><span class="pre">variant</span></code>.</p>
+<p>Each <a class="reference internal" href="#dist_zero.node.io.internal.InternalNode" title="dist_zero.node.io.internal.InternalNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InternalNode</span></code></a> instance is responsible for keeping track of the state of its subtree, and for growing
+or shrinking it as necessary.  In particular, when new leaves are created, <a class="reference internal" href="#dist_zero.node.io.internal.InternalNode.create_kid_config" title="dist_zero.node.io.internal.InternalNode.create_kid_config"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">InternalNode.create_kid_config</span></code></a> must
+be called on the desired immediate parent to generate the node config for starting that child.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id to use for this node</li>
+<li><strong>variant</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – ‘input’ or ‘output’</li>
+<li><strong>adjacent</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the adjacent node.  It must be provided when this internal node starts.</li>
+<li><strong>controller</strong> (<a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><em>MachineController</em></a>) – The controller for this node.</li>
+<li><strong>initial_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A json serializeable starting state for all leaves spawned from this node.
+This state is important for output leaves that update that state over time.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="dist_zero.node.io.internal.InternalNode.added_leaf">
+<code class="descname">added_leaf</code><span class="sig-paren">(</span><em>kid</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/internal.html#InternalNode.added_leaf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.internal.InternalNode.added_leaf" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>kid</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the leaf node that was just added.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.node.io.internal.InternalNode.create_kid_config">
+<code class="descname">create_kid_config</code><span class="sig-paren">(</span><em>name</em>, <em>machine_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/internal.html#InternalNode.create_kid_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.internal.InternalNode.create_kid_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate a config for a new child leaf node, and mark it as a pending child on this parent node.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The name to use for the new node.</li>
+<li><strong>machine_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the MachineController which will run the new node.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A config for the new child node.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.node.io.internal.InternalNode.elapse">
+<code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/internal.html#InternalNode.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.internal.InternalNode.elapse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Elapse ms of time on this node.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>ms</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – A number of milliseconds.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.node.io.internal.InternalNode.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/internal.html#InternalNode.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.internal.InternalNode.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called exactly once, when a node starts to run.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.node.io.internal.InternalNode.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/internal.html#InternalNode.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.internal.InternalNode.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Receive a message from a sender.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The message.</li>
+<li><strong>sender_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the sender <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>, or <a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.6)"><code class="xref any docutils literal notranslate"><span class="pre">None</span></code></a> if the message was not generated by a sender.
+(pre-recorded messages will not have a sender).</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.node.io.leaf"></span><dl class="class">
+<dt id="dist_zero.node.io.leaf.LeafNode">
+<em class="property">class </em><code class="descclassname">dist_zero.node.io.leaf.</code><code class="descname">LeafNode</code><span class="sig-paren">(</span><em>node_id</em>, <em>parent</em>, <em>controller</em>, <em>variant</em>, <em>update_state</em>, <em>recorded_user=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/leaf.html#LeafNode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.leaf.LeafNode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents a leaf in a tree of input or output nodes.</p>
+<p>The leaf nodes are meant to correspond to the code closest to the actual physical input or output devices.</p>
+<p>For example, if a laptop or desktop computer is interfacing with a user, it should have a leaf node running on it
+to interact with the hardware.</p>
+<p>Leaf nodes function</p>
+<ul class="simple">
+<li>either with <code class="docutils literal notranslate"><span class="pre">variant</span> <span class="pre">==</span> <span class="pre">'input'</span></code> in which case the node is reading messages from an input device.</li>
+<li>or with <code class="docutils literal notranslate"><span class="pre">variant</span> <span class="pre">==</span> <span class="pre">'output'</span></code> in which case the node is writing output messages to an output device.</li>
+</ul>
+<p>A single device that functions as both an input and an output should run 2 separate nodes for input and output.</p>
+<p>Input and output leaves are designed to be abstract with respect to where the input goes to or where the output comes
+from.  Practically, this design decision motivates two behaviors:</p>
+<ul class="simple">
+<li>From the perspective of an input node, each input message will be sent via a single exporter.</li>
+<li>From the perspective of an output node, each output message will be received via a single importer.</li>
+</ul>
+<p>so leaves are designed never to have to manage complex sets of senders or receivers.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>controller</strong> (<a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><em>MachineController</em></a>) – the controller for this node’s machine.</li>
+<li><strong>parent</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the parent <a class="reference internal" href="#dist_zero.node.io.internal.InternalNode" title="dist_zero.node.io.internal.InternalNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InternalNode</span></code></a> of this node.</li>
+<li><strong>variant</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – ‘input’ or ‘output’</li>
+<li><strong>update_state</strong> (<em>func</em>) – A function.
+Call it with a function that takes the current state and returns a new state.</li>
+<li><strong>recorded_user</strong> (<a class="reference internal" href="recorded.html#dist_zero.recorded.RecordedUser" title="dist_zero.recorded.RecordedUser"><em>RecordedUser</em></a>) – In tests, this parameter may be not null to indicate that this
+node should playback the actions of an attached <a class="reference internal" href="recorded.html#dist_zero.recorded.RecordedUser" title="dist_zero.recorded.RecordedUser"><code class="xref any py py-class docutils literal notranslate"><span class="pre">RecordedUser</span></code></a> instance.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="dist_zero.node.io.leaf.LeafNode.elapse">
+<code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/leaf.html#LeafNode.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.leaf.LeafNode.elapse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Elapse ms of time on this node.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>ms</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – A number of milliseconds.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.node.io.leaf.LeafNode.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/leaf.html#LeafNode.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.leaf.LeafNode.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called exactly once, when a node starts to run.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.node.io.leaf.LeafNode.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/leaf.html#LeafNode.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.leaf.LeafNode.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Receive a message from a sender.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The message.</li>
+<li><strong>sender_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the sender <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>, or <a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.6)"><code class="xref any docutils literal notranslate"><span class="pre">None</span></code></a> if the message was not generated by a sender.
+(pre-recorded messages will not have a sender).</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.node.sum"></span><dl class="class">
 <dt id="dist_zero.node.sum.SumNode">
 <em class="property">class </em><code class="descclassname">dist_zero.node.sum.</code><code class="descname">SumNode</code><span class="sig-paren">(</span><em>node_id</em>, <em>senders</em>, <em>receivers</em>, <em>spawning_migration</em>, <em>input_node</em>, <em>output_node</em>, <em>pending_sender_ids</em>, <em>controller</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode" title="Permalink to this definition">¶</a></dt>
 <dd><p>An internal node for summing all increments from its senders and forwarding the total to its receivers.</p>
 <p>Each <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a> is of one of three types</p>
 <ul class="simple">
-<li>input <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a>, which receive as the adjacent node to an <code class="xref any docutils literal notranslate"><span class="pre">io.LeafNode</span></code> or <code class="xref any docutils literal notranslate"><span class="pre">io.InternalNode</span></code> and send to <code class="docutils literal notranslate"><span class="pre">receivers</span></code>.
+<li>input <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a>, which receive as the adjacent node to an <a class="reference internal" href="#dist_zero.node.io.leaf.LeafNode" title="dist_zero.node.io.leaf.LeafNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">LeafNode</span></code></a> or <a class="reference internal" href="#dist_zero.node.io.internal.InternalNode" title="dist_zero.node.io.internal.InternalNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InternalNode</span></code></a> and send to <code class="docutils literal notranslate"><span class="pre">receivers</span></code>.
 These nodes have an <code class="docutils literal notranslate"><span class="pre">input_node</span></code> but no <code class="docutils literal notranslate"><span class="pre">output_node</span></code> and some nonempty list of <code class="docutils literal notranslate"><span class="pre">receivers</span></code>.</li>
-<li>output <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a>, which send as the adjacent node to an <code class="xref any docutils literal notranslate"><span class="pre">io.LeafNode</span></code> or <code class="xref any docutils literal notranslate"><span class="pre">io.InternalNode</span></code> and receive from <code class="docutils literal notranslate"><span class="pre">senders</span></code>.
+<li>output <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a>, which send as the adjacent node to an <a class="reference internal" href="#dist_zero.node.io.leaf.LeafNode" title="dist_zero.node.io.leaf.LeafNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">LeafNode</span></code></a> or <a class="reference internal" href="#dist_zero.node.io.internal.InternalNode" title="dist_zero.node.io.internal.InternalNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InternalNode</span></code></a> and receive from <code class="docutils literal notranslate"><span class="pre">senders</span></code>.
 These nodes have an <code class="docutils literal notranslate"><span class="pre">output_node</span></code> but no <code class="docutils literal notranslate"><span class="pre">input_node</span></code> and some nonempty list of <code class="docutils literal notranslate"><span class="pre">senders</span></code>.</li>
 <li>internal <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a>, which receive from senders and send to receivers.  These nodes have <code class="docutils literal notranslate"><span class="pre">input_node</span> <span class="pre">is</span> <span class="pre">None</span></code>
 and <code class="docutils literal notranslate"><span class="pre">output_node</span> <span class="pre">is</span> <span class="pre">None</span></code></li>
 </ul>
-<p>Note that input/output <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a> could be for either <code class="xref any docutils literal notranslate"><span class="pre">io.LeafNode</span></code> or <code class="xref any docutils literal notranslate"><span class="pre">io.InternalNode</span></code>.  A <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a> adjacent to an 
-<code class="xref any docutils literal notranslate"><span class="pre">InternalNode</span></code> is primarily responsible for helping to spin up new leaves, whereas a <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a> adjacent to a
-<code class="xref any docutils literal notranslate"><span class="pre">LeafNode</span></code> will actually receive input messages from (or send output messages to) its adjacent leaf.</p>
+<p>Note that input/output <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a> could be for either <a class="reference internal" href="#dist_zero.node.io.leaf.LeafNode" title="dist_zero.node.io.leaf.LeafNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">LeafNode</span></code></a> or <a class="reference internal" href="#dist_zero.node.io.internal.InternalNode" title="dist_zero.node.io.internal.InternalNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InternalNode</span></code></a>.  A <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a> adjacent to an 
+<a class="reference internal" href="#dist_zero.node.io.internal.InternalNode" title="dist_zero.node.io.internal.InternalNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InternalNode</span></code></a> is primarily responsible for helping to spin up new leaves, whereas a <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a> adjacent to a
+<a class="reference internal" href="#dist_zero.node.io.leaf.LeafNode" title="dist_zero.node.io.leaf.LeafNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">LeafNode</span></code></a> will actually receive input messages from (or send output messages to) its adjacent leaf.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
