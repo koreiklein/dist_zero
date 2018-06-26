@@ -38,6 +38,7 @@ def test_times_in_order():
     ('.*increment.*', 0.27, 'duplicate', 'a'),
     ('.*increment.*', 0.27, 'reorder', 'a'),
     ('.*input_action.*', 0.4, 'drop', 'h'),
+    ('.*output_action.*', 0.4, 'drop', 'h'),
 ])
 def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, seed, error_regexp):
   # Create node controllers (each simulates the behavior of a separate machine.
