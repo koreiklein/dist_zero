@@ -82,7 +82,7 @@ class Exporter(object):
 
   def initialize(self):
     self._node.send(self._receiver,
-                    messages.migration.connect_internal(
+                    messages.migration.connect_node(
                         node=self._node.new_handle(self._receiver['id']), direction='sender'))
 
   @property

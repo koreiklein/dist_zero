@@ -57,7 +57,7 @@ class Importer(object):
 
   def initialize(self):
     self._node.send(self._sender,
-                    messages.migration.connect_internal(
+                    messages.migration.connect_node(
                         node=self._node.new_handle(self._sender['id']), direction='receiver'))
 
   def import_message(self, message, sender_id):

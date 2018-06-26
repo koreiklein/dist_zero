@@ -179,17 +179,17 @@ class SumNode(Node):
 
     elif message['type'] == 'finished_duplicating':
       self.migrator.finished_duplicating(sender_id)
-    elif message['type'] == 'connect_internal':
+    elif message['type'] == 'connect_node':
       node = message['node']
       direction = message['direction']
 
       if direction == 'sender':
         if node['id'] in self._importers:
-          raise errors.InternalError("Received connect_internal for an importer that had already been added.")
+          raise errors.InternalError("Received connect_node for an importer that had already been added.")
         self._importers[node['id']] = self.linker.new_importer(sender=node)
       elif direction == 'receiver':
         if node['id'] in self._exporters:
-          raise errors.InternalError("Received connect_internal for an exporter that had already been added.")
+          raise errors.InternalError("Received connect_node for an exporter that had already been added.")
         self._exporters[node['id']] = self.linker.new_exporter(receiver=node)
       else:
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
@@ -454,10 +454,10 @@ class SumNodeSenderSplitMigrator(object):
   def _transition_to_finished(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS, SumNodeSenderSplitMigrator.STATE_FINISHED)
 
-    self.linker.remove_deactivated_importers()
-    self._importers = {
+    self.node.linker.remove_deactivated_importers()
+    self.node._importers = {
         sender_id: importer
-        for sender_id, importer in self._importers.items() if not importer._deactivated
+        for sender_id, importer in self.node._importers.items() if not importer._deactivated
     }
 
     self.node.migration_finished()

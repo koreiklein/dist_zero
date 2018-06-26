@@ -78,7 +78,7 @@ class LeafNode(Node):
     self._exporter = self.linker.new_exporter(node)
 
   def receive(self, message, sender_id):
-    if message['type'] == 'connect_internal':
+    if message['type'] == 'connect_node':
       if message['direction'] == 'receiver':
         self._set_output(message['node'])
       elif message['direction'] == 'sender':
