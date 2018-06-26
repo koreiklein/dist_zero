@@ -3,9 +3,9 @@ Messages to be received by migration nodes.
 '''
 
 
-def connect_internal(node, direction):
+def connect_node(node, direction):
   '''
-  Inform a node internal to a computation that it is now linked to a new node either
+  Inform a node that it is now linked to a new node either
   as a sender or a receiver.
 
   :param node: The handle of the new node
@@ -13,7 +13,7 @@ def connect_internal(node, direction):
   :param str direction: 'sender' or 'receiver' depending respectively on whether the newly added node will
     send to or receive from the node getting this message.
   '''
-  return {'type': 'connect_internal', 'node': node, 'direction': direction}
+  return {'type': 'connect_node', 'node': node, 'direction': direction}
 
 
 def middle_node_is_live():

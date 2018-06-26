@@ -3,22 +3,11 @@ Messages to be received by sum nodes
 '''
 
 
-def increment(amount, sequence_number):
+def increment(amount):
   '''
   :param int amount: An integer amount by which to increment.
-  :param int sequence_number: The sequence number of the sending node at the time this message is sent.
   '''
-  return {'type': 'increment', 'amount': amount, 'sequence_number': sequence_number}
-
-
-def acknowledge(sequence_number):
-  '''
-  This message acknowledges the receipt of all sequence numbers < sequence_number on the recipient.
-
-  :param int sequence_number: The least sequence number that sender has not acknowledged.
-    All lower sequence numbers are acknowledged.
-  '''
-  return {'type': 'acknowledge', 'sequence_number': sequence_number}
+  return {'type': 'increment', 'amount': amount}
 
 
 def sum_node_started(sum_node_handle):

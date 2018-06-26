@@ -64,7 +64,7 @@ def set_input(input_node):
 
 def set_output(output_node):
   '''
-  Configure the output node for a calculating node at the edge.
+  This message informs a computation node of the data node it should output to.
 
   :param output_node: The :ref:`handle` of the node to use as output.
   :type output_node: :ref:`handle`
