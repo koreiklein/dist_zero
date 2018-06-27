@@ -58,12 +58,12 @@ class TestLongRunningSum(object):
     self.sum_node_id = self.system.spawn_node(
         on_machine=machine_a,
         node_config=messages.sum.sum_node_config(
-            node_id=dist_zero.ids.new_id('SumNode'),
+            node_id=dist_zero.ids.new_id('SumNode_internal'),
             senders=[],
             receivers=[],
         ))
 
-    self.root_input_node_id = dist_zero.ids.new_id('InternalNode')
+    self.root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
     self.system.spawn_node(
         on_machine=machine_a,
         node_config=messages.io.internal_node_config(
@@ -71,7 +71,7 @@ class TestLongRunningSum(object):
             adjacent=self.system.generate_new_handle(
                 new_node_id=self.root_input_node_id, existing_node_id=self.sum_node_id),
             variant='input'))
-    self.root_output_node_id = dist_zero.ids.new_id('InternalNode')
+    self.root_output_node_id = dist_zero.ids.new_id('InternalNode_output')
     self.system.spawn_node(
         on_machine=machine_a,
         node_config=messages.io.internal_node_config(

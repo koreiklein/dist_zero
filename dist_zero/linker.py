@@ -66,7 +66,8 @@ class Linker(object):
     for exporter in self._exporters.values():
       exporter.initialize()
 
-  def n_used_sequence_numbers(self):
+  @property
+  def least_unused_sequence_number(self):
     return self._least_unused_sequence_number
 
   def advance_sequence_number(self):
@@ -76,7 +77,7 @@ class Linker(object):
     This method also tracks internally which Importer sequence numbers this sequence number corresponds to.
     '''
     result = self._least_unused_sequence_number
-    self._branching.append((result, [(importer, importer.least_unreceived_remote_sequence_number)
+    self._branching.append((result, [(importer, importer.least_undelivered_remote_sequence_number)
                                      for sender_id, importer in self._importers.items()]))
 
     self._least_unused_sequence_number += 1
@@ -167,22 +168,19 @@ class Linker(object):
       # No new messages need to be acknowledged.
       pass
     else:
-      # The last pairings of sender_id with least_unreceived_remote_sequence_number before branching_index
+      # The last pairings of sender_id with least_undelivered_remote_sequence_number before branching_index
       # will contain all the acknowledgements we need to send.
-      for importer, least_unreceived_remote_sequence_number in self._branching[branching_index - 1][1]:
-        if least_unreceived_remote_sequence_number == 0:
+      for importer, least_undelivered_remote_sequence_number in self._branching[branching_index - 1][1]:
+        if least_undelivered_remote_sequence_number == 0:
           # Do not send acknowledgements to importers that have never sent us a message.
           continue
         else:
-          importer.acknowledge(least_unreceived_remote_sequence_number)
+          importer.acknowledge(least_undelivered_remote_sequence_number)
 
       self._branching = self._branching[branching_index:]
 
-  def remove_deactivated_importers(self):
-    self._importers = {
-        sender_id: importer
-        for sender_id, importer in self._importers.items() if not importer._deactivated
-    }
-
   def remove_exporter(self, exporter):
     del self._exporters[exporter.receiver_id]
+
+  def remove_importer(self, importer):
+    del self._importers[importer.sender_id]
