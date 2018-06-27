@@ -106,6 +106,20 @@ class Exporter(object):
     self._pending_messages = [(t, sn, msg) for t, sn, msg in self._pending_messages
                               if sn >= self._least_unacknowledged_sequence_number]
 
+  def export_started_duplication_message(self, message, sequence_number):
+    '''
+    Sent a message to the associated node that informs it that this exporter is now duplicating to it.
+
+    :param int sequence_number: The sequence number of the new message.
+    :param message: The message for that sequence number.
+    :type message: :ref:`message`
+    '''
+    self._node.send(self._receiver,
+                    messages.migration.started_duplication(
+                        node=self._node.new_handle(self._receiver['id']),
+                        sequence_number=sequence_number,
+                        message=message))
+
   def export_message(self, message, sequence_number):
     '''
     Export a message to the receiver.
@@ -118,13 +132,17 @@ class Exporter(object):
     self._node.send(self._receiver,
                     messages.linker.sequence_message_send(message=message, sequence_number=sequence_number))
 
-  def duplicate(self, exporters):
+  def duplicate(self, exporters, sequence_number, message):
     '''
     Start duplicating this exporter to a new receiver.
 
     prerequisite: The exporter must not already be duplicating.
 
     :param list exporters: A list of uninitialized `Exporter` instances to duplicate to.
+
+    :param int sequence_number: The sequence number at which the duplication starts.
+    :param message: The first message the importer should receive.  It corresponds to ``sequence_number``
+    :type message: :ref:`message`
     '''
     if self._duplicated_exporters is not None:
       raise errors.InternalError("Can not duplicate while already duplicating.")
@@ -132,7 +150,7 @@ class Exporter(object):
     self._duplicated_exporters = exporters
 
     for exporter in exporters:
-      exporter.initialize()
+      exporter.export_started_duplication_message(message, sequence_number)
 
   @property
   def logger(self):

@@ -16,18 +16,39 @@ def connect_node(node, direction):
   return {'type': 'connect_node', 'node': node, 'direction': direction}
 
 
-def middle_node_is_live():
+def middle_node_is_synced():
   '''
   Indicates that a middle node is now fully synced up.
   '''
-  return {'type': 'middle_node_is_live'}
+  return {'type': 'middle_node_is_synced'}
 
 
-def middle_node_is_duplicated():
+def started_duplication(node, sequence_number, message):
+  '''
+  Informs a middle node in a migration that an input node is now duplicating to it.
+
+  :param node: The node that is now duplicating messages.
+  :type node: `Node`
+
+  :param int sequence_number: The sequence number of the new message.
+  :param message: The message for that sequence number.
+  :type message: :ref:`message`
+  '''
+  return {'type': 'started_duplication', 'sequence_number': sequence_number, 'message': message}
+
+
+def middle_node_is_duplicated(duplicator_id_to_first_sequence_number):
   '''
   Indicates that a middle node is now receiving from all the proper senders.
+
+  :param dict[int,int] duplicator_id_to_first_sequence_number: For the id of each `Node` that is
+    duplicating to the middle node, this map gives the first sequence number the middle node received
+    from that duplicator.
   '''
-  return {'type': 'middle_node_is_duplicated'}
+  return {
+      'type': 'middle_node_is_duplicated',
+      'duplicator_id_to_first_sequence_number': duplicator_id_to_first_sequence_number
+  }
 
 
 def start_duplicating(old_receiver_id, receiver):
