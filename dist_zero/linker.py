@@ -114,9 +114,17 @@ class Linker(object):
 
   def receive_sequence_message(self, message, sender_id):
     if message['type'] == 'acknowledge':
-      # In past cases where the exporter for a given sender id is not present, it was often
-      # the case that the exporter was removed prematurely.
-      self._exporters[sender_id].acknowledge(message['sequence_number'])
+      if sender_id in self._exporters:
+        self._exporters[sender_id].acknowledge(message['sequence_number'])
+      else:
+        # In past cases where the exporter for a given sender id is not present, it was often
+        # the case that the exporter was removed prematurely.
+        # In fact, whenever a sender is removed, some acknowledgement message could in theory still be in flight
+        # and arrive later on.  It's best to ingore these.
+        self._node.logger.info(
+            "Ignoring an acknowledgement for an unknown exporter.  It was likely already removed.",
+            extra={'unrecognized_sender_id': sender_id})
+
     elif message['type'] == 'receive':
       self._importers[sender_id].import_message(message, sender_id)
     else:
