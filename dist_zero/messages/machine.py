@@ -10,6 +10,15 @@ def ip_transport(host):
 # Machine configs
 
 
+def std_system_config():
+  '''
+  Miscellaneous configuration for the overall system.
+  '''
+  return {
+      'SUM_NODE_SENDER_LIMIT': 15,
+  }
+
+
 def std_simulated_network_errors_config():
   '''
   Configuration for simulating network errors.
@@ -47,6 +56,7 @@ def machine_config(
     system_id,
     mode,
     network_errors_config=None,
+    system_config=None,
     random_seed=None,
 ):
   '''
@@ -59,6 +69,8 @@ def machine_config(
 
   :param dict network_errors_config: Configuration for simulating network errors.
     See `std_simulated_network_errors_config` for an example.
+  :param dict system_config: Other miscellaneous configuration for the overall system.
+    See `std_system_config` for an example.
   :param str random_seed: An optional seed to use for all this machine's randomness.  If it is not provided,
     the machine will get a random seed from the underlying operating system.
   '''
@@ -69,6 +81,7 @@ def machine_config(
       'mode': mode,
       'system_id': system_id,
       'network_errors_config': network_errors_config or std_simulated_network_errors_config(),
+      'system_config': system_config or std_system_config(),
       'random_seed': random_seed,
   }
 

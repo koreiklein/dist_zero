@@ -84,14 +84,15 @@ class Linker(object):
 
     return result
 
-  def new_importer(self, sender):
+  def new_importer(self, sender, first_sequence_number=0):
     '''
     Generate and return a new `Importer` instance.
 
     :param sender: The :ref:`handle` of the node that will send for this importer.
     :type sender: :ref:`handle`
+    :param int first_sequence_number: The first sequence number this importer should expect to receive.
     '''
-    result = importer.Importer(node=self._node, linker=self, sender=sender)
+    result = importer.Importer(node=self._node, linker=self, sender=sender, first_sequence_number=first_sequence_number)
     self._importers[sender['id']] = result
     return result
 

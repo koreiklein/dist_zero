@@ -137,7 +137,7 @@ class SumNode(Node):
 
       # Go into the state for ordinary sum node behavior.
       self.deltas_only = False
-      self.standby = False
+      self.standby_mode = False
       self.send(self._spawning_migration,
                 messages.migration.middle_node_is_live(self._input_node_id_to_first_live_sequence_number))
 
@@ -239,9 +239,11 @@ class SumNode(Node):
           # As soon as we're getting started_duplication messages, we must ensure that all updates go
           # are stored as deltas until the set_sum_total message arrives.
           self.deltas_only = True
+          self._deltas[node['id']] = []
           self._pending_sender_ids.remove(node['id'])
-          self._importers[node['id']] = self.linker.new_importer(sender=node)
-          self._deltas[node['id']] = [(message['sequence_number'], message['message'])]
+          new_importer = self.linker.new_importer(sender=node, first_sequence_number=message['sequence_number'])
+          self.linker.receive_sequence_message(message['message'], sender_id)
+          self._importers[node['id']] = new_importer
           self._duplicator_id_to_first_sequence_number[node['id']] = message['sequence_number']
           self._maybe_finish_middle_node_duplication()
     elif message['type'] == 'finished_duplicating':
@@ -264,9 +266,9 @@ class SumNode(Node):
       self._input_node_id_to_first_live_sequence_number[node_id] = message['first_live_sequence_number']
 
       new_pairs = []
-      for rsn, message in self._deltas[node_id]:
+      for rsn, delta_message in self._deltas[node_id]:
         if rsn < message['first_live_sequence_number']:
-          self._current_state += message['amount']
+          self._current_state += delta_message['amount']
       self._deltas[node_id] = new_pairs
 
       self._maybe_middle_node_goes_live()
@@ -307,13 +309,14 @@ class SumNode(Node):
     self._unsent_time_ms += ms
 
     if not self._pending_sender_ids and \
+        not self.standby_mode and \
         not self.deltas_only and \
         any(self._deltas.values()) and \
         self._unsent_time_ms > SumNode.SEND_INTERVAL_MS:
 
       self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
-      SENDER_LIMIT = 15
+      SENDER_LIMIT = self.system_config['SUM_NODE_SENDER_LIMIT']
       if len(self._importers) >= SENDER_LIMIT:
         self.logger.info("Hit sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
         if self.migrator is None:

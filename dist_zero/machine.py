@@ -105,6 +105,8 @@ class NodeManager(MachineController):
     self.name = machine_config['machine_name']
     self.mode = machine_config['mode']
 
+    self.system_config = machine_config['system_config']
+
     self._random = Random(machine_config['random_seed']) if machine_config['random_seed'] is not None else Random()
 
     self._network_errors_config = self._parse_network_errors_config(machine_config['network_errors_config'])

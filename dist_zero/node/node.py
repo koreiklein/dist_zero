@@ -17,6 +17,10 @@ class Node(object):
     self.fernet = Fernet(self._fernet_key)
 
     self.linker = linker.Linker(self)
+    self.system_config = self._controller.system_config
+    '''
+    System configuration parameters.
+    '''
 
   def send(self, receiver, message):
     '''

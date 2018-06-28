@@ -123,7 +123,8 @@ class Exporter(object):
                     messages.migration.started_duplication(
                         node=self._node.new_handle(self._receiver['id']),
                         sequence_number=sequence_number,
-                        message=message))
+                        message=messages.linker.sequence_message_send(message=message,
+                                                                      sequence_number=sequence_number)['value']))
 
   def export_message(self, message, sequence_number):
     '''
