@@ -111,20 +111,15 @@ class Exporter(object):
     self._pending_messages = [(t, sn, msg) for t, sn, msg in self._pending_messages
                               if sn >= self._least_unacknowledged_sequence_number]
 
-  def export_started_duplication_message(self, message, sequence_number):
+  def export_started_duplication(self, sequence_number):
     '''
     Sent a message to the associated node that informs it that this exporter is now duplicating to it.
 
-    :param int sequence_number: The sequence number of the new message.
-    :param message: The message for that sequence number.
-    :type message: :ref:`message`
+    :param int sequence_number: The first sequence number to be duplicated.
     '''
     self._node.send(self._receiver,
                     messages.migration.started_duplication(
-                        node=self._node.new_handle(self._receiver['id']),
-                        sequence_number=sequence_number,
-                        message=messages.linker.sequence_message_send(message=message,
-                                                                      sequence_number=sequence_number)['value']))
+                        node=self._node.new_handle(self._receiver['id']), sequence_number=sequence_number))
 
   def export_message(self, message, sequence_number):
     '''
@@ -157,7 +152,7 @@ class Exporter(object):
     self._node.send(self._receiver,
                     messages.linker.sequence_message_send(message=message, sequence_number=sequence_number))
 
-  def duplicate(self, exporter, sequence_number, message):
+  def duplicate(self, exporter, sequence_number):
     '''
     Start duplicating this exporter to a new receiver.
 
@@ -166,9 +161,7 @@ class Exporter(object):
     :param exporter: An uninitialized `Exporter` instance to duplicate to.
     :type exporter: `Exporter`
 
-    :param int sequence_number: The sequence number at which the duplication starts.
-    :param message: The first message the importer should receive.  It corresponds to ``sequence_number``
-    :type message: :ref:`message`
+    :param int sequence_number: The first sequence number to be duplicated.
     '''
     if self._duplicated_exporter is not None:
       raise errors.InternalError("Can not duplicate while already duplicating.")
@@ -176,7 +169,7 @@ class Exporter(object):
     self._duplicated_exporter = exporter
     self._swapped = False
 
-    exporter.export_started_duplication_message(message, sequence_number)
+    exporter.export_started_duplication(sequence_number)
 
   def swap_to_duplicate(self):
     '''

@@ -16,12 +16,29 @@ from dist_zero.system_controller import SystemController
 
 
 class TestLongRunningSum(object):
-  def test_node_splitting(self, demo):
+  @pytest.mark.parametrize(
+      'error_regexp,drop_rate,network_error_type',
+      [
+          ('.*increment.*', 0.1, 'drop'),
+          #('.*increment.*', 0.3, 'drop'),
+      ])
+  def test_node_splitting(self, demo, error_regexp, drop_rate, network_error_type):
     '''
     Spawn a single sum node, and add senders until it splits.
     '''
     self.demo = demo
     self.n_machines = 6
+
+    network_errors_config = messages.machine.std_simulated_network_errors_config()
+    network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
+    network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
+
+    self._base_config = {
+        'system_config': {
+            'SUM_NODE_SENDER_LIMIT': 15,
+        },
+        'network_errors_config': network_errors_config,
+    }
 
     self._rand = random.Random('test_node_splitting')
     self._total_simulated_amount = 0
@@ -34,14 +51,15 @@ class TestLongRunningSum(object):
     self.input_node_ids = []
     self._spawn_inputs_loop(n_inputs=15, total_time_ms=20 * 1000)
 
-    # Assert the output messages have all arrived.
-    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
-    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
-
     # Assert that each input node has received acknowledgments for all its sent messages.
     for input_node_id in self.input_node_ids:
       stats = self.demo.system.get_stats(input_node_id)
       assert stats['sent_messages'] == stats['acknowledged_messages']
+
+    # Assert the output messages have all arrived.
+    #import ipdb; ipdb.set_trace()
+    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
+    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
 
   def test_single_node_hits_sender_limit(self, demo):
     '''
@@ -52,6 +70,7 @@ class TestLongRunningSum(object):
     '''
     self.n_machines = 6
     self.demo = demo
+    self._base_config = None
 
     self._rand = random.Random('test_single_node_hits_sender_limit')
     self._total_simulated_amount = 0
@@ -66,10 +85,7 @@ class TestLongRunningSum(object):
     self._spawn_inputs_loop(n_inputs=20, total_time_ms=20 * 1000)
 
   def _spawn_initial_nodes(self):
-    self.machine_ids = self.demo.new_machine_controllers(
-        self.n_machines, base_config={'system_config': {
-            'SUM_NODE_SENDER_LIMIT': 15,
-        }})
+    self.machine_ids = self.demo.new_machine_controllers(self.n_machines, base_config=self._base_config)
 
     machine_a = self.machine_ids[0]
 

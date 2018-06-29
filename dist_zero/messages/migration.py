@@ -36,18 +36,16 @@ def middle_node_is_live(input_node_id_to_first_live_sequence_number):
   }
 
 
-def started_duplication(node, sequence_number, message):
+def started_duplication(node, sequence_number):
   '''
   Informs a middle node in a migration that an input node is now duplicating to it.
 
   :param node: The :ref:`handle` of the `Node` that is now duplicating messages.
   :type node: :ref:`handle`
 
-  :param int sequence_number: The sequence number of the new message.
-  :param message: The message for that sequence number.
-  :type message: :ref:`message`
+  :param int sequence_number: The sequence number of the first message to be duplicated.
   '''
-  return {'type': 'started_duplication', 'sequence_number': sequence_number, 'message': message, 'node': node}
+  return {'type': 'started_duplication', 'sequence_number': sequence_number, 'node': node}
 
 
 def middle_node_is_duplicated(duplicator_id_to_first_sequence_number):

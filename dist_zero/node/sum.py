@@ -242,7 +242,6 @@ class SumNode(Node):
           self._deltas[node['id']] = []
           self._pending_sender_ids.remove(node['id'])
           new_importer = self.linker.new_importer(sender=node, first_sequence_number=message['sequence_number'])
-          self.linker.receive_sequence_message(message['message'], sender_id)
           self._importers[node['id']] = new_importer
           self._duplicator_id_to_first_sequence_number[node['id']] = message['sequence_number']
           self._maybe_finish_middle_node_duplication()
@@ -291,11 +290,8 @@ class SumNode(Node):
               'old_receiver_id': old_receiver_id,
           })
       exporter = self._exporters[old_receiver_id]
-      duplication_sequence_number, increment_message = self._send_forward_messages()
-      exporter.duplicate(
-          self.linker.new_exporter(new_receiver),
-          sequence_number=duplication_sequence_number,
-          message=increment_message)
+      first_duplicated_sequence_number = self._send_forward_messages()
+      exporter.duplicate(self.linker.new_exporter(new_receiver), sequence_number=first_duplicated_sequence_number)
     elif message['type'] == 'finish_duplicating':
       receiver_id = message['receiver_id']
       exporter = self._exporters[receiver_id]
@@ -352,8 +348,8 @@ class SumNode(Node):
   def _send_forward_messages(self):
     '''
     Generate a new sequence number, combine deltas into an update message, and send it on all exporters.
-    :return: a pair of the new sequence number and the increment message for it
-    :rtype: tuple[int, :ref:`message`]
+    :return: the next unused sequence number
+    :rtype: int
     '''
     if self.standby_mode:
       raise errors.InternalError("Nodes should not be sending messages on exporters while in standby mode.")
@@ -368,9 +364,9 @@ class SumNode(Node):
         })
 
     sequence_number = self.linker.advance_sequence_number()
-    result = self._send_increment(increment=unsent_total, sequence_number=sequence_number)
+    self._send_increment(increment=unsent_total, sequence_number=sequence_number)
     self._current_state += unsent_total
-    return result
+    return sequence_number + 1
 
   def _send_increment(self, increment, sequence_number):
     for exporter in self._exporters.values():
@@ -384,8 +380,6 @@ class SumNode(Node):
       self._output_exporter.export_message(message=message, sequence_number=sequence_number)
 
     self._unsent_time_ms = 0
-
-    return sequence_number, messages.sum.increment(amount=increment)
 
   def initialize(self):
     self.logger.info(
