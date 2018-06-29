@@ -567,7 +567,7 @@ class SumNodeSenderSplitMigrator(object):
 
     middle_node_id_to_starting_total = {}
     total = self.node._current_state
-    total_quotient, total_remainder = total % self.n_new_nodes, total // self.n_new_nodes
+    total_quotient, total_remainder = total // self.n_new_nodes, total % self.n_new_nodes
     for i, middle_node_id in enumerate(self._partition.keys()):
       # The first total_remainder nodes start with a slightly larger total
       middle_node_id_to_starting_total[middle_node_id] = total_quotient + 1 if i < total_remainder else total_quotient
@@ -619,6 +619,17 @@ class SumNodeSenderSplitMigrator(object):
     arrived from middle nodes and all the input importers have delivered the requisite messages.
     If so, it finished swapping outputs and enters the STATE_TRIMMING_INPUTS state.
     '''
+    # FIXME(KK): Remove this.
+    if self._state == SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS and all(
+        state == 'live' for state in self._middle_node_states.values()):
+      values = [(sn == self.node._importers[node_id].least_undelivered_remote_sequence_number, node_id, sn,
+                 self.node._importers[node_id].least_undelivered_remote_sequence_number)
+                for node_id, sn in self._input_node_id_to_first_live_sequence_number.items()]
+      for x in values:
+        print(x)
+      #import ipdb; ipdb.set_trace()
+      pass
+
     if self._state == SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS and \
         all(state == 'live'
           for state in self._middle_node_states.values()) and \
@@ -627,6 +638,7 @@ class SumNodeSenderSplitMigrator(object):
 
       # All live messages from middle nodes, and the requisite prior messages from input nodes have arrived.
       # Finish the switch to the new behavior and enter the trimming state.
+      #import ipdb; ipdb.set_trace()
       removed_importers = self._remove_importers(set(self._partition.keys()))
       self._transition_to_trimming(removed_importers)
 

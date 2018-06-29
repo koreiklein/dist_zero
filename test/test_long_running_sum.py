@@ -57,7 +57,13 @@ class TestLongRunningSum(object):
       assert stats['sent_messages'] == stats['acknowledged_messages']
 
     # Assert the output messages have all arrived.
-    #import ipdb; ipdb.set_trace()
+    if self._total_simulated_amount != self.demo.system.get_output_state(self.user_a_output_id):
+      import ipdb
+      ipdb.set_trace()
+      print('failing')
+    else:
+      #import ipdb; ipdb.set_trace()
+      print('suceeding')
     assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
     assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
 

@@ -45,11 +45,6 @@ class Exporter(object):
     # If None, then this Exporter is not duplicating.
     # Otherwise, the list of Exporter instances to duplicate to.
     self._duplicated_exporter = None
-    # If False, the duplicated exporter is getting messages from self, but the migration has not switched
-    # any outputs to rely on those messages getting there.
-    # If True, the duplicated exporter should receive new messages, and self._receiver should NOT receive any
-    # new messages (but may receive retransmissions and may still send acknowledgements).
-    self._swapped = False
 
     # A list of tuples (time_sent_ms, sequence_number_when_sent, message)
     # of all messages that have been sent but not acknowledged, along with
@@ -58,6 +53,16 @@ class Exporter(object):
 
     # See `Exporter.least_unacknowledged_sequence_number`
     self._least_unacknowledged_sequence_number = least_unacknowledged_sequence_number
+
+    # When this exporter is swapping,
+
+    # If None, the duplicated exporter is getting messages from self, but no migration has switched
+    # any outputs to rely on those messages getting there.
+    # Otherwise, this will be set to the first sequence number that is sent live
+    # to the duplicated receiver.  The duplicated exporter should send all new messages,
+    # but self.receiver_id will NOT get any new messages.  Messages before self._first_swapped_sequence_number,
+    # however, should still be retransmitted and acknowledged.
+    self._first_swapped_sequence_number = None
 
   def has_pending_messages(self):
     '''return True iff this exporter has pending messages for which it is waiting for an acknowledgement.'''
@@ -135,7 +140,7 @@ class Exporter(object):
       #   duplicate while it is still migrating is super complex.
       #    We should try to avoid ever having to handle that case.
       self._duplicated_exporter._export_message_self_only(message, sequence_number)
-      if not self._swapped:
+      if self._first_swapped_sequence_number is None or self._first_swapped_sequence_number > sequence_number:
         self._export_message_self_only(message, sequence_number)
     else:
       self._export_message_self_only(message, sequence_number)
@@ -167,7 +172,6 @@ class Exporter(object):
       raise errors.InternalError("Can not duplicate while already duplicating.")
 
     self._duplicated_exporter = exporter
-    self._swapped = False
 
     exporter.export_started_duplication(sequence_number)
 
@@ -181,7 +185,7 @@ class Exporter(object):
     self._node.send(self._duplicated_exporter._receiver,
                     messages.migration.swapped_to_duplicate(
                         node_id=self._node.id, first_live_sequence_number=self._linker.least_unused_sequence_number))
-    self._swapped = True
+    self._first_swapped_sequence_number = self._linker.least_unused_sequence_number
 
   @property
   def logger(self):

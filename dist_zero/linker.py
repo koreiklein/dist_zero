@@ -122,12 +122,21 @@ class Linker(object):
         # the case that the exporter was removed prematurely.
         # In fact, whenever a sender is removed, some acknowledgement message could in theory still be in flight
         # and arrive later on.  It's best to ingore these.
-        self._node.logger.info(
+        self._node.logger.warning(
             "Ignoring an acknowledgement for an unknown exporter.  It was likely already removed.",
             extra={'unrecognized_sender_id': sender_id})
 
     elif message['type'] == 'receive':
-      self._importers[sender_id].import_message(message, sender_id)
+      if sender_id in self._importers:
+        self._importers[sender_id].import_message(message, sender_id)
+      else:
+        # In case certain messages take a long time to arrive, it's possible
+        # that an importer might be removed while the paired exporter is still retransmitting.
+        # That's okay, and can be ignored.  We log a warning because it should be suspicious
+        # when messages take too long to arrive.
+        self._node.logger.warning(
+            "Ignoring a message for an unknown importer.  It was likely already removed.",
+            extra={'unrecognized_sender_id': sender_id})
     else:
       raise errors.InternalError('Unrecognized message type "{}"'.format(message['type']))
 
