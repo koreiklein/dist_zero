@@ -33,9 +33,11 @@ class TestLongRunningSum(object):
     network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
     network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
 
+    n_inputs_at_split = 15
+
     self._base_config = {
         'system_config': {
-            'SUM_NODE_SENDER_LIMIT': 15,
+            'SUM_NODE_SENDER_LIMIT': n_inputs_at_split,
         },
         'network_errors_config': network_errors_config,
     }
@@ -49,7 +51,7 @@ class TestLongRunningSum(object):
     self.demo.run_for(ms=500)
 
     self.input_node_ids = []
-    self._spawn_inputs_loop(n_inputs=15, total_time_ms=20 * 1000)
+    self._spawn_inputs_loop(n_inputs=n_inputs_at_split, total_time_ms=20 * 1000)
     self.demo.run_for(ms=2000)
 
     # Assert that each input node has received acknowledgments for all its sent messages.
