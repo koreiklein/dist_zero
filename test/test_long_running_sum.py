@@ -18,6 +18,8 @@ from dist_zero.system_controller import SystemController
 class TestLongRunningSum(object):
   @pytest.mark.parametrize('error_regexp,drop_rate,network_error_type', [
       ('.*increment.*', 0.3, 'drop'),
+      ('.*increment.*', 0.27, 'duplicate'),
+      ('.*increment.*', 0.27, 'reorder'),
   ])
   def test_node_splitting(self, demo, error_regexp, drop_rate, network_error_type):
     '''

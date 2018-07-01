@@ -155,10 +155,10 @@ class NodeManager(MachineController):
       if error_type == 'drop':
         pass
       elif error_type == 'reorder':
-        heapq.heappush(self._pending_events, (self._postpone_ms(), 'send', send_args))
+        heapq.heappush(self._pending_events, (self._postpone_ms(), 'send', json.dumps(send_args)))
       elif error_type == 'duplicate':
         self._send_without_error_simulation(node_handle, message, sending_node_id)
-        heapq.heappush(self._pending_events, (self._postpone_ms(), 'send', send_args))
+        heapq.heappush(self._pending_events, (self._postpone_ms(), 'send', json.dumps(send_args)))
       else:
         raise errors.InternalError("Unrecognized error type '{}'".format(error_type))
     else:
@@ -330,10 +330,10 @@ class NodeManager(MachineController):
         if error_type == 'drop':
           pass
         elif error_type == 'reorder':
-          heapq.heappush(self._pending_events, (self._postpone_ms(), 'receive', receive_args))
+          heapq.heappush(self._pending_events, (self._postpone_ms(), 'receive', json.dumps(receive_args)))
         elif error_type == 'duplicate':
           self._receive_without_error_simulation(node_id, decoded_message, sender_id)
-          heapq.heappush(self._pending_events, (self._postpone_ms(), 'receive', receive_args))
+          heapq.heappush(self._pending_events, (self._postpone_ms(), 'receive', json.dumps(receive_args)))
         else:
           raise errors.InternalError("Unrecognized error type '{}'".format(error_type))
       else:
@@ -366,9 +366,9 @@ class NodeManager(MachineController):
     while self._pending_events and self._pending_events[0][0] <= final_time_ms:
       t, send_or_receive, args = heapq.heappop(self._pending_events)
       if send_or_receive == 'send':
-        self._send_without_error_simulation(*args)
+        self._send_without_error_simulation(*json.loads(args))
       elif send_or_receive == 'receive':
-        self._receive_without_error_simulation(*args)
+        self._receive_without_error_simulation(*json.loads(args))
       else:
         raise errors.InternalError("Unrecognized 'send' or 'receive': {}".format(send_or_receive))
 
