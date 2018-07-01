@@ -16,18 +16,50 @@ def connect_node(node, direction):
   return {'type': 'connect_node', 'node': node, 'direction': direction}
 
 
-def middle_node_is_live():
+def middle_node_is_synced():
   '''
   Indicates that a middle node is now fully synced up.
   '''
-  return {'type': 'middle_node_is_live'}
+  return {'type': 'middle_node_is_synced'}
 
 
-def middle_node_is_duplicated():
+def middle_node_is_live(input_node_id_to_first_live_sequence_number):
+  '''
+  Indicate to the migrator node that a middle node is now live and sending totally up to date messages.
+
+  :param dict[str, int] input_node_id_to_first_live_sequence_number: For each input node to that middle node,
+    this map assigns the first sequence number that it will send through the middle node after the swap.
+  '''
+  return {
+      'type': 'middle_node_is_live',
+      'input_node_id_to_first_live_sequence_number': input_node_id_to_first_live_sequence_number
+  }
+
+
+def started_duplication(node, sequence_number):
+  '''
+  Informs a middle node in a migration that an input node is now duplicating to it.
+
+  :param node: The :ref:`handle` of the `Node` that is now duplicating messages.
+  :type node: :ref:`handle`
+
+  :param int sequence_number: The sequence number of the first message to be duplicated.
+  '''
+  return {'type': 'started_duplication', 'sequence_number': sequence_number, 'node': node}
+
+
+def middle_node_is_duplicated(duplicator_id_to_first_sequence_number):
   '''
   Indicates that a middle node is now receiving from all the proper senders.
+
+  :param dict[int,int] duplicator_id_to_first_sequence_number: For the id of each `Node` that is
+    duplicating to the middle node, this map gives the first sequence number the middle node received
+    from that duplicator.
   '''
-  return {'type': 'middle_node_is_duplicated'}
+  return {
+      'type': 'middle_node_is_duplicated',
+      'duplicator_id_to_first_sequence_number': duplicator_id_to_first_sequence_number
+  }
 
 
 def start_duplicating(old_receiver_id, receiver):
@@ -44,6 +76,28 @@ def start_duplicating(old_receiver_id, receiver):
 
   '''
   return {'type': 'start_duplicating', 'old_receiver_id': old_receiver_id, 'receiver': receiver}
+
+
+def swap_to_duplicate(node_id):
+  '''
+  Indicates to an input `Node` that it should send new messages only on
+  the newly duplicated exporter, and not to the `Node` identified by ``node_id``.
+
+  :param str node_id: The id of the `Node` to which the receiver of this message should stop sending.
+  '''
+  return {'type': 'swap_to_duplicate', 'node_id': node_id}
+
+
+def swapped_to_duplicate(node_id, first_live_sequence_number):
+  '''
+  Indicates to a middle `Node` in a migration that an input node has now swapped to using it instead of
+  the previous receiver.
+
+  :param int node_id: The id of the input node that has swapped to using the middle node.
+  :param int first_live_sequence_number: The first sequence number that will be sent to the middle node after
+    the swap.
+  '''
+  return {'type': 'swapped_to_duplicate', 'node_id': node_id, 'first_live_sequence_number': first_live_sequence_number}
 
 
 def finish_duplicating(receiver_id):

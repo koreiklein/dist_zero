@@ -1,4 +1,5 @@
 import json
+import random
 import pytest
 import time
 
@@ -9,6 +10,10 @@ from dist_zero.system_controller import SystemController
 from dist_zero.spawners.simulator import SimulatedSpawner
 from dist_zero.spawners.docker import DockerSpawner
 from dist_zero.spawners.cloud.aws import Ec2Spawner
+
+DEFAULT_SYSTEM_CONFIG = {
+    'SUM_NODE_SENDER_LIMIT': 15,
+}
 
 
 @pytest.fixture(params=[
@@ -85,8 +90,17 @@ class Demo(object):
     if self.cloud_spawner:
       self.cloud_spawner.clean_all()
 
+  def _new_unique_system_id(self):
+    '''
+    Generate an id to use for a new system.
+    These ids should actually be distinct each time, and so will use actualy unique ids or novel randomness.
+    '''
+    return dist_zero.ids.new_id(
+        'System', random_id=''.join(random.choice(dist_zero.ids.RAND_CHARS) for i in range(dist_zero.ids.RAND_LENGTH)))
+
   def _set_system_by_mode(self):
-    self.system_id = dist_zero.ids.new_id('System')
+    # Use the
+    self.system_id = self._new_unique_system_id()
     if self.mode == spawners.MODE_SIMULATED:
       self.spawner = self.simulated_spawner = SimulatedSpawner(system_id=self.system_id, random_seed=self.random_seed)
     elif self.mode == spawners.MODE_VIRTUAL:

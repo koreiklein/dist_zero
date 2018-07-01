@@ -17,6 +17,10 @@ class Node(object):
     self.fernet = Fernet(self._fernet_key)
 
     self.linker = linker.Linker(self)
+    self.system_config = self._controller.system_config
+    '''
+    System configuration parameters.
+    '''
 
   def send(self, receiver, message):
     '''
@@ -96,6 +100,6 @@ class Node(object):
         'n_retransmissions': self.linker.n_retransmissions,
         'n_reorders': self.linker.n_reorders,
         'n_duplicates': self.linker.n_duplicates,
-        'sent_messages': self.linker.n_used_sequence_numbers(),
+        'sent_messages': self.linker.least_unused_sequence_number,
         'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
     }

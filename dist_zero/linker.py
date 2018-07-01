@@ -66,7 +66,8 @@ class Linker(object):
     for exporter in self._exporters.values():
       exporter.initialize()
 
-  def n_used_sequence_numbers(self):
+  @property
+  def least_unused_sequence_number(self):
     return self._least_unused_sequence_number
 
   def advance_sequence_number(self):
@@ -76,21 +77,22 @@ class Linker(object):
     This method also tracks internally which Importer sequence numbers this sequence number corresponds to.
     '''
     result = self._least_unused_sequence_number
-    self._branching.append((result, [(importer, importer.least_unreceived_remote_sequence_number)
+    self._branching.append((result, [(importer, importer.least_undelivered_remote_sequence_number)
                                      for sender_id, importer in self._importers.items()]))
 
     self._least_unused_sequence_number += 1
 
     return result
 
-  def new_importer(self, sender):
+  def new_importer(self, sender, first_sequence_number=0):
     '''
     Generate and return a new `Importer` instance.
 
     :param sender: The :ref:`handle` of the node that will send for this importer.
     :type sender: :ref:`handle`
+    :param int first_sequence_number: The first sequence number this importer should expect to receive.
     '''
-    result = importer.Importer(node=self._node, linker=self, sender=sender)
+    result = importer.Importer(node=self._node, linker=self, sender=sender, first_sequence_number=first_sequence_number)
     self._importers[sender['id']] = result
     return result
 
@@ -113,9 +115,28 @@ class Linker(object):
 
   def receive_sequence_message(self, message, sender_id):
     if message['type'] == 'acknowledge':
-      self._exporters[sender_id].acknowledge(message['sequence_number'])
+      if sender_id in self._exporters:
+        self._exporters[sender_id].acknowledge(message['sequence_number'])
+      else:
+        # In past cases where the exporter for a given sender id is not present, it was often
+        # the case that the exporter was removed prematurely.
+        # In fact, whenever a sender is removed, some acknowledgement message could in theory still be in flight
+        # and arrive later on.  It's best to ingore these.
+        self._node.logger.warning(
+            "Ignoring an acknowledgement for an unknown exporter.  It was likely already removed.",
+            extra={'unrecognized_sender_id': sender_id})
+
     elif message['type'] == 'receive':
-      self._importers[sender_id].import_message(message, sender_id)
+      if sender_id in self._importers:
+        self._importers[sender_id].import_message(message, sender_id)
+      else:
+        # In case certain messages take a long time to arrive, it's possible
+        # that an importer might be removed while the paired exporter is still retransmitting.
+        # That's okay, and can be ignored.  We log a warning because it should be suspicious
+        # when messages take too long to arrive.
+        self._node.logger.warning(
+            "Ignoring a message for an unknown importer.  It was likely already removed.",
+            extra={'unrecognized_sender_id': sender_id})
     else:
       raise errors.InternalError('Unrecognized message type "{}"'.format(message['type']))
 
@@ -165,22 +186,19 @@ class Linker(object):
       # No new messages need to be acknowledged.
       pass
     else:
-      # The last pairings of sender_id with least_unreceived_remote_sequence_number before branching_index
+      # The last pairings of sender_id with least_undelivered_remote_sequence_number before branching_index
       # will contain all the acknowledgements we need to send.
-      for importer, least_unreceived_remote_sequence_number in self._branching[branching_index - 1][1]:
-        if least_unreceived_remote_sequence_number == 0:
+      for importer, least_undelivered_remote_sequence_number in self._branching[branching_index - 1][1]:
+        if least_undelivered_remote_sequence_number == 0:
           # Do not send acknowledgements to importers that have never sent us a message.
           continue
         else:
-          importer.acknowledge(least_unreceived_remote_sequence_number)
+          importer.acknowledge(least_undelivered_remote_sequence_number)
 
       self._branching = self._branching[branching_index:]
 
-  def remove_deactivated_importers(self):
-    self._importers = {
-        sender_id: importer
-        for sender_id, importer in self._importers.items() if not importer._deactivated
-    }
-
   def remove_exporter(self, exporter):
     del self._exporters[exporter.receiver_id]
+
+  def remove_importer(self, importer):
+    del self._importers[importer.sender_id]

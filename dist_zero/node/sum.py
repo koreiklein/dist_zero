@@ -55,46 +55,58 @@ class SumNode(Node):
 
     self.migrator = None
 
+    # For middle nodes in a migration, the set of input nodes that still need to start duplicating to self.
     self._pending_sender_ids = set(pending_sender_ids)
+    # For middle nodes in a migration, the set of input nodes that still need to swap to self.
+    self._pending_swapped_sender_ids = set(pending_sender_ids)
+    # For middle nodes in a migration, each input node that duplicates to self is mapped to the first sequence
+    # number that node will send live to self after the swap is finished.
+    self._input_node_id_to_first_live_sequence_number = {}
 
     # Invariants:
     #   At certain points in time, a increment message is sent to every receiver.
     #   self._unsent_time_ms is the number of elapsed milliseconds since the last such point in time
-    #   self._sent_total is the total amount of increment sent to receivers as of that point in time
+    #   self._current_state is the total amount of increment sent to receivers as of that point in time
     #     (note: the amonut is always identical for every receiver)
-    #   self._unsent_total is the total amonut of increment received since that point in time.
-    #   None of the increment in self._unsent_total has been sent.
-    self._sent_total = 0
-    self._unsent_total = 0
+    #   self._deltas is the complete set of updates received since that point in time.  None of the deltas
+    #     have been added to self._current_state or sent to receivers.
+    self._current_state = 0
+    # Map from sender_id to a list of pairs (remote_sequence_number, message)
+    self._deltas = {}
     self._unsent_time_ms = 0
     self._now_ms = 0
 
+    self.deltas_only = False
+    '''
+    When true, this node should never apply deltas to its current state.  It should collect them in the deltas
+    map instead.
+    '''
+
+    self.standby_mode = False
+    '''
+    When true, this node is participating in a migration, and has finished syncing up self._current_state,
+    but is not yet responsible for sending messages to its output node.
+    '''
+
+    self._duplicator_id_to_first_sequence_number = {}
+    '''
+    For middle nodes in a migration as duplicators introduce themselves.
+    This map tracks for each node duplicating to self, the first sequence_number that it ever sent.
+    '''
+
     super(SumNode, self).__init__(logger)
 
-    self._input_importer = None if input_node is None else self.linker.new_importer(input_node)
+    if input_node is None:
+      self._input_importer = None
+    else:
+      self._input_importer = self.linker.new_importer(input_node)
+      self._deltas[self._input_importer.sender_id] = []
     self._output_exporter = None if output_node is None else self.linker.new_exporter(output_node)
 
     self._importers = {sender['id']: self.linker.new_importer(sender) for sender in senders}
+    for sender_id in self._importers.keys():
+      self._deltas[sender_id] = []
     self._exporters = {receiver['id']: self.linker.new_exporter(receiver) for receiver in receivers}
-
-  def restrict_importers(self, remaining_sender_ids):
-    '''
-    Deactivate importers.
-
-    :param set remaining_sender_ids: The set of senders that are still sending.  All other senders should be deactivated.
-    '''
-    n_deactivated_importers = 0
-    remaining_importers = {}
-    for sender_id, importer in self._importers.items():
-      if sender_id not in remaining_sender_ids:
-        importer.deactivate()
-        n_deactivated_importers += 1
-
-    self.logger.info(
-        "Deactivating {n_deactivated_importers} importers",
-        extra={
-            'n_deactivated_importers': n_deactivated_importers,
-        })
 
   def migration_finished(self):
     '''
@@ -115,6 +127,38 @@ class SumNode(Node):
         spawning_migration=node_config['spawning_migration'],
         controller=controller)
 
+  def _maybe_middle_node_goes_live(self):
+    '''
+    For middle nodes that are still getting swapped_to_duplicate messages.
+    Check whether both
+      a) all input nodes have swapped
+      and 
+      b) all the messages before the first_live_sequence_numbers have been received.
+    if so, inform the spawning_migration that self is live.
+    '''
+    if self._input_node_id_to_first_live_sequence_number and not self._pending_swapped_sender_ids:
+      if all(self._importers[node_id].least_undelivered_remote_sequence_number >= flsn
+             for node_id, flsn in self._input_node_id_to_first_live_sequence_number.items()):
+        self.logger.info("Middle node from a migration is now going live")
+
+        # Receive all messages before the first live sequence numbers now, without sending them to
+        # any downstream receiver nodes.
+        for node_id, flsn in self._input_node_id_to_first_live_sequence_number.items():
+          new_pairs = []
+          for rsn, delta_message in self._deltas[node_id]:
+            if rsn < flsn:
+              self._current_state += delta_message['amount']
+            else:
+              new_pairs.append((rsn, delta_message))
+          self._deltas[node_id] = new_pairs
+
+        # Go into the state for ordinary sum node behavior.
+        self.deltas_only = False
+        self.standby_mode = False
+        self.send(self._spawning_migration,
+                  messages.migration.middle_node_is_live(self._input_node_id_to_first_live_sequence_number))
+        self._input_node_id_to_first_live_sequence_number = None
+
   def _maybe_finish_middle_node_duplication(self):
     '''
     For middle nodes that are still getting duplication messages.
@@ -122,31 +166,43 @@ class SumNode(Node):
     inform the spawning_migration that the duplication is complete.
     '''
     if not self._pending_sender_ids:
-      self.send(self._spawning_migration, messages.migration.middle_node_is_duplicated())
+      self.send(self._spawning_migration,
+                messages.migration.middle_node_is_duplicated(self._duplicator_id_to_first_sequence_number))
 
-  def deliver(self, message):
+      # Now that the duplications are done, this map should never be used again.  null it out.
+      self._duplicator_id_to_first_sequence_number = None
+
+      # Enter standby mode, and collect deltas.
+      # PERF(KK): For cases where standby mode could take a long time, it would make some sense
+      # for the nodes to apply some deltas while in standby mode to avoid collecting too many.
+      # The problem with doing that, is that until the middle node has received a swapped_to_duplicate message
+      # from an input node, it doesn't know which of that input node's messages are before or after that sequence number,
+      # and should not accidentally apply a later message as it must be saved and sent on the middle node's exporter
+      # as an increment.
+      self.standby_mode = True
+      self.deltas_only = True
+
+  def deliver(self, message, sequence_number, sender_id):
     '''
     Called by `Importer` instances in self._importers to deliver messages to self.
     Also called for an edge sum node adjacent to an input_node when the input node triggers incrementing the sum.
     '''
-    if message['type'] == 'input_action':
-      self._unsent_total += message['number']
-    elif message['type'] == 'increment':
-      self._unsent_total += message['amount']
-    else:
-      raise errors.InternalError('Unrecognized message type "{}"'.format(message['type']))
+    # Don't update any internal state just yet, but wait until the next sequence number is generated.
+    self._deltas[sender_id].append((sequence_number, message))
+
+    if self.migrator:
+      self.migrator.check_trimming_trigger()
+
+    self._maybe_middle_node_goes_live()
 
   def receive(self, sender_id, message):
     if message['type'] == 'sequence_message':
       self.linker.receive_sequence_message(message['value'], sender_id)
-    elif message['type'] == 'input_action':
-      if self._input_importer is None:
-        raise errors.InternalError("SumNode should not be receiving an input action without an input_node")
-      self.deliver(message['number'])
     elif message['type'] == 'set_input':
       if self._input_importer is not None:
         raise errors.InternalError("Can not set a new input node when one already exists.")
       self._input_importer = self.linker.new_importer(message['input_node'])
+      self._deltas[self._input_importer.sender_id] = []
     elif message['type'] == 'set_output':
       if self._output_exporter is not None:
         raise errors.InternalError("Can not set a new output node when one already exists.")
@@ -154,7 +210,7 @@ class SumNode(Node):
     elif message['type'] == 'added_adjacent_leaf':
       if message['variant'] == 'input':
         if self._input_importer is not None:
-          node_id = ids.new_id('SumNode')
+          node_id = ids.new_id('SumNode_input_kid')
           self_handle = self.new_handle(node_id)
           self._controller.spawn_node(
               messages.sum.sum_node_config(
@@ -165,7 +221,7 @@ class SumNode(Node):
               ))
       elif message['variant'] == 'output':
         if self._output_exporter is not None:
-          node_id = ids.new_id('SumNode')
+          node_id = ids.new_id('SumNode_output_kid')
           self_handle = self.new_handle(node_id)
           self._controller.spawn_node(
               messages.sum.sum_node_config(
@@ -176,9 +232,6 @@ class SumNode(Node):
               ))
       else:
         raise errors.InternalError("Unrecognized variant {}".format(message['variant']))
-
-    elif message['type'] == 'finished_duplicating':
-      self.migrator.finished_duplicating(sender_id)
     elif message['type'] == 'connect_node':
       node = message['node']
       direction = message['direction']
@@ -187,31 +240,61 @@ class SumNode(Node):
         if node['id'] in self._importers:
           raise errors.InternalError("Received connect_node for an importer that had already been added.")
         self._importers[node['id']] = self.linker.new_importer(sender=node)
+        self._deltas[node['id']] = []
       elif direction == 'receiver':
         if node['id'] in self._exporters:
           raise errors.InternalError("Received connect_node for an exporter that had already been added.")
         self._exporters[node['id']] = self.linker.new_exporter(receiver=node)
       else:
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
-
-      if self._spawning_migration is not None:
-        # Doing a migration
-        if node['id'] in self._pending_sender_ids:
-          self._pending_sender_ids.remove(sender_id)
-        self._maybe_finish_middle_node_duplication()
+    elif message['type'] == 'started_duplication':
+      if self._spawning_migration is None:
+        raise errors.InternalError(
+            "Only middle nodes from a migration should ever receive a started_duplication message.")
+      else:
+        node = message['node']
+        if node['id'] not in self._pending_sender_ids:
+          raise errors.InternalError("Only middle nodes with an appriate pending sender id"
+                                     " should receive started_duplication messages.")
+        else:
+          # As soon as we're getting started_duplication messages, we must ensure that all updates go
+          # are stored as deltas until the set_sum_total message arrives.
+          self.deltas_only = True
+          self._deltas[node['id']] = []
+          self._pending_sender_ids.remove(node['id'])
+          new_importer = self.linker.new_importer(sender=node, first_sequence_number=message['sequence_number'])
+          self._importers[node['id']] = new_importer
+          self._duplicator_id_to_first_sequence_number[node['id']] = message['sequence_number']
+          self._maybe_finish_middle_node_duplication()
+    elif message['type'] == 'finished_duplicating':
+      self.migrator.finished_duplicating(sender_id)
     elif message['type'] == 'sum_node_started':
       if self.migrator:
         self.migrator.middle_node_started(message['sum_node_handle'])
     elif message['type'] == 'set_sum_total':
-      # FIXME(KK): Think through how to set these parameters appropriately during startup.
-      self._sent_total = message['total']
-      self._unsent_total = 0
+      if not self.standby_mode:
+        raise errors.InternalError("Middle nodes must be in standby mode when they receive state syncing messages.")
+      self._current_state = message['total']
+      unsent_total = self._combine_and_remove_deltas()
       self._unsent_time_ms = 0
-      self.send(self._spawning_migration, messages.migration.middle_node_is_live())
+      self._current_state += unsent_total
+      self.send(self._spawning_migration, messages.migration.middle_node_is_synced())
+    elif message['type'] == 'swapped_to_duplicate':
+      node_id = message['node_id']
+      if node_id not in self._pending_swapped_sender_ids:
+        raise errors.InternalError("node_id of recently swapped node should be found in pending_swapped_sender_ids")
+      self._pending_swapped_sender_ids.remove(node_id)
+      self._input_node_id_to_first_live_sequence_number[node_id] = message['first_live_sequence_number']
+
+      self._maybe_middle_node_goes_live()
+    elif message['type'] == 'swap_to_duplicate':
+      self._exporters[message['node_id']].swap_to_duplicate()
     elif message['type'] == 'middle_node_is_duplicated':
-      self.migrator.middle_node_duplicated(sender_id)
+      self.migrator.middle_node_duplicated(message['duplicator_id_to_first_sequence_number'], middle_node_id=sender_id)
+    elif message['type'] == 'middle_node_is_synced':
+      self.migrator.middle_node_synced(sender_id)
     elif message['type'] == 'middle_node_is_live':
-      self.migrator.middle_node_live(sender_id)
+      self.migrator.middle_node_live(sender_id, message['input_node_id_to_first_live_sequence_number'])
     elif message['type'] == 'start_duplicating':
       old_receiver_id = message['old_receiver_id']
       new_receiver = message['receiver']
@@ -222,22 +305,29 @@ class SumNode(Node):
               'old_receiver_id': old_receiver_id,
           })
       exporter = self._exporters[old_receiver_id]
-      exporter.duplicate([self.linker.new_exporter(new_receiver)])
+      first_duplicated_sequence_number = self._send_forward_messages()
+      exporter.duplicate(self.linker.new_exporter(new_receiver), sequence_number=first_duplicated_sequence_number)
     elif message['type'] == 'finish_duplicating':
       receiver_id = message['receiver_id']
       exporter = self._exporters[receiver_id]
       del self._exporters[receiver_id]
-      for new_exporter in exporter.finish_duplicating():
-        self._exporters[new_exporter.receiver_id] = new_exporter
+      new_exporter = exporter.finish_duplicating()
+      self._exporters[new_exporter.receiver_id] = new_exporter
     else:
       self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
 
   def elapse(self, ms):
     self._unsent_time_ms += ms
-    if self._unsent_total > 0 and self._unsent_time_ms > SumNode.SEND_INTERVAL_MS:
+
+    if not self._pending_sender_ids and \
+        not self.standby_mode and \
+        not self.deltas_only and \
+        any(self._deltas.values()) and \
+        self._unsent_time_ms > SumNode.SEND_INTERVAL_MS:
+
       self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
-      SENDER_LIMIT = 15
+      SENDER_LIMIT = self.system_config['SUM_NODE_SENDER_LIMIT']
       if len(self._importers) >= SENDER_LIMIT:
         self.logger.info("Hit sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
         if self.migrator is None:
@@ -253,29 +343,58 @@ class SumNode(Node):
     self.migrator = SumNodeSenderSplitMigrator(self)
     self.migrator.start()
 
+  def _combine_and_remove_deltas(self):
+    '''
+    Sum all the amounts in the deltas, remove them, and return the result.
+    '''
+    result = 0
+    for sender_id, pairs in list(self._deltas.items()):
+      for sequence_number, message in pairs:
+        if message['type'] == 'input_action':
+          result += message['number']
+        elif message['type'] == 'increment':
+          result += message['amount']
+        else:
+          raise errors.InternalError('Unrecognized message type "{}"'.format(message['type']))
+      self._deltas[sender_id] = []
+
+    return result
+
   def _send_forward_messages(self):
+    '''
+    Generate a new sequence number, combine deltas into an update message, and send it on all exporters.
+    :return: the next unused sequence number
+    :rtype: int
+    '''
+    if self.standby_mode:
+      raise errors.InternalError("Nodes should not be sending messages on exporters while in standby mode.")
+
+    unsent_total = self._combine_and_remove_deltas()
+
     self.logger.debug(
         "Sending new increment of {unsent_total} to all {n_receivers} receivers",
         extra={
-            'unsent_total': self._unsent_total,
+            'unsent_total': unsent_total,
             'n_receivers': len(self._exporters)
         })
 
     sequence_number = self.linker.advance_sequence_number()
+    self._send_increment(increment=unsent_total, sequence_number=sequence_number)
+    self._current_state += unsent_total
+    return sequence_number + 1
 
+  def _send_increment(self, increment, sequence_number):
     for exporter in self._exporters.values():
       exporter.export_message(
-          message=messages.sum.increment(amount=self._unsent_total),
+          message=messages.sum.increment(amount=increment),
           sequence_number=sequence_number,
       )
 
     if self._output_exporter and self._output_exporter.receiver_id.startswith('LeafNode'):
-      message = messages.io.output_action(self._unsent_total)
+      message = messages.io.output_action(increment)
       self._output_exporter.export_message(message=message, sequence_number=sequence_number)
 
     self._unsent_time_ms = 0
-    self._sent_total += self._unsent_total
-    self._unsent_total = 0
 
   def initialize(self):
     self.logger.info(
@@ -374,11 +493,10 @@ class SumNodeSenderSplitMigrator(object):
     self.node = sum_node
     self._state = SumNodeSenderSplitMigrator.STATE_NEW
 
+    self.n_new_nodes = 2
+
     self._middle_nodes = []
     '''Handles of the middle nodes'''
-
-    self._totals = {}
-    '''A map from middle node id to its starting total'''
 
     self._partition = {}
     '''A map from middle node id to a list of the importers that will be moved to it'''
@@ -392,7 +510,20 @@ class SumNodeSenderSplitMigrator(object):
       'new' -- The config was generated, but the node has not yet been heard from.
       'started' -- This node has received a first initialization message from the newly started node.
       'duplicated' -- This node is now getting duplicated messages from all the appropriate senders.
+      'synced' -- This node has synced up its model and can now be considered "up to date".
       'live' -- This node has received its model and is getting up to date messages from its input nodes.
+    '''
+
+    self._input_id_to_first_sequence_number = {}
+    '''
+    A map from input node id to the first sequence number that it duplicated to its assigned middle node.
+    This map starts off empty, but will be complete as the migrator leaves STATE_DUPLICATING_INPUTS.
+    '''
+
+    self._input_node_id_to_first_live_sequence_number = {}
+    '''
+    A map from input node id to the first sequence number that it will send once it has swapped to its assigned
+    middle node.  This map starts off empty, but will be complete as the migrator leaves STATE_SWAPPING_OUTPUTS
     '''
 
   def _transition_state(self, from_state, to_state):
@@ -422,6 +553,7 @@ class SumNodeSenderSplitMigrator(object):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_INITIALIZING_NEW_NODES,
                            SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS)
 
+    self.node.deltas_only = True
     for middle_node in self._middle_nodes:
       for importer in self._partition[middle_node['id']]:
         self._duplicating_input_ids.add(importer.sender_id)
@@ -431,8 +563,34 @@ class SumNodeSenderSplitMigrator(object):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS,
                            SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES)
 
+    increment = 0
+
+    for importers in self._partition.values():
+      for sender_id in (i.sender_id for i in importers):
+        first_sequence_number_from_middle_node = self._input_id_to_first_sequence_number[sender_id]
+        remaining_pairs = []
+        for rsn, message in self.node._deltas[sender_id]:
+          if rsn < first_sequence_number_from_middle_node:
+            increment += message['amount']
+          else:
+            remaining_pairs.append((rsn, message))
+        self.node._deltas[sender_id] = remaining_pairs
+
+    sequence_number = self.node.linker.advance_sequence_number()
+    self.node._send_increment(increment=increment, sequence_number=sequence_number)
+    self.node._current_state += increment
+
+    middle_node_id_to_starting_total = {}
+    total = self.node._current_state
+    total_quotient, total_remainder = total // self.n_new_nodes, total % self.n_new_nodes
+    for i, middle_node_id in enumerate(self._partition.keys()):
+      # The first total_remainder nodes start with a slightly larger total
+      middle_node_id_to_starting_total[middle_node_id] = total_quotient + 1 if i < total_remainder else total_quotient
+
     for middle_node in self._middle_nodes:
-      self.node.send(middle_node, messages.sum.set_sum_total(self._totals[middle_node['id']]))
+      self.node.send(middle_node, messages.sum.set_sum_total(middle_node_id_to_starting_total[middle_node['id']]))
+
+    self.node.deltas_only = False
 
   def _transition_to_swapping_outputs(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES,
@@ -440,35 +598,79 @@ class SumNodeSenderSplitMigrator(object):
 
     # Since the current node is right here, we can swap the outputs immediately and
     # transition directly into the trimming state.
-    self.node.restrict_importers(set(self._partition.keys()))
-    self._transition_to_trimming()
+    for importers in self._partition.values():
+      for i in importers:
+        self.node.send(i.sender, messages.migration.swap_to_duplicate(node_id=self.node.id))
 
-  def _transition_to_trimming(self):
+  def _transition_to_trimming(self, removed_importers):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS,
                            SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS)
 
-    for importers in self._partition.values():
-      for i in importers:
-        i.finish_duplicating_paired_exporters()
+    for importer in removed_importers:
+      self.node.send(importer.sender, messages.migration.finish_duplicating(receiver_id=self.node.id))
 
   def _transition_to_finished(self):
     self._transition_state(SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS, SumNodeSenderSplitMigrator.STATE_FINISHED)
 
-    self.node.linker.remove_deactivated_importers()
-    self.node._importers = {
-        sender_id: importer
-        for sender_id, importer in self.node._importers.items() if not importer._deactivated
-    }
-
     self.node.migration_finished()
 
-  def middle_node_live(self, middle_node_id):
-    '''Called when a middle node has been confirmed to be live.'''
+  def middle_node_synced(self, middle_node_id):
+    '''Called when a middle node has been confirmed to be fully synced up.'''
     self.logger.info("Marking middle node as now being live", extra={'middle_node_id': middle_node_id})
-    self._middle_node_states[middle_node_id] = 'live'
+    self._middle_node_states[middle_node_id] = 'synced'
 
-    if all(state == 'live' for state in self._middle_node_states.values()):
+    if all(state == 'synced' for state in self._middle_node_states.values()):
       self._transition_to_swapping_outputs()
+
+  def middle_node_live(self, middle_node_id, input_node_id_to_first_live_sequence_number):
+    self._middle_node_states[middle_node_id] = 'live'
+    self._input_node_id_to_first_live_sequence_number.update(input_node_id_to_first_live_sequence_number)
+
+    self.check_trimming_trigger()
+
+  def check_trimming_trigger(self):
+    '''
+    While in the STATE_SWAPPING_OUTPUTS state, this method checks whether all liveness messages have
+    arrived from middle nodes and all the input importers have delivered the requisite messages.
+    If so, it finished swapping outputs and enters the STATE_TRIMMING_INPUTS state.
+    '''
+    if self._state == SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS and \
+        all(state == 'live'
+          for state in self._middle_node_states.values()) and \
+        all(sn == self.node._importers[node_id].least_undelivered_remote_sequence_number
+          for node_id, sn in self._input_node_id_to_first_live_sequence_number.items()):
+
+      # All live messages from middle nodes, and the requisite prior messages from input nodes have arrived.
+      # Finish the switch to the new behavior and enter the trimming state.
+      removed_importers = self._remove_importers(set(self._partition.keys()))
+      self._transition_to_trimming(removed_importers)
+
+  def _remove_importers(self, remaining_sender_ids):
+    '''
+    Remove importers entirely from this node.
+
+    :param set remaining_sender_ids: The set of senders that are still sending.  All other senders should be deactivated.
+    :return: The removed `Importer` instances.
+    :rtype: list[`Importer`]
+    '''
+    new_importers = {}
+    removed_importers = []
+    for sender_id, importer in self.node._importers.items():
+      if sender_id in remaining_sender_ids:
+        new_importers[sender_id] = importer
+      else:
+        removed_importers.append(importer)
+        self.node.linker.remove_importer(importer)
+
+    self.logger.info(
+        "Removing {n_removed_importers} importers as a migration ends",
+        extra={
+            'n_removed_importers': len(removed_importers),
+        })
+
+    self.node._importers = new_importers
+
+    return removed_importers
 
   def middle_node_started(self, middle_node_handle):
     '''
@@ -483,14 +685,19 @@ class SumNodeSenderSplitMigrator(object):
     if all(state == 'started' for state in self._middle_node_states.values()):
       self._transition_to_duplicating()
 
-  def middle_node_duplicated(self, middle_node_id):
+  def middle_node_duplicated(self, input_id_to_first_sequence_number, middle_node_id):
     '''
     Called when a middle node has confirmed that it is receiving all the proper duplicated inputs.
+
+    :param dict[int, int] input_id_to_first_sequence_number: To each id of an input node assigned to the
+      middle node with an id of ``middle_node_id``, this map assigns the first sequence number received by that
+      middle node.
 
     :param str middle_node_id: The id of the middle node.
     '''
     self.logger.info("Marking middle node as now being duplicated", extra={'middle_node_id': middle_node_id})
     self._middle_node_states[middle_node_id] = 'duplicated'
+    self._input_id_to_first_sequence_number.update(input_id_to_first_sequence_number)
 
     if all(state == 'duplicated' for state in self._middle_node_states.values()):
       self._transition_to_syncing()
@@ -514,19 +721,12 @@ class SumNodeSenderSplitMigrator(object):
     Side effect: update self._partition to map each middle node id to the leftmost nodes that will send to it
       once we reach the terminal state.
     '''
-    n_new_nodes = 2
-    n_senders_per_node = len(self.node._importers) // n_new_nodes
-
-    total = self.node._sent_total
-    total_quotient, total_remainder = total % n_new_nodes, total // n_new_nodes
+    n_senders_per_node = len(self.node._importers) // self.n_new_nodes
 
     importers = list(self.node._importers.values())
 
-    for i in range(n_new_nodes):
-      new_id = ids.new_id('SumNode')
-
-      # The first total_remainder nodes start with a slightly larger total
-      self._totals[new_id] = total_quotient + 1 if i < total_remainder else total_quotient
+    for i in range(self.n_new_nodes):
+      new_id = ids.new_id('SumNode_middle_for_migration')
 
       self._partition[new_id] = importers[i * n_senders_per_node:(i + 1) * n_senders_per_node]
       self._middle_node_states[new_id] = 'new'
@@ -534,7 +734,7 @@ class SumNodeSenderSplitMigrator(object):
     new_node_ids = list(self._partition.keys())
 
     # allocate the remaining senders as evenly as possible
-    for j, extra_importer in enumerate(importers[n_new_nodes * n_senders_per_node:]):
+    for j, extra_importer in enumerate(importers[self.n_new_nodes * n_senders_per_node:]):
       self._partition[new_node_ids[j]].append(extra_importer)
 
     return [

@@ -44,7 +44,7 @@ class Exporter(object):
 
     # If None, then this Exporter is not duplicating.
     # Otherwise, the list of Exporter instances to duplicate to.
-    self._duplicated_exporters = None
+    self._duplicated_exporter = None
 
     # A list of tuples (time_sent_ms, sequence_number_when_sent, message)
     # of all messages that have been sent but not acknowledged, along with
@@ -53,6 +53,16 @@ class Exporter(object):
 
     # See `Exporter.least_unacknowledged_sequence_number`
     self._least_unacknowledged_sequence_number = least_unacknowledged_sequence_number
+
+    # When this exporter is swapping,
+
+    # If None, the duplicated exporter is getting messages from self, but no migration has switched
+    # any outputs to rely on those messages getting there.
+    # Otherwise, this will be set to the first sequence number that is sent live
+    # to the duplicated receiver.  The duplicated exporter should send all new messages,
+    # but self.receiver_id will NOT get any new messages.  Messages before self._first_swapped_sequence_number,
+    # however, should still be retransmitted and acknowledged.
+    self._first_swapped_sequence_number = None
 
   def has_pending_messages(self):
     '''return True iff this exporter has pending messages for which it is waiting for an acknowledgement.'''
@@ -106,9 +116,38 @@ class Exporter(object):
     self._pending_messages = [(t, sn, msg) for t, sn, msg in self._pending_messages
                               if sn >= self._least_unacknowledged_sequence_number]
 
+  def export_started_duplication(self, sequence_number):
+    '''
+    Sent a message to the associated node that informs it that this exporter is now duplicating to it.
+
+    :param int sequence_number: The first sequence number to be duplicated.
+    '''
+    self._node.send(self._receiver,
+                    messages.migration.started_duplication(
+                        node=self._node.new_handle(self._receiver['id']), sequence_number=sequence_number))
+
   def export_message(self, message, sequence_number):
     '''
-    Export a message to the receiver.
+    Export a message to whichever of the receiver or the duplicated receiver should receive it.
+
+    :param message: The message
+    :type message: :ref:`message`
+    :param int sequence_number: The sequence number of the new message.
+    '''
+    if self._duplicated_exporter:
+      # NOTE(KK): Call _export_message_self_only instead of export_message,
+      #   as the whole idea of a middle node setting up a new
+      #   duplicate while it is still migrating is super complex.
+      #    We should try to avoid ever having to handle that case.
+      self._duplicated_exporter._export_message_self_only(message, sequence_number)
+      if self._first_swapped_sequence_number is None or self._first_swapped_sequence_number > sequence_number:
+        self._export_message_self_only(message, sequence_number)
+    else:
+      self._export_message_self_only(message, sequence_number)
+
+  def _export_message_self_only(self, message, sequence_number):
+    '''
+    Export a message to the receiver of self, but no duplicated receiver.
 
     :param message: The message
     :type message: :ref:`message`
@@ -118,21 +157,35 @@ class Exporter(object):
     self._node.send(self._receiver,
                     messages.linker.sequence_message_send(message=message, sequence_number=sequence_number))
 
-  def duplicate(self, exporters):
+  def duplicate(self, exporter, sequence_number):
     '''
     Start duplicating this exporter to a new receiver.
 
     prerequisite: The exporter must not already be duplicating.
 
-    :param list exporters: A list of uninitialized `Exporter` instances to duplicate to.
+    :param exporter: An uninitialized `Exporter` instance to duplicate to.
+    :type exporter: `Exporter`
+
+    :param int sequence_number: The first sequence number to be duplicated.
     '''
-    if self._duplicated_exporters is not None:
+    if self._duplicated_exporter is not None:
       raise errors.InternalError("Can not duplicate while already duplicating.")
 
-    self._duplicated_exporters = exporters
+    self._duplicated_exporter = exporter
 
-    for exporter in exporters:
-      exporter.initialize()
+    exporter.export_started_duplication(sequence_number)
+
+  def swap_to_duplicate(self):
+    '''
+    Prerequisite: self is duplicating to another `Exporter`
+
+    Send an swapped_to_duplicate message to the duplicated receiver, and cease sending new messages
+    to the old receiver.  Existing messages sent to the old receiver should still be retransmitted.
+    '''
+    self._node.send(self._duplicated_exporter._receiver,
+                    messages.migration.swapped_to_duplicate(
+                        node_id=self._node.id, first_live_sequence_number=self._linker.least_unused_sequence_number))
+    self._first_swapped_sequence_number = self._linker.least_unused_sequence_number
 
   @property
   def logger(self):
@@ -147,15 +200,10 @@ class Exporter(object):
     Typically, when an `Exporter` finishes duplicating, it will never be used again and should be left
     for cleanup by the garbage collector.
 
-    :return: The list of exporters this node was duplicating to.
-    :rtype: list[`Exporter`]
+    :return: The exporter this node was duplicating to.
+    :rtype: `Exporter`
     '''
-    self.logger.info(
-        "Finishing duplication phase for {cur_node_id} ."
-        "  Cutting back from {n_old_receivers} receivers to 1.",
-        extra={
-            'n_old_receivers': len(self._duplicated_exporters),
-        })
+    self.logger.info("Finishing duplication phase for {cur_node_id} ." "  Cutting back to 1 receivers.")
     self._node.send(self._receiver, messages.migration.finished_duplicating())
     self._linker.remove_exporter(self)
-    return self._duplicated_exporters
+    return self._duplicated_exporter

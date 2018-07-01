@@ -57,7 +57,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   sum_node_id = demo.system.spawn_node(
       on_machine=machine_a,
       node_config=messages.sum.sum_node_config(
-          node_id=dist_zero.ids.new_id('SumNode'),
+          node_id=dist_zero.ids.new_id('SumNode_middle'),
           senders=[],
           receivers=[],
       ))
@@ -65,7 +65,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   demo.run_for(ms=200)
 
   # Configure the starting network topology
-  root_input_node_id = dist_zero.ids.new_id('InternalNode')
+  root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
   demo.system.spawn_node(
       on_machine=machine_a,
       node_config=messages.io.internal_node_config(
@@ -73,7 +73,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           variant='input',
           adjacent=demo.system.generate_new_handle(new_node_id=root_input_node_id, existing_node_id=sum_node_id)))
 
-  root_output_node_id = dist_zero.ids.new_id('InternalNode')
+  root_output_node_id = dist_zero.ids.new_id('InternalNode_output')
   demo.system.spawn_node(
       on_machine=machine_a,
       node_config=messages.io.internal_node_config(
