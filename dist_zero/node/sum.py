@@ -130,16 +130,34 @@ class SumNode(Node):
   def _maybe_middle_node_goes_live(self):
     '''
     For middle nodes that are still getting swapped_to_duplicate messages.
-    Check whether all input nodes have swapped and if so, inform the spawning_migration that self is live.
+    Check whether both
+      a) all input nodes have swapped
+      and 
+      b) all the messages before the first_live_sequence_numbers have been received.
+    if so, inform the spawning_migration that self is live.
     '''
-    if not self._pending_swapped_sender_ids:
-      self.logger.info("Middle node from a migration is now going live")
+    if self._input_node_id_to_first_live_sequence_number and not self._pending_swapped_sender_ids:
+      if all(self._importers[node_id].least_undelivered_remote_sequence_number >= flsn
+             for node_id, flsn in self._input_node_id_to_first_live_sequence_number.items()):
+        self.logger.info("Middle node from a migration is now going live")
 
-      # Go into the state for ordinary sum node behavior.
-      self.deltas_only = False
-      self.standby_mode = False
-      self.send(self._spawning_migration,
-                messages.migration.middle_node_is_live(self._input_node_id_to_first_live_sequence_number))
+        # Receive all messages before the first live sequence numbers now, without sending them to
+        # any downstream receiver nodes.
+        for node_id, flsn in self._input_node_id_to_first_live_sequence_number.items():
+          new_pairs = []
+          for rsn, delta_message in self._deltas[node_id]:
+            if rsn < flsn:
+              self._current_state += delta_message['amount']
+            else:
+              new_pairs.append((rsn, delta_message))
+          self._deltas[node_id] = new_pairs
+
+        # Go into the state for ordinary sum node behavior.
+        self.deltas_only = False
+        self.standby_mode = False
+        self.send(self._spawning_migration,
+                  messages.migration.middle_node_is_live(self._input_node_id_to_first_live_sequence_number))
+        self._input_node_id_to_first_live_sequence_number = None
 
   def _maybe_finish_middle_node_duplication(self):
     '''
@@ -171,8 +189,11 @@ class SumNode(Node):
     '''
     # Don't update any internal state just yet, but wait until the next sequence number is generated.
     self._deltas[sender_id].append((sequence_number, message))
+
     if self.migrator:
       self.migrator.check_trimming_trigger()
+
+    self._maybe_middle_node_goes_live()
 
   def receive(self, sender_id, message):
     if message['type'] == 'sequence_message':
@@ -252,9 +273,9 @@ class SumNode(Node):
         self.migrator.middle_node_started(message['sum_node_handle'])
     elif message['type'] == 'set_sum_total':
       self._current_state = message['total']
+      unsent_total = self._combine_and_remove_deltas()
       self._unsent_time_ms = 0
       self.standby_mode = True
-      unsent_total = self._combine_and_remove_deltas()
       self._current_state += unsent_total
       self.send(self._spawning_migration, messages.migration.middle_node_is_synced())
     elif message['type'] == 'swapped_to_duplicate':
@@ -264,15 +285,8 @@ class SumNode(Node):
       self._pending_swapped_sender_ids.remove(node_id)
       self._input_node_id_to_first_live_sequence_number[node_id] = message['first_live_sequence_number']
 
-      new_pairs = []
-      for rsn, delta_message in self._deltas[node_id]:
-        if rsn < message['first_live_sequence_number']:
-          self._current_state += delta_message['amount']
-      self._deltas[node_id] = new_pairs
-
       self._maybe_middle_node_goes_live()
     elif message['type'] == 'swap_to_duplicate':
-      sequence_number = self
       self._exporters[message['node_id']].swap_to_duplicate()
     elif message['type'] == 'middle_node_is_duplicated':
       self.migrator.middle_node_duplicated(message['duplicator_id_to_first_sequence_number'], middle_node_id=sender_id)
@@ -619,17 +633,6 @@ class SumNodeSenderSplitMigrator(object):
     arrived from middle nodes and all the input importers have delivered the requisite messages.
     If so, it finished swapping outputs and enters the STATE_TRIMMING_INPUTS state.
     '''
-    # FIXME(KK): Remove this.
-    if self._state == SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS and all(
-        state == 'live' for state in self._middle_node_states.values()):
-      values = [(sn == self.node._importers[node_id].least_undelivered_remote_sequence_number, node_id, sn,
-                 self.node._importers[node_id].least_undelivered_remote_sequence_number)
-                for node_id, sn in self._input_node_id_to_first_live_sequence_number.items()]
-      for x in values:
-        print(x)
-      #import ipdb; ipdb.set_trace()
-      pass
-
     if self._state == SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS and \
         all(state == 'live'
           for state in self._middle_node_states.values()) and \
@@ -638,7 +641,6 @@ class SumNodeSenderSplitMigrator(object):
 
       # All live messages from middle nodes, and the requisite prior messages from input nodes have arrived.
       # Finish the switch to the new behavior and enter the trimming state.
-      #import ipdb; ipdb.set_trace()
       removed_importers = self._remove_importers(set(self._partition.keys()))
       self._transition_to_trimming(removed_importers)
 

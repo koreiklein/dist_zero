@@ -50,20 +50,13 @@ class TestLongRunningSum(object):
 
     self.input_node_ids = []
     self._spawn_inputs_loop(n_inputs=15, total_time_ms=20 * 1000)
+    self.demo.run_for(ms=2000)
 
     # Assert that each input node has received acknowledgments for all its sent messages.
     for input_node_id in self.input_node_ids:
       stats = self.demo.system.get_stats(input_node_id)
       assert stats['sent_messages'] == stats['acknowledged_messages']
 
-    # Assert the output messages have all arrived.
-    if self._total_simulated_amount != self.demo.system.get_output_state(self.user_a_output_id):
-      import ipdb
-      ipdb.set_trace()
-      print('failing')
-    else:
-      #import ipdb; ipdb.set_trace()
-      print('suceeding')
     assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
     assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
 
