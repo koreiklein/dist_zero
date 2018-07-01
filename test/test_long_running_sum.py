@@ -16,12 +16,9 @@ from dist_zero.system_controller import SystemController
 
 
 class TestLongRunningSum(object):
-  @pytest.mark.parametrize(
-      'error_regexp,drop_rate,network_error_type',
-      [
-          ('.*increment.*', 0.1, 'drop'),
-          #('.*increment.*', 0.3, 'drop'),
-      ])
+  @pytest.mark.parametrize('error_regexp,drop_rate,network_error_type', [
+      ('.*increment.*', 0.3, 'drop'),
+  ])
   def test_node_splitting(self, demo, error_regexp, drop_rate, network_error_type):
     '''
     Spawn a single sum node, and add senders until it splits.
