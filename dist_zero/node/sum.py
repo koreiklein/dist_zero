@@ -272,10 +272,11 @@ class SumNode(Node):
       if self.migrator:
         self.migrator.middle_node_started(message['sum_node_handle'])
     elif message['type'] == 'set_sum_total':
+      if not self.standby_mode:
+        raise errors.InternalError("Middle nodes must be in standby mode when they receive state syncing messages.")
       self._current_state = message['total']
       unsent_total = self._combine_and_remove_deltas()
       self._unsent_time_ms = 0
-      self.standby_mode = True
       self._current_state += unsent_total
       self.send(self._spawning_migration, messages.migration.middle_node_is_synced())
     elif message['type'] == 'swapped_to_duplicate':
