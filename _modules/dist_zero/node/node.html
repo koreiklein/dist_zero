@@ -50,6 +50,10 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">fernet</span> <span class="o">=</span> <span class="n">Fernet</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fernet_key</span><span class="p">)</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">linker</span> <span class="o">=</span> <span class="n">linker</span><span class="o">.</span><span class="n">Linker</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">system_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">system_config</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    System configuration parameters.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
 
 <div class="viewcode-block" id="Node.send"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.node.Node.send">[docs]</a>  <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">receiver</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -129,7 +133,7 @@
         <span class="s1">&#39;n_retransmissions&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">n_retransmissions</span><span class="p">,</span>
         <span class="s1">&#39;n_reorders&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">n_reorders</span><span class="p">,</span>
         <span class="s1">&#39;n_duplicates&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">n_duplicates</span><span class="p">,</span>
-        <span class="s1">&#39;sent_messages&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">n_used_sequence_numbers</span><span class="p">(),</span>
+        <span class="s1">&#39;sent_messages&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">least_unused_sequence_number</span><span class="p">,</span>
         <span class="s1">&#39;acknowledged_messages&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">least_unacknowledged_sequence_number</span><span class="p">(),</span>
     <span class="p">}</span></div></div>
 </pre></div>

@@ -32,6 +32,7 @@
             
   <h1>Source code for test.demo</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">random</span>
 <span class="kn">import</span> <span class="nn">pytest</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
@@ -42,6 +43,10 @@
 <span class="kn">from</span> <span class="nn">dist_zero.spawners.simulator</span> <span class="k">import</span> <span class="n">SimulatedSpawner</span>
 <span class="kn">from</span> <span class="nn">dist_zero.spawners.docker</span> <span class="k">import</span> <span class="n">DockerSpawner</span>
 <span class="kn">from</span> <span class="nn">dist_zero.spawners.cloud.aws</span> <span class="k">import</span> <span class="n">Ec2Spawner</span>
+
+<span class="n">DEFAULT_SYSTEM_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;SUM_NODE_SENDER_LIMIT&#39;</span><span class="p">:</span> <span class="mi">15</span><span class="p">,</span>
+<span class="p">}</span>
 
 
 <span class="nd">@pytest</span><span class="o">.</span><span class="n">fixture</span><span class="p">(</span><span class="n">params</span><span class="o">=</span><span class="p">[</span>
@@ -118,8 +123,17 @@
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cloud_spawner</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">cloud_spawner</span><span class="o">.</span><span class="n">clean_all</span><span class="p">()</span></div>
 
+  <span class="k">def</span> <span class="nf">_new_unique_system_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Generate an id to use for a new system.</span>
+<span class="sd">    These ids should actually be distinct each time, and so will use actualy unique ids or novel randomness.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span>
+        <span class="s1">&#39;System&#39;</span><span class="p">,</span> <span class="n">random_id</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">RAND_CHARS</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">RAND_LENGTH</span><span class="p">)))</span>
+
   <span class="k">def</span> <span class="nf">_set_system_by_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">system_id</span> <span class="o">=</span> <span class="n">dist_zero</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;System&#39;</span><span class="p">)</span>
+    <span class="c1"># Use the</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">system_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_unique_system_id</span><span class="p">()</span>
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="n">spawners</span><span class="o">.</span><span class="n">MODE_SIMULATED</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">spawner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">simulated_spawner</span> <span class="o">=</span> <span class="n">SimulatedSpawner</span><span class="p">(</span><span class="n">system_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">system_id</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">random_seed</span><span class="p">)</span>
     <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="n">spawners</span><span class="o">.</span><span class="n">MODE_VIRTUAL</span><span class="p">:</span>

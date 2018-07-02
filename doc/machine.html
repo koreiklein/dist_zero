@@ -55,7 +55,7 @@ runs a single <a class="reference internal" href="#dist_zero.machine.NodeManager
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
 <li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – A <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> managed by self.</li>
-<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of some other <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a></li>
+<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of some other <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a></li>
 </ul>
 </td>
 </tr>
@@ -80,7 +80,7 @@ runs a single <a class="reference internal" href="#dist_zero.machine.NodeManager
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of a node</li>
 <li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A message for that node</li>
-<li><strong>sending_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the sending node.</li>
+<li><strong>sending_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the sending node.</li>
 </ul>
 </td>
 </tr>
@@ -105,7 +105,7 @@ runs a single <a class="reference internal" href="#dist_zero.machine.NodeManager
 <tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The id of the newly created node.</p>
 </td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a></p>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)">str</a></p>
 </td>
 </tr>
 </tbody>
@@ -122,7 +122,7 @@ runs a single <a class="reference internal" href="#dist_zero.machine.NodeManager
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
 <li><strong>transport</strong> (<a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a>) – A <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> that some local sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> can use to send to some receiver <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</li>
-<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of some new sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</li>
+<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of some new sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</li>
 </ul>
 </td>
 </tr>
@@ -155,7 +155,7 @@ and deliver ordinary messages and api messages.</p>
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>machine_config</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A configuration message of type ‘machine_config’</li>
 <li><strong>spawner</strong> (<a class="reference internal" href="spawners.html#dist_zero.spawners.spawner.Spawner" title="dist_zero.spawners.spawner.Spawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Spawner</span></code></a>) – A <a class="reference internal" href="spawners.html#dist_zero.spawners.spawner.Spawner" title="dist_zero.spawners.spawner.Spawner"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Spawner</span></code></a> instance to use when creating new nodes.</li>
-<li><strong>ip_host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The host parameter to use when generating transports that send to this machine.</li>
+<li><strong>ip_host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The host parameter to use when generating transports that send to this machine.</li>
 <li><strong>send_to_machine</strong> (<em>func</em>) – A function send_to_machine(message, transport)
 where message is a <a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>, and transport is a <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> for a receiving node.</li>
 </ul>
@@ -184,7 +184,7 @@ where message is a <a class="reference internal" href="message.html#message"><sp
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>ms</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.6)"><em>int</em></a>) – The number of milliseconds to elapse.</td>
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>ms</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – The number of milliseconds to elapse.</td>
 </tr>
 </tbody>
 </table>
@@ -197,11 +197,11 @@ where message is a <a class="reference internal" href="message.html#message"><sp
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)"><em>object</em></a>) – A json message for the API</td>
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.7)"><em>object</em></a>) – A json message for the API</td>
 </tr>
 <tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The API response to the message</td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.6)">object</a></td>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.7)">object</a></td>
 </tr>
 </tbody>
 </table>
@@ -231,7 +231,7 @@ where message is a <a class="reference internal" href="message.html#message"><sp
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
 <li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – A <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> managed by self.</li>
-<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of some other <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a></li>
+<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of some other <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a></li>
 </ul>
 </td>
 </tr>
@@ -256,7 +256,7 @@ where message is a <a class="reference internal" href="message.html#message"><sp
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The handle of a node</li>
 <li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A message for that node</li>
-<li><strong>sending_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of the sending node.</li>
+<li><strong>sending_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the sending node.</li>
 </ul>
 </td>
 </tr>
@@ -281,7 +281,7 @@ where message is a <a class="reference internal" href="message.html#message"><sp
 <tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The id of the newly created node.</p>
 </td>
 </tr>
-<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)">str</a></p>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)">str</a></p>
 </td>
 </tr>
 </tbody>
@@ -298,7 +298,7 @@ where message is a <a class="reference internal" href="message.html#message"><sp
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
 <li><strong>transport</strong> (<a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a>) – A <a class="reference internal" href="transport.html#transport"><span class="std std-ref">Transport</span></a> that some local sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> can use to send to some receiver <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</li>
-<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.6)"><em>str</em></a>) – The id of some new sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</li>
+<li><strong>for_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of some new sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</li>
 </ul>
 </td>
 </tr>
