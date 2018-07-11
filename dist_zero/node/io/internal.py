@@ -113,3 +113,6 @@ class InternalNode(Node):
       self.send(self._adjacent,
                 messages.io.added_adjacent_leaf(
                     kid=self.transfer_handle(handle=kid, for_node_id=self._adjacent['id']), variant=self._variant))
+
+  def deliver(self, message, sequence_number, sender_id):
+    raise errors.InternalError("Messages should not be delivered to internal nodes.")

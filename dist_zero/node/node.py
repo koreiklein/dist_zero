@@ -16,7 +16,25 @@ class Node(object):
     self._fernet_key = Fernet.generate_key().decode(messages.ENCODING)
     self.fernet = Fernet(self._fernet_key)
 
-    self.linker = linker.Linker(self)
+    self.least_unused_sequence_number = 0
+    self._branching = []
+    '''
+    An ordered list of pairs
+    (sent_sequence_number, pairs)
+
+    where sent_sequence_number is a sequence number that has been sent on all exporters
+    and pairs is a list of pairs (importer, least_unreceived_sequence_number)
+      where each pair gives the least unreceived sequence number of the importer at the time
+      that sent_sequence_number was generated.
+    '''
+
+    self.migrators = {}
+    '''
+    A map from migration id to `Migrator` instance.
+    It gives the migrators for the set of migrations that are currently migrating this `Node`
+    '''
+
+    self.linker = linker.Linker(self, logger=self.logger, deliver=self.deliver)
     self.system_config = self._controller.system_config
     '''
     System configuration parameters.
@@ -81,6 +99,12 @@ class Node(object):
     '''
     raise RuntimeError('Abstract Superclass')
 
+  def deliver(self, message, sequence_number, sender_id):
+    '''
+    Abstract method for delivering new messages to this node.
+    '''
+    raise RuntimeError('Abstract Superclass')
+
   def receive(self, message, sender_id):
     '''
     Receive a message from a sender.
@@ -103,3 +127,18 @@ class Node(object):
         'sent_messages': self.linker.least_unused_sequence_number,
         'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
     }
+
+  def advance_sequence_number(self, importers):
+    '''
+    Generate and return a new sequence number.
+
+    This method also tracks internally which Importer sequence numbers this sequence number corresponds to.
+    '''
+    result = self.least_unused_sequence_number
+    self._branching.append(
+        (result,
+         [(importer, importer.least_undelivered_remote_sequence_number) for sender_id, importer in importers.items()]))
+
+    self.least_unused_sequence_number += 1
+
+    return result

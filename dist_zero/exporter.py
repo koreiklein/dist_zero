@@ -3,16 +3,20 @@ from dist_zero import messages, errors
 
 class Exporter(object):
   '''
-  Instances of Exporter will be used by nodes internal to a computation to represent
-  a destination for messages leaving the node.
-
-  During migrations, they are responsible for duplicating messages.
+  Each instance of Exporter will be used by a `Node` to represent its end of a connection
+  on which it is sending messages to another `Node` .
 
   Retransmission:
 
   When a node tries to export a message with the exporter, the exporter will send the message,
   and watch to see whether the message is acknowleded.  If after enough time the message is not acknowledged,
   it will resubmit it.
+
+  Duplication:
+
+  During migrations, a single `Exporter` instance may duplicate all its messages to other `Exporter` instances for a while.
+  Each of the duplicate `Exporter` instances is responsible for retransmitting its own messages.
+
   '''
 
   PENDING_EXPIRATION_TIME_MS = 1 * 400
@@ -24,35 +28,38 @@ class Exporter(object):
   Expired messages will be retransmitted during calls to `Exporter.retransmit_expired_pending_messages`
   '''
 
-  def __init__(self, node, receiver, linker, least_unacknowledged_sequence_number):
+  def __init__(self, receiver, linker, migration_id):
     '''
-    :param node: The internal node.
-    :type node: `Node`
+    :param receiver: The :ref:`handle` of the node receiving from this internal node.
+    :type receiver: :ref:`handle`
 
     :param linker: The linker associated with this exporter
     :type linker: `Linker`
 
-    :param receiver: The :ref:`handle` of the node receiving from this internal node.
-    :type receiver: :ref:`handle`
-
-    :param int least_unacknowledged_sequence_number: The least sequence number this Exporter will ever be responsible for.
+    :param str migration_id: If the exporter will be running as part of the new flow during a migration,
+      then the id of the migration.  Otherwise, `None`
     '''
-    self._node = node
     self._receiver = receiver
 
+    self._migration_id = migration_id
+
     self._linker = linker
+    self.logger = self._linker.logger
 
     # If None, then this Exporter is not duplicating.
     # Otherwise, the list of Exporter instances to duplicate to.
-    self._duplicated_exporter = None
+    self.duplicated_exporters = None
 
-    # A list of tuples (time_sent_ms, sequence_number_when_sent, message)
+    # A list of tuples (time_sent_ms, internal_sequence_number_sent, message)
     # of all messages that have been sent but not acknowledged, along with
     # the time and sequence number at which they were sent.
     self._pending_messages = []
+    self._internal_sequence_number = 0
+    self._internal_sequence_number_to_sequence_number = {}
 
     # See `Exporter.least_unacknowledged_sequence_number`
-    self._least_unacknowledged_sequence_number = least_unacknowledged_sequence_number
+    self._least_internal_unacknowledged_sequence_number = 0
+    self._least_unacknowledged_sequence_number = self._linker.least_unused_sequence_number
 
     # When this exporter is swapping,
 
@@ -63,6 +70,10 @@ class Exporter(object):
     # but self.receiver_id will NOT get any new messages.  Messages before self._first_swapped_sequence_number,
     # however, should still be retransmitted and acknowledged.
     self._first_swapped_sequence_number = None
+
+  def switch_linker(self, linker):
+    self._linker = linker
+    self._migration_id = None
 
   def has_pending_messages(self):
     '''return True iff this exporter has pending messages for which it is waiting for an acknowledgement.'''
@@ -76,10 +87,13 @@ class Exporter(object):
     '''
     cutoff_send_time_ms = self._linker.now_ms - Exporter.PENDING_EXPIRATION_TIME_MS
     while self._pending_messages and self._pending_messages[0][0] <= cutoff_send_time_ms:
-      t, sequence_number, message = self._pending_messages.pop(0)
+      t, internal_sequence_number, message = self._pending_messages.pop(0)
       self._linker.n_retransmissions += 1
-      self._node.logger.warning("Retransmitting message {sequence_number}", extra={'sequence_number': sequence_number})
-      self.export_message(message=message, sequence_number=sequence_number)
+
+      self.logger.warning(
+          "Retransmitting message {internal_sequence_number}",
+          extra={'internal_sequence_number': internal_sequence_number})
+      self._export_message_self_only(message=message, internal_sequence_number=internal_sequence_number)
 
   @property
   def least_unacknowledged_sequence_number(self):
@@ -90,41 +104,69 @@ class Exporter(object):
     '''
     return self._least_unacknowledged_sequence_number
 
-  def initialize(self):
-    self._node.send(self._receiver,
-                    messages.migration.connect_node(
-                        node=self._node.new_handle(self._receiver['id']), direction='sender'))
+  @property
+  def receiver(self):
+    '''The handle of the node receiving from this exporter'''
+    return self._receiver
 
   @property
   def receiver_id(self):
     '''The id of the node receiving from this exporter'''
     return self._receiver['id']
 
-  def acknowledge(self, sequence_number):
+  def acknowledge(self, internal_sequence_number):
     '''
     Acknowledge the receipt of all sequence numbers less than sequence_number.
 
-    :param int sequence_number: Some sequence number for which all smaller sequence numbers should now be acknowledged.
+    :param int internal_sequence_number: Some internal sequence number for which all
+      smaller sequence numbers should now be acknowledged.
     '''
-    self._least_unacknowledged_sequence_number = max(self._least_unacknowledged_sequence_number, sequence_number)
-
     self.logger.debug(
         "exporter acknowledges all sequence numbers below {acknowledged_sequence_number}",
-        extra={'acknowledged_sequence_number': sequence_number})
+        extra={'acknowledged_sequence_number': internal_sequence_number})
 
-    # PERF(KK): binary search is possible here.
-    self._pending_messages = [(t, sn, msg) for t, sn, msg in self._pending_messages
-                              if sn >= self._least_unacknowledged_sequence_number]
+    if internal_sequence_number > self._least_internal_unacknowledged_sequence_number:
+      self._least_internal_unacknowledged_sequence_number = internal_sequence_number
+      self._least_unacknowledged_sequence_number = self._internal_sequence_number_to_sequence_number[
+          internal_sequence_number]
+      # Clear out extra entries in self._internal_sequence_number_to_sequence_number to keep it from growing unboundedly.
+      # PERF(KK): An ordered list could change the asymptotics here... but the dictionary may never be large enough
+      #   for that perf improvement to matter.
+      self._internal_sequence_number_to_sequence_number = {
+          k: v
+          for k, v in self._internal_sequence_number_to_sequence_number.items() if k >= internal_sequence_number
+      }
 
-  def export_started_duplication(self, sequence_number):
+      # PERF(KK): binary search is possible here.
+      self._pending_messages = [(t, sn, msg) for t, sn, msg in self._pending_messages
+                                if sn >= self._least_internal_unacknowledged_sequence_number]
+
+  def send_started_flow(self):
     '''
     Sent a message to the associated node that informs it that this exporter is now duplicating to it.
 
     :param int sequence_number: The first sequence number to be duplicated.
     '''
-    self._node.send(self._receiver,
-                    messages.migration.started_duplication(
-                        node=self._node.new_handle(self._receiver['id']), sequence_number=sequence_number))
+    if self._migration_id is None:
+      raise errors.InternalError(
+          "An exporter should not be sending started_flow messages when it is not part of a migration.")
+
+    self._linker.send(self._receiver,
+                      messages.migration.started_flow(
+                          migration_id=self._migration_id,
+                          sequence_number=self._internal_sequence_number,
+                          sender=self._linker.new_handle(self._receiver['id']),
+                      ))
+
+  def send_swapped_to_duplicate(self):
+    '''
+    For internal nodes, this method sends a swapped to duplicate message
+    to this exporters receiving node.
+    '''
+    print('internal node swap at {}'.format(self._pending_messages))
+    self._linker.send(self._receiver,
+                      messages.migration.swapped_to_duplicate(
+                          self._migration_id, first_live_sequence_number=self._internal_sequence_number))
 
   def export_message(self, message, sequence_number):
     '''
@@ -134,76 +176,68 @@ class Exporter(object):
     :type message: :ref:`message`
     :param int sequence_number: The sequence number of the new message.
     '''
-    if self._duplicated_exporter:
+    if self.duplicated_exporters:
       # NOTE(KK): Call _export_message_self_only instead of export_message,
       #   as the whole idea of a middle node setting up a new
       #   duplicate while it is still migrating is super complex.
       #    We should try to avoid ever having to handle that case.
-      self._duplicated_exporter._export_message_self_only(message, sequence_number)
-      if self._first_swapped_sequence_number is None or self._first_swapped_sequence_number > sequence_number:
-        self._export_message_self_only(message, sequence_number)
-    else:
-      self._export_message_self_only(message, sequence_number)
+      for duplicated_exporter in self.duplicated_exporters:
+        duplicated_exporter.export_message(message, sequence_number)
 
-  def _export_message_self_only(self, message, sequence_number):
+    if self._first_swapped_sequence_number is None:
+      self._export_message_self_only(message, self._internal_sequence_number)
+
+      self._internal_sequence_number += 1
+      self._internal_sequence_number_to_sequence_number[self._internal_sequence_number] = sequence_number + 1
+
+  def _export_message_self_only(self, message, internal_sequence_number):
     '''
     Export a message to the receiver of self, but no duplicated receiver.
 
     :param message: The message
     :type message: :ref:`message`
-    :param int sequence_number: The sequence number of the new message.
+    :param int internal_sequence_number: The sequence number of the new message.
     '''
-    self._pending_messages.append((self._linker.now_ms, sequence_number, message))
-    self._node.send(self._receiver,
-                    messages.linker.sequence_message_send(message=message, sequence_number=sequence_number))
+    self._pending_messages.append((self._linker.now_ms, internal_sequence_number, message))
+    sequence_message = messages.linker.sequence_message_send(message=message, sequence_number=internal_sequence_number)
+    self._linker.send(self._receiver, sequence_message
+                      if self._migration_id is None else messages.migration.new_flow_sequence_message(
+                          self._migration_id, sequence_message))
 
-  def duplicate(self, exporter, sequence_number):
+  def start_new_flow(self, exporters, migration_id):
     '''
-    Start duplicating this exporter to a new receiver.
+    Start a duplicate flow from this exporter to new receivers.
 
     prerequisite: The exporter must not already be duplicating.
 
-    :param exporter: An uninitialized `Exporter` instance to duplicate to.
-    :type exporter: `Exporter`
+    :param list[`Exporter`] exporters: Uninitialized `Exporter` instances to duplicate to.
 
-    :param int sequence_number: The first sequence number to be duplicated.
+    :param str migration_id: The id of the relevant migration.
     '''
-    if self._duplicated_exporter is not None:
-      raise errors.InternalError("Can not duplicate while already duplicating.")
+    if self.duplicated_exporters is not None:
+      raise errors.InternalError("Can not start a new flow on an exporter that is currently duplicating.")
 
-    self._duplicated_exporter = exporter
+    self.duplicated_exporters = exporters
 
-    exporter.export_started_duplication(sequence_number)
+    for exporter in self.duplicated_exporters:
+      exporter.send_started_flow()
 
-  def swap_to_duplicate(self):
+    self._linker.send(self._receiver,
+                      messages.migration.replacing_flow(
+                          migration_id=migration_id, sequence_number=self._internal_sequence_number))
+
+  def swap_to_duplicate(self, migration_id):
     '''
     Prerequisite: self is duplicating to another `Exporter`
 
     Send an swapped_to_duplicate message to the duplicated receiver, and cease sending new messages
     to the old receiver.  Existing messages sent to the old receiver should still be retransmitted.
     '''
-    self._node.send(self._duplicated_exporter._receiver,
-                    messages.migration.swapped_to_duplicate(
-                        node_id=self._node.id, first_live_sequence_number=self._linker.least_unused_sequence_number))
-    self._first_swapped_sequence_number = self._linker.least_unused_sequence_number
-
-  @property
-  def logger(self):
-    return self._node.logger
-
-  def finish_duplicating(self):
-    '''
-    End duplication to the original receiver.
-
-    prerequisite: The exporter must in the process of duplicating.
-
-    Typically, when an `Exporter` finishes duplicating, it will never be used again and should be left
-    for cleanup by the garbage collector.
-
-    :return: The exporter this node was duplicating to.
-    :rtype: `Exporter`
-    '''
-    self.logger.info("Finishing duplication phase for {cur_node_id} ." "  Cutting back to 1 receivers.")
-    self._node.send(self._receiver, messages.migration.finished_duplicating())
-    self._linker.remove_exporter(self)
-    return self._duplicated_exporter
+    for duplicated_exporter in self.duplicated_exporters:
+      self._linker.send(duplicated_exporter._receiver,
+                        messages.migration.swapped_to_duplicate(
+                            migration_id, first_live_sequence_number=duplicated_exporter._internal_sequence_number))
+    self._linker.send(self._receiver,
+                      messages.migration.swapped_from_duplicate(
+                          migration_id, first_live_sequence_number=self._internal_sequence_number))
+    self._first_swapped_sequence_number = self._internal_sequence_number

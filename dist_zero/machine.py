@@ -10,6 +10,7 @@ from dist_zero import errors, messages
 
 from .node import io
 from .node.sum import SumNode
+from .migration.migration_node import MigrationNode
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,14 @@ class MachineController(object):
     :type on_machine: :ref:`handle`
     :return: The id of the newly created node.
     :rtype: str
+    '''
+    raise RuntimeError("Abstract Superclass")
+
+  def terminate_node(self, node_id):
+    '''
+    Stop running a `Node`.
+
+    :param str node_id: The id of the node to terminate.
     '''
     raise RuntimeError("Abstract Superclass")
 
@@ -197,6 +206,9 @@ class NodeManager(MachineController):
 
     return node_config['id']
 
+  def terminate_node(self, node_id):
+    self._node_by_id.pop(node_id)
+
   def new_transport(self, node, for_node_id):
     return messages.machine.ip_transport(self._ip_host)
 
@@ -228,6 +240,8 @@ class NodeManager(MachineController):
       node = io.InternalNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'SumNode':
       node = SumNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'MigrationNode':
+      node = MigrationNode.from_config(node_config, controller=self)
     else:
       raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 
