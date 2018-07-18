@@ -17,7 +17,7 @@ from dist_zero.system_controller import SystemController
 
 class TestLongRunningSum(object):
   @pytest.mark.parametrize('error_regexp,drop_rate,network_error_type', [
-      ('.*increment.*', 0.3, 'drop'),
+      ('.*increment.*', 0.37, 'drop'),
       ('.*increment.*', 0.27, 'duplicate'),
       ('.*increment.*', 0.27, 'reorder'),
   ])
@@ -49,17 +49,71 @@ class TestLongRunningSum(object):
     self._spawn_initial_nodes()
     self.demo.run_for(ms=500)
 
+    if self.demo.mode == spawners.MODE_SIMULATED:
+      total_nodes = sum(
+          self.system.get_simulated_spawner().get_machine_by_id(machine_id).n_nodes for machine_id in self.machine_ids)
+
+      # 2 io internal, 1 sum internal, 2 io outputs, and 2 io output adjacent sum nodes.
+      assert total_nodes == 2 + 1 + 2 + 2
+
     self.input_node_ids = []
     self._spawn_inputs_loop(n_inputs=n_inputs_at_split, total_time_ms=20 * 1000)
-    self.demo.run_for(ms=2000)
+    self.demo.run_for(ms=4000)
+
+    # Uncomment the below line to do more in depth debugging regarding why totals might not add up properly.
+    #self._debug_node_spltting()
+
+    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
+    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
 
     # Assert that each input node has received acknowledgments for all its sent messages.
     for input_node_id in self.input_node_ids:
       stats = self.demo.system.get_stats(input_node_id)
       assert stats['sent_messages'] == stats['acknowledged_messages']
 
-    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
-    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
+    if self.demo.mode == spawners.MODE_SIMULATED:
+      total_nodes = sum(
+          self.system.get_simulated_spawner().get_machine_by_id(machine_id).n_nodes for machine_id in self.machine_ids)
+
+      # 7 from before, 15 io leaves each with a sum node adjacent, and 2 new middle sum nodes.
+      # Importantly, the migration node should be terminated at this point.
+      assert total_nodes == 7 + 15 * 2 + 2
+
+  def _debug_node_spltting(self):
+    '''A useful method for debugging problems when totals don't add up after running a migration.'''
+    inputs = [
+        v for k, v in self.demo.system._spawner._controller_by_id[self.machine_ids[0]]._node_by_id.items()
+        if k.startswith('SumNode_input_kid')
+    ]
+    total_before = sum(x._TESTING_total_before_first_swap for x in inputs)
+    total_after = sum(x._TESTING_total_after_first_swap for x in inputs)
+    midnodes = [
+        v for k, v in self.demo.system._spawner._controller_by_id[self.machine_ids[0]]._node_by_id.items()
+        if k.startswith('SumNode_middle_for')
+    ]
+    mid_total_before = sum(x._TESTING_total_before_first_swap for x in midnodes)
+    mid_total_after = sum(x._TESTING_total_after_first_swap for x in midnodes)
+    lastnode = [
+        v for k, v in self.demo.system._spawner._controller_by_id[self.machine_ids[0]]._node_by_id.items()
+        if k.startswith('SumNode_internal')
+    ][0]
+    fin_total_before = lastnode._TESTING_total_before_first_swap
+    fin_total_after = lastnode._TESTING_total_after_first_swap
+    ex0 = list(midnodes[0]._exporters.values())[0]
+    ex1 = list(midnodes[1]._exporters.values())[0]
+    im0 = list(lastnode._importers.values())[0]
+    im1 = list(lastnode._importers.values())[1]
+    ex_pending = lambda ex: list(sorted(b for a, b, c in ex._pending_messages))
+    im_early = lambda im: list(sorted(im._remote_sequence_number_to_early_message.keys()))
+    print('ex0_pending {}'.format(ex_pending(ex0)))
+    print('ex1_pending {}'.format(ex_pending(ex1)))
+    print('im0_early {}'.format(im_early(im0)))
+    print('im1_early {}'.format(im_early(im1)))
+    print('total_after {}'.format(total_after))
+    print('fin_total_after {}'.format(fin_total_after))
+    if self._total_simulated_amount != self.demo.system.get_output_state(self.user_a_output_id):
+      # Here is a good place to add a breakpoint.
+      pass
 
   def test_single_node_hits_sender_limit(self, demo):
     '''

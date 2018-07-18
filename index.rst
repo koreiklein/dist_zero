@@ -26,6 +26,7 @@ Welcome to DistZero's documentation!
 
    doc/messages
    doc/nodes
+   doc/migrations
    doc/errors
    doc/recorded
 

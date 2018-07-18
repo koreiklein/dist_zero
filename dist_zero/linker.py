@@ -1,4 +1,4 @@
-from dist_zero import importer, exporter, errors
+from dist_zero import importer, exporter, errors, messages
 
 
 class Linker(object):
@@ -23,25 +23,19 @@ class Linker(object):
   TIME_BETWEEN_RETRANSMISSION_CHECKS_MS = 20
   '''The number of ms between checks for whether we should retransmit to receivers.'''
 
-  def __init__(self, node):
+  def __init__(self, node, logger, deliver):
+    '''
+    :param object node: An object implementing methods with the format of `Node.send`, `Node.deliver`, `Node.new_handle`
+    '''
     self._node = node
+    self.logger = logger
 
     self.now_ms = 0
 
-    self._least_unused_sequence_number = 0
-    self._branching = []
-    '''
-    An ordered list of pairs
-    (sent_sequence_number, pairs)
-
-    where sent_sequence_number is a sequence number that has been sent on all exporters
-    and pairs is a list of pairs (importer, least_unreceived_sequence_number)
-      where each pair gives the least unreceived sequence number of the importer at the time
-      that sent_sequence_number was generated.
-    '''
-
     self._importers = {}
     self._exporters = {}
+
+    self.deliver = deliver
 
     self.n_retransmissions = 0
     '''Number of times this node has retransmitted a message'''
@@ -54,6 +48,17 @@ class Linker(object):
     self._time_since_retransmitted_expired_pending_messages = 0
     self._initialized = False
 
+    self._branching = []
+    '''
+    An ordered list of pairs
+    (sent_sequence_number, pairs)
+
+    where sent_sequence_number is a sequence number that has been sent on all exporters
+    and pairs is a list of pairs (importer, least_unreceived_sequence_number)
+      where each pair gives the least unreceived sequence number of the importer at the time
+      that sent_sequence_number was generated.
+    '''
+
   def initialize(self):
     if self._initialized:
       raise errors.InternalError("linker has already been initialized")
@@ -61,14 +66,41 @@ class Linker(object):
     self._initialized = True
 
     for importer in self._importers.values():
-      importer.initialize()
+      self.send(importer.sender,
+                messages.migration.connect_node(node=self.new_handle(importer.sender_id), direction='receiver'))
 
     for exporter in self._exporters.values():
-      exporter.initialize()
+      self.send(exporter.receiver,
+                messages.migration.connect_node(node=self.new_handle(exporter.receiver_id), direction='sender'))
+
+  def remove_exporters(self, receiver_ids):
+    for receiver_id in receiver_ids:
+      self._exporters.pop(receiver_id)
+
+  def remove_importers(self, sender_ids):
+    '''
+    Remove a set of importers from this linker entirely.
+    :param set[str] sender_ids: The identifiers for the importers to remove.
+    '''
+    for sender_id in sender_ids:
+      self._importers.pop(sender_id)
+
+    for i in range(len(self._branching)):
+      sent_sequence_number, pairs = self._branching[i]
+      self._branching[i] = (sent_sequence_number,
+                            [(importer, least_unreceived_sequence_number)
+                             for importer, least_unreceived_sequence_number in self._branching[i][1]
+                             if importer.sender_id not in sender_ids])
+
+  def new_handle(self, for_node_id):
+    return self._node.new_handle(for_node_id)
+
+  def send(self, receiver, message):
+    self._node.send(receiver=receiver, message=message)
 
   @property
   def least_unused_sequence_number(self):
-    return self._least_unused_sequence_number
+    return self._node.least_unused_sequence_number
 
   def advance_sequence_number(self):
     '''
@@ -76,15 +108,15 @@ class Linker(object):
 
     This method also tracks internally which Importer sequence numbers this sequence number corresponds to.
     '''
-    result = self._least_unused_sequence_number
+    result = self._node.least_unused_sequence_number
     self._branching.append((result, [(importer, importer.least_undelivered_remote_sequence_number)
                                      for sender_id, importer in self._importers.items()]))
 
-    self._least_unused_sequence_number += 1
+    self._node.least_unused_sequence_number += 1
 
     return result
 
-  def new_importer(self, sender, first_sequence_number=0):
+  def new_importer(self, sender, first_sequence_number=0, remote_sequence_number_to_early_message=None):
     '''
     Generate and return a new `Importer` instance.
 
@@ -92,24 +124,29 @@ class Linker(object):
     :type sender: :ref:`handle`
     :param int first_sequence_number: The first sequence number this importer should expect to receive.
     '''
-    result = importer.Importer(node=self._node, linker=self, sender=sender, first_sequence_number=first_sequence_number)
+    result = importer.Importer(
+        linker=self,
+        sender=sender,
+        first_sequence_number=first_sequence_number,
+        remote_sequence_number_to_early_message=remote_sequence_number_to_early_message)
     self._importers[sender['id']] = result
     return result
 
-  def new_exporter(self, receiver):
+  def new_exporter(self, receiver, migration_id=None):
     '''
     Generate and return a new `Exporter` instance.
 
     :param receiver: The :ref:`handle` of the node that will receive for this exporter.
     :type receiver: :ref:`handle`
+
+    :param str migration_id: If the exporter will be running as part of the new flow during a migration,
+      then the id of the migration.  Otherwise, `None`
     '''
     result = exporter.Exporter(
-        node=self._node,
         linker=self,
         receiver=receiver,
-        # NOTE(KK): When you implement robustness during a migration, you should think very very carefully
-        #   about how to set this parameter to guarantee correctness.
-        least_unacknowledged_sequence_number=self._least_unused_sequence_number)
+        migration_id=migration_id,
+    )
     self._exporters[receiver['id']] = result
     return result
 
@@ -122,7 +159,7 @@ class Linker(object):
         # the case that the exporter was removed prematurely.
         # In fact, whenever a sender is removed, some acknowledgement message could in theory still be in flight
         # and arrive later on.  It's best to ingore these.
-        self._node.logger.warning(
+        self.logger.warning(
             "Ignoring an acknowledgement for an unknown exporter.  It was likely already removed.",
             extra={'unrecognized_sender_id': sender_id})
 
@@ -134,7 +171,7 @@ class Linker(object):
         # that an importer might be removed while the paired exporter is still retransmitting.
         # That's okay, and can be ignored.  We log a warning because it should be suspicious
         # when messages take too long to arrive.
-        self._node.logger.warning(
+        self.logger.warning(
             "Ignoring a message for an unknown importer.  It was likely already removed.",
             extra={'unrecognized_sender_id': sender_id})
     else:
@@ -144,11 +181,23 @@ class Linker(object):
     '''
     The least sequence number that has not been acknowledged by every Exporter responsible for it.
     '''
-    result = self._least_unused_sequence_number
+    result = self.least_unused_sequence_number
     for exporter in self._exporters.values():
       if exporter.has_pending_messages():
         result = min(result, exporter.least_unacknowledged_sequence_number)
     return result
+
+  def absorb_linker(self, linker):
+    self._branching.extend(linker._branching)
+    self._branching.sort()
+
+    for k, v in linker._exporters.items():
+      v.switch_linker(self)
+      self._exporters[k] = v
+
+    for k, v in linker._importers.items():
+      v.switch_linker(self)
+      self._importers[k] = v
 
   def elapse(self, ms):
     '''
@@ -162,18 +211,15 @@ class Linker(object):
     self._time_since_retransmitted_expired_pending_messages += ms
 
     if self._time_since_sent_acknowledgements > Linker.TIME_BETWEEN_ACKNOWLEDGEMENTS_MS:
-      self._send_acknowledgement_messages()
+      self.send_acknowledgement_messages()
       self._time_since_sent_acknowledgements = 0
 
     if self._time_since_retransmitted_expired_pending_messages > Linker.TIME_BETWEEN_RETRANSMISSION_CHECKS_MS:
-      self._retransmit_expired_pending_messages()
+      for exporter in self._exporters.values():
+        exporter.retransmit_expired_pending_messages()
       self._time_since_retransmitted_expired_pending_messages = 0
 
-  def _retransmit_expired_pending_messages(self):
-    for exporter in self._exporters.values():
-      exporter.retransmit_expired_pending_messages()
-
-  def _send_acknowledgement_messages(self):
+  def _branching_index_for_least_unacknowledged_sequence_number(self):
     least_unacknowledged_sequence_number = self.least_unacknowledged_sequence_number()
 
     branching_index = 0
@@ -181,6 +227,11 @@ class Linker(object):
         self._branching) and self._branching[branching_index][0] < least_unacknowledged_sequence_number:
       # PERF(KK): binary search is possible here.
       branching_index += 1
+
+    return branching_index
+
+  def send_acknowledgement_messages(self):
+    branching_index = self._branching_index_for_least_unacknowledged_sequence_number()
 
     if branching_index == 0:
       # No new messages need to be acknowledged.
@@ -196,9 +247,3 @@ class Linker(object):
           importer.acknowledge(least_undelivered_remote_sequence_number)
 
       self._branching = self._branching[branching_index:]
-
-  def remove_exporter(self, exporter):
-    del self._exporters[exporter.receiver_id]
-
-  def remove_importer(self, importer):
-    del self._importers[importer.sender_id]

@@ -16,7 +16,15 @@ class Node(object):
     self._fernet_key = Fernet.generate_key().decode(messages.ENCODING)
     self.fernet = Fernet(self._fernet_key)
 
-    self.linker = linker.Linker(self)
+    self.least_unused_sequence_number = 0
+
+    self.migrators = {}
+    '''
+    A map from migration id to `Migrator` instance.
+    It gives the migrators for the set of migrations that are currently migrating this `Node`
+    '''
+
+    self.linker = linker.Linker(self, logger=self.logger, deliver=self.deliver)
     self.system_config = self._controller.system_config
     '''
     System configuration parameters.
@@ -81,6 +89,12 @@ class Node(object):
     '''
     raise RuntimeError('Abstract Superclass')
 
+  def deliver(self, message, sequence_number, sender_id):
+    '''
+    Abstract method for delivering new messages to this node.
+    '''
+    raise RuntimeError('Abstract Superclass')
+
   def receive(self, message, sender_id):
     '''
     Receive a message from a sender.
@@ -103,3 +117,22 @@ class Node(object):
         'sent_messages': self.linker.least_unused_sequence_number,
         'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
     }
+
+  def handle_api_message(self, message):
+    '''
+    Handle an api message.
+    '''
+    if message['type'] == 'create_kid_config':
+      return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
+    elif message['type'] == 'new_handle':
+      self.logger.debug(
+          "API is creating a new handle for a new node {new_node_id} to send to the existing local node {local_node_id}",
+          extra={
+              'local_node_id': self.id,
+              'new_node_id': message['new_node_id'],
+          })
+      return self.new_handle(for_node_id=message['new_node_id'])
+    elif message['type'] == 'get_stats':
+      return self.stats()
+    else:
+      self.logger.error('Unrecognized node api message of type "{}"'.format(message['type']))

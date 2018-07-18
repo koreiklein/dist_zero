@@ -22,7 +22,7 @@ def _new_id_uuid(prefix, random_id=None):
   return '{}_{}'.format(prefix, random_id or str(uuid.uuid4()))
 
 
-new_id = _new_id_random if settings.DIST_ZERO_ENV == 'test' else _new_id_uuid
+new_id = _new_id_random if settings.IS_TESTING_ENV else _new_id_uuid
 '''
 Generate unique ids for things.
 

@@ -157,3 +157,9 @@ class LeafNode(Node):
       for t, msg in self._recorded_user.elapse_and_get_messages(ms):
         self.logger.info("Simulated user generated a message", extra={'recorded_message': msg})
         self.receive(msg, sender_id=None)
+
+  def handle_api_message(self, message):
+    if message['type'] == 'get_output_state':
+      return self._controller.get_output_state(self.id)
+    else:
+      return super(LeafNode, self).handle_api_message(message)

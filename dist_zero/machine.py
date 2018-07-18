@@ -10,6 +10,7 @@ from dist_zero import errors, messages
 
 from .node import io
 from .node.sum import SumNode
+from .migration.migration_node import MigrationNode
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,14 @@ class MachineController(object):
     :type on_machine: :ref:`handle`
     :return: The id of the newly created node.
     :rtype: str
+    '''
+    raise RuntimeError("Abstract Superclass")
+
+  def terminate_node(self, node_id):
+    '''
+    Stop running a `Node`.
+
+    :param str node_id: The id of the node to terminate.
     '''
     raise RuntimeError("Abstract Superclass")
 
@@ -197,14 +206,21 @@ class NodeManager(MachineController):
 
     return node_config['id']
 
+  def terminate_node(self, node_id):
+    self._node_by_id.pop(node_id)
+
   def new_transport(self, node, for_node_id):
     return messages.machine.ip_transport(self._ip_host)
 
   def transfer_transport(self, transport, for_node_id):
     return dict(transport)
 
-  def get_node(self, handle):
-    return self._node_by_id[handle['id']]
+  def get_node_by_id(self, node_id):
+    return self._node_by_id[node_id]
+
+  @property
+  def n_nodes(self):
+    return len(self._node_by_id)
 
   def _update_output_node_state(self, node_id, f):
     new_state = f(self._output_node_state_by_id[node_id])
@@ -228,6 +244,8 @@ class NodeManager(MachineController):
       node = io.InternalNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'SumNode':
       node = SumNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'MigrationNode':
+      node = MigrationNode.from_config(node_config, controller=self)
     else:
       raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 
@@ -249,39 +267,11 @@ class NodeManager(MachineController):
     :rtype: object
     '''
     logger.info("API Message of type {message_type}", extra={'message_type': message['type']})
-    if message['type'] == 'api_create_kid_config':
-      node = self._node_by_id[message['internal_node_id']]
-      logger.debug(
-          "API is creating kid config {node_name} for output node {internal_node_id}",
-          extra={
-              'node_name': message['new_node_name'],
-              'internal_node_id': message['internal_node_id']
-          })
+    if message['type'] == 'api_node_message':
+      node = self._node_by_id[message['node_id']]
       return {
           'status': 'ok',
-          'data': node.create_kid_config(message['new_node_name'], message['machine_id']),
-      }
-    elif message['type'] == 'api_new_handle':
-      node = self._node_by_id[message['local_node_id']]
-      logger.debug(
-          "API is creating a new handle for a new node {new_node_id} to send to the existing local node {local_node_id}",
-          extra={
-              'local_node_id': message['local_node_id'],
-              'new_node_id': message['new_node_id'],
-          })
-      return {
-          'status': 'ok',
-          'data': node.new_handle(for_node_id=message['new_node_id']),
-      }
-    elif message['type'] == 'api_get_output_state':
-      return {
-          'status': 'ok',
-          'data': self.get_output_state(message['node_id']),
-      }
-    elif message['type'] == 'api_get_stats':
-      return {
-          'status': 'ok',
-          'data': self.get_stats(message['node_id']),
+          'data': node.handle_api_message(message['message']),
       }
     else:
       logger.error("Unrecognized API message type {message_type}", extra={'message_type': message['type']})
@@ -292,9 +282,6 @@ class NodeManager(MachineController):
 
   def get_output_state(self, node_id):
     return self._output_node_state_by_id[node_id]
-
-  def get_stats(self, node_id):
-    return self._node_by_id[node_id].stats()
 
   def _format_node_id_for_logs(self, node_id):
     if node_id is None:

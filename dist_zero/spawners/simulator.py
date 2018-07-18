@@ -154,14 +154,13 @@ class SimulatedSpawner(spawner.Spawner):
 
       self._elapsed_time_ms = new_elapsed_time_ms
 
-  def get_machine_controller(self, handle):
+  def get_machine_by_id(self, machine_id):
     '''
-    :param handle: The handle of a MachineController being simulated by this simulator.
-    :type handle: :ref:`handle`
+    :param str machine_id: The id of a `MachineController` being simulated by this simulator.
 
     :return: The associated `MachineController` instance.
     '''
-    return self._controller_by_id[handle['id']]
+    return self._controller_by_id[machine_id]
 
   def create_machines(self, machine_configs):
     return [self.create_machine(machine_config) for machine_config in machine_configs]

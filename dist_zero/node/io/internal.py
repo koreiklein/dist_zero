@@ -67,6 +67,12 @@ class InternalNode(Node):
   def elapse(self, ms):
     pass
 
+  def handle_api_message(self, message):
+    if message['type'] == 'create_kid_config':
+      return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
+    else:
+      return super(InternalNode, self).handle_api_message(message)
+
   def create_kid_config(self, name, machine_id):
     '''
     Generate a config for a new child leaf node, and mark it as a pending child on this parent node.
@@ -113,3 +119,6 @@ class InternalNode(Node):
       self.send(self._adjacent,
                 messages.io.added_adjacent_leaf(
                     kid=self.transfer_handle(handle=kid, for_node_id=self._adjacent['id']), variant=self._variant))
+
+  def deliver(self, message, sequence_number, sender_id):
+    raise errors.InternalError("Messages should not be delivered to internal nodes.")
