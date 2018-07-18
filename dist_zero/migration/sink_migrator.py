@@ -174,11 +174,10 @@ class SinkMigrator(migrator.Migrator):
         self._node._deltas.covers(self._old_sender_id_to_first_flow_sequence_number):
 
       self._node.logger.info("SinkMigrator started syncing.", extra={'migration_id': self.migration_id})
+      self._node.send_forward_messages(before=self._old_sender_id_to_first_flow_sequence_number)
       self._node.deltas_only = False
       receivers = self._start_syncing_message['receivers']
       self._sync_target_to_status = {receiver['id']: 'pending' for receiver in receivers}
-
-      self._node.send_forward_messages(before=self._old_sender_id_to_first_flow_sequence_number)
 
       total = self._node._current_state
       total_quotient, total_remainder = total // len(receivers), total % len(receivers)

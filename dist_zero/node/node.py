@@ -117,3 +117,22 @@ class Node(object):
         'sent_messages': self.linker.least_unused_sequence_number,
         'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
     }
+
+  def handle_api_message(self, message):
+    '''
+    Handle an api message.
+    '''
+    if message['type'] == 'create_kid_config':
+      return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
+    elif message['type'] == 'new_handle':
+      self.logger.debug(
+          "API is creating a new handle for a new node {new_node_id} to send to the existing local node {local_node_id}",
+          extra={
+              'local_node_id': self.id,
+              'new_node_id': message['new_node_id'],
+          })
+      return self.new_handle(for_node_id=message['new_node_id'])
+    elif message['type'] == 'get_stats':
+      return self.stats()
+    else:
+      self.logger.error('Unrecognized node api message of type "{}"'.format(message['type']))

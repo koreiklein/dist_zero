@@ -111,42 +111,49 @@ def machine_deliver_to_node(node_id, message, sending_node_id):
 
 
 # API messages
-def api_new_handle(local_node_id, new_node_id):
+def api_node_message(node_id, message):
+  '''
+  Generic api message for passing an inner message to a node on this machine.
+
+  :param str node_id: The id of a `Node` instance running on self.
+  :param message: An inner message for the handle_api_message method of the node identified by ``node_id``
+  :type message: :ref:`message`
+  '''
+  return {'type': 'api_node_message', 'node_id': node_id, 'message': message}
+
+
+def new_handle(new_node_id):
   '''
   Get a new handle that can be used to send messages to a local node.  The handle will be used
   by a node that has not yet been spawned.
 
-  :param str local_node_id: The id of an exsiting `Node` on this machine.
   :param str new_node_id: The id of a `Node` that has not yet been spawned.
   '''
-  return {'type': 'api_new_handle', 'local_node_id': local_node_id, 'new_node_id': new_node_id}
+  return {'type': 'new_handle', 'new_node_id': new_node_id}
 
 
-def api_get_output_state(node_id):
+def get_output_state():
   '''
   Get and return the current output state for an output node.
-  :param str node: The id of an output leaf node.
   :return: The current output state of that node.
   :rtype: object
   '''
-  return {'type': 'api_get_output_state', 'node_id': node_id}
+  return {'type': 'get_output_state'}
 
 
-def api_get_stats(node_id):
+def get_stats():
   '''
   Get and return the stats for a `Node` in the network.
-  :param str node: The id of a `Node` that collects stats.
   :return: The current stats of that node.
   :rtype: dict
   '''
-  return {'type': 'api_get_stats', 'node_id': node_id}
+  return {'type': 'get_stats'}
 
 
-def api_create_kid_config(internal_node_id, new_node_name, machine_id):
+def create_kid_config(new_node_name, machine_id):
   '''
   Create a node_config for a new kid node of an internal io node.
 
-  :param internal_node_id: The id of the parent `InternalNode`.
   :param str new_node_name: The name to use for the new node.
   :param str machine_id: The id of the machine on which the new node will run.
 
@@ -154,8 +161,7 @@ def api_create_kid_config(internal_node_id, new_node_name, machine_id):
   :rtype: :ref:`message`
   '''
   return {
-      'type': 'api_create_kid_config',
-      'internal_node_id': internal_node_id,
+      'type': 'create_kid_config',
       'new_node_name': new_node_name,
       'machine_id': machine_id,
   }

@@ -54,11 +54,12 @@ class SystemController(object):
     machine_id = self._node_id_to_machine_id[internal_node_id]
     return self._send_to_machine(
         machine_id=machine_id,
-        message=messages.machine.api_create_kid_config(
-            internal_node_id=internal_node_id,
-            new_node_name=new_node_name,
-            machine_id=machine_id,
-        ),
+        message=messages.machine.api_node_message(
+            node_id=internal_node_id,
+            message=messages.machine.create_kid_config(
+                new_node_name=new_node_name,
+                machine_id=machine_id,
+            )),
         sock_type='tcp')
 
   def create_kid(self, parent_node_id, new_node_name, machine_id, recorded_user=None):
@@ -155,7 +156,9 @@ class SystemController(object):
     '''
     machine_id = self._node_id_to_machine_id[output_node_id]
     return self._send_to_machine(
-        machine_id=machine_id, message=messages.machine.api_get_output_state(node_id=output_node_id), sock_type='tcp')
+        machine_id=machine_id,
+        message=messages.machine.api_node_message(node_id=output_node_id, message=messages.machine.get_output_state()),
+        sock_type='tcp')
 
   def get_stats(self, node_id):
     '''
@@ -167,7 +170,9 @@ class SystemController(object):
     '''
     machine_id = self._node_id_to_machine_id[node_id]
     return self._send_to_machine(
-        machine_id=machine_id, message=messages.machine.api_get_stats(node_id=node_id), sock_type='tcp')
+        machine_id=machine_id,
+        message=messages.machine.api_node_message(node_id=node_id, message=messages.machine.get_stats()),
+        sock_type='tcp')
 
   def generate_new_handle(self, new_node_id, existing_node_id):
     '''
@@ -182,7 +187,8 @@ class SystemController(object):
     machine_id = self._node_id_to_machine_id[existing_node_id]
     return self._send_to_machine(
         machine_id=machine_id,
-        message=messages.machine.api_new_handle(local_node_id=existing_node_id, new_node_id=new_node_id),
+        message=messages.machine.api_node_message(
+            node_id=existing_node_id, message=messages.machine.new_handle(new_node_id=new_node_id)),
         sock_type='tcp')
 
   def send_to_node(self, node_id, message):

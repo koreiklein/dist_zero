@@ -267,39 +267,11 @@ class NodeManager(MachineController):
     :rtype: object
     '''
     logger.info("API Message of type {message_type}", extra={'message_type': message['type']})
-    if message['type'] == 'api_create_kid_config':
-      node = self._node_by_id[message['internal_node_id']]
-      logger.debug(
-          "API is creating kid config {node_name} for output node {internal_node_id}",
-          extra={
-              'node_name': message['new_node_name'],
-              'internal_node_id': message['internal_node_id']
-          })
+    if message['type'] == 'api_node_message':
+      node = self._node_by_id[message['node_id']]
       return {
           'status': 'ok',
-          'data': node.create_kid_config(message['new_node_name'], message['machine_id']),
-      }
-    elif message['type'] == 'api_new_handle':
-      node = self._node_by_id[message['local_node_id']]
-      logger.debug(
-          "API is creating a new handle for a new node {new_node_id} to send to the existing local node {local_node_id}",
-          extra={
-              'local_node_id': message['local_node_id'],
-              'new_node_id': message['new_node_id'],
-          })
-      return {
-          'status': 'ok',
-          'data': node.new_handle(for_node_id=message['new_node_id']),
-      }
-    elif message['type'] == 'api_get_output_state':
-      return {
-          'status': 'ok',
-          'data': self.get_output_state(message['node_id']),
-      }
-    elif message['type'] == 'api_get_stats':
-      return {
-          'status': 'ok',
-          'data': self.get_stats(message['node_id']),
+          'data': node.handle_api_message(message['message']),
       }
     else:
       logger.error("Unrecognized API message type {message_type}", extra={'message_type': message['type']})
@@ -310,9 +282,6 @@ class NodeManager(MachineController):
 
   def get_output_state(self, node_id):
     return self._output_node_state_by_id[node_id]
-
-  def get_stats(self, node_id):
-    return self._node_by_id[node_id].stats()
 
   def _format_node_id_for_logs(self, node_id):
     if node_id is None:

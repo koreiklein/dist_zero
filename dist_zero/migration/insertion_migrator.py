@@ -76,9 +76,13 @@ class InsertionMigrator(migrator.Migrator):
     elif message['type'] == 'set_sum_total':
       if not self._flow_is_started:
         raise errors.InternalError("Migrator should not receive set_sum_total before the flow has started.")
+      # Set the starting state, as of the state on inputs when they sent started_flow.
       self._node._current_state = message['total']
+
+      # Exit deltas only, add the exporters and start sending to them.
       for nid, receiver in self._receivers.items():
         self._node._exporters[nid] = self._node.linker.new_exporter(receiver, migration_id=self.migration_id)
+      self._node.deltas_only = False
       self._node.send_forward_messages()
       self._node.send(message['from_node'], messages.migration.sum_total_set(self.migration_id))
     elif message['type'] == 'prepare_for_switch':
