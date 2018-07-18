@@ -187,14 +187,13 @@
 
       <span class="bp">self</span><span class="o">.</span><span class="n">_elapsed_time_ms</span> <span class="o">=</span> <span class="n">new_elapsed_time_ms</span>
 
-<div class="viewcode-block" id="SimulatedSpawner.get_machine_controller"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.get_machine_controller">[docs]</a>  <span class="k">def</span> <span class="nf">get_machine_controller</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">):</span>
+<div class="viewcode-block" id="SimulatedSpawner.get_machine_by_id"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.get_machine_by_id">[docs]</a>  <span class="k">def</span> <span class="nf">get_machine_by_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    :param handle: The handle of a MachineController being simulated by this simulator.</span>
-<span class="sd">    :type handle: :ref:`handle`</span>
+<span class="sd">    :param str machine_id: The id of a `MachineController` being simulated by this simulator.</span>
 
 <span class="sd">    :return: The associated `MachineController` instance.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller_by_id</span><span class="p">[</span><span class="n">handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller_by_id</span><span class="p">[</span><span class="n">machine_id</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="SimulatedSpawner.create_machines"><a class="viewcode-back" href="../../../doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.create_machines">[docs]</a>  <span class="k">def</span> <span class="nf">create_machines</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">machine_configs</span><span class="p">):</span>
     <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">create_machine</span><span class="p">(</span><span class="n">machine_config</span><span class="p">)</span> <span class="k">for</span> <span class="n">machine_config</span> <span class="ow">in</span> <span class="n">machine_configs</span><span class="p">]</span></div>

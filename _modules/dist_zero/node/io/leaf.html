@@ -142,7 +142,7 @@
       <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Leaf node is postponing an input_action message send since it does not yet have an exporter.&quot;</span><span class="p">)</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_pre_active_messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
 
-  <span class="k">def</span> <span class="nf">deliver</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sequence_number</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
+<div class="viewcode-block" id="LeafNode.deliver"><a class="viewcode-back" href="../../../../doc/nodes.html#dist_zero.node.io.leaf.LeafNode.deliver">[docs]</a>  <span class="k">def</span> <span class="nf">deliver</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sequence_number</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variant</span> <span class="o">!=</span> <span class="s1">&#39;output&#39;</span><span class="p">:</span>
       <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Only &#39;output&#39; variant nodes may receive output actions&quot;</span><span class="p">)</span>
 
@@ -150,7 +150,7 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Output incrementing state by </span><span class="si">{increment}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;increment&#39;</span><span class="p">:</span> <span class="n">increment</span><span class="p">})</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_update_state</span><span class="p">(</span><span class="k">lambda</span> <span class="n">amount</span><span class="p">:</span> <span class="n">amount</span> <span class="o">+</span> <span class="n">increment</span><span class="p">)</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">advance_sequence_number</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">advance_sequence_number</span><span class="p">()</span></div>
 
   <span class="nd">@staticmethod</span>
   <span class="k">def</span> <span class="nf">_init_recorded_user_from_config</span><span class="p">(</span><span class="n">recorded_user_json</span><span class="p">):</span>
@@ -189,7 +189,13 @@
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recorded_user</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
       <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">msg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recorded_user</span><span class="o">.</span><span class="n">elapse_and_get_messages</span><span class="p">(</span><span class="n">ms</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Simulated user generated a message&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;recorded_message&#39;</span><span class="p">:</span> <span class="n">msg</span><span class="p">})</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">receive</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">sender_id</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></div></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">receive</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">sender_id</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="LeafNode.handle_api_message"><a class="viewcode-back" href="../../../../doc/nodes.html#dist_zero.node.io.leaf.LeafNode.handle_api_message">[docs]</a>  <span class="k">def</span> <span class="nf">handle_api_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;get_output_state&#39;</span><span class="p">:</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">get_output_state</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">LeafNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">handle_api_message</span><span class="p">(</span><span class="n">message</span><span class="p">)</span></div></div>
 </pre></div>
 
           </div>

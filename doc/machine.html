@@ -113,6 +113,20 @@ runs a single <a class="reference internal" href="#dist_zero.machine.NodeManager
 </dd></dl>
 
 <dl class="method">
+<dt id="dist_zero.machine.MachineController.terminate_node">
+<code class="descname">terminate_node</code><span class="sig-paren">(</span><em>node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.terminate_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.terminate_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>Stop running a <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the node to terminate.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
 <dt id="dist_zero.machine.MachineController.transfer_transport">
 <code class="descname">transfer_transport</code><span class="sig-paren">(</span><em>transport</em>, <em>for_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#MachineController.transfer_transport"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.MachineController.transfer_transport" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a new transport suitable for a distinct sender.</p>
@@ -283,6 +297,20 @@ where message is a <a class="reference internal" href="message.html#message"><sp
 </tr>
 <tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)">str</a></p>
 </td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.machine.NodeManager.terminate_node">
+<code class="descname">terminate_node</code><span class="sig-paren">(</span><em>node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/machine.html#NodeManager.terminate_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.machine.NodeManager.terminate_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>Stop running a <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the node to terminate.</td>
 </tr>
 </tbody>
 </table>

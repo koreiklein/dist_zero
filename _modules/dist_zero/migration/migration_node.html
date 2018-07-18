@@ -1,0 +1,228 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>dist_zero.migration.migration_node &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for dist_zero.migration.migration_node</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">itertools</span>
+
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">messages</span><span class="p">,</span> <span class="n">errors</span>
+<span class="kn">from</span> <span class="nn">dist_zero.node</span> <span class="k">import</span> <span class="n">node</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">from</span> <span class="nn">dist_zero.migration.state.state</span> <span class="k">import</span> <span class="n">State</span>
+<span class="kn">from</span> <span class="nn">dist_zero.migration.state.state_01_starting_new_nodes</span> <span class="k">import</span> <span class="n">StartingNewNodesState</span>
+<span class="kn">from</span> <span class="nn">dist_zero.migration.state.state_02_starting_node_migrators</span> <span class="k">import</span> <span class="n">StartingNodeMigratorsState</span>
+<span class="kn">from</span> <span class="nn">dist_zero.migration.state.state_03_starting_new_flow</span> <span class="k">import</span> <span class="n">StartingNewFlowState</span>
+<span class="kn">from</span> <span class="nn">dist_zero.migration.state.state_04_syncing_new_nodes</span> <span class="k">import</span> <span class="n">SyncingNewNodesState</span>
+<span class="kn">from</span> <span class="nn">dist_zero.migration.state.state_05_preparing_switching</span> <span class="k">import</span> <span class="n">PreparingSwitchingState</span>
+<span class="kn">from</span> <span class="nn">dist_zero.migration.state.state_06_switching</span> <span class="k">import</span> <span class="n">SwitchingState</span>
+<span class="kn">from</span> <span class="nn">dist_zero.migration.state.state_07_terminating_migrators</span> <span class="k">import</span> <span class="n">TerminatingMigratorsState</span>
+<span class="kn">from</span> <span class="nn">dist_zero.migration.state.state_08_finished</span> <span class="k">import</span> <span class="n">FinishedState</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="MigrationNode"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.migration_node.MigrationNode">[docs]</a><span class="k">class</span> <span class="nc">MigrationNode</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Each migration node will manage a single migration.</span>
+
+<span class="sd">  The migration will set up a new flow of data from a nonempty set of existing source</span>
+<span class="sd">  nodes to a nonempty set of existing sink nodes.  In setting up the new flow, the migration</span>
+<span class="sd">  may spawn many new &quot;insertion&quot; nodes.</span>
+
+<span class="sd">  The migration will also remove an old flow of data from the source nodes to the sink nodes.</span>
+
+<span class="sd">  Importantly, not a single message arriving at the inputs should be lost over the course of the migration.</span>
+
+<span class="sd">  The migration node itself will store the overall state of the migration.  Each node involved in the migration</span>
+<span class="sd">  will be attached to a separate `Migrator` subclass will run that will control how that node behaves during the migration.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">migration_id</span><span class="p">,</span> <span class="n">controller</span><span class="p">,</span> <span class="n">migration_config</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param str migration_id: The node id of this migration.</span>
+
+<span class="sd">    :param object migration_config: Configuration parameters for the migration.</span>
+<span class="sd">      These parameters will be parsed by the different `State` classes responsible for each state of the migration.</span>
+
+<span class="sd">    :param `MachineController` controller: the controller for this node&#39;s machine.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">migration_id</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span> <span class="o">=</span> <span class="n">controller</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state</span> <span class="o">=</span> <span class="n">State</span><span class="o">.</span><span class="n">NEW</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_migration_config</span> <span class="o">=</span> <span class="n">migration_config</span>
+
+    <span class="nb">super</span><span class="p">(</span><span class="n">MigrationNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
+
+  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">from_config</span><span class="p">(</span><span class="n">node_config</span><span class="p">,</span> <span class="n">controller</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">MigrationNode</span><span class="p">(</span><span class="n">migration_id</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">controller</span><span class="o">=</span><span class="n">controller</span><span class="p">,</span> <span class="n">migration_config</span><span class="o">=</span><span class="n">node_config</span><span class="p">)</span>
+
+<div class="viewcode-block" id="MigrationNode.receive"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.migration_node.MigrationNode.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span><span class="o">.</span><span class="n">receive</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="o">=</span><span class="n">sender_id</span><span class="p">)</span></div>
+
+  <span class="k">def</span> <span class="nf">_transition_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">from_state</span><span class="p">,</span> <span class="n">to_state</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Move from one state to another.&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_state</span> <span class="o">!=</span> <span class="n">from_state</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Must be in state </span><span class="si">{}</span><span class="s2"> to transition&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">from_state</span><span class="p">))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Migration transition </span><span class="si">{from_state}</span><span class="s2"> -&gt; </span><span class="si">{to_state}</span><span class="s2"> for </span><span class="si">{cur_node_id}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;from_state&#39;</span><span class="p">:</span> <span class="n">from_state</span><span class="p">,</span>
+            <span class="s1">&#39;to_state&#39;</span><span class="p">:</span> <span class="n">to_state</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state</span> <span class="o">=</span> <span class="n">to_state</span>
+
+<div class="viewcode-block" id="MigrationNode.initialize"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.migration_node.MigrationNode.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">State</span><span class="o">.</span><span class="n">NEW</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">STARTING_NEW_NODES</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span> <span class="o">=</span> <span class="n">StartingNewNodesState</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_migration_config</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span></div>
+
+  <span class="k">def</span> <span class="nf">finish_state_starting_new_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">insertion_nodes</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">State</span><span class="o">.</span><span class="n">STARTING_NEW_NODES</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">STARTING_NODE_MIGRATORS</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">insertion_nodes</span> <span class="o">=</span> <span class="n">insertion_nodes</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span> <span class="o">=</span> <span class="n">StartingNodeMigratorsState</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_migration_config</span><span class="p">,</span> <span class="n">insertion_nodes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">insertion_nodes</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+  <span class="k">def</span> <span class="nf">finish_state_starting_node_migrators</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_nodes</span><span class="p">,</span> <span class="n">sink_nodes</span><span class="p">,</span> <span class="n">removal_nodes</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">State</span><span class="o">.</span><span class="n">STARTING_NODE_MIGRATORS</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">STARTING_NEW_FLOW</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">source_nodes</span> <span class="o">=</span> <span class="n">source_nodes</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">sink_nodes</span> <span class="o">=</span> <span class="n">sink_nodes</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">removal_nodes</span> <span class="o">=</span> <span class="n">removal_nodes</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span> <span class="o">=</span> <span class="n">StartingNewFlowState</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_migration_config</span><span class="p">,</span> <span class="n">source_nodes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">source_nodes</span><span class="p">,</span> <span class="n">sink_nodes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sink_nodes</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+  <span class="k">def</span> <span class="nf">finish_state_starting_new_flow</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">State</span><span class="o">.</span><span class="n">STARTING_NEW_FLOW</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">SYNCING_NEW_NODES</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span> <span class="o">=</span> <span class="n">SyncingNewNodesState</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_migration_config</span><span class="p">,</span> <span class="n">insertion_nodes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">insertion_nodes</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+  <span class="k">def</span> <span class="nf">finish_state_syncing_new_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">State</span><span class="o">.</span><span class="n">SYNCING_NEW_NODES</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">PREPARING_SWITCHING</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span> <span class="o">=</span> <span class="n">PreparingSwitchingState</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="p">,</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_migration_config</span><span class="p">,</span>
+        <span class="n">insertion_nodes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">insertion_nodes</span><span class="p">,</span>
+        <span class="n">sink_nodes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sink_nodes</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+  <span class="k">def</span> <span class="nf">finish_state_preparing_switching</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">State</span><span class="o">.</span><span class="n">PREPARING_SWITCHING</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">SWITCHING</span><span class="p">)</span>
+    <span class="c1"># At this point, the migration is &quot;over the hump&quot;, nde new flow is now destined to become active, and the</span>
+    <span class="c1"># old flow is destined to be removed.  The migration can no longer be reversed.</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span> <span class="o">=</span> <span class="n">SwitchingState</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_migration_config</span><span class="p">,</span> <span class="n">source_nodes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">source_nodes</span><span class="p">,</span> <span class="n">sink_nodes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sink_nodes</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+  <span class="k">def</span> <span class="nf">finish_state_switching</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">State</span><span class="o">.</span><span class="n">SWITCHING</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">TERMINATING_MIGRATORS</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span> <span class="o">=</span> <span class="n">TerminatingMigratorsState</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="p">,</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_migration_config</span><span class="p">,</span>
+        <span class="n">all_nodes</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span>
+            <span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">source_nodes</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">insertion_nodes</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">removal_nodes</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">sink_nodes</span><span class="o">.</span><span class="n">values</span><span class="p">())))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+  <span class="k">def</span> <span class="nf">finish_state_terminating_migrators</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">State</span><span class="o">.</span><span class="n">TERMINATING_MIGRATORS</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">FINISHED</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span> <span class="o">=</span> <span class="n">FinishedState</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_migration_config</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_state_controller</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">terminate_node</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+
+<div class="viewcode-block" id="MigrationNode.elapse"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.migration_node.MigrationNode.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="c1"># TODO(KK): Add retransmission to migration nodes when it is taking to long to move into the next state.</span>
+    <span class="c1">#   Perhaps it would help to use exporters/importers?  Alternatively, the messages to resend in each state</span>
+    <span class="c1">#   are simple enough, that it would make sense to set up the processing of each message to be idempotent</span>
+    <span class="c1">#   and just have the migration node periodically resent messages.</span>
+    <span class="k">pass</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -16,7 +16,7 @@
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Errors" href="errors.html" />
+    <link rel="next" title="Migrations" href="migrations.html" />
     <link rel="prev" title="Messages" href="messages.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -43,6 +43,12 @@ that run on that machine.</p>
 <em class="property">class </em><code class="descclassname">dist_zero.node.node.</code><code class="descname">Node</code><span class="sig-paren">(</span><em>logger</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/node.html#Node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.node.Node" title="Permalink to this definition">¶</a></dt>
 <dd><p>Abstract base class for nodes</p>
 <dl class="method">
+<dt id="dist_zero.node.node.Node.deliver">
+<code class="descname">deliver</code><span class="sig-paren">(</span><em>message</em>, <em>sequence_number</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/node.html#Node.deliver"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.node.Node.deliver" title="Permalink to this definition">¶</a></dt>
+<dd><p>Abstract method for delivering new messages to this node.</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="dist_zero.node.node.Node.elapse">
 <code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/node.html#Node.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.node.Node.elapse" title="Permalink to this definition">¶</a></dt>
 <dd><p>Elapse ms of time on this node.</p>
@@ -57,9 +63,22 @@ that run on that machine.</p>
 </dd></dl>
 
 <dl class="method">
+<dt id="dist_zero.node.node.Node.handle_api_message">
+<code class="descname">handle_api_message</code><span class="sig-paren">(</span><em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/node.html#Node.handle_api_message"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.node.Node.handle_api_message" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle an api message.</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="dist_zero.node.node.Node.initialize">
 <code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/node.html#Node.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.node.Node.initialize" title="Permalink to this definition">¶</a></dt>
 <dd><p>Called exactly once, when a node starts to run.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.node.node.Node.migrators">
+<code class="descname">migrators</code><em class="property"> = None</em><a class="headerlink" href="#dist_zero.node.node.Node.migrators" title="Permalink to this definition">¶</a></dt>
+<dd><p>A map from migration id to <a class="reference internal" href="migrations.html#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> instance.
+It gives the migrators for the set of migrations that are currently migrating this <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a></p>
 </dd></dl>
 
 <dl class="method">
@@ -166,7 +185,7 @@ that run on that machine.</p>
 
 <span class="target" id="module-dist_zero.linker"></span><dl class="class">
 <dt id="dist_zero.linker.Linker">
-<em class="property">class </em><code class="descclassname">dist_zero.linker.</code><code class="descname">Linker</code><span class="sig-paren">(</span><em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/linker.html#Linker"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.linker.Linker" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">dist_zero.linker.</code><code class="descname">Linker</code><span class="sig-paren">(</span><em>node</em>, <em>logger</em>, <em>deliver</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/linker.html#Linker"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.linker.Linker" title="Permalink to this definition">¶</a></dt>
 <dd><p>For linking a possibly empty set of <a class="reference internal" href="#dist_zero.importer.Importer" title="dist_zero.importer.Importer"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Importer</span></code></a> instances to a possibly empty set of <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a> instances.</p>
 <p>Each linker is associated with some <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>.
 As that node adds and removes <a class="reference internal" href="#dist_zero.importer.Importer" title="dist_zero.importer.Importer"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Importer</span></code></a> and <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a> classes, it will register them with its associated <a class="reference internal" href="#dist_zero.linker.Linker" title="dist_zero.linker.Linker"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Linker</span></code></a>
@@ -177,6 +196,14 @@ that sequence number to export.
 It will also elapse time through the linker.</p>
 <p>The linker is then expected to make sure that <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a> instances retransmit at the right times
 and that <a class="reference internal" href="#dist_zero.importer.Importer" title="dist_zero.importer.Importer"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Importer</span></code></a> instances generate proper acknowledgements.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>node</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.7)"><em>object</em></a>) – An object implementing methods with the format of <a class="reference internal" href="#dist_zero.node.node.Node.send" title="dist_zero.node.node.Node.send"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.send</span></code></a>, <a class="reference internal" href="#dist_zero.node.node.Node.deliver" title="dist_zero.node.node.Node.deliver"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.deliver</span></code></a>, <a class="reference internal" href="#dist_zero.node.node.Node.new_handle" title="dist_zero.node.node.Node.new_handle"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.new_handle</span></code></a></td>
+</tr>
+</tbody>
+</table>
 <dl class="attribute">
 <dt id="dist_zero.linker.Linker.TIME_BETWEEN_ACKNOWLEDGEMENTS_MS">
 <code class="descname">TIME_BETWEEN_ACKNOWLEDGEMENTS_MS</code><em class="property"> = 30</em><a class="headerlink" href="#dist_zero.linker.Linker.TIME_BETWEEN_ACKNOWLEDGEMENTS_MS" title="Permalink to this definition">¶</a></dt>
@@ -236,13 +263,18 @@ and that <a class="reference internal" href="#dist_zero.importer.Importer" title
 
 <dl class="method">
 <dt id="dist_zero.linker.Linker.new_exporter">
-<code class="descname">new_exporter</code><span class="sig-paren">(</span><em>receiver</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/linker.html#Linker.new_exporter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.linker.Linker.new_exporter" title="Permalink to this definition">¶</a></dt>
+<code class="descname">new_exporter</code><span class="sig-paren">(</span><em>receiver</em>, <em>migration_id=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/linker.html#Linker.new_exporter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.linker.Linker.new_exporter" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate and return a new <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a> instance.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the node that will receive for this exporter.</td>
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the node that will receive for this exporter.</li>
+<li><strong>migration_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – If the exporter will be running as part of the new flow during a migration,
+then the id of the migration.  Otherwise, <a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.7)"><code class="xref any docutils literal notranslate"><span class="pre">None</span></code></a></li>
+</ul>
+</td>
 </tr>
 </tbody>
 </table>
@@ -250,7 +282,7 @@ and that <a class="reference internal" href="#dist_zero.importer.Importer" title
 
 <dl class="method">
 <dt id="dist_zero.linker.Linker.new_importer">
-<code class="descname">new_importer</code><span class="sig-paren">(</span><em>sender</em>, <em>first_sequence_number=0</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/linker.html#Linker.new_importer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.linker.Linker.new_importer" title="Permalink to this definition">¶</a></dt>
+<code class="descname">new_importer</code><span class="sig-paren">(</span><em>sender</em>, <em>first_sequence_number=0</em>, <em>remote_sequence_number_to_early_message=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/linker.html#Linker.new_importer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.linker.Linker.new_importer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate and return a new <a class="reference internal" href="#dist_zero.importer.Importer" title="dist_zero.importer.Importer"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Importer</span></code></a> instance.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
@@ -266,11 +298,18 @@ and that <a class="reference internal" href="#dist_zero.importer.Importer" title
 </table>
 </dd></dl>
 
+<dl class="method">
+<dt id="dist_zero.linker.Linker.remove_importers">
+<code class="descname">remove_importers</code><span class="sig-paren">(</span><em>sender_ids</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/linker.html#Linker.remove_importers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.linker.Linker.remove_importers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove a set of importers from this linker entirely.
+:param set[str] sender_ids: The identifiers for the importers to remove.</p>
+</dd></dl>
+
 </dd></dl>
 
 <span class="target" id="module-dist_zero.importer"></span><dl class="class">
 <dt id="dist_zero.importer.Importer">
-<em class="property">class </em><code class="descclassname">dist_zero.importer.</code><code class="descname">Importer</code><span class="sig-paren">(</span><em>node</em>, <em>linker</em>, <em>sender</em>, <em>first_sequence_number=0</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/importer.html#Importer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.importer.Importer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">dist_zero.importer.</code><code class="descname">Importer</code><span class="sig-paren">(</span><em>linker</em>, <em>sender</em>, <em>first_sequence_number=0</em>, <em>remote_sequence_number_to_early_message=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/importer.html#Importer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.importer.Importer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Instances of Importer will be used by nodes internal to a computation to represent
 a source of input messages to that node.</p>
 <p>As messages arrive from the sender, the underlying <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> should pass them to the <a class="reference internal" href="#dist_zero.importer.Importer.import_message" title="dist_zero.importer.Importer.import_message"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Importer.import_message</span></code></a> method.
@@ -281,7 +320,6 @@ each message, exactly once, and in the right order.</p>
 <col class="field-body" />
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
-<li><strong>node</strong> (<a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The internal node.</li>
 <li><strong>linker</strong> (<a class="reference internal" href="#dist_zero.linker.Linker" title="dist_zero.linker.Linker"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Linker</span></code></a>) – The linker associated with this importer</li>
 <li><strong>sender</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the node sending to this internal node.</li>
 <li><strong>first_sequence_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – The first sequence number this importer should expect to receive.</li>
@@ -327,30 +365,32 @@ be acknowledged by the underlying <a class="reference internal" href="#dist_zero
 <dl class="attribute">
 <dt id="dist_zero.importer.Importer.least_undelivered_remote_sequence_number">
 <code class="descname">least_undelivered_remote_sequence_number</code><a class="headerlink" href="#dist_zero.importer.Importer.least_undelivered_remote_sequence_number" title="Permalink to this definition">¶</a></dt>
-<dd><p>The least sequence number (in the sender’s sequence) that has never been delivered to self._node .</p>
+<dd><p>The least sequence number (in the sender’s sequence) that has never been delivered.</p>
 </dd></dl>
 
 </dd></dl>
 
 <span class="target" id="module-dist_zero.exporter"></span><dl class="class">
 <dt id="dist_zero.exporter.Exporter">
-<em class="property">class </em><code class="descclassname">dist_zero.exporter.</code><code class="descname">Exporter</code><span class="sig-paren">(</span><em>node</em>, <em>receiver</em>, <em>linker</em>, <em>least_unacknowledged_sequence_number</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter" title="Permalink to this definition">¶</a></dt>
-<dd><p>Instances of Exporter will be used by nodes internal to a computation to represent
-a destination for messages leaving the node.</p>
-<p>During migrations, they are responsible for duplicating messages.</p>
+<em class="property">class </em><code class="descclassname">dist_zero.exporter.</code><code class="descname">Exporter</code><span class="sig-paren">(</span><em>receiver</em>, <em>linker</em>, <em>migration_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Each instance of Exporter will be used by a <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> to represent its end of a connection
+on which it is sending messages to another <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> .</p>
 <p>Retransmission:</p>
 <p>When a node tries to export a message with the exporter, the exporter will send the message,
 and watch to see whether the message is acknowleded.  If after enough time the message is not acknowledged,
 it will resubmit it.</p>
+<p>Duplication:</p>
+<p>During migrations, a single <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a> instance may duplicate all its messages to other <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a> instances for a while.
+Each of the duplicate <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a> instances is responsible for retransmitting its own messages.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
-<li><strong>node</strong> (<a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The internal node.</li>
-<li><strong>linker</strong> (<a class="reference internal" href="#dist_zero.linker.Linker" title="dist_zero.linker.Linker"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Linker</span></code></a>) – The linker associated with this exporter</li>
 <li><strong>receiver</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the node receiving from this internal node.</li>
-<li><strong>least_unacknowledged_sequence_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – The least sequence number this Exporter will ever be responsible for.</li>
+<li><strong>linker</strong> (<a class="reference internal" href="#dist_zero.linker.Linker" title="dist_zero.linker.Linker"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Linker</span></code></a>) – The linker associated with this exporter</li>
+<li><strong>migration_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – If the exporter will be running as part of the new flow during a migration,
+then the id of the migration.  Otherwise, <a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.7)"><code class="xref any docutils literal notranslate"><span class="pre">None</span></code></a></li>
 </ul>
 </td>
 </tr>
@@ -367,32 +407,14 @@ it will be considered expired.</p>
 
 <dl class="method">
 <dt id="dist_zero.exporter.Exporter.acknowledge">
-<code class="descname">acknowledge</code><span class="sig-paren">(</span><em>sequence_number</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter.acknowledge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter.acknowledge" title="Permalink to this definition">¶</a></dt>
+<code class="descname">acknowledge</code><span class="sig-paren">(</span><em>internal_sequence_number</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter.acknowledge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter.acknowledge" title="Permalink to this definition">¶</a></dt>
 <dd><p>Acknowledge the receipt of all sequence numbers less than sequence_number.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>sequence_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Some sequence number for which all smaller sequence numbers should now be acknowledged.</td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.exporter.Exporter.duplicate">
-<code class="descname">duplicate</code><span class="sig-paren">(</span><em>exporter</em>, <em>sequence_number</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter.duplicate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter.duplicate" title="Permalink to this definition">¶</a></dt>
-<dd><p>Start duplicating this exporter to a new receiver.</p>
-<p>prerequisite: The exporter must not already be duplicating.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
-<li><strong>exporter</strong> (<a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a>) – An uninitialized <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a> instance to duplicate to.</li>
-<li><strong>sequence_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – The first sequence number to be duplicated.</li>
-</ul>
-</td>
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>internal_sequence_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Some internal sequence number for which all
+smaller sequence numbers should now be acknowledged.</td>
 </tr>
 </tbody>
 </table>
@@ -411,39 +433,6 @@ it will be considered expired.</p>
 <li><strong>sequence_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – The sequence number of the new message.</li>
 </ul>
 </td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.exporter.Exporter.export_started_duplication">
-<code class="descname">export_started_duplication</code><span class="sig-paren">(</span><em>sequence_number</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter.export_started_duplication"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter.export_started_duplication" title="Permalink to this definition">¶</a></dt>
-<dd><p>Sent a message to the associated node that informs it that this exporter is now duplicating to it.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>sequence_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – The first sequence number to be duplicated.</td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.exporter.Exporter.finish_duplicating">
-<code class="descname">finish_duplicating</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter.finish_duplicating"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter.finish_duplicating" title="Permalink to this definition">¶</a></dt>
-<dd><p>End duplication to the original receiver.</p>
-<p>prerequisite: The exporter must in the process of duplicating.</p>
-<p>Typically, when an <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a> finishes duplicating, it will never be used again and should be left
-for cleanup by the garbage collector.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The exporter this node was duplicating to.</td>
-</tr>
-<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a></td>
 </tr>
 </tbody>
 </table>
@@ -469,6 +458,12 @@ for cleanup by the garbage collector.</p>
 </dd></dl>
 
 <dl class="attribute">
+<dt id="dist_zero.exporter.Exporter.receiver">
+<code class="descname">receiver</code><a class="headerlink" href="#dist_zero.exporter.Exporter.receiver" title="Permalink to this definition">¶</a></dt>
+<dd><p>The handle of the node receiving from this exporter</p>
+</dd></dl>
+
+<dl class="attribute">
 <dt id="dist_zero.exporter.Exporter.receiver_id">
 <code class="descname">receiver_id</code><a class="headerlink" href="#dist_zero.exporter.Exporter.receiver_id" title="Permalink to this definition">¶</a></dt>
 <dd><p>The id of the node receiving from this exporter</p>
@@ -486,14 +481,6 @@ for cleanup by the garbage collector.</p>
 </tr>
 </tbody>
 </table>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.exporter.Exporter.swap_to_duplicate">
-<code class="descname">swap_to_duplicate</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/exporter.html#Exporter.swap_to_duplicate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.exporter.Exporter.swap_to_duplicate" title="Permalink to this definition">¶</a></dt>
-<dd><p>Prerequisite: self is duplicating to another <a class="reference internal" href="#dist_zero.exporter.Exporter" title="dist_zero.exporter.Exporter"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Exporter</span></code></a></p>
-<p>Send an swapped_to_duplicate message to the duplicated receiver, and cease sending new messages
-to the old receiver.  Existing messages sent to the old receiver should still be retransmitted.</p>
 </dd></dl>
 
 </dd></dl>
@@ -559,6 +546,12 @@ This state is important for output leaves that update that state over time.</li>
 </dd></dl>
 
 <dl class="method">
+<dt id="dist_zero.node.io.internal.InternalNode.deliver">
+<code class="descname">deliver</code><span class="sig-paren">(</span><em>message</em>, <em>sequence_number</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/internal.html#InternalNode.deliver"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.internal.InternalNode.deliver" title="Permalink to this definition">¶</a></dt>
+<dd><p>Abstract method for delivering new messages to this node.</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="dist_zero.node.io.internal.InternalNode.elapse">
 <code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/internal.html#InternalNode.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.internal.InternalNode.elapse" title="Permalink to this definition">¶</a></dt>
 <dd><p>Elapse ms of time on this node.</p>
@@ -570,6 +563,12 @@ This state is important for output leaves that update that state over time.</li>
 </tr>
 </tbody>
 </table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.node.io.internal.InternalNode.handle_api_message">
+<code class="descname">handle_api_message</code><span class="sig-paren">(</span><em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/internal.html#InternalNode.handle_api_message"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.internal.InternalNode.handle_api_message" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle an api message.</p>
 </dd></dl>
 
 <dl class="method">
@@ -637,6 +636,12 @@ node should playback the actions of an attached <a class="reference internal" hr
 </tbody>
 </table>
 <dl class="method">
+<dt id="dist_zero.node.io.leaf.LeafNode.deliver">
+<code class="descname">deliver</code><span class="sig-paren">(</span><em>message</em>, <em>sequence_number</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/leaf.html#LeafNode.deliver"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.leaf.LeafNode.deliver" title="Permalink to this definition">¶</a></dt>
+<dd><p>Abstract method for delivering new messages to this node.</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="dist_zero.node.io.leaf.LeafNode.elapse">
 <code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/leaf.html#LeafNode.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.leaf.LeafNode.elapse" title="Permalink to this definition">¶</a></dt>
 <dd><p>Elapse ms of time on this node.</p>
@@ -648,6 +653,12 @@ node should playback the actions of an attached <a class="reference internal" hr
 </tr>
 </tbody>
 </table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.node.io.leaf.LeafNode.handle_api_message">
+<code class="descname">handle_api_message</code><span class="sig-paren">(</span><em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/io/leaf.html#LeafNode.handle_api_message"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.io.leaf.LeafNode.handle_api_message" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle an api message.</p>
 </dd></dl>
 
 <dl class="method">
@@ -679,7 +690,7 @@ node should playback the actions of an attached <a class="reference internal" hr
 
 <span class="target" id="module-dist_zero.node.sum"></span><dl class="class">
 <dt id="dist_zero.node.sum.SumNode">
-<em class="property">class </em><code class="descclassname">dist_zero.node.sum.</code><code class="descname">SumNode</code><span class="sig-paren">(</span><em>node_id</em>, <em>senders</em>, <em>receivers</em>, <em>spawning_migration</em>, <em>input_node</em>, <em>output_node</em>, <em>pending_sender_ids</em>, <em>controller</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">dist_zero.node.sum.</code><code class="descname">SumNode</code><span class="sig-paren">(</span><em>node_id</em>, <em>senders</em>, <em>receivers</em>, <em>input_node</em>, <em>output_node</em>, <em>controller</em>, <em>migrator_config=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode" title="Permalink to this definition">¶</a></dt>
 <dd><p>An internal node for summing all increments from its senders and forwarding the total to its receivers.</p>
 <p>Each <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a> is of one of three types</p>
 <ul class="simple">
@@ -701,11 +712,11 @@ and <code class="docutils literal notranslate"><span class="pre">output_node</sp
 <li><strong>node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The node id for this node.</li>
 <li><strong>senders</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – A list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the nodes sending increments</li>
 <li><strong>receivers</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – A list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the nodes to receive increments</li>
-<li><strong>pending_sender_ids</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – In the event that this node is starting via a migration, this is the list of
-senders that must be registered as sending duplicates in order for this node to decide that it is fully duplicated.</li>
 <li><strong>input_node</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> or None) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the input node to this node if it has one.</li>
 <li><strong>output_node</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> or None) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the output node to this node if it has one.</li>
-<li><strong>spawning_migration</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> or None) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the migration spawing this <a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a> if it has one.</li>
+<li><strong>migrator_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.7)"><em>object</em></a>) – Configuration for an initializing migrator, or None if the node
+is not being initialized as part of a migration.</li>
+<li><strong>controller</strong> (<a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><em>MachineController</em></a>) – the controller for this node’s machine.</li>
 </ul>
 </td>
 </tr>
@@ -746,15 +757,23 @@ map instead.</p>
 </dd></dl>
 
 <dl class="method">
-<dt id="dist_zero.node.sum.SumNode.initialize">
-<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.initialize" title="Permalink to this definition">¶</a></dt>
-<dd><p>Called exactly once, when a node starts to run.</p>
+<dt id="dist_zero.node.sum.SumNode.import_from_node">
+<code class="descname">import_from_node</code><span class="sig-paren">(</span><em>node</em>, <em>first_sequence_number=0</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.import_from_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.import_from_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start importing from node.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>node</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of a <a class="reference internal" href="#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> that should now be sending to self.</td>
+</tr>
+</tbody>
+</table>
 </dd></dl>
 
 <dl class="method">
-<dt id="dist_zero.node.sum.SumNode.migration_finished">
-<code class="descname">migration_finished</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.migration_finished"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.migration_finished" title="Permalink to this definition">¶</a></dt>
-<dd><p>Called when the current migrator has finished migrating.</p>
+<dt id="dist_zero.node.sum.SumNode.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called exactly once, when a node starts to run.</p>
 </dd></dl>
 
 <dl class="method">
@@ -776,161 +795,29 @@ map instead.</p>
 </table>
 </dd></dl>
 
-<dl class="attribute">
-<dt id="dist_zero.node.sum.SumNode.standby_mode">
-<code class="descname">standby_mode</code><em class="property"> = None</em><a class="headerlink" href="#dist_zero.node.sum.SumNode.standby_mode" title="Permalink to this definition">¶</a></dt>
-<dd><p>When true, this node is participating in a migration, and has finished syncing up self._current_state,
-but is not yet responsible for sending messages to its output node.</p>
+<dl class="method">
+<dt id="dist_zero.node.sum.SumNode.remove_migrator">
+<code class="descname">remove_migrator</code><span class="sig-paren">(</span><em>migration_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.remove_migrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.remove_migrator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove a migrator for self.migrators.</p>
 </dd></dl>
 
-</dd></dl>
-
-<dl class="class">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator">
-<em class="property">class </em><code class="descclassname">dist_zero.node.sum.</code><code class="descname">SumNodeSenderSplitMigrator</code><span class="sig-paren">(</span><em>sum_node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNodeSenderSplitMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator" title="Permalink to this definition">¶</a></dt>
-<dd><p>For managing the way in which a sum node migrates to having new nodes between it and its senders.</p>
-<p>Terminology:</p>
-<dl class="docutils">
-<dt>The initial state before the migration:</dt>
-<dd>(large set of leftmost sender nodes) –sending_to–&gt; current node</dd>
-<dt>The final state after the migration:</dt>
-<dd>(large set of sender nodes) –sending_to–&gt; (smaller set of middle nodes) –sending_to–&gt; current node</dd>
-</dl>
-<p>There are thus three sets of nodes involved, the ‘leftmost’ sender nodes, the ‘middle’ nodes and the ‘current’ node</p>
-<p>The job of this migrator is to spin up an appropriate set of middle nodes in between the leftmost nodes
-and the current node.</p>
+<dl class="method">
+<dt id="dist_zero.node.sum.SumNode.send_forward_messages">
+<code class="descname">send_forward_messages</code><span class="sig-paren">(</span><em>before=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNode.send_forward_messages"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNode.send_forward_messages" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate a new sequence number, combine deltas into an update message, and send it on all exporters.
+:param dict[str, int] before: An optional dictionary mapping sender ids to sequence_numbers.</p>
+<blockquote>
+<div>If provided, process only up to the provided sequence number for each sender id.</div></blockquote>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>sum_node</strong> (<a class="reference internal" href="#dist_zero.node.sum.SumNode" title="dist_zero.node.sum.SumNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SumNode</span></code></a>) – The underlying sum node</td>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">the next unused sequence number</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></td>
 </tr>
 </tbody>
 </table>
-<dl class="attribute">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS">
-<code class="descname">STATE_DUPLICATING_INPUTS</code><em class="property"> = 'DUPLICATING_INPUTS'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_DUPLICATING_INPUTS" title="Permalink to this definition">¶</a></dt>
-<dd><p>Trigger: The migrator has received confirmations that each new node is now running.
-Action: The migrator tries to get input nodes to duplicate their exports.
-Description: The migrator is waiting for confirmations that the input nodes are duplicating.</p>
-</dd></dl>
-
-<dl class="attribute">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_FINISHED">
-<code class="descname">STATE_FINISHED</code><em class="property"> = 'FINISHED'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_FINISHED" title="Permalink to this definition">¶</a></dt>
-<dd><p>Trigger: The migrator has received confirmations that all the input nodes are trimmed.
-Action: None.
-Description: The migration is over.</p>
-</dd></dl>
-
-<dl class="attribute">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_INITIALIZING_NEW_NODES">
-<code class="descname">STATE_INITIALIZING_NEW_NODES</code><em class="property"> = 'INITIALIZING_NEW_NODES'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_INITIALIZING_NEW_NODES" title="Permalink to this definition">¶</a></dt>
-<dd><p>Trigger: none.  The migrator can enter this state immediately.
-Action: The migrator tries to spawn new nodes.
-Description: The migrator is waiting for new nodes to start running.</p>
-</dd></dl>
-
-<dl class="attribute">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_NEW">
-<code class="descname">STATE_NEW</code><em class="property"> = 'NEW'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_NEW" title="Permalink to this definition">¶</a></dt>
-<dd><p>The initial state of the migrator.</p>
-</dd></dl>
-
-<dl class="attribute">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS">
-<code class="descname">STATE_SWAPPING_OUTPUTS</code><em class="property"> = 'SWAPPING_OUTPUTS'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_SWAPPING_OUTPUTS" title="Permalink to this definition">¶</a></dt>
-<dd><p>Trigger: The migrator has received confirmations that the new nodes are live, and can be safely relied on
-in place of the input nodes.
-Action: The migrator converts all the output nodes to rely on the new nodes instead of the input nodes.
-Description: The migrator is waiting for confirmation that all output nodes have finished relying on the input nodes
-and are safely using the new nodes instead.</p>
-</dd></dl>
-
-<dl class="attribute">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES">
-<code class="descname">STATE_SYNCING_NEW_NODES</code><em class="property"> = 'SYNCING_NEW_NODES'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_SYNCING_NEW_NODES" title="Permalink to this definition">¶</a></dt>
-<dd><p>Trigger: The migrator has received confirmations that all input nodes are duplicating.
-Action: The migrator attempts to bring the new nodes up to speed so that they can be treated as live.
-Description: The migrator is waiting for the new nodes to sync up with the current node they will be replacing.</p>
-</dd></dl>
-
-<dl class="attribute">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS">
-<code class="descname">STATE_TRIMMING_INPUTS</code><em class="property"> = 'TRIMMING_INPUTS'</em><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.STATE_TRIMMING_INPUTS" title="Permalink to this definition">¶</a></dt>
-<dd><p>Trigger: The migrator has received confirmations that no nodes currently depend on the old output of the input nodes.
-Action: The migrator attempts to trim the input nodes (i.e. to stop them from sending their original messages,
-and send only to the new nodes they were duplicating to).
-Description: The migrator is waiting to be sure that all input nodes have been trimmed.</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.check_trimming_trigger">
-<code class="descname">check_trimming_trigger</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNodeSenderSplitMigrator.check_trimming_trigger"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.check_trimming_trigger" title="Permalink to this definition">¶</a></dt>
-<dd><p>While in the STATE_SWAPPING_OUTPUTS state, this method checks whether all liveness messages have
-arrived from middle nodes and all the input importers have delivered the requisite messages.
-If so, it finished swapping outputs and enters the STATE_TRIMMING_INPUTS state.</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.finished_duplicating">
-<code class="descname">finished_duplicating</code><span class="sig-paren">(</span><em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNodeSenderSplitMigrator.finished_duplicating"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.finished_duplicating" title="Permalink to this definition">¶</a></dt>
-<dd><p>Called when a sender sum node is sending messages only according the structure at the end of migration, and not
-the duplicate messages from the beginning of the migration.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>sender_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the sender node that has finished duplicating.</td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_duplicated">
-<code class="descname">middle_node_duplicated</code><span class="sig-paren">(</span><em>input_id_to_first_sequence_number</em>, <em>middle_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNodeSenderSplitMigrator.middle_node_duplicated"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_duplicated" title="Permalink to this definition">¶</a></dt>
-<dd><p>Called when a middle node has confirmed that it is receiving all the proper duplicated inputs.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
-<li><strong>int</strong><strong>] </strong><strong>input_id_to_first_sequence_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.7)"><em>dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a><em>,</em>) – To each id of an input node assigned to the
-middle node with an id of <code class="docutils literal notranslate"><span class="pre">middle_node_id</span></code>, this map assigns the first sequence number received by that
-middle node.</li>
-<li><strong>middle_node_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the middle node.</li>
-</ul>
-</td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_started">
-<code class="descname">middle_node_started</code><span class="sig-paren">(</span><em>middle_node_handle</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNodeSenderSplitMigrator.middle_node_started"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_started" title="Permalink to this definition">¶</a></dt>
-<dd><p>Called when a middle node is confirmed to be running.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>middle_node_handle</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the middle node.</td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_synced">
-<code class="descname">middle_node_synced</code><span class="sig-paren">(</span><em>middle_node_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNodeSenderSplitMigrator.middle_node_synced"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_synced" title="Permalink to this definition">¶</a></dt>
-<dd><p>Called when a middle node has been confirmed to be fully synced up.</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="dist_zero.node.sum.SumNodeSenderSplitMigrator.start">
-<code class="descname">start</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/node/sum.html#SumNodeSenderSplitMigrator.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.node.sum.SumNodeSenderSplitMigrator.start" title="Permalink to this definition">¶</a></dt>
-<dd><p>Start the migration.</p>
 </dd></dl>
 
 </dd></dl>
@@ -947,7 +834,7 @@ middle node.</li>
 <ul>
   <li><a href="../index.html">Documentation overview</a><ul>
       <li>Previous: <a href="messages.html" title="previous chapter">Messages</a></li>
-      <li>Next: <a href="errors.html" title="next chapter">Errors</a></li>
+      <li>Next: <a href="migrations.html" title="next chapter">Migrations</a></li>
   </ul></li>
 </ul>
 </div>

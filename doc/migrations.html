@@ -1,0 +1,492 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Migrations &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Errors" href="errors.html" />
+    <link rel="prev" title="Nodes" href="nodes.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="migrations">
+<h1>Migrations<a class="headerlink" href="#migrations" title="Permalink to this headline">¶</a></h1>
+<p>Migrations are created to update the structure of the network of nodes.
+Each migration is represented by a single instance of <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a>.</p>
+<span class="target" id="module-dist_zero.migration.migration_node"></span><dl class="class">
+<dt id="dist_zero.migration.migration_node.MigrationNode">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.migration_node.</code><code class="descname">MigrationNode</code><span class="sig-paren">(</span><em>migration_id</em>, <em>controller</em>, <em>migration_config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/migration_node.html#MigrationNode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migration_node.MigrationNode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Each migration node will manage a single migration.</p>
+<p>The migration will set up a new flow of data from a nonempty set of existing source
+nodes to a nonempty set of existing sink nodes.  In setting up the new flow, the migration
+may spawn many new “insertion” nodes.</p>
+<p>The migration will also remove an old flow of data from the source nodes to the sink nodes.</p>
+<p>Importantly, not a single message arriving at the inputs should be lost over the course of the migration.</p>
+<p>The migration node itself will store the overall state of the migration.  Each node involved in the migration
+will be attached to a separate <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> subclass will run that will control how that node behaves during the migration.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>migration_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The node id of this migration.</li>
+<li><strong>migration_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.7)"><em>object</em></a>) – Configuration parameters for the migration.
+These parameters will be parsed by the different <code class="xref any docutils literal notranslate"><span class="pre">State</span></code> classes responsible for each state of the migration.</li>
+<li><strong>controller</strong> (<a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><em>MachineController</em></a>) – the controller for this node’s machine.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="dist_zero.migration.migration_node.MigrationNode.elapse">
+<code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/migration_node.html#MigrationNode.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migration_node.MigrationNode.elapse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Elapse ms of time on this node.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>ms</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – A number of milliseconds.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.migration_node.MigrationNode.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/migration_node.html#MigrationNode.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migration_node.MigrationNode.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called exactly once, when a node starts to run.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.migration_node.MigrationNode.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/migration_node.html#MigrationNode.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migration_node.MigrationNode.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Receive a message from a sender.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The message.</li>
+<li><strong>sender_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the sender <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>, or <a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.7)"><code class="xref any docutils literal notranslate"><span class="pre">None</span></code></a> if the message was not generated by a sender.
+(pre-recorded messages will not have a sender).</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.migrator"></span><dl class="class">
+<dt id="dist_zero.migration.migrator.Migrator">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.migrator.</code><code class="descname">Migrator</code><a class="reference internal" href="../_modules/dist_zero/migration/migrator.html#Migrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migrator.Migrator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Abstract base class for the different kinds of migrators.</p>
+<p>Each <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> instance will be initialized on a <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> and added to that
+node’s set of active migrators.</p>
+<p>Each <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> is also associated with a unique <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> identified
+by <code class="xref any docutils literal notranslate"><span class="pre">Migrator.migration_id</span></code></p>
+<dl class="method">
+<dt id="dist_zero.migration.migrator.Migrator.elapse">
+<code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/migrator.html#Migrator.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migrator.Migrator.elapse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subclasses may override elapse.  It will be called as time passes.
+:param int ms: The number of elapsed milliseconds since the last call to elapse, or since initialization.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.migrator.Migrator.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/migrator.html#Migrator.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migrator.Migrator.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subclasses may override initialize.  It will be called when the migrator is first created.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.migrator.Migrator.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>sender_id</em>, <em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/migrator.html#Migrator.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migrator.Migrator.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Receive a migration message.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>sender_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the node that sent the message.</li>
+<li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A migration message.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.source_migrator"></span><dl class="class">
+<dt id="dist_zero.migration.source_migrator.SourceMigrator">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.source_migrator.</code><code class="descname">SourceMigrator</code><span class="sig-paren">(</span><em>migration</em>, <em>node</em>, <em>exporter_swaps</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/source_migrator.html#SourceMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.source_migrator.SourceMigrator" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>migration</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> running the migration.</li>
+<li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> on which this migrator runs.</li>
+<li><strong>exporter_swaps</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – A list of pairs (receiver_id, new_receiver_handles) giving for each existing
+receiver, the set of new receivers that it should duplicate to.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="dist_zero.migration.source_migrator.SourceMigrator.elapse">
+<code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/source_migrator.html#SourceMigrator.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.source_migrator.SourceMigrator.elapse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subclasses may override elapse.  It will be called as time passes.
+:param int ms: The number of elapsed milliseconds since the last call to elapse, or since initialization.</p>
+</dd></dl>
+
+<dl class="staticmethod">
+<dt id="dist_zero.migration.source_migrator.SourceMigrator.from_config">
+<em class="property">static </em><code class="descname">from_config</code><span class="sig-paren">(</span><em>migrator_config</em>, <em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/source_migrator.html#SourceMigrator.from_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.source_migrator.SourceMigrator.from_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create and return a new <a class="reference internal" href="#dist_zero.migration.source_migrator.SourceMigrator" title="dist_zero.migration.source_migrator.SourceMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SourceMigrator</span></code></a> from a config.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>migrator_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.7)"><em>dict</em></a>) – Configuration dictionary for the <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> instance.</li>
+<li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> instance on which the new <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> will run.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The appropriate <a class="reference internal" href="#dist_zero.migration.source_migrator.SourceMigrator" title="dist_zero.migration.source_migrator.SourceMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SourceMigrator</span></code></a> instance.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="#dist_zero.migration.source_migrator.SourceMigrator" title="dist_zero.migration.source_migrator.SourceMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SourceMigrator</span></code></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.source_migrator.SourceMigrator.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/source_migrator.html#SourceMigrator.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.source_migrator.SourceMigrator.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subclasses may override initialize.  It will be called when the migrator is first created.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.source_migrator.SourceMigrator.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>sender_id</em>, <em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/source_migrator.html#SourceMigrator.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.source_migrator.SourceMigrator.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Receive a migration message.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>sender_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the node that sent the message.</li>
+<li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A migration message.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.sink_migrator"></span><dl class="class">
+<dt id="dist_zero.migration.sink_migrator.SinkMigrator">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.sink_migrator.</code><code class="descname">SinkMigrator</code><span class="sig-paren">(</span><em>new_flow_sender_ids</em>, <em>old_flow_sender_ids</em>, <em>migration</em>, <em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/sink_migrator.html#SinkMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.sink_migrator.SinkMigrator" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>migration</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> running the migration.</li>
+<li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> on which this migrator runs.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="attribute">
+<dt id="dist_zero.migration.sink_migrator.SinkMigrator.NEW_FLOW_ACKNOWLEDGEMENT_INTERNAL_MS">
+<code class="descname">NEW_FLOW_ACKNOWLEDGEMENT_INTERNAL_MS</code><em class="property"> = 30</em><a class="headerlink" href="#dist_zero.migration.sink_migrator.SinkMigrator.NEW_FLOW_ACKNOWLEDGEMENT_INTERNAL_MS" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of milliseconds between points in time when the <a class="reference internal" href="#dist_zero.migration.sink_migrator.SinkMigrator" title="dist_zero.migration.sink_migrator.SinkMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SinkMigrator</span></code></a> acknowledges messages in the new flow.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.sink_migrator.SinkMigrator.elapse">
+<code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/sink_migrator.html#SinkMigrator.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.sink_migrator.SinkMigrator.elapse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subclasses may override elapse.  It will be called as time passes.
+:param int ms: The number of elapsed milliseconds since the last call to elapse, or since initialization.</p>
+</dd></dl>
+
+<dl class="staticmethod">
+<dt id="dist_zero.migration.sink_migrator.SinkMigrator.from_config">
+<em class="property">static </em><code class="descname">from_config</code><span class="sig-paren">(</span><em>migrator_config</em>, <em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/sink_migrator.html#SinkMigrator.from_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.sink_migrator.SinkMigrator.from_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create and return a new <a class="reference internal" href="#dist_zero.migration.sink_migrator.SinkMigrator" title="dist_zero.migration.sink_migrator.SinkMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SinkMigrator</span></code></a> from a config.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>migrator_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.7)"><em>dict</em></a>) – Configuration dictionary for the <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> instance.</li>
+<li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> instance on which the new <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> will run.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The appropriate <a class="reference internal" href="#dist_zero.migration.sink_migrator.SinkMigrator" title="dist_zero.migration.sink_migrator.SinkMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SinkMigrator</span></code></a> instance.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="#dist_zero.migration.sink_migrator.SinkMigrator" title="dist_zero.migration.sink_migrator.SinkMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SinkMigrator</span></code></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.sink_migrator.SinkMigrator.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/sink_migrator.html#SinkMigrator.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.sink_migrator.SinkMigrator.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subclasses may override initialize.  It will be called when the migrator is first created.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.sink_migrator.SinkMigrator.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>sender_id</em>, <em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/sink_migrator.html#SinkMigrator.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.sink_migrator.SinkMigrator.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Receive a migration message.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>sender_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the node that sent the message.</li>
+<li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A migration message.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.insertion_migrator"></span><dl class="class">
+<dt id="dist_zero.migration.insertion_migrator.InsertionMigrator">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.insertion_migrator.</code><code class="descname">InsertionMigrator</code><span class="sig-paren">(</span><em>migration</em>, <em>senders</em>, <em>receivers</em>, <em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/insertion_migrator.html#InsertionMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.insertion_migrator.InsertionMigrator" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>migration</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> running the migration.</li>
+<li><strong>senders</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – A list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> s that will send to self by the end of the migration.</li>
+<li><strong>receivers</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – A list of <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> s that will receive from self by the end of the migration.</li>
+<li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> on which this migrator runs.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="dist_zero.migration.insertion_migrator.InsertionMigrator.elapse">
+<code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/insertion_migrator.html#InsertionMigrator.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.insertion_migrator.InsertionMigrator.elapse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subclasses may override elapse.  It will be called as time passes.
+:param int ms: The number of elapsed milliseconds since the last call to elapse, or since initialization.</p>
+</dd></dl>
+
+<dl class="staticmethod">
+<dt id="dist_zero.migration.insertion_migrator.InsertionMigrator.from_config">
+<em class="property">static </em><code class="descname">from_config</code><span class="sig-paren">(</span><em>migrator_config</em>, <em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/insertion_migrator.html#InsertionMigrator.from_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.insertion_migrator.InsertionMigrator.from_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create and return a new <a class="reference internal" href="#dist_zero.migration.insertion_migrator.InsertionMigrator" title="dist_zero.migration.insertion_migrator.InsertionMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InsertionMigrator</span></code></a> from a config.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>migrator_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.7)"><em>dict</em></a>) – Configuration dictionary for the <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> instance.</li>
+<li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> instance on which the new <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> will run.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The appropriate <a class="reference internal" href="#dist_zero.migration.insertion_migrator.InsertionMigrator" title="dist_zero.migration.insertion_migrator.InsertionMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InsertionMigrator</span></code></a> instance.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="#dist_zero.migration.insertion_migrator.InsertionMigrator" title="dist_zero.migration.insertion_migrator.InsertionMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InsertionMigrator</span></code></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.insertion_migrator.InsertionMigrator.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/insertion_migrator.html#InsertionMigrator.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.insertion_migrator.InsertionMigrator.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subclasses may override initialize.  It will be called when the migrator is first created.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.insertion_migrator.InsertionMigrator.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>sender_id</em>, <em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/insertion_migrator.html#InsertionMigrator.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.insertion_migrator.InsertionMigrator.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Receive a migration message.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>sender_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the node that sent the message.</li>
+<li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A migration message.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.removal_migrator"></span><dl class="class">
+<dt id="dist_zero.migration.removal_migrator.RemovalMigrator">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.removal_migrator.</code><code class="descname">RemovalMigrator</code><span class="sig-paren">(</span><em>migration</em>, <em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/removal_migrator.html#RemovalMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.removal_migrator.RemovalMigrator" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>migration</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> running the migration.</li>
+<li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> on which this migrator runs.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="staticmethod">
+<dt id="dist_zero.migration.removal_migrator.RemovalMigrator.from_config">
+<em class="property">static </em><code class="descname">from_config</code><span class="sig-paren">(</span><em>migrator_config</em>, <em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/removal_migrator.html#RemovalMigrator.from_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.removal_migrator.RemovalMigrator.from_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create and return a new <a class="reference internal" href="#dist_zero.migration.removal_migrator.RemovalMigrator" title="dist_zero.migration.removal_migrator.RemovalMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">RemovalMigrator</span></code></a> from a config.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>migrator_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.7)"><em>dict</em></a>) – Configuration dictionary for the <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> instance.</li>
+<li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> instance on which the new <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> will run.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The appropriate <a class="reference internal" href="#dist_zero.migration.removal_migrator.RemovalMigrator" title="dist_zero.migration.removal_migrator.RemovalMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">RemovalMigrator</span></code></a> instance.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="#dist_zero.migration.removal_migrator.RemovalMigrator" title="dist_zero.migration.removal_migrator.RemovalMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">RemovalMigrator</span></code></a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.removal_migrator.RemovalMigrator.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/removal_migrator.html#RemovalMigrator.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.removal_migrator.RemovalMigrator.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subclasses may override initialize.  It will be called when the migrator is first created.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.removal_migrator.RemovalMigrator.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>sender_id</em>, <em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/removal_migrator.html#RemovalMigrator.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.removal_migrator.RemovalMigrator.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Receive a migration message.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>sender_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The id of the node that sent the message.</li>
+<li><strong>message</strong> (<a class="reference internal" href="message.html#message"><span class="std std-ref">Message</span></a>) – A migration message.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="nodes.html" title="previous chapter">Nodes</a></li>
+      <li>Next: <a href="errors.html" title="next chapter">Errors</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../_sources/doc/migrations.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="../_sources/doc/migrations.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

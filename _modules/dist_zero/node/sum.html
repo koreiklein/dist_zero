@@ -33,7 +33,7 @@
   <h1>Source code for dist_zero.node.sum</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span> <span class="nn">logging</span>
 
-<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">messages</span><span class="p">,</span> <span class="n">errors</span><span class="p">,</span> <span class="n">ids</span>
+<span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">messages</span><span class="p">,</span> <span class="n">errors</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">migration</span><span class="p">,</span> <span class="n">deltas</span><span class="p">,</span> <span class="n">settings</span>
 <span class="kn">from</span> <span class="nn">.node</span> <span class="k">import</span> <span class="n">Node</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
@@ -60,15 +60,11 @@
   <span class="n">SEND_INTERVAL_MS</span> <span class="o">=</span> <span class="mi">30</span>
   <span class="sd">&#39;&#39;&#39;The number of ms between sends to receivers.&#39;&#39;&#39;</span>
 
-  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">senders</span><span class="p">,</span> <span class="n">receivers</span><span class="p">,</span> <span class="n">spawning_migration</span><span class="p">,</span> <span class="n">input_node</span><span class="p">,</span> <span class="n">output_node</span><span class="p">,</span> <span class="n">pending_sender_ids</span><span class="p">,</span>
-               <span class="n">controller</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">senders</span><span class="p">,</span> <span class="n">receivers</span><span class="p">,</span> <span class="n">input_node</span><span class="p">,</span> <span class="n">output_node</span><span class="p">,</span> <span class="n">controller</span><span class="p">,</span> <span class="n">migrator_config</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    :param str node_id: The node id for this node.</span>
 <span class="sd">    :param list senders: A list of :ref:`handle` of the nodes sending increments</span>
 <span class="sd">    :param list receivers: A list of :ref:`handle` of the nodes to receive increments</span>
-
-<span class="sd">    :param list pending_sender_ids: In the event that this node is starting via a migration, this is the list of</span>
-<span class="sd">      senders that must be registered as sending duplicates in order for this node to decide that it is fully duplicated.</span>
 
 <span class="sd">    :param input_node: The :ref:`handle` of the input node to this node if it has one.</span>
 <span class="sd">    :type input_node: :ref:`handle` or None</span>
@@ -76,25 +72,19 @@
 <span class="sd">    :param output_node: The :ref:`handle` of the output node to this node if it has one.</span>
 <span class="sd">    :type output_node: :ref:`handle` or None</span>
 
-<span class="sd">    :param spawning_migration: The :ref:`handle` of the migration spawing this `SumNode` if it has one.</span>
-<span class="sd">    :type spawning_migration: :ref:`handle` or None</span>
+<span class="sd">    :param object migrator_config: Configuration for an initializing migrator, or None if the node</span>
+<span class="sd">      is not being initialized as part of a migration.</span>
 
+<span class="sd">    :param `MachineController` controller: the controller for this node&#39;s machine.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span> <span class="o">=</span> <span class="n">controller</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">node_id</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span> <span class="o">=</span> <span class="n">spawning_migration</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span> <span class="o">=</span> <span class="kc">None</span>
-
-    <span class="c1"># For middle nodes in a migration, the set of input nodes that still need to start duplicating to self.</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_pending_sender_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">pending_sender_ids</span><span class="p">)</span>
-    <span class="c1"># For middle nodes in a migration, the set of input nodes that still need to swap to self.</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_pending_swapped_sender_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">pending_sender_ids</span><span class="p">)</span>
-    <span class="c1"># For middle nodes in a migration, each input node that duplicates to self is mapped to the first sequence</span>
-    <span class="c1"># number that node will send live to self after the swap is finished.</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_input_node_id_to_first_live_sequence_number</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">IS_TESTING_ENV</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_TESTING_total_before_first_swap</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_TESTING_swapped_once</span> <span class="o">=</span> <span class="kc">False</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_TESTING_total_after_first_swap</span> <span class="o">=</span> <span class="mi">0</span>
 
     <span class="c1"># Invariants:</span>
     <span class="c1">#   At certain points in time, a increment message is sent to every receiver.</span>
@@ -105,7 +95,7 @@
     <span class="c1">#     have been added to self._current_state or sent to receivers.</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_current_state</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="c1"># Map from sender_id to a list of pairs (remote_sequence_number, message)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span> <span class="o">=</span> <span class="n">deltas</span><span class="o">.</span><span class="n">Deltas</span><span class="p">()</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">=</span> <span class="mi">0</span>
 
@@ -115,38 +105,36 @@
 <span class="sd">    map instead.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">standby_mode</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    When true, this node is participating in a migration, and has finished syncing up self._current_state,</span>
-<span class="sd">    but is not yet responsible for sending messages to its output node.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_duplicator_id_to_first_sequence_number</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    For middle nodes in a migration as duplicators introduce themselves.</span>
-<span class="sd">    This map tracks for each node duplicating to self, the first sequence_number that it ever sent.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-
     <span class="nb">super</span><span class="p">(</span><span class="n">SumNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">input_node</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="k">else</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_importer</span><span class="p">(</span><span class="n">input_node</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span><span class="o">.</span><span class="n">sender_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">add_sender</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span><span class="o">.</span><span class="n">sender_id</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_initial_migrator_config</span> <span class="o">=</span> <span class="n">migrator_config</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_initial_migrator</span> <span class="o">=</span> <span class="kc">None</span> <span class="c1"># It will be initialized later.</span>
+
     <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">output_node</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_exporter</span><span class="p">(</span><span class="n">output_node</span><span class="p">)</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span> <span class="o">=</span> <span class="p">{</span><span class="n">sender</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_importer</span><span class="p">(</span><span class="n">sender</span><span class="p">)</span> <span class="k">for</span> <span class="n">sender</span> <span class="ow">in</span> <span class="n">senders</span><span class="p">}</span>
-    <span class="k">for</span> <span class="n">sender_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span> <span class="o">=</span> <span class="p">{</span><span class="n">receiver</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_exporter</span><span class="p">(</span><span class="n">receiver</span><span class="p">)</span> <span class="k">for</span> <span class="n">receiver</span> <span class="ow">in</span> <span class="n">receivers</span><span class="p">}</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span> <span class="o">=</span> <span class="p">{}</span>
 
-<div class="viewcode-block" id="SumNode.migration_finished"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.migration_finished">[docs]</a>  <span class="k">def</span> <span class="nf">migration_finished</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Called when the current migrator has finished migrating.</span>
+    <span class="k">for</span> <span class="n">sender</span> <span class="ow">in</span> <span class="n">senders</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">import_from_node</span><span class="p">(</span><span class="n">sender</span><span class="p">)</span>
 
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span> <span class="o">=</span> <span class="kc">None</span></div>
+<div class="viewcode-block" id="SumNode.initialize"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s1">&#39;Starting sum node </span><span class="si">{sum_node_id}</span><span class="s1">. input=</span><span class="si">{input_node_id}</span><span class="s1">, output=</span><span class="si">{output_node_id}</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;sum_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="s1">&#39;input_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span><span class="o">.</span><span class="n">sender_id</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s1">&#39;output_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span><span class="o">.</span><span class="n">receiver_id</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_initial_migrator_config</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_initial_migrator</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attach_migrator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_initial_migrator_config</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span></div>
 
   <span class="nd">@staticmethod</span>
   <span class="k">def</span> <span class="nf">from_config</span><span class="p">(</span><span class="n">node_config</span><span class="p">,</span> <span class="n">controller</span><span class="p">):</span>
@@ -154,66 +142,10 @@
         <span class="n">node_id</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
         <span class="n">senders</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;senders&#39;</span><span class="p">],</span>
         <span class="n">receivers</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;receivers&#39;</span><span class="p">],</span>
-        <span class="n">pending_sender_ids</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;pending_sender_ids&#39;</span><span class="p">],</span>
         <span class="n">output_node</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;output_node&#39;</span><span class="p">],</span>
         <span class="n">input_node</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;input_node&#39;</span><span class="p">],</span>
-        <span class="n">spawning_migration</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;spawning_migration&#39;</span><span class="p">],</span>
+        <span class="n">migrator_config</span><span class="o">=</span><span class="n">node_config</span><span class="p">[</span><span class="s1">&#39;migrator&#39;</span><span class="p">],</span>
         <span class="n">controller</span><span class="o">=</span><span class="n">controller</span><span class="p">)</span>
-
-  <span class="k">def</span> <span class="nf">_maybe_middle_node_goes_live</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    For middle nodes that are still getting swapped_to_duplicate messages.</span>
-<span class="sd">    Check whether both</span>
-<span class="sd">      a) all input nodes have swapped</span>
-<span class="sd">      and </span>
-<span class="sd">      b) all the messages before the first_live_sequence_numbers have been received.</span>
-<span class="sd">    if so, inform the spawning_migration that self is live.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_node_id_to_first_live_sequence_number</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_swapped_sender_ids</span><span class="p">:</span>
-      <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span><span class="o">.</span><span class="n">least_undelivered_remote_sequence_number</span> <span class="o">&gt;=</span> <span class="n">flsn</span>
-             <span class="k">for</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">flsn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_node_id_to_first_live_sequence_number</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Middle node from a migration is now going live&quot;</span><span class="p">)</span>
-
-        <span class="c1"># Receive all messages before the first live sequence numbers now, without sending them to</span>
-        <span class="c1"># any downstream receiver nodes.</span>
-        <span class="k">for</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">flsn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_node_id_to_first_live_sequence_number</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-          <span class="n">new_pairs</span> <span class="o">=</span> <span class="p">[]</span>
-          <span class="k">for</span> <span class="n">rsn</span><span class="p">,</span> <span class="n">delta_message</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="n">node_id</span><span class="p">]:</span>
-            <span class="k">if</span> <span class="n">rsn</span> <span class="o">&lt;</span> <span class="n">flsn</span><span class="p">:</span>
-              <span class="bp">self</span><span class="o">.</span><span class="n">_current_state</span> <span class="o">+=</span> <span class="n">delta_message</span><span class="p">[</span><span class="s1">&#39;amount&#39;</span><span class="p">]</span>
-            <span class="k">else</span><span class="p">:</span>
-              <span class="n">new_pairs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">rsn</span><span class="p">,</span> <span class="n">delta_message</span><span class="p">))</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_pairs</span>
-
-        <span class="c1"># Go into the state for ordinary sum node behavior.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">deltas_only</span> <span class="o">=</span> <span class="kc">False</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">standby_mode</span> <span class="o">=</span> <span class="kc">False</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">,</span>
-                  <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">middle_node_is_live</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_input_node_id_to_first_live_sequence_number</span><span class="p">))</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_input_node_id_to_first_live_sequence_number</span> <span class="o">=</span> <span class="kc">None</span>
-
-  <span class="k">def</span> <span class="nf">_maybe_finish_middle_node_duplication</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    For middle nodes that are still getting duplication messages.</span>
-<span class="sd">    Check whether all the appropriate inputs are successfully duplicating their messages, and if so,</span>
-<span class="sd">    inform the spawning_migration that the duplication is complete.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_sender_ids</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">,</span>
-                <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">middle_node_is_duplicated</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_duplicator_id_to_first_sequence_number</span><span class="p">))</span>
-
-      <span class="c1"># Now that the duplications are done, this map should never be used again.  null it out.</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_duplicator_id_to_first_sequence_number</span> <span class="o">=</span> <span class="kc">None</span>
-
-      <span class="c1"># Enter standby mode, and collect deltas.</span>
-      <span class="c1"># PERF(KK): For cases where standby mode could take a long time, it would make some sense</span>
-      <span class="c1"># for the nodes to apply some deltas while in standby mode to avoid collecting too many.</span>
-      <span class="c1"># The problem with doing that, is that until the middle node has received a swapped_to_duplicate message</span>
-      <span class="c1"># from an input node, it doesn&#39;t know which of that input node&#39;s messages are before or after that sequence number,</span>
-      <span class="c1"># and should not accidentally apply a later message as it must be saved and sent on the middle node&#39;s exporter</span>
-      <span class="c1"># as an increment.</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">standby_mode</span> <span class="o">=</span> <span class="kc">True</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">deltas_only</span> <span class="o">=</span> <span class="kc">True</span>
 
 <div class="viewcode-block" id="SumNode.deliver"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.deliver">[docs]</a>  <span class="k">def</span> <span class="nf">deliver</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sequence_number</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -221,21 +153,46 @@
 <span class="sd">    Also called for an edge sum node adjacent to an input_node when the input node triggers incrementing the sum.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="c1"># Don&#39;t update any internal state just yet, but wait until the next sequence number is generated.</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">sequence_number</span><span class="p">,</span> <span class="n">message</span><span class="p">))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">add_message</span><span class="p">(</span><span class="n">sender_id</span><span class="o">=</span><span class="n">sender_id</span><span class="p">,</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">sequence_number</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">)</span></div>
 
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="o">.</span><span class="n">check_trimming_trigger</span><span class="p">()</span>
+  <span class="k">def</span> <span class="nf">_attach_migrator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">migrator_config</span><span class="p">):</span>
+    <span class="n">migration_id</span> <span class="o">=</span> <span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;migration&#39;</span><span class="p">][</span><span class="s1">&#39;id&#39;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">migration_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">migrators</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+          <span class="s2">&quot;There is already a migration running on </span><span class="si">{cur_node_id}</span><span class="s2"> for migration </span><span class="si">{migration_id}</span><span class="s2">&quot;</span><span class="p">,</span>
+          <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;migration_id&#39;</span><span class="p">:</span> <span class="n">migration_id</span><span class="p">})</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">migrator</span> <span class="o">=</span> <span class="n">migration</span><span class="o">.</span><span class="n">migrator_from_config</span><span class="p">(</span><span class="n">migrator_config</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">,</span> <span class="n">node</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">migrators</span><span class="p">[</span><span class="n">migration_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">migrator</span>
+      <span class="n">migrator</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_middle_node_goes_live</span><span class="p">()</span></div>
+<div class="viewcode-block" id="SumNode.remove_migrator"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.remove_migrator">[docs]</a>  <span class="k">def</span> <span class="nf">remove_migrator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">migration_id</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Remove a migrator for self.migrators.&#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">migrators</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">migration_id</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="SumNode.receive"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;sequence_message&#39;</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">receive_sequence_message</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">],</span> <span class="n">sender_id</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;attach_migrator&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_attach_migrator</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;migrator_config&#39;</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;migration&#39;</span><span class="p">:</span>
+      <span class="n">migration_id</span><span class="p">,</span> <span class="n">migration_message</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;migration_id&#39;</span><span class="p">],</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">]</span>
+      <span class="k">if</span> <span class="n">migration_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">migrators</span><span class="p">:</span>
+        <span class="c1"># Possible, when a migration was removed at about the same time as some of the last few</span>
+        <span class="c1"># acknowledgement or retransmission messages came through.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">&quot;Got a migration message for a migration which is not running on this node.&quot;</span><span class="p">,</span>
+            <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+                <span class="s1">&#39;migration_id&#39;</span><span class="p">:</span> <span class="n">migration_id</span><span class="p">,</span>
+                <span class="s1">&#39;migration_message_type&#39;</span><span class="p">:</span> <span class="n">migration_message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span>
+            <span class="p">})</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">migrators</span><span class="p">[</span><span class="n">migration_id</span><span class="p">]</span><span class="o">.</span><span class="n">receive</span><span class="p">(</span><span class="n">sender_id</span><span class="o">=</span><span class="n">sender_id</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">migration_message</span><span class="p">)</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;set_input&#39;</span><span class="p">:</span>
       <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Can not set a new input node when one already exists.&quot;</span><span class="p">)</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_importer</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;input_node&#39;</span><span class="p">])</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span><span class="o">.</span><span class="n">sender_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">add_sender</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span><span class="o">.</span><span class="n">sender_id</span><span class="p">)</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;set_output&#39;</span><span class="p">:</span>
       <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Can not set a new output node when one already exists.&quot;</span><span class="p">)</span>
@@ -270,139 +227,131 @@
       <span class="n">direction</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;direction&#39;</span><span class="p">]</span>
 
       <span class="k">if</span> <span class="n">direction</span> <span class="o">==</span> <span class="s1">&#39;sender&#39;</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">:</span>
-          <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Received connect_node for an importer that had already been added.&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_importer</span><span class="p">(</span><span class="n">sender</span><span class="o">=</span><span class="n">node</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">import_from_node</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
       <span class="k">elif</span> <span class="n">direction</span> <span class="o">==</span> <span class="s1">&#39;receiver&#39;</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">:</span>
           <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Received connect_node for an exporter that had already been added.&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_exporter</span><span class="p">(</span><span class="n">receiver</span><span class="o">=</span><span class="n">node</span><span class="p">)</span>
       <span class="k">else</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Unrecognized direction parameter &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">direction</span><span class="p">))</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;started_duplication&#39;</span><span class="p">:</span>
-      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span>
-            <span class="s2">&quot;Only middle nodes from a migration should ever receive a started_duplication message.&quot;</span><span class="p">)</span>
-      <span class="k">else</span><span class="p">:</span>
-        <span class="n">node</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;node&#39;</span><span class="p">]</span>
-        <span class="k">if</span> <span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_sender_ids</span><span class="p">:</span>
-          <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Only middle nodes with an appriate pending sender id&quot;</span>
-                                     <span class="s2">&quot; should receive started_duplication messages.&quot;</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-          <span class="c1"># As soon as we&#39;re getting started_duplication messages, we must ensure that all updates go</span>
-          <span class="c1"># are stored as deltas until the set_sum_total message arrives.</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">deltas_only</span> <span class="o">=</span> <span class="kc">True</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">_pending_sender_ids</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])</span>
-          <span class="n">new_importer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_importer</span><span class="p">(</span><span class="n">sender</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">first_sequence_number</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">])</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">new_importer</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">_duplicator_id_to_first_sequence_number</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">]</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_finish_middle_node_duplication</span><span class="p">()</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;finished_duplicating&#39;</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="o">.</span><span class="n">finished_duplicating</span><span class="p">(</span><span class="n">sender_id</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;sum_node_started&#39;</span><span class="p">:</span>
-      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="o">.</span><span class="n">middle_node_started</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sum_node_handle&#39;</span><span class="p">])</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;set_sum_total&#39;</span><span class="p">:</span>
-      <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">standby_mode</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Middle nodes must be in standby mode when they receive state syncing messages.&quot;</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_current_state</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;total&#39;</span><span class="p">]</span>
-      <span class="n">unsent_total</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_combine_and_remove_deltas</span><span class="p">()</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">=</span> <span class="mi">0</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_current_state</span> <span class="o">+=</span> <span class="n">unsent_total</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">middle_node_is_synced</span><span class="p">())</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;swapped_to_duplicate&#39;</span><span class="p">:</span>
-      <span class="n">node_id</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;node_id&#39;</span><span class="p">]</span>
-      <span class="k">if</span> <span class="n">node_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_swapped_sender_ids</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;node_id of recently swapped node should be found in pending_swapped_sender_ids&quot;</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_pending_swapped_sender_ids</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">node_id</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_input_node_id_to_first_live_sequence_number</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;first_live_sequence_number&#39;</span><span class="p">]</span>
-
-      <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_middle_node_goes_live</span><span class="p">()</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;swap_to_duplicate&#39;</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;node_id&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">swap_to_duplicate</span><span class="p">()</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;middle_node_is_duplicated&#39;</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="o">.</span><span class="n">middle_node_duplicated</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;duplicator_id_to_first_sequence_number&#39;</span><span class="p">],</span> <span class="n">middle_node_id</span><span class="o">=</span><span class="n">sender_id</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;middle_node_is_synced&#39;</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="o">.</span><span class="n">middle_node_synced</span><span class="p">(</span><span class="n">sender_id</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;middle_node_is_live&#39;</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="o">.</span><span class="n">middle_node_live</span><span class="p">(</span><span class="n">sender_id</span><span class="p">,</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;input_node_id_to_first_live_sequence_number&#39;</span><span class="p">])</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;start_duplicating&#39;</span><span class="p">:</span>
-      <span class="n">old_receiver_id</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;old_receiver_id&#39;</span><span class="p">]</span>
-      <span class="n">new_receiver</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;receiver&#39;</span><span class="p">]</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-          <span class="s2">&quot;Starting duplication phase for </span><span class="si">{cur_node_id}</span><span class="s2"> . </span><span class="si">{new_receiver_id}</span><span class="s2"> will now receive duplicates from </span><span class="si">{old_receiver_id}</span><span class="s2">.&quot;</span><span class="p">,</span>
-          <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
-              <span class="s1">&#39;new_receiver_id&#39;</span><span class="p">:</span> <span class="n">new_receiver</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
-              <span class="s1">&#39;old_receiver_id&#39;</span><span class="p">:</span> <span class="n">old_receiver_id</span><span class="p">,</span>
-          <span class="p">})</span>
-      <span class="n">exporter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">old_receiver_id</span><span class="p">]</span>
-      <span class="n">first_duplicated_sequence_number</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_forward_messages</span><span class="p">()</span>
-      <span class="n">exporter</span><span class="o">.</span><span class="n">duplicate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_exporter</span><span class="p">(</span><span class="n">new_receiver</span><span class="p">),</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">first_duplicated_sequence_number</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;finish_duplicating&#39;</span><span class="p">:</span>
-      <span class="n">receiver_id</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;receiver_id&#39;</span><span class="p">]</span>
-      <span class="n">exporter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">receiver_id</span><span class="p">]</span>
-      <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">receiver_id</span><span class="p">]</span>
-      <span class="n">new_exporter</span> <span class="o">=</span> <span class="n">exporter</span><span class="o">.</span><span class="n">finish_duplicating</span><span class="p">()</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">new_exporter</span><span class="o">.</span><span class="n">receiver_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_exporter</span>
     <span class="k">else</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Unrecognized message </span><span class="si">{bad_msg}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;bad_msg&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">})</span></div>
+
+<div class="viewcode-block" id="SumNode.import_from_node"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.import_from_node">[docs]</a>  <span class="k">def</span> <span class="nf">import_from_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">first_sequence_number</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Start importing from node.</span>
+
+<span class="sd">    :param node: The :ref:`handle` of a `Node` that should now be sending to self.</span>
+<span class="sd">    :type node: :ref:`handle`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Received connect_node for an importer that had already been added.&quot;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">[</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">new_importer</span><span class="p">(</span><span class="n">sender</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">first_sequence_number</span><span class="o">=</span><span class="n">first_sequence_number</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">add_sender</span><span class="p">(</span><span class="n">node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])</span></div>
 
 <div class="viewcode-block" id="SumNode.elapse"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">+=</span> <span class="n">ms</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_sender_ids</span> <span class="ow">and</span> \
-        <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">standby_mode</span> <span class="ow">and</span> \
-        <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">deltas_only</span> <span class="ow">and</span> \
-        <span class="nb">any</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="ow">and</span> \
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">deltas_only</span> <span class="ow">and</span> \
+        <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">has_data</span><span class="p">()</span> <span class="ow">and</span> \
         <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">&gt;</span> <span class="n">SumNode</span><span class="o">.</span><span class="n">SEND_INTERVAL_MS</span><span class="p">:</span>
 
       <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;current n_senders = </span><span class="si">{n_senders}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;n_senders&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">)})</span>
 
       <span class="n">SENDER_LIMIT</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system_config</span><span class="p">[</span><span class="s1">&#39;SUM_NODE_SENDER_LIMIT&#39;</span><span class="p">]</span>
       <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">SENDER_LIMIT</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Hit sender limit of </span><span class="si">{sender_limit}</span><span class="s2"> senders&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;sender_limit&#39;</span><span class="p">:</span> <span class="n">SENDER_LIMIT</span><span class="p">})</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">migrators</span><span class="p">:</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Hitting sender limit of </span><span class="si">{sender_limit}</span><span class="s2"> senders&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;sender_limit&#39;</span><span class="p">:</span> <span class="n">SENDER_LIMIT</span><span class="p">})</span>
           <span class="bp">self</span><span class="o">.</span><span class="n">_hit_sender_limit</span><span class="p">()</span>
 
-      <span class="bp">self</span><span class="o">.</span><span class="n">_send_forward_messages</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">send_forward_messages</span><span class="p">()</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">+=</span> <span class="n">ms</span>
+
+    <span class="k">for</span> <span class="n">migrator</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">migrators</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+      <span class="n">migrator</span><span class="o">.</span><span class="n">elapse</span><span class="p">(</span><span class="n">ms</span><span class="p">)</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">elapse</span><span class="p">(</span><span class="n">ms</span><span class="p">)</span></div>
 
   <span class="k">def</span> <span class="nf">_hit_sender_limit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span> <span class="o">=</span> <span class="n">SumNodeSenderSplitMigrator</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">migrator</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+    <span class="n">node_id</span> <span class="o">=</span> <span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;MigrationNode_add_layer_before_sum_node&#39;</span><span class="p">)</span>
+    <span class="n">insertion_node_configs</span><span class="p">,</span> <span class="n">partition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_sender_configs</span><span class="p">()</span>
+    <span class="n">reverse_partition</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">importer</span><span class="o">.</span><span class="n">sender_id</span><span class="p">:</span> <span class="n">middle_node_id</span>
+        <span class="k">for</span> <span class="n">middle_node_id</span><span class="p">,</span> <span class="n">importers</span> <span class="ow">in</span> <span class="n">partition</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">for</span> <span class="n">importer</span> <span class="ow">in</span> <span class="n">importers</span>
+    <span class="p">}</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span>
+        <span class="n">node_config</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">migration_node_config</span><span class="p">(</span>
+            <span class="n">node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">,</span>
+            <span class="n">source_nodes</span><span class="o">=</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">transfer_handle</span><span class="p">(</span><span class="n">importer</span><span class="o">.</span><span class="n">sender</span><span class="p">,</span> <span class="n">node_id</span><span class="p">),</span>
+                           <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">source_migrator_config</span><span class="p">(</span>
+                               <span class="n">exporter_swaps</span><span class="o">=</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="p">[</span><span class="n">reverse_partition</span><span class="p">[</span><span class="n">importer</span><span class="o">.</span><span class="n">sender_id</span><span class="p">]])],</span> <span class="p">))</span>
+                          <span class="k">for</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span>
+            <span class="n">sink_nodes</span><span class="o">=</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="n">node_id</span><span class="p">),</span>
+                         <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">sink_migrator_config</span><span class="p">(</span>
+                             <span class="n">new_flow_sender_ids</span><span class="o">=</span><span class="p">[</span>
+                                 <span class="n">insertion_node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">insertion_node_config</span> <span class="ow">in</span> <span class="n">insertion_node_configs</span>
+                             <span class="p">],</span>
+                             <span class="n">old_flow_sender_ids</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span>
+                         <span class="p">))],</span>
+            <span class="n">removal_nodes</span><span class="o">=</span><span class="p">[],</span>
+            <span class="n">insertion_node_configs</span><span class="o">=</span><span class="n">insertion_node_configs</span><span class="p">,</span>
+            <span class="n">sync_pairs</span><span class="o">=</span><span class="p">[</span>
+                <span class="c1"># A single pair, indicating that self should sync to the insertion nodes.</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="n">node_id</span><span class="p">),</span>
+                 <span class="p">[</span><span class="n">insertion_node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">insertion_node_config</span> <span class="ow">in</span> <span class="n">insertion_node_configs</span><span class="p">])</span>
+            <span class="p">],</span>
+        <span class="p">))</span>
 
-  <span class="k">def</span> <span class="nf">_combine_and_remove_deltas</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">_new_sender_configs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Sum all the amounts in the deltas, remove them, and return the result.</span>
+<span class="sd">    Calculate which middle nodes to spawn in order to protect the current node against a high load from the leftmost</span>
+<span class="sd">    sender nodes, and return a pair</span>
+<span class="sd">      (the middle nodes&#39; configs, the partition assigning to each new id the list of importers it will use)</span>
+
+<span class="sd">    Side effect: update self._partition to map each middle node id to the leftmost nodes that will send to it</span>
+<span class="sd">      once we reach the terminal state.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">pairs</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
-      <span class="k">for</span> <span class="n">sequence_number</span><span class="p">,</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;input_action&#39;</span><span class="p">:</span>
-          <span class="n">result</span> <span class="o">+=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;number&#39;</span><span class="p">]</span>
-        <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;increment&#39;</span><span class="p">:</span>
-          <span class="n">result</span> <span class="o">+=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;amount&#39;</span><span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-          <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s1">&#39;Unrecognized message type &quot;</span><span class="si">{}</span><span class="s1">&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]))</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">n_new_nodes</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">n_senders_per_node</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">)</span> <span class="o">//</span> <span class="n">n_new_nodes</span>
 
-    <span class="k">return</span> <span class="n">result</span>
+    <span class="n">importers</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
 
-  <span class="k">def</span> <span class="nf">_send_forward_messages</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="n">partition</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_new_nodes</span><span class="p">):</span>
+      <span class="n">new_id</span> <span class="o">=</span> <span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;SumNode_middle_for_migration&#39;</span><span class="p">)</span>
+
+      <span class="n">partition</span><span class="p">[</span><span class="n">new_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">importers</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">n_senders_per_node</span><span class="p">:(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">n_senders_per_node</span><span class="p">]</span>
+
+    <span class="n">new_node_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">partition</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+
+    <span class="c1"># allocate the remaining senders as evenly as possible</span>
+    <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">extra_importer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">importers</span><span class="p">[</span><span class="n">n_new_nodes</span> <span class="o">*</span> <span class="n">n_senders_per_node</span><span class="p">:]):</span>
+      <span class="n">partition</span><span class="p">[</span><span class="n">new_node_ids</span><span class="p">[</span><span class="n">j</span><span class="p">]]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">extra_importer</span><span class="p">)</span>
+
+    <span class="n">configs</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">sum</span><span class="o">.</span><span class="n">sum_node_config</span><span class="p">(</span>
+            <span class="n">node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">,</span>
+            <span class="n">senders</span><span class="o">=</span><span class="p">[],</span>
+            <span class="n">receivers</span><span class="o">=</span><span class="p">[],</span>
+            <span class="n">migrator</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">insertion_migrator_config</span><span class="p">(</span>
+                <span class="n">senders</span><span class="o">=</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">transfer_handle</span><span class="p">(</span><span class="n">importer</span><span class="o">.</span><span class="n">sender</span><span class="p">,</span> <span class="n">for_node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">importer</span> <span class="ow">in</span> <span class="n">importers</span><span class="p">],</span>
+                <span class="n">receivers</span><span class="o">=</span><span class="p">[</span><span class="n">self_handle</span><span class="p">],</span>
+            <span class="p">),</span>
+        <span class="p">)</span> <span class="k">for</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">importers</span> <span class="ow">in</span> <span class="n">partition</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">for</span> <span class="n">self_handle</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="n">node_id</span><span class="p">)]</span>
+    <span class="p">]</span>
+    <span class="k">return</span> <span class="n">configs</span><span class="p">,</span> <span class="n">partition</span>
+
+<div class="viewcode-block" id="SumNode.send_forward_messages"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.send_forward_messages">[docs]</a>  <span class="k">def</span> <span class="nf">send_forward_messages</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">before</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Generate a new sequence number, combine deltas into an update message, and send it on all exporters.</span>
+<span class="sd">    :param dict[str, int] before: An optional dictionary mapping sender ids to sequence_numbers.</span>
+<span class="sd">      If provided, process only up to the provided sequence number for each sender id.</span>
 <span class="sd">    :return: the next unused sequence number</span>
 <span class="sd">    :rtype: int</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">standby_mode</span><span class="p">:</span>
-      <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s2">&quot;Nodes should not be sending messages on exporters while in standby mode.&quot;</span><span class="p">)</span>
-
-    <span class="n">unsent_total</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_combine_and_remove_deltas</span><span class="p">()</span>
+    <span class="n">unsent_total</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">pop_deltas</span><span class="p">(</span><span class="n">before</span><span class="o">=</span><span class="n">before</span><span class="p">)</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
         <span class="s2">&quot;Sending new increment of </span><span class="si">{unsent_total}</span><span class="s2"> to all </span><span class="si">{n_receivers}</span><span class="s2"> receivers&quot;</span><span class="p">,</span>
@@ -414,9 +363,15 @@
     <span class="n">sequence_number</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">advance_sequence_number</span><span class="p">()</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_send_increment</span><span class="p">(</span><span class="n">increment</span><span class="o">=</span><span class="n">unsent_total</span><span class="p">,</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">sequence_number</span><span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_current_state</span> <span class="o">+=</span> <span class="n">unsent_total</span>
-    <span class="k">return</span> <span class="n">sequence_number</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="n">sequence_number</span> <span class="o">+</span> <span class="mi">1</span></div>
 
   <span class="k">def</span> <span class="nf">_send_increment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">increment</span><span class="p">,</span> <span class="n">sequence_number</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">IS_TESTING_ENV</span><span class="p">:</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_TESTING_swapped_once</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_TESTING_total_after_first_swap</span> <span class="o">+=</span> <span class="n">increment</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_TESTING_total_before_first_swap</span> <span class="o">+=</span> <span class="n">increment</span>
+
     <span class="k">for</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
       <span class="n">exporter</span><span class="o">.</span><span class="n">export_message</span><span class="p">(</span>
           <span class="n">message</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">sum</span><span class="o">.</span><span class="n">increment</span><span class="p">(</span><span class="n">amount</span><span class="o">=</span><span class="n">increment</span><span class="p">),</span>
@@ -427,366 +382,7 @@
       <span class="n">message</span> <span class="o">=</span> <span class="n">messages</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">output_action</span><span class="p">(</span><span class="n">increment</span><span class="p">)</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span><span class="o">.</span><span class="n">export_message</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">sequence_number</span><span class="p">)</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">=</span> <span class="mi">0</span>
-
-<div class="viewcode-block" id="SumNode.initialize"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-        <span class="s1">&#39;Starting sum node </span><span class="si">{sum_node_id}</span><span class="s1">. input=</span><span class="si">{input_node_id}</span><span class="s1">, output=</span><span class="si">{output_node_id}</span><span class="s1">&#39;</span><span class="p">,</span>
-        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
-            <span class="s1">&#39;sum_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
-            <span class="s1">&#39;input_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span><span class="o">.</span><span class="n">sender_id</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-            <span class="s1">&#39;output_node_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span><span class="o">.</span><span class="n">receiver_id</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="p">})</span>
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">,</span>
-          <span class="n">messages</span><span class="o">.</span><span class="n">sum</span><span class="o">.</span><span class="n">sum_node_started</span><span class="p">(</span><span class="n">sum_node_handle</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_spawning_migration</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])))</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span></div></div>
-
-
-<div class="viewcode-block" id="SumNodeSenderSplitMigrator"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator">[docs]</a><span class="k">class</span> <span class="nc">SumNodeSenderSplitMigrator</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-  <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">  For managing the way in which a sum node migrates to having new nodes between it and its senders.</span>
-
-<span class="sd">  Terminology:</span>
-
-<span class="sd">  The initial state before the migration:</span>
-<span class="sd">   (large set of leftmost sender nodes) --sending_to--&gt; current node</span>
-<span class="sd">  The final state after the migration:</span>
-<span class="sd">   (large set of sender nodes) --sending_to--&gt; (smaller set of middle nodes) --sending_to--&gt; current node</span>
-
-<span class="sd">  There are thus three sets of nodes involved, the &#39;leftmost&#39; sender nodes, the &#39;middle&#39; nodes and the &#39;current&#39; node</span>
-
-<span class="sd">  The job of this migrator is to spin up an appropriate set of middle nodes in between the leftmost nodes</span>
-<span class="sd">  and the current node.</span>
-<span class="sd">  &#39;&#39;&#39;</span>
-
-  <span class="c1"># Below are the states of a migrator.</span>
-  <span class="c1"># The migrator will move linearly from each state to the next state.</span>
-  <span class="c1"># Each state has some trigger, the condition that must be met in order to transition.  As soon as the transition</span>
-  <span class="c1"># is met, the migrator will move into the next state.</span>
-  <span class="c1"># Each state has an action, something that the migrator is responsible for doing while in that state.</span>
-  <span class="c1"># Each state also has a description, which explains the state of affairs of the overall migration while the</span>
-  <span class="c1"># migrator is in that state.</span>
-
-  <span class="n">STATE_NEW</span> <span class="o">=</span> <span class="s1">&#39;NEW&#39;</span>
-  <span class="sd">&#39;&#39;&#39;The initial state of the migrator.&#39;&#39;&#39;</span>
-
-  <span class="n">STATE_INITIALIZING_NEW_NODES</span> <span class="o">=</span> <span class="s1">&#39;INITIALIZING_NEW_NODES&#39;</span>
-  <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">  Trigger: none.  The migrator can enter this state immediately.</span>
-<span class="sd">  Action: The migrator tries to spawn new nodes.</span>
-<span class="sd">  Description: The migrator is waiting for new nodes to start running.</span>
-<span class="sd">  &#39;&#39;&#39;</span>
-
-  <span class="n">STATE_DUPLICATING_INPUTS</span> <span class="o">=</span> <span class="s1">&#39;DUPLICATING_INPUTS&#39;</span>
-  <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">  Trigger: The migrator has received confirmations that each new node is now running.</span>
-<span class="sd">  Action: The migrator tries to get input nodes to duplicate their exports.</span>
-<span class="sd">  Description: The migrator is waiting for confirmations that the input nodes are duplicating.</span>
-<span class="sd">  &#39;&#39;&#39;</span>
-
-  <span class="n">STATE_SYNCING_NEW_NODES</span> <span class="o">=</span> <span class="s1">&#39;SYNCING_NEW_NODES&#39;</span>
-  <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">  Trigger: The migrator has received confirmations that all input nodes are duplicating.</span>
-<span class="sd">  Action: The migrator attempts to bring the new nodes up to speed so that they can be treated as live.</span>
-<span class="sd">  Description: The migrator is waiting for the new nodes to sync up with the current node they will be replacing.</span>
-<span class="sd">  &#39;&#39;&#39;</span>
-
-  <span class="n">STATE_SWAPPING_OUTPUTS</span> <span class="o">=</span> <span class="s1">&#39;SWAPPING_OUTPUTS&#39;</span>
-  <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">  Trigger: The migrator has received confirmations that the new nodes are live, and can be safely relied on</span>
-<span class="sd">  in place of the input nodes.</span>
-<span class="sd">  Action: The migrator converts all the output nodes to rely on the new nodes instead of the input nodes.</span>
-<span class="sd">  Description: The migrator is waiting for confirmation that all output nodes have finished relying on the input nodes</span>
-<span class="sd">  and are safely using the new nodes instead.</span>
-<span class="sd">  &#39;&#39;&#39;</span>
-
-  <span class="n">STATE_TRIMMING_INPUTS</span> <span class="o">=</span> <span class="s1">&#39;TRIMMING_INPUTS&#39;</span>
-  <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">  Trigger: The migrator has received confirmations that no nodes currently depend on the old output of the input nodes.</span>
-<span class="sd">  Action: The migrator attempts to trim the input nodes (i.e. to stop them from sending their original messages,</span>
-<span class="sd">  and send only to the new nodes they were duplicating to).</span>
-<span class="sd">  Description: The migrator is waiting to be sure that all input nodes have been trimmed.</span>
-<span class="sd">  &#39;&#39;&#39;</span>
-
-  <span class="n">STATE_FINISHED</span> <span class="o">=</span> <span class="s1">&#39;FINISHED&#39;</span>
-  <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">  Trigger: The migrator has received confirmations that all the input nodes are trimmed.</span>
-<span class="sd">  Action: None.</span>
-<span class="sd">  Description: The migration is over.</span>
-<span class="sd">  &#39;&#39;&#39;</span>
-
-  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sum_node</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    :param sum_node: The underlying sum node</span>
-<span class="sd">    :type sum_node: `SumNode`</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">node</span> <span class="o">=</span> <span class="n">sum_node</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_state</span> <span class="o">=</span> <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_NEW</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">n_new_nodes</span> <span class="o">=</span> <span class="mi">2</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_middle_nodes</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="sd">&#39;&#39;&#39;Handles of the middle nodes&#39;&#39;&#39;</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_partition</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="sd">&#39;&#39;&#39;A map from middle node id to a list of the importers that will be moved to it&#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_duplicating_input_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
-    <span class="sd">&#39;&#39;&#39;The set of ids of input nodes that have been told to duplicate, and have not yet confirmed that they</span>
-<span class="sd">    are done duplicating.&#39;&#39;&#39;</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    A map from middle node id to its state.  One of </span>
-<span class="sd">      &#39;new&#39; -- The config was generated, but the node has not yet been heard from.</span>
-<span class="sd">      &#39;started&#39; -- This node has received a first initialization message from the newly started node.</span>
-<span class="sd">      &#39;duplicated&#39; -- This node is now getting duplicated messages from all the appropriate senders.</span>
-<span class="sd">      &#39;synced&#39; -- This node has synced up its model and can now be considered &quot;up to date&quot;.</span>
-<span class="sd">      &#39;live&#39; -- This node has received its model and is getting up to date messages from its input nodes.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_input_id_to_first_sequence_number</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    A map from input node id to the first sequence number that it duplicated to its assigned middle node.</span>
-<span class="sd">    This map starts off empty, but will be complete as the migrator leaves STATE_DUPLICATING_INPUTS.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_input_node_id_to_first_live_sequence_number</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    A map from input node id to the first sequence number that it will send once it has swapped to its assigned</span>
-<span class="sd">    middle node.  This map starts off empty, but will be complete as the migrator leaves STATE_SWAPPING_OUTPUTS</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-
-  <span class="k">def</span> <span class="nf">_transition_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">from_state</span><span class="p">,</span> <span class="n">to_state</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;Move from one state to another.&#39;&#39;&#39;</span>
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_state</span> <span class="o">!=</span> <span class="n">from_state</span><span class="p">:</span>
-      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Must be in state </span><span class="si">{}</span><span class="s2"> to transition&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">from_state</span><span class="p">))</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-        <span class="s2">&quot;Migration transition </span><span class="si">{from_state}</span><span class="s2"> -&gt; </span><span class="si">{to_state}</span><span class="s2"> for </span><span class="si">{cur_node_id}</span><span class="s2">&quot;</span><span class="p">,</span>
-        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
-            <span class="s1">&#39;from_state&#39;</span><span class="p">:</span> <span class="n">from_state</span><span class="p">,</span>
-            <span class="s1">&#39;to_state&#39;</span><span class="p">:</span> <span class="n">to_state</span><span class="p">,</span>
-        <span class="p">})</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_state</span> <span class="o">=</span> <span class="n">to_state</span>
-
-<div class="viewcode-block" id="SumNodeSenderSplitMigrator.start"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator.start">[docs]</a>  <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;Start the migration.&#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_to_initializing_middle_nodes</span><span class="p">()</span></div>
-
-  <span class="k">def</span> <span class="nf">_transition_to_initializing_middle_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_NEW</span><span class="p">,</span>
-                           <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_INITIALIZING_NEW_NODES</span><span class="p">)</span>
-
-    <span class="k">for</span> <span class="n">node_config</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_sender_configs</span><span class="p">():</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">controller</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span><span class="n">node_config</span><span class="o">=</span><span class="n">node_config</span><span class="p">)</span>
-
-  <span class="k">def</span> <span class="nf">_transition_to_duplicating</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_INITIALIZING_NEW_NODES</span><span class="p">,</span>
-                           <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_DUPLICATING_INPUTS</span><span class="p">)</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">deltas_only</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="k">for</span> <span class="n">middle_node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_middle_nodes</span><span class="p">:</span>
-      <span class="k">for</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="p">[</span><span class="n">middle_node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_duplicating_input_ids</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">importer</span><span class="o">.</span><span class="n">sender_id</span><span class="p">)</span>
-        <span class="n">importer</span><span class="o">.</span><span class="n">duplicate_paired_exporters_to</span><span class="p">(</span><span class="n">middle_node</span><span class="p">)</span>
-
-  <span class="k">def</span> <span class="nf">_transition_to_syncing</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_DUPLICATING_INPUTS</span><span class="p">,</span>
-                           <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_SYNCING_NEW_NODES</span><span class="p">)</span>
-
-    <span class="n">increment</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="k">for</span> <span class="n">importers</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
-      <span class="k">for</span> <span class="n">sender_id</span> <span class="ow">in</span> <span class="p">(</span><span class="n">i</span><span class="o">.</span><span class="n">sender_id</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">importers</span><span class="p">):</span>
-        <span class="n">first_sequence_number_from_middle_node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_id_to_first_sequence_number</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span>
-        <span class="n">remaining_pairs</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">rsn</span><span class="p">,</span> <span class="n">message</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]:</span>
-          <span class="k">if</span> <span class="n">rsn</span> <span class="o">&lt;</span> <span class="n">first_sequence_number_from_middle_node</span><span class="p">:</span>
-            <span class="n">increment</span> <span class="o">+=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;amount&#39;</span><span class="p">]</span>
-          <span class="k">else</span><span class="p">:</span>
-            <span class="n">remaining_pairs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">rsn</span><span class="p">,</span> <span class="n">message</span><span class="p">))</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_deltas</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">remaining_pairs</span>
-
-    <span class="n">sequence_number</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">advance_sequence_number</span><span class="p">()</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_send_increment</span><span class="p">(</span><span class="n">increment</span><span class="o">=</span><span class="n">increment</span><span class="p">,</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">sequence_number</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_current_state</span> <span class="o">+=</span> <span class="n">increment</span>
-
-    <span class="n">middle_node_id_to_starting_total</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="n">total</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_current_state</span>
-    <span class="n">total_quotient</span><span class="p">,</span> <span class="n">total_remainder</span> <span class="o">=</span> <span class="n">total</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_new_nodes</span><span class="p">,</span> <span class="n">total</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_new_nodes</span>
-    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">middle_node_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
-      <span class="c1"># The first total_remainder nodes start with a slightly larger total</span>
-      <span class="n">middle_node_id_to_starting_total</span><span class="p">[</span><span class="n">middle_node_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">total_quotient</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">total_remainder</span> <span class="k">else</span> <span class="n">total_quotient</span>
-
-    <span class="k">for</span> <span class="n">middle_node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_middle_nodes</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">middle_node</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">sum</span><span class="o">.</span><span class="n">set_sum_total</span><span class="p">(</span><span class="n">middle_node_id_to_starting_total</span><span class="p">[</span><span class="n">middle_node</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]))</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">deltas_only</span> <span class="o">=</span> <span class="kc">False</span>
-
-  <span class="k">def</span> <span class="nf">_transition_to_swapping_outputs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_SYNCING_NEW_NODES</span><span class="p">,</span>
-                           <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_SWAPPING_OUTPUTS</span><span class="p">)</span>
-
-    <span class="c1"># Since the current node is right here, we can swap the outputs immediately and</span>
-    <span class="c1"># transition directly into the trimming state.</span>
-    <span class="k">for</span> <span class="n">importers</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
-      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">importers</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">i</span><span class="o">.</span><span class="n">sender</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">swap_to_duplicate</span><span class="p">(</span><span class="n">node_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
-
-  <span class="k">def</span> <span class="nf">_transition_to_trimming</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">removed_importers</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_SWAPPING_OUTPUTS</span><span class="p">,</span>
-                           <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_TRIMMING_INPUTS</span><span class="p">)</span>
-
-    <span class="k">for</span> <span class="n">importer</span> <span class="ow">in</span> <span class="n">removed_importers</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">importer</span><span class="o">.</span><span class="n">sender</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">finish_duplicating</span><span class="p">(</span><span class="n">receiver_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
-
-  <span class="k">def</span> <span class="nf">_transition_to_finished</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_transition_state</span><span class="p">(</span><span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_TRIMMING_INPUTS</span><span class="p">,</span> <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_FINISHED</span><span class="p">)</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">migration_finished</span><span class="p">()</span>
-
-<div class="viewcode-block" id="SumNodeSenderSplitMigrator.middle_node_synced"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_synced">[docs]</a>  <span class="k">def</span> <span class="nf">middle_node_synced</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">middle_node_id</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;Called when a middle node has been confirmed to be fully synced up.&#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Marking middle node as now being live&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;middle_node_id&#39;</span><span class="p">:</span> <span class="n">middle_node_id</span><span class="p">})</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="p">[</span><span class="n">middle_node_id</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;synced&#39;</span>
-
-    <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;synced&#39;</span> <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_transition_to_swapping_outputs</span><span class="p">()</span></div>
-
-  <span class="k">def</span> <span class="nf">middle_node_live</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">middle_node_id</span><span class="p">,</span> <span class="n">input_node_id_to_first_live_sequence_number</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="p">[</span><span class="n">middle_node_id</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;live&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_input_node_id_to_first_live_sequence_number</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">input_node_id_to_first_live_sequence_number</span><span class="p">)</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">check_trimming_trigger</span><span class="p">()</span>
-
-<div class="viewcode-block" id="SumNodeSenderSplitMigrator.check_trimming_trigger"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator.check_trimming_trigger">[docs]</a>  <span class="k">def</span> <span class="nf">check_trimming_trigger</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    While in the STATE_SWAPPING_OUTPUTS state, this method checks whether all liveness messages have</span>
-<span class="sd">    arrived from middle nodes and all the input importers have delivered the requisite messages.</span>
-<span class="sd">    If so, it finished swapping outputs and enters the STATE_TRIMMING_INPUTS state.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_state</span> <span class="o">==</span> <span class="n">SumNodeSenderSplitMigrator</span><span class="o">.</span><span class="n">STATE_SWAPPING_OUTPUTS</span> <span class="ow">and</span> \
-        <span class="nb">all</span><span class="p">(</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;live&#39;</span>
-          <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="ow">and</span> \
-        <span class="nb">all</span><span class="p">(</span><span class="n">sn</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_importers</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span><span class="o">.</span><span class="n">least_undelivered_remote_sequence_number</span>
-          <span class="k">for</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">sn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_input_node_id_to_first_live_sequence_number</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
-
-      <span class="c1"># All live messages from middle nodes, and the requisite prior messages from input nodes have arrived.</span>
-      <span class="c1"># Finish the switch to the new behavior and enter the trimming state.</span>
-      <span class="n">removed_importers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remove_importers</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_transition_to_trimming</span><span class="p">(</span><span class="n">removed_importers</span><span class="p">)</span></div>
-
-  <span class="k">def</span> <span class="nf">_remove_importers</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remaining_sender_ids</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Remove importers entirely from this node.</span>
-
-<span class="sd">    :param set remaining_sender_ids: The set of senders that are still sending.  All other senders should be deactivated.</span>
-<span class="sd">    :return: The removed `Importer` instances.</span>
-<span class="sd">    :rtype: list[`Importer`]</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="n">new_importers</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="n">removed_importers</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-      <span class="k">if</span> <span class="n">sender_id</span> <span class="ow">in</span> <span class="n">remaining_sender_ids</span><span class="p">:</span>
-        <span class="n">new_importers</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">importer</span>
-      <span class="k">else</span><span class="p">:</span>
-        <span class="n">removed_importers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">importer</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">remove_importer</span><span class="p">(</span><span class="n">importer</span><span class="p">)</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-        <span class="s2">&quot;Removing </span><span class="si">{n_removed_importers}</span><span class="s2"> importers as a migration ends&quot;</span><span class="p">,</span>
-        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
-            <span class="s1">&#39;n_removed_importers&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">removed_importers</span><span class="p">),</span>
-        <span class="p">})</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_importers</span> <span class="o">=</span> <span class="n">new_importers</span>
-
-    <span class="k">return</span> <span class="n">removed_importers</span>
-
-<div class="viewcode-block" id="SumNodeSenderSplitMigrator.middle_node_started"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_started">[docs]</a>  <span class="k">def</span> <span class="nf">middle_node_started</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">middle_node_handle</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Called when a middle node is confirmed to be running.</span>
-
-<span class="sd">    :param middle_node_handle: The :ref:`handle` of the middle node.</span>
-<span class="sd">    :type middle_node_handle: :ref:`handle`</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Marking middle node as having started&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;middle_node_id&#39;</span><span class="p">:</span> <span class="n">middle_node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]})</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_middle_nodes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">middle_node_handle</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="p">[</span><span class="n">middle_node_handle</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="s1">&#39;started&#39;</span>
-    <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;started&#39;</span> <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_transition_to_duplicating</span><span class="p">()</span></div>
-
-<div class="viewcode-block" id="SumNodeSenderSplitMigrator.middle_node_duplicated"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator.middle_node_duplicated">[docs]</a>  <span class="k">def</span> <span class="nf">middle_node_duplicated</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_id_to_first_sequence_number</span><span class="p">,</span> <span class="n">middle_node_id</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Called when a middle node has confirmed that it is receiving all the proper duplicated inputs.</span>
-
-<span class="sd">    :param dict[int, int] input_id_to_first_sequence_number: To each id of an input node assigned to the</span>
-<span class="sd">      middle node with an id of ``middle_node_id``, this map assigns the first sequence number received by that</span>
-<span class="sd">      middle node.</span>
-
-<span class="sd">    :param str middle_node_id: The id of the middle node.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Marking middle node as now being duplicated&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;middle_node_id&#39;</span><span class="p">:</span> <span class="n">middle_node_id</span><span class="p">})</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="p">[</span><span class="n">middle_node_id</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;duplicated&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_input_id_to_first_sequence_number</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">input_id_to_first_sequence_number</span><span class="p">)</span>
-
-    <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;duplicated&#39;</span> <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_transition_to_syncing</span><span class="p">()</span></div>
-
-<div class="viewcode-block" id="SumNodeSenderSplitMigrator.finished_duplicating"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNodeSenderSplitMigrator.finished_duplicating">[docs]</a>  <span class="k">def</span> <span class="nf">finished_duplicating</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Called when a sender sum node is sending messages only according the structure at the end of migration, and not</span>
-<span class="sd">    the duplicate messages from the beginning of the migration.</span>
-
-<span class="sd">    :param str sender_id: The id of the sender node that has finished duplicating.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_duplicating_input_ids</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">sender_id</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_duplicating_input_ids</span><span class="p">:</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_transition_to_finished</span><span class="p">()</span></div>
-
-  <span class="k">def</span> <span class="nf">_new_sender_configs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    Calculate which middle nodes to spawn in order to protect the current node against a high load from the leftmost</span>
-<span class="sd">    sender nodes, and return the middle nodes&#39; configs.</span>
-
-<span class="sd">    Side effect: update self._partition to map each middle node id to the leftmost nodes that will send to it</span>
-<span class="sd">      once we reach the terminal state.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="n">n_senders_per_node</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_importers</span><span class="p">)</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_new_nodes</span>
-
-    <span class="n">importers</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
-
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_new_nodes</span><span class="p">):</span>
-      <span class="n">new_id</span> <span class="o">=</span> <span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;SumNode_middle_for_migration&#39;</span><span class="p">)</span>
-
-      <span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="p">[</span><span class="n">new_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">importers</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">n_senders_per_node</span><span class="p">:(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">n_senders_per_node</span><span class="p">]</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_middle_node_states</span><span class="p">[</span><span class="n">new_id</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;new&#39;</span>
-
-    <span class="n">new_node_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-
-    <span class="c1"># allocate the remaining senders as evenly as possible</span>
-    <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">extra_importer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">importers</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">n_new_nodes</span> <span class="o">*</span> <span class="n">n_senders_per_node</span><span class="p">:]):</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="p">[</span><span class="n">new_node_ids</span><span class="p">[</span><span class="n">j</span><span class="p">]]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">extra_importer</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="p">[</span>
-        <span class="n">messages</span><span class="o">.</span><span class="n">sum</span><span class="o">.</span><span class="n">sum_node_config</span><span class="p">(</span>
-            <span class="n">node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">,</span>
-            <span class="n">pending_sender_ids</span><span class="o">=</span><span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">sender_id</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">importers</span><span class="p">],</span>
-            <span class="n">senders</span><span class="o">=</span><span class="p">[],</span>
-            <span class="n">receivers</span><span class="o">=</span><span class="p">[</span><span class="n">self_handle</span><span class="p">],</span>
-            <span class="n">spawning_migration</span><span class="o">=</span><span class="n">self_handle</span><span class="p">,</span>
-        <span class="p">)</span> <span class="k">for</span> <span class="n">node_id</span><span class="p">,</span> <span class="n">importers</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_partition</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">for</span> <span class="n">self_handle</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="n">node_id</span><span class="p">)]</span>
-    <span class="p">]</span>
-
-  <span class="nd">@property</span>
-  <span class="k">def</span> <span class="nf">logger</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">logger</span>
-
-  <span class="nd">@property</span>
-  <span class="k">def</span> <span class="nf">controller</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">node</span><span class="o">.</span><span class="n">_controller</span></div>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">=</span> <span class="mi">0</span></div>
 </pre></div>
 
           </div>

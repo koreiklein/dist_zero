@@ -44,11 +44,8 @@
 <span class="sd">  each message, exactly once, and in the right order.</span>
 <span class="sd">  &#39;&#39;&#39;</span>
 
-  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">linker</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="n">first_sequence_number</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">linker</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="n">first_sequence_number</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">remote_sequence_number_to_early_message</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    :param node: The internal node.</span>
-<span class="sd">    :type node: `Node`</span>
-
 <span class="sd">    :param linker: The linker associated with this importer</span>
 <span class="sd">    :type linker: `Linker`</span>
 
@@ -57,21 +54,34 @@
 
 <span class="sd">    :param int first_sequence_number: The first sequence number this importer should expect to receive.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_node</span> <span class="o">=</span> <span class="n">node</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_linker</span> <span class="o">=</span> <span class="n">linker</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_sender</span> <span class="o">=</span> <span class="n">sender</span>
 
+    <span class="bp">self</span><span class="o">.</span><span class="n">_migration_id</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_linker</span><span class="o">.</span><span class="n">logger</span>
+
     <span class="bp">self</span><span class="o">.</span><span class="n">_least_undelivered_remote_sequence_number</span> <span class="o">=</span> <span class="n">first_sequence_number</span> <span class="c1"># see `Importer.least_undelivered_remote_sequence_number`</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">_remote_sequence_number_to_early_message</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="n">remote_sequence_number_to_early_message</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_remote_sequence_number_to_early_message</span> <span class="o">=</span> <span class="p">{</span>
+          <span class="n">k</span><span class="p">:</span> <span class="n">v</span>
+          <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">remote_sequence_number_to_early_message</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="o">&gt;=</span> <span class="n">first_sequence_number</span>
+      <span class="p">}</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_remote_sequence_number_to_early_message</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    A map from:</span>
 <span class="sd">    (sequence numbers greater than self._least_undelivered_remote_sequence_number) -&gt; (a received message with that number)</span>
 <span class="sd">    &#39;&#39;&#39;</span>
 
+  <span class="k">def</span> <span class="nf">switch_linker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">linker</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_linker</span> <span class="o">=</span> <span class="n">linker</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_migration_id</span> <span class="o">=</span> <span class="kc">None</span>
+
   <span class="nd">@property</span>
   <span class="k">def</span> <span class="nf">least_undelivered_remote_sequence_number</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;The least sequence number (in the sender&#39;s sequence) that has never been delivered to self._node .&#39;&#39;&#39;</span>
+    <span class="sd">&#39;&#39;&#39;The least sequence number (in the sender&#39;s sequence) that has never been delivered.&#39;&#39;&#39;</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_undelivered_remote_sequence_number</span>
 
 <div class="viewcode-block" id="Importer.acknowledge"><a class="viewcode-back" href="../../doc/nodes.html#dist_zero.importer.Importer.acknowledge">[docs]</a>  <span class="k">def</span> <span class="nf">acknowledge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remote_sequence_number</span><span class="p">):</span>
@@ -82,18 +92,13 @@
 <span class="sd">      When acknowledge is called, all messages with sequence numbers less than remote_sequence_number must</span>
 <span class="sd">      be acknowledged by the underlying `Node`.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
         <span class="s2">&quot;importer sending remote acknowledgement message. remote sequence number: </span><span class="si">{remote_sequence_number}</span><span class="s2">&quot;</span><span class="p">,</span>
         <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
             <span class="s1">&#39;remote_sequence_number&#39;</span><span class="p">:</span> <span class="n">remote_sequence_number</span><span class="p">,</span>
             <span class="s1">&#39;sender_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">sender_id</span>
         <span class="p">})</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sender</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">sequence_message_acknowledge</span><span class="p">(</span><span class="n">remote_sequence_number</span><span class="p">))</span></div>
-
-  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sender</span><span class="p">,</span>
-                    <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">connect_node</span><span class="p">(</span>
-                        <span class="n">node</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sender</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]),</span> <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;receiver&#39;</span><span class="p">))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_linker</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sender</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">sequence_message_acknowledge</span><span class="p">(</span><span class="n">remote_sequence_number</span><span class="p">))</span></div>
 
 <div class="viewcode-block" id="Importer.import_message"><a class="viewcode-back" href="../../doc/nodes.html#dist_zero.importer.Importer.import_message">[docs]</a>  <span class="k">def</span> <span class="nf">import_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -108,7 +113,7 @@
     <span class="n">rsn</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">]</span>
     <span class="k">if</span> <span class="n">rsn</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_least_undelivered_remote_sequence_number</span> <span class="ow">or</span> <span class="n">rsn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remote_sequence_number_to_early_message</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_linker</span><span class="o">.</span><span class="n">n_duplicates</span> <span class="o">+=</span> <span class="mi">1</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
           <span class="p">(</span><span class="s2">&quot;Received duplicate message for sequence number </span><span class="si">{remote_sequence_number}</span><span class="s2">&quot;</span>
            <span class="s2">&quot; from sender </span><span class="si">{sender_id}</span><span class="s2">&quot;</span><span class="p">),</span>
           <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
@@ -124,19 +129,19 @@
         <span class="c1"># The deliver code should run with a correct least_undelivered_remote_sequence_number.</span>
         <span class="c1"># Make sure to update it BEFORE calling deliver.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_least_undelivered_remote_sequence_number</span> <span class="o">+=</span> <span class="mi">1</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
             <span class="s2">&quot;Delivering ordinary message for sequence number </span><span class="si">{remote_sequence_number}</span><span class="s2">&quot;</span><span class="p">,</span>
             <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
                 <span class="s1">&#39;remote_sequence_number&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">],</span>
                 <span class="s1">&#39;sender_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">sender_id</span>
             <span class="p">})</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">deliver</span><span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_linker</span><span class="o">.</span><span class="n">deliver</span><span class="p">(</span>
             <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;message&#39;</span><span class="p">],</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">],</span> <span class="n">sender_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sender_id</span><span class="p">)</span>
 
       <span class="k">if</span> <span class="n">message</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># This message was not processed immediately, consider it reordered.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_linker</span><span class="o">.</span><span class="n">n_reorders</span> <span class="o">+=</span> <span class="mi">1</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
             <span class="s2">&quot;Postponing out of order message for sequence number </span><span class="si">{remote_sequence_number}</span><span class="s2">&quot;</span><span class="p">,</span>
             <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
                 <span class="s1">&#39;remote_sequence_number&#39;</span><span class="p">:</span> <span class="n">rsn</span><span class="p">,</span>
@@ -149,14 +154,7 @@
 
   <span class="nd">@property</span>
   <span class="k">def</span> <span class="nf">sender</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sender</span>
-
-  <span class="k">def</span> <span class="nf">duplicate_paired_exporters_to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other_node</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sender</span><span class="p">,</span>
-                    <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">start_duplicating</span><span class="p">(</span>
-                        <span class="n">old_receiver_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
-                        <span class="n">receiver</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">transfer_handle</span><span class="p">(</span><span class="n">handle</span><span class="o">=</span><span class="n">other_node</span><span class="p">,</span> <span class="n">for_node_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_sender</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]),</span>
-                    <span class="p">))</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sender</span></div>
 </pre></div>
 
           </div>
