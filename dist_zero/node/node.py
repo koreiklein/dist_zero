@@ -17,16 +17,6 @@ class Node(object):
     self.fernet = Fernet(self._fernet_key)
 
     self.least_unused_sequence_number = 0
-    self._branching = []
-    '''
-    An ordered list of pairs
-    (sent_sequence_number, pairs)
-
-    where sent_sequence_number is a sequence number that has been sent on all exporters
-    and pairs is a list of pairs (importer, least_unreceived_sequence_number)
-      where each pair gives the least unreceived sequence number of the importer at the time
-      that sent_sequence_number was generated.
-    '''
 
     self.migrators = {}
     '''
@@ -127,18 +117,3 @@ class Node(object):
         'sent_messages': self.linker.least_unused_sequence_number,
         'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
     }
-
-  def advance_sequence_number(self, importers):
-    '''
-    Generate and return a new sequence number.
-
-    This method also tracks internally which Importer sequence numbers this sequence number corresponds to.
-    '''
-    result = self.least_unused_sequence_number
-    self._branching.append(
-        (result,
-         [(importer, importer.least_undelivered_remote_sequence_number) for sender_id, importer in importers.items()]))
-
-    self.least_unused_sequence_number += 1
-
-    return result

@@ -48,6 +48,17 @@ class Linker(object):
     self._time_since_retransmitted_expired_pending_messages = 0
     self._initialized = False
 
+    self._branching = []
+    '''
+    An ordered list of pairs
+    (sent_sequence_number, pairs)
+
+    where sent_sequence_number is a sequence number that has been sent on all exporters
+    and pairs is a list of pairs (importer, least_unreceived_sequence_number)
+      where each pair gives the least unreceived sequence number of the importer at the time
+      that sent_sequence_number was generated.
+    '''
+
   def initialize(self):
     if self._initialized:
       raise errors.InternalError("linker has already been initialized")
@@ -61,14 +72,6 @@ class Linker(object):
     for exporter in self._exporters.values():
       self.send(exporter.receiver,
                 messages.migration.connect_node(node=self.new_handle(exporter.receiver_id), direction='sender'))
-
-  @property
-  def _branching(self):
-    return self._node._branching
-
-  @_branching.setter
-  def _branching(self, value):
-    self._node._branching = value
 
   def remove_exporters(self, receiver_ids):
     for receiver_id in receiver_ids:
@@ -100,7 +103,18 @@ class Linker(object):
     return self._node.least_unused_sequence_number
 
   def advance_sequence_number(self):
-    return self._node.advance_sequence_number(self._importers)
+    '''
+    Generate and return a new sequence number.
+
+    This method also tracks internally which Importer sequence numbers this sequence number corresponds to.
+    '''
+    result = self._node.least_unused_sequence_number
+    self._branching.append((result, [(importer, importer.least_undelivered_remote_sequence_number)
+                                     for sender_id, importer in self._importers.items()]))
+
+    self._node.least_unused_sequence_number += 1
+
+    return result
 
   def new_importer(self, sender, first_sequence_number=0, remote_sequence_number_to_early_message=None):
     '''
@@ -174,6 +188,9 @@ class Linker(object):
     return result
 
   def absorb_linker(self, linker):
+    self._branching.extend(linker._branching)
+    self._branching.sort()
+
     for k, v in linker._exporters.items():
       v.switch_linker(self)
       self._exporters[k] = v

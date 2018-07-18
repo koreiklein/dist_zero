@@ -20,6 +20,8 @@ class SourceMigrator(migrator.Migrator):
 
     self._exporter_swaps = exporter_swaps
 
+    self._swapped = False
+
   @staticmethod
   def from_config(migrator_config, node):
     '''
@@ -64,6 +66,9 @@ class SourceMigrator(migrator.Migrator):
       for new_exporter in exporter.duplicated_exporters:
         self._node._exporters[new_exporter.receiver_id] = new_exporter
     self._node.linker.absorb_linker(self._linker)
+    self._swapped = True
+    if settings.IS_TESTING_ENV:
+      self._node._TESTING_swapped_once = True
 
   def _receive_terminate_migrator(self, sender_id, message):
     receiver_ids_to_remove = set()

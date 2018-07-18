@@ -13,6 +13,8 @@ load_dotenv(find_dotenv())
 
 DIST_ZERO_ENV = os.environ['DIST_ZERO_ENV']
 
+IS_TESTING_ENV = DIST_ZERO_ENV == 'test'
+
 ALWAYS_REBUILD_DOCKER_IMAGES = os.environ.get('ALWAYS_REBUILD_DOCKER_IMAGES', '').lower() == 'true'
 
 # URL for the docker server

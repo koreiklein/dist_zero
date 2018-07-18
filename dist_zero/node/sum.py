@@ -1,6 +1,6 @@
 import logging
 
-from dist_zero import messages, errors, ids, migration, deltas
+from dist_zero import messages, errors, ids, migration, deltas, settings
 from .node import Node
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,11 @@ class SumNode(Node):
     self._controller = controller
 
     self.id = node_id
+
+    if settings.IS_TESTING_ENV:
+      self._TESTING_total_before_first_swap = 0
+      self._TESTING_swapped_once = False
+      self._TESTING_total_after_first_swap = 0
 
     # Invariants:
     #   At certain points in time, a increment message is sent to every receiver.
@@ -328,6 +333,12 @@ class SumNode(Node):
     return sequence_number + 1
 
   def _send_increment(self, increment, sequence_number):
+    if settings.IS_TESTING_ENV:
+      if self._TESTING_swapped_once:
+        self._TESTING_total_after_first_swap += increment
+      else:
+        self._TESTING_total_before_first_swap += increment
+
     for exporter in self._exporters.values():
       exporter.export_message(
           message=messages.sum.increment(amount=increment),
