@@ -120,7 +120,8 @@ class SourceMigrator(migrator.Migrator):
     return self._migration['id']
 
   def elapse(self, ms):
-    self._linker.elapse(ms)
+    if not self._swapped:
+      self._linker.elapse(ms)
 
   def initialize(self):
     self._node.send(self._migration, messages.migration.attached_migrator())
