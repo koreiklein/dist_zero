@@ -16,8 +16,6 @@ class InsertionMigrator(migrator.Migrator):
     self._migration = migration
     self._node = node
 
-    self._node.deltas_only = True
-
     # When true, the swap has been prepared, and the migrator should be checking whether it's time to swap.
     self._waiting_for_swap = False
 
@@ -59,27 +57,19 @@ class InsertionMigrator(migrator.Migrator):
       self._node.deltas_only = True
       self._flow_is_started = True
 
-      sequence_number = self._node.linker.least_unused_sequence_number
-      if sequence_number != 0:
-        self._node.logger.error(
-            "First sequence number for an insertion node should be 0.  Got {sequence_number}",
-            extra={'sequence_number': sequence_number})
-
       for receiver in self._receivers.values():
-        self._node.send(receiver,
-                        messages.migration.started_flow(
-                            migration_id=self.migration_id,
-                            sequence_number=sequence_number,
-                            sender=self._node.new_handle(receiver['id'])))
+        self._node.send(
+            receiver,
+            messages.migration.started_flow(
+                migration_id=self.migration_id,
+                sequence_number=0, # Insertion nodes always start at sequence number 0
+                sender=self._node.new_handle(receiver['id'])))
 
   def receive(self, sender_id, message):
     if message['type'] == 'sequence_message':
       self._node.linker.receive_sequence_message(message['value'], sender_id=sender_id)
       self._maybe_swap()
     elif message['type'] == 'started_flow':
-      if self._flow_is_started:
-        self._node.logger.warning("Received a started_flow message after the flow had already started.")
-        return
       self._node.import_from_node(message['sender'], first_sequence_number=message['sequence_number'])
       self._sender_id_to_status[sender_id] = 'started_flow'
       self._maybe_send_started_flow()
@@ -108,16 +98,20 @@ class InsertionMigrator(migrator.Migrator):
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
 
   def _maybe_swap(self):
-    if self._waiting_for_swap and all(status == 'swapped' for status in self._sender_id_to_status.values()):
-      if self._node._deltas.covers(self._new_sender_id_to_first_live_sequence_number):
-        self._node.send_forward_messages(self._new_sender_id_to_first_live_sequence_number)
-        if settings.IS_TESTING_ENV:
-          self._node._TESTING_swapped_once = True
-        self._node.deltas_only = False
-        self._waiting_for_swap = False
-        for receiver_id in self._receivers.keys():
-          exporter = self._node._exporters[receiver_id]
-          exporter.send_swapped_to_duplicate()
+    if self._waiting_for_swap and \
+        all(status == 'swapped' for status in self._sender_id_to_status.values()) and \
+        self._node._deltas.covers(self._new_sender_id_to_first_live_sequence_number):
+      self._node.send_forward_messages(self._new_sender_id_to_first_live_sequence_number)
+      self._node.deltas_only = False
+      self._waiting_for_swap = False
+      for receiver_id in self._receivers.keys():
+        exporter = self._node._exporters[receiver_id]
+        self._node.send(exporter.receiver,
+                        messages.migration.swapped_to_duplicate(
+                            self.migration_id, first_live_sequence_number=exporter._internal_sequence_number))
+
+      if settings.IS_TESTING_ENV:
+        self._node._TESTING_swapped_once = True
 
   @property
   def migration_id(self):

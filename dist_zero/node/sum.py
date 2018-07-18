@@ -80,15 +80,15 @@ class SumNode(Node):
       self._input_importer = self.linker.new_importer(input_node)
       self._deltas.add_sender(self._input_importer.sender_id)
 
-    self._importers = {sender['id']: self.linker.new_importer(sender) for sender in senders}
-    for sender_id in self._importers.keys():
-      self._deltas.add_sender(sender_id)
-
     self._initial_migrator_config = migrator_config
     self._initial_migrator = None # It will be initialized later.
 
     self._output_exporter = None if output_node is None else self.linker.new_exporter(output_node)
     self._exporters = {receiver['id']: self.linker.new_exporter(receiver) for receiver in receivers}
+    self._importers = {}
+
+    for sender in senders:
+      self.import_from_node(sender)
 
   def initialize(self):
     self.logger.info(

@@ -26,6 +26,13 @@ class SourceMigrator(migrator.Migrator):
 
     self._exporter_swaps = exporter_swaps
 
+    self._old_exporters = {
+        old_receiver_id: self._node._exporters[old_receiver_id]
+        for old_receiver_id, new_receivers in self._exporter_swaps
+    }
+
+    self._new_exporters = {}
+
     self._swapped = False
 
   @staticmethod
@@ -52,33 +59,49 @@ class SourceMigrator(migrator.Migrator):
               'new_receivers': new_receivers,
               'old_receiver_id': old_receiver_id,
           })
-      self._node._exporters[old_receiver_id].start_new_flow(
-          exporters=[
-              self._linker.new_exporter(new_receiver, migration_id=self.migration_id) for new_receiver in new_receivers
-          ],
-          migration_id=self.migration_id)
+      exporter = self._node._exporters[old_receiver_id]
+      if exporter.duplicated_exporters is not None:
+        raise errors.InternalError("Refusing to start duplicating an exporter that is already duplicating.")
+
+      exporter.duplicated_exporters = []
+      for new_receiver in new_receivers:
+        new_exporter = self._linker.new_exporter(new_receiver, migration_id=self.migration_id)
+        self._new_exporters[new_receiver['id']] = new_exporter
+        exporter.duplicated_exporters.append(new_exporter)
+        self._node.send(new_exporter.receiver,
+                        messages.migration.started_flow(
+                            migration_id=self.migration_id,
+                            sequence_number=new_exporter.internal_sequence_number,
+                            sender=self._node.new_handle(new_exporter.receiver_id),
+                        ))
+
+      self._node.send(exporter.receiver,
+                      messages.migration.replacing_flow(
+                          migration_id=self.migration_id, sequence_number=exporter.internal_sequence_number))
 
   def _receive_switch_flows(self, sender_id, message):
     # Clear out any messages that can still be sent on the old flow.
     self._node.send_forward_messages()
-    for old_receiver_id, new_receivers in self._exporter_swaps:
-      exporter = self._node._exporters.pop(old_receiver_id)
-      exporter.swap_to_duplicate(self.migration_id)
-      for new_exporter in exporter.duplicated_exporters:
-        self._node._exporters[new_exporter.receiver_id] = new_exporter
+
+    for receiver_id in self._old_exporters:
+      exporter = self._node._exporters.pop(receiver_id)
+      self._node.send(exporter.receiver,
+                      messages.migration.swapped_from_duplicate(
+                          self.migration_id, first_live_sequence_number=exporter.internal_sequence_number))
+
+    for exporter in self._new_exporters.values():
+      self._node.send(exporter.receiver,
+                      messages.migration.swapped_to_duplicate(
+                          self.migration_id, first_live_sequence_number=exporter.internal_sequence_number))
+
+    self._node._exporters.update(self._new_exporters)
     self._node.linker.absorb_linker(self._linker)
     self._swapped = True
     if settings.IS_TESTING_ENV:
       self._node._TESTING_swapped_once = True
 
   def _receive_terminate_migrator(self, sender_id, message):
-    receiver_ids_to_remove = set()
-    for old_receiver_id, new_receivers in self._exporter_swaps:
-      receiver_ids_to_remove.add(old_receiver_id)
-      for new_receiver in new_receivers:
-        self._node._exporters[new_receiver['id']]._migration_id = None
-
-    self._node.linker.remove_exporters(receiver_ids_to_remove)
+    self._node.linker.remove_exporters(set(self._old_exporters.keys()))
     self._node.remove_migrator(self.migration_id)
     self._node.send(self._migration, messages.migration.migrator_terminated())
 
