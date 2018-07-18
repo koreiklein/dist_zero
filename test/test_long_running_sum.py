@@ -49,6 +49,13 @@ class TestLongRunningSum(object):
     self._spawn_initial_nodes()
     self.demo.run_for(ms=500)
 
+    if self.demo.mode == spawners.MODE_SIMULATED:
+      total_nodes = sum(
+          self.system.get_simulated_spawner().get_machine_by_id(machine_id).n_nodes for machine_id in self.machine_ids)
+
+      # 2 io internal, 1 sum internal, 2 io outputs, and 2 io output adjacent sum nodes.
+      assert total_nodes == 2 + 1 + 2 + 2
+
     self.input_node_ids = []
     self._spawn_inputs_loop(n_inputs=n_inputs_at_split, total_time_ms=20 * 1000)
     self.demo.run_for(ms=4000)
@@ -63,6 +70,14 @@ class TestLongRunningSum(object):
     for input_node_id in self.input_node_ids:
       stats = self.demo.system.get_stats(input_node_id)
       assert stats['sent_messages'] == stats['acknowledged_messages']
+
+    if self.demo.mode == spawners.MODE_SIMULATED:
+      total_nodes = sum(
+          self.system.get_simulated_spawner().get_machine_by_id(machine_id).n_nodes for machine_id in self.machine_ids)
+
+      # 7 from before, 15 io leaves each with a sum node adjacent, and 2 new middle sum nodes.
+      # Importantly, the migration node should be terminated at this point.
+      assert total_nodes == 7 + 15 * 2 + 2
 
   def _debug_node_spltting(self):
     '''A useful method for debugging problems when totals don't add up after running a migration.'''

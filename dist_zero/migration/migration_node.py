@@ -140,7 +140,7 @@ class MigrationNode(node.Node):
     self._state_controller = FinishedState(self, self._controller, self._migration_config)
     self._state_controller.initialize()
 
-    # FIXME(KK): At this point, it is safe to remove the MigrationNode entirely.  Do so!
+    self._controller.terminate_node(self.id)
 
   def elapse(self, ms):
     # TODO(KK): Add retransmission to migration nodes when it is taking to long to move into the next state.

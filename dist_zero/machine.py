@@ -215,8 +215,12 @@ class NodeManager(MachineController):
   def transfer_transport(self, transport, for_node_id):
     return dict(transport)
 
-  def get_node(self, handle):
-    return self._node_by_id[handle['id']]
+  def get_node_by_id(self, node_id):
+    return self._node_by_id[node_id]
+
+  @property
+  def n_nodes(self):
+    return len(self._node_by_id)
 
   def _update_output_node_state(self, node_id, f):
     new_state = f(self._output_node_state_by_id[node_id])

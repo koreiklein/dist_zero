@@ -201,6 +201,11 @@ class SystemController(object):
   def _node_handle_to_machine_id(self, node_handle):
     return self._node_id_to_machine_id[node_handle['id']]
 
+  def get_simulated_spawner(self):
+    if self._spawner.mode() != spawners.MODE_SIMULATED:
+      raise errors.InternalError("System is not using a simulated spawner")
+    return self._spawner
+
   def configure_logging(self):
     # Filters
     str_format_filter = dist_zero.logging.StrFormatFilter()
