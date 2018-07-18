@@ -17,6 +17,78 @@ from dist_zero.system_controller import SystemController
 
 class TestLongRunningSum(object):
   @pytest.mark.parametrize('error_regexp,drop_rate,network_error_type', [
+      ('.*increment.*', 0.2, 'drop'),
+  ])
+  def test_consolidate_nodes(self, demo, error_regexp, drop_rate, network_error_type):
+    self.demo = demo
+    self.n_machines = 6
+
+    network_errors_config = messages.machine.std_simulated_network_errors_config()
+    network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
+    network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
+
+    n_inputs_at_split = 15
+
+    n_new_nodes = 1
+
+    self._base_config = {
+        'system_config': {
+            'SUM_NODE_SENDER_LIMIT': n_inputs_at_split,
+            'SUM_NODE_SPLIT_N_NEW_NODES': n_new_nodes,
+        },
+        'network_errors_config': network_errors_config,
+    }
+
+    self._rand = random.Random('test_node_splitting')
+    self._total_simulated_amount = 0
+
+    self.simulated = True
+    self.system = demo.system
+    self._spawn_initial_nodes()
+    self.demo.run_for(ms=500)
+
+    self.input_node_ids = []
+    for i in range(3):
+      self.input_node_ids.append(
+          self.system.create_kid(
+              parent_node_id=self.root_input_node_id,
+              new_node_name='input_{}'.format(i),
+              # Place the new nodes on machines in a round-robin manner.
+              machine_id=self.machine_ids[i % len(self.machine_ids)],
+              recorded_user=self._new_recorded_user(
+                  name='user {}'.format(i), ave_inter_message_time_ms=1200, send_messages_for_ms=8 * 1000)))
+
+    # Let things settle down
+    self.demo.run_for(ms=2000)
+
+    if self.demo.mode == spawners.MODE_SIMULATED:
+      # 7 original nodes, plus each new input node plus its adjacent sum node.
+      assert self.total_nodes() == 7 + len(self.input_node_ids) * 2
+
+    # For the sum node to spawn new senders that it doesn't need.
+    self.system.send_api_message(self.sum_node_id, messages.machine.spawn_new_senders())
+
+    # Let the first migration run.
+    self.demo.run_for(ms=3000)
+
+    if self.demo.mode == spawners.MODE_SIMULATED:
+      # We should now have additional nodes spawned in the above migration.
+      assert self.total_nodes() == 7 + len(self.input_node_ids) * 2 + n_new_nodes
+
+    # The newly spawned nodes should trigger migrations to excise themselves
+    self.demo.run_for(ms=6000)
+    if self.demo.mode == spawners.MODE_SIMULATED:
+      assert self.total_nodes() == 7 + len(self.input_node_ids) * 2
+
+    # Make sure the totals are correct
+    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
+    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
+
+  def total_nodes(self):
+    return sum(
+        self.system.get_simulated_spawner().get_machine_by_id(machine_id).n_nodes for machine_id in self.machine_ids)
+
+  @pytest.mark.parametrize('error_regexp,drop_rate,network_error_type', [
       ('.*increment.*', 0.37, 'drop'),
       ('.*increment.*', 0.27, 'duplicate'),
       ('.*increment.*', 0.27, 'reorder'),
@@ -37,6 +109,7 @@ class TestLongRunningSum(object):
     self._base_config = {
         'system_config': {
             'SUM_NODE_SENDER_LIMIT': n_inputs_at_split,
+            'SUM_NODE_SPLIT_N_NEW_NODES': 2,
         },
         'network_errors_config': network_errors_config,
     }
@@ -50,11 +123,8 @@ class TestLongRunningSum(object):
     self.demo.run_for(ms=500)
 
     if self.demo.mode == spawners.MODE_SIMULATED:
-      total_nodes = sum(
-          self.system.get_simulated_spawner().get_machine_by_id(machine_id).n_nodes for machine_id in self.machine_ids)
-
       # 2 io internal, 1 sum internal, 2 io outputs, and 2 io output adjacent sum nodes.
-      assert total_nodes == 2 + 1 + 2 + 2
+      assert self.total_nodes() == 2 + 1 + 2 + 2
 
     self.input_node_ids = []
     self._spawn_inputs_loop(n_inputs=n_inputs_at_split, total_time_ms=20 * 1000)
@@ -72,12 +142,9 @@ class TestLongRunningSum(object):
       assert stats['sent_messages'] == stats['acknowledged_messages']
 
     if self.demo.mode == spawners.MODE_SIMULATED:
-      total_nodes = sum(
-          self.system.get_simulated_spawner().get_machine_by_id(machine_id).n_nodes for machine_id in self.machine_ids)
-
       # 7 from before, 15 io leaves each with a sum node adjacent, and 2 new middle sum nodes.
       # Importantly, the migration node should be terminated at this point.
-      assert total_nodes == 7 + 15 * 2 + 2
+      assert self.total_nodes() == 7 + 15 * 2 + 2
 
   def _debug_node_spltting(self):
     '''A useful method for debugging problems when totals don't add up after running a migration.'''

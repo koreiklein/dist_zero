@@ -16,6 +16,7 @@ def std_system_config():
   '''
   return {
       'SUM_NODE_SENDER_LIMIT': 15,
+      'SUM_NODE_SPLIT_N_NEW_NODES': 2,
   }
 
 
@@ -165,3 +166,10 @@ def create_kid_config(new_node_name, machine_id):
       'new_node_name': new_node_name,
       'machine_id': machine_id,
   }
+
+
+def spawn_new_senders():
+  '''
+  Indicates to a sum node that it should spawn new senders.
+  '''
+  return {'type': 'spawn_new_senders'}

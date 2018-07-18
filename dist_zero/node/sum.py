@@ -229,7 +229,7 @@ class SumNode(Node):
       if len(self._importers) >= SENDER_LIMIT:
         if not self.migrators:
           self.logger.info("Hitting sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
-          self._hit_sender_limit()
+          self._spawn_new_senders_migration()
 
       self.send_forward_messages()
 
@@ -240,14 +240,17 @@ class SumNode(Node):
 
     self.linker.elapse(ms)
 
-  def _hit_sender_limit(self):
+  def _spawn_new_senders_migration(self):
+    '''
+    Trigger a migration to spawn new sender nodes between self and its current senders.
+    '''
     node_id = ids.new_id('MigrationNode_add_layer_before_sum_node')
     insertion_node_configs, partition = self._new_sender_configs()
     reverse_partition = {
         importer.sender_id: middle_node_id
         for middle_node_id, importers in partition.items() for importer in importers
     }
-    self._controller.spawn_node(
+    return self._controller.spawn_node(
         node_config=messages.migration.migration_node_config(
             node_id=node_id,
             source_nodes=[(self.transfer_handle(importer.sender, node_id),
@@ -279,7 +282,7 @@ class SumNode(Node):
     Side effect: update self._partition to map each middle node id to the leftmost nodes that will send to it
       once we reach the terminal state.
     '''
-    n_new_nodes = 2
+    n_new_nodes = self.system_config['SUM_NODE_SPLIT_N_NEW_NODES']
     n_senders_per_node = len(self._importers) // n_new_nodes
 
     importers = list(self._importers.values())
@@ -350,3 +353,9 @@ class SumNode(Node):
       self._output_exporter.export_message(message=message, sequence_number=sequence_number)
 
     self._unsent_time_ms = 0
+
+  def handle_api_message(self, message):
+    if message['type'] == 'spawn_new_senders':
+      return self._spawn_new_senders_migration()
+    else:
+      return super(SumNode, self).handle_api_message(message)
