@@ -62,9 +62,6 @@ class TestLongRunningSum(object):
     # Assert that each input node has received acknowledgments for all its sent messages.
     for input_node_id in self.input_node_ids:
       stats = self.demo.system.get_stats(input_node_id)
-      if stats['sent_messages'] != stats['acknowledged_messages']:
-        import ipdb
-        ipdb.set_trace()
       assert stats['sent_messages'] == stats['acknowledged_messages']
 
   def _debug_node_spltting(self):

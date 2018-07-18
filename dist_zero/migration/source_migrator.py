@@ -16,7 +16,13 @@ class SourceMigrator(migrator.Migrator):
     '''
     self._migration = migration
     self._node = node
-    self._linker = linker.Linker(self._node, logger=self._node.logger, deliver=self.deliver)
+
+    def _deliver(message, sequence_number, sender_id):
+      # Impossible! Source migrators do not add any importers to their linkers, and thus the linker
+      # should never call deliver.
+      raise errors.InternalError("No messages should be delivered to a `SourceMigrator` by its linker.")
+
+    self._linker = linker.Linker(self._node, logger=self._node.logger, deliver=_deliver)
 
     self._exporter_swaps = exporter_swaps
 
@@ -36,11 +42,6 @@ class SourceMigrator(migrator.Migrator):
     '''
     return SourceMigrator(
         migration=migrator_config['migration'], node=node, exporter_swaps=migrator_config['exporter_swaps'])
-
-  def deliver(self, message, sequence_number, sender_id):
-    # Impossible! Source migrators do not add any importers to their linkers, and thus the linker
-    # should never call deliver.
-    raise errors.InternalError("No messages should be delivered to a `SourceMigrator` by its linker.")
 
   def _receive_start_flow(self, sender_id, message):
     self._node.send_forward_messages()

@@ -18,11 +18,8 @@ class SinkMigrator(migrator.Migrator):
     '''
     self._migration = migration
     self._node = node
-    self._linker = linker.Linker(self._node, logger=self._node.logger, deliver=self.deliver)
 
     self._waiting_for_swap = False
-
-    self._deltas = deltas.Deltas()
 
     self._now_ms = 0
 
@@ -43,8 +40,16 @@ class SinkMigrator(migrator.Migrator):
     self._new_importers = {sender_id: None for sender_id in new_flow_sender_ids}
     '''Sender id to the new importer'''
 
+    self._deltas = deltas.Deltas()
     for sender_id in new_flow_sender_ids:
       self._deltas.add_sender(sender_id)
+
+    self._linker = linker.Linker(
+        self._node,
+        logger=self._node.logger,
+        deliver=lambda message, sequence_number, sender_id: self._deltas.add_message(
+          sender_id=sender_id, sequence_number=sequence_number, message=message)
+        )
 
     self._old_sender_id_to_first_swapped_sequence_number = {sender_id: None for sender_id in old_flow_sender_ids}
     '''Maps each old sender_id to the first sequence number after it has swapped to the new flow.'''
@@ -90,61 +95,41 @@ class SinkMigrator(migrator.Migrator):
       sequence_number = self._node.send_forward_messages()
       self._node.send(self._migration, messages.migration.completed_flow(sequence_number=sequence_number))
 
-  def new_handle(self, for_node_id):
-    return self._node.new_handle(for_node_id)
-
-  def send(self, receiver, message):
-    self._node.send(receiver=receiver, message=message)
-
-  def deliver(self, message, sequence_number, sender_id):
-    self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
-
-  def _receive_started_flow(self, sender_id, message):
-    # These messages are received from the new flow.
-    if self._flow_is_started:
-      self._node.logger.warning("Received a started_flow message after the flow had already started.")
-      return
-
-    self._new_importers[sender_id] = self._linker.new_importer(
-        sender=message['sender'], first_sequence_number=message['sequence_number'])
-
-    self._new_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
-    self._maybe_complete_flow()
-
-  def _receive_replacing_flow(self, sender_id, message):
-    # These messages are received from the old flow.
-
-    if self._flow_is_started:
-      self._node.logger.warning("Ignoring a 'replacing_flow' message received after the new flow has started")
-      return
-
-    self._old_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
-    self._maybe_complete_flow()
-
   def receive(self, sender_id, message):
     if message['type'] == 'started_flow':
-      self._receive_started_flow(sender_id, message)
+      self._new_importers[sender_id] = self._linker.new_importer(
+          sender=message['sender'], first_sequence_number=message['sequence_number'])
+      self._new_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
+      self._maybe_complete_flow()
     elif message['type'] == 'replacing_flow':
-      self._receive_replacing_flow(sender_id, message)
+      self._old_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
+      self._maybe_complete_flow()
+
     elif message['type'] == 'sequence_message':
+      # After the swap, sequence_messages for the migration should go directly to the node's linker.
       linker = self._node.linker if self._swapped else self._linker
       linker.receive_sequence_message(message=message['value'], sender_id=sender_id)
+
     elif message['type'] == 'start_syncing':
       self._start_syncing_message = message
       self._maybe_start_syncing()
+
     elif message['type'] == 'sum_total_set':
       self._sync_target_to_status[sender_id] = 'synced'
       if all(status == 'synced' for status in self._sync_target_to_status.values()):
         self._node.send(self._migration, messages.migration.syncer_is_synced())
+
     elif message['type'] == 'prepare_for_switch':
       self._waiting_for_swap = True
       self._node.send(self._migration, messages.migration.prepared_for_switch())
+
     elif message['type'] == 'swapped_from_duplicate':
       self._old_sender_id_to_first_swapped_sequence_number[sender_id] = message['first_live_sequence_number']
       self._maybe_swap()
     elif message['type'] == 'swapped_to_duplicate':
       self._new_sender_id_to_first_swapped_sequence_number[sender_id] = message['first_live_sequence_number']
       self._maybe_swap()
+
     elif message['type'] == 'terminate_migrator':
       self._node.remove_migrator(self.migration_id)
       self._node.send(self._migration, messages.migration.migrator_terminated())
@@ -178,7 +163,7 @@ class SinkMigrator(migrator.Migrator):
       self._node.linker.absorb_linker(self._linker)
       self._node._importers = self._new_importers
 
-      self.send(self._migration, messages.migration.switched_flows())
+      self._node.send(self._migration, messages.migration.switched_flows())
 
       # self._linker should no longer be used.  Null it out.
       self._linker = None
@@ -201,11 +186,11 @@ class SinkMigrator(migrator.Migrator):
       for i, receiver in enumerate(receivers):
         # The first total_remainder receivers will get a total that is one greater than that of the other receivers.
         # This way, the totals of the receivers will add to the total of self._node
-        self.send(receiver,
-                  messages.migration.set_sum_total(
-                      migration_id=self.migration_id,
-                      from_node=self._node.new_handle(receiver['id']),
-                      total=total_quotient + 1 if i < total_remainder else total_quotient))
+        self._node.send(receiver,
+                        messages.migration.set_sum_total(
+                            migration_id=self.migration_id,
+                            from_node=self._node.new_handle(receiver['id']),
+                            total=total_quotient + 1 if i < total_remainder else total_quotient))
 
   def elapse(self, ms):
     self._maybe_start_syncing()
@@ -226,4 +211,4 @@ class SinkMigrator(migrator.Migrator):
 
   def initialize(self):
     self._node.deltas_only = True
-    self.send(self._migration, messages.migration.attached_migrator())
+    self._node.send(self._migration, messages.migration.attached_migrator())
