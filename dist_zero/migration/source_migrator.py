@@ -40,40 +40,49 @@ class SourceMigrator(migrator.Migrator):
     # should never call deliver.
     raise errors.InternalError("No messages should be delivered to a `SourceMigrator` by its linker.")
 
+  def _receive_start_flow(self, sender_id, message):
+    self._node.send_forward_messages()
+    for old_receiver_id, new_receivers in self._exporter_swaps:
+      self._node.logger.info(
+          "Starting duplication phase for {cur_node_id} . {new_receivers} will now receive duplicates from {old_receiver_id}.",
+          extra={
+              'new_receivers': new_receivers,
+              'old_receiver_id': old_receiver_id,
+          })
+      self._node._exporters[old_receiver_id].start_new_flow(
+          exporters=[
+              self._linker.new_exporter(new_receiver, migration_id=self.migration_id) for new_receiver in new_receivers
+          ],
+          migration_id=self.migration_id)
+
+  def _receive_switch_flows(self, sender_id, message):
+    # Clear out any messages that can still be sent on the old flow.
+    self._node.send_forward_messages()
+    for old_receiver_id, new_receivers in self._exporter_swaps:
+      exporter = self._node._exporters.pop(old_receiver_id)
+      exporter.swap_to_duplicate(self.migration_id)
+      for new_exporter in exporter.duplicated_exporters:
+        self._node._exporters[new_exporter.receiver_id] = new_exporter
+    self._node.linker.absorb_linker(self._linker)
+
+  def _receive_terminate_migrator(self, sender_id, message):
+    receiver_ids_to_remove = set()
+    for old_receiver_id, new_receivers in self._exporter_swaps:
+      receiver_ids_to_remove.add(old_receiver_id)
+      for new_receiver in new_receivers:
+        self._node._exporters[new_receiver['id']]._migration_id = None
+
+    self._node.linker.remove_exporters(receiver_ids_to_remove)
+    self._node.remove_migrator(self.migration_id)
+    self._node.send(self._migration, messages.migration.migrator_terminated())
+
   def receive(self, sender_id, message):
     if message['type'] == 'start_flow':
-      self._node.send_forward_messages()
-      for old_receiver_id, new_receivers in self._exporter_swaps:
-        self._node.logger.info(
-            "Starting duplication phase for {cur_node_id} . {new_receivers} will now receive duplicates from {old_receiver_id}.",
-            extra={
-                'new_receivers': new_receivers,
-                'old_receiver_id': old_receiver_id,
-            })
-        self._node._exporters[old_receiver_id].start_new_flow(
-            exporters=[
-                self._linker.new_exporter(new_receiver, migration_id=self.migration_id)
-                for new_receiver in new_receivers
-            ],
-            migration_id=self.migration_id)
+      self._receive_start_flow(sender_id, message)
     elif message['type'] == 'switch_flows':
-      # Clear out any messages that can still be sent on the old flow.
-      self._node.send_forward_messages()
-      for old_receiver_id, new_receivers in self._exporter_swaps:
-        exporter = self._node._exporters.pop(old_receiver_id)
-        exporter.swap_to_duplicate(self.migration_id)
-        for new_exporter in exporter.duplicated_exporters:
-          self._node._exporters[new_exporter.receiver_id] = new_exporter
-      self._node.linker.absorb_linker(self._linker)
+      self._receive_switch_flows(sender_id, message)
     elif message['type'] == 'terminate_migrator':
-      receiver_ids_to_remove = set()
-      for old_receiver_id, new_receivers in self._exporter_swaps:
-        receiver_ids_to_remove.add(old_receiver_id)
-        for new_receiver in new_receivers:
-          self._node._exporters[new_receiver['id']]._migration_id = None
-      self._node.linker.remove_exporters(receiver_ids_to_remove)
-      self._node.remove_migrator(self.migration_id)
-      self._node.send(self._migration, messages.migration.migrator_terminated())
+      self._receive_terminate_migrator(sender_id, message)
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
 

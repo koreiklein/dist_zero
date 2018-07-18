@@ -198,12 +198,9 @@ class Linker(object):
       self._time_since_sent_acknowledgements = 0
 
     if self._time_since_retransmitted_expired_pending_messages > Linker.TIME_BETWEEN_RETRANSMISSION_CHECKS_MS:
-      self._retransmit_expired_pending_messages()
+      for exporter in self._exporters.values():
+        exporter.retransmit_expired_pending_messages()
       self._time_since_retransmitted_expired_pending_messages = 0
-
-  def _retransmit_expired_pending_messages(self):
-    for exporter in self._exporters.values():
-      exporter.retransmit_expired_pending_messages()
 
   def _branching_index_for_least_unacknowledged_sequence_number(self):
     least_unacknowledged_sequence_number = self.least_unacknowledged_sequence_number()
@@ -233,9 +230,3 @@ class Linker(object):
           importer.acknowledge(least_undelivered_remote_sequence_number)
 
       self._branching = self._branching[branching_index:]
-
-  def remove_exporter(self, exporter):
-    del self._exporters[exporter.receiver_id]
-
-  def remove_importer(self, importer):
-    del self._importers[importer.sender_id]
