@@ -35,6 +35,8 @@ class TestLongRunningSum(object):
         'system_config': {
             'SUM_NODE_SENDER_LIMIT': n_inputs_at_split,
             'SUM_NODE_SPLIT_N_NEW_NODES': n_new_nodes,
+            'SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS': 3 * 1000,
+            'SUM_NODE_RECEIVER_LOWER_LIMIT': 3,
         },
         'network_errors_config': network_errors_config,
     }
@@ -110,6 +112,8 @@ class TestLongRunningSum(object):
         'system_config': {
             'SUM_NODE_SENDER_LIMIT': n_inputs_at_split,
             'SUM_NODE_SPLIT_N_NEW_NODES': 2,
+            'SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS': 3 * 1000,
+            'SUM_NODE_RECEIVER_LOWER_LIMIT': 3,
         },
         'network_errors_config': network_errors_config,
     }

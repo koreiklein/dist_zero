@@ -11,10 +11,6 @@ from dist_zero.spawners.simulator import SimulatedSpawner
 from dist_zero.spawners.docker import DockerSpawner
 from dist_zero.spawners.cloud.aws import Ec2Spawner
 
-DEFAULT_SYSTEM_CONFIG = {
-    'SUM_NODE_SENDER_LIMIT': 15,
-}
-
 
 @pytest.fixture(params=[
     pytest.param(spawners.MODE_SIMULATED, marks=pytest.mark.simulated),

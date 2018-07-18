@@ -15,8 +15,16 @@ def std_system_config():
   Miscellaneous configuration for the overall system.
   '''
   return {
+      # If a sum node has more than this many senders, it will trigger a
+      # "sum node split migration" to create a middle layer of senders.
       'SUM_NODE_SENDER_LIMIT': 15,
+      # A sum node split will create this many new nodes
       'SUM_NODE_SPLIT_N_NEW_NODES': 2,
+
+      # If a sum node has fewer than SUM_NODE_RECEIVER_LOWER_LIMIT receivers for more than
+      # SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS milliseconds, it will trigger a migration to excise the sum node.
+      'SUM_NODE_RECEIVER_LOWER_LIMIT': 3,
+      'SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS': 3 * 1000,
   }
 
 

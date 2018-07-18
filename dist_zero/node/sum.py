@@ -66,6 +66,8 @@ class SumNode(Node):
     self._unsent_time_ms = 0
     self._now_ms = 0
 
+    self._time_since_had_enough_receivers_ms = 0
+
     self.deltas_only = False
     '''
     When true, this node should never apply deltas to its current state.  It should collect them in the deltas
@@ -218,19 +220,13 @@ class SumNode(Node):
 
   def elapse(self, ms):
     self._unsent_time_ms += ms
+    self._time_since_had_enough_receivers_ms += ms
 
     if not self.deltas_only and \
         self._deltas.has_data() and \
         self._unsent_time_ms > SumNode.SEND_INTERVAL_MS:
 
-      self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
-
-      SENDER_LIMIT = self.system_config['SUM_NODE_SENDER_LIMIT']
-      if len(self._importers) >= SENDER_LIMIT:
-        if not self.migrators:
-          self.logger.info("Hitting sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
-          self._spawn_new_senders_migration()
-
+      self._check_limits()
       self.send_forward_messages()
 
     self._now_ms += ms
@@ -239,6 +235,35 @@ class SumNode(Node):
       migrator.elapse(ms)
 
     self.linker.elapse(ms)
+
+  def _check_limits(self):
+    '''Test for various kinds of load problems and take appropriate actions to remedy them.'''
+    SENDER_LIMIT = self.system_config['SUM_NODE_SENDER_LIMIT']
+    TOO_FEW_RECEIVERS_TIME_MS = self.system_config['SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS']
+    SUM_NODE_RECEIVER_LOWER_LIMIT = self.system_config['SUM_NODE_RECEIVER_LOWER_LIMIT']
+
+    if len(self._exporters) >= SUM_NODE_RECEIVER_LOWER_LIMIT:
+      self._time_since_had_enough_receivers_ms = 0
+    elif self._time_since_had_enough_receivers_ms > TOO_FEW_RECEIVERS_TIME_MS and \
+        self._input_importer is None \
+        and self._output_exporter is None:
+      self._time_since_had_enough_receivers_ms = 0
+      self._excise_self()
+
+    self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
+
+    if len(self._importers) >= SENDER_LIMIT:
+      if not self.migrators:
+        self.logger.info("Hitting sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
+        self._spawn_new_senders_migration()
+
+  def _excise_self(self):
+    '''
+    Trigger a migration to remove self.
+    '''
+    import ipdb
+    ipdb.set_trace()
+    #raise RuntimeError("Not Yet Implemented")
 
   def _spawn_new_senders_migration(self):
     '''
