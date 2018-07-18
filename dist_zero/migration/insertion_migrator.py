@@ -111,7 +111,6 @@ class InsertionMigrator(migrator.Migrator):
     if self._waiting_for_swap and all(status == 'swapped' for status in self._sender_id_to_status.values()):
       if self._node._deltas.covers(self._new_sender_id_to_first_live_sequence_number):
         self._node.send_forward_messages(self._new_sender_id_to_first_live_sequence_number)
-        self._node._FIXME_swapped = True
         self._node.deltas_only = False
         self._waiting_for_swap = False
         for receiver_id in self._receivers.keys():

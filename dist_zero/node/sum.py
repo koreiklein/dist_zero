@@ -67,11 +67,6 @@ class SumNode(Node):
     map instead.
     '''
 
-    self._FIXME_delivered = {}
-    self._FIXME_total_before_swap = 0
-    self._FIXME_swapped = False
-    self._FIXME_total_after_swap = 0
-
     super(SumNode, self).__init__(logger)
 
     if input_node is None:
@@ -119,18 +114,6 @@ class SumNode(Node):
     Called by `Importer` instances in self._importers to deliver messages to self.
     Also called for an edge sum node adjacent to an input_node when the input node triggers incrementing the sum.
     '''
-    # FIXME(KK): Remove
-    if self.id.startswith('SumNode_internal'):
-      if sender_id not in self._importers:
-        import ipdb; ipdb.set_trace()
-      if sender_id.startswith('SumNode_middle_for'):
-        if sender_id not in self._FIXME_delivered:
-          self._FIXME_delivered[sender_id] = message['amount']
-        else:
-          self._FIXME_delivered[sender_id] += message['amount']
-      elif self._FIXME_swapped:
-        import ipdb; ipdb.set_trace()
-
     # Don't update any internal state just yet, but wait until the next sequence number is generated.
     self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
 
@@ -345,13 +328,6 @@ class SumNode(Node):
     return sequence_number + 1
 
   def _send_increment(self, increment, sequence_number):
-    if self._FIXME_swapped:
-      if self.id.startswith('SumNode_internal'):
-        print('increment is {}'.format(increment))
-      self._FIXME_total_after_swap += increment
-    else:
-      self._FIXME_total_before_swap += increment
-
     for exporter in self._exporters.values():
       exporter.export_message(
           message=messages.sum.increment(amount=increment),

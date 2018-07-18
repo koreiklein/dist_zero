@@ -150,15 +150,6 @@ class Linker(object):
             extra={'unrecognized_sender_id': sender_id})
 
     elif message['type'] == 'receive':
-      if hasattr(self._node, 'id') and self._node.id.startswith('SumNode_internal') and self._node._FIXME_swapped:
-        if not hasattr(self, '_FIXME_receive_after_swap'):
-          self._FIXME_receive_after_swap = 0
-          self._FIXME_receive_after_swap_seq_numbers = set()
-        else:
-          if message['sequence_number'] not in self._FIXME_receive_after_swap_seq_numbers:
-            self._FIXME_receive_after_swap += message['message']['amount']
-            self._FIXME_receive_after_swap_seq_numbers.add(message['sequence_number'])
-            #print('linker receive after swap total {}'.format(self._FIXME_receive_after_swap))
       if sender_id in self._importers:
         self._importers[sender_id].import_message(message, sender_id)
       else:

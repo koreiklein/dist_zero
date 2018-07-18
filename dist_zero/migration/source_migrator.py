@@ -59,7 +59,6 @@ class SourceMigrator(migrator.Migrator):
     elif message['type'] == 'switch_flows':
       # Clear out any messages that can still be sent on the old flow.
       self._node.send_forward_messages()
-      self._node._FIXME_swapped = True
       for old_receiver_id, new_receivers in self._exporter_swaps:
         exporter = self._node._exporters.pop(old_receiver_id)
         exporter.swap_to_duplicate(self.migration_id)

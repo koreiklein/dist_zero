@@ -123,14 +123,6 @@ class SinkMigrator(migrator.Migrator):
       self._maybe_complete_flow()
     elif message['type'] == 'sequence_message':
       if self._swapped:
-        if not hasattr(self, '_FIXME_total_seq_msg_after_swap'):
-          self._FIXME_total_seq_msg_after_swap = 0
-          self._FIXME_seq_msg_set = set()
-        else:
-          if message['value']['type'] == 'receive' and message['value']['sequence_number'] not in self._FIXME_seq_msg_set:
-            self._FIXME_seq_msg_set.add(message['value']['sequence_number'])
-            self._FIXME_total_seq_msg_after_swap += message['value']['message']['amount']
-            print('sink migrator seq msg {}'.format(self._FIXME_total_seq_msg_after_swap))
         self._node.linker.receive_sequence_message(message=message['value'], sender_id=sender_id)
       else:
         self._linker.receive_sequence_message(message=message['value'], sender_id=sender_id)
@@ -176,14 +168,6 @@ class SinkMigrator(migrator.Migrator):
       # what was represented from the old flow as of the above call to send_forward_messages.
       self._deltas.pop_deltas(before=self._new_sender_id_to_first_swapped_sequence_number)
 
-      FIXME_total = [
-          v._FIXME_total_before_swap for k, v in self._node._controller._node_by_id.items()
-          if k.startswith('SumNode_input_kid_')
-      ]
-      self._node._FIXME_swapped = True
-      if self._node._current_state != sum(FIXME_total):
-        raise RuntimeError("FIXME Remove this . totals did not match.")
-
       # FIXME(KK): This code is obviously too intrusive into the internal details of these objects.
       self._node._deltas = deltas.Deltas()
       for sender_id in self._new_importers:
@@ -201,9 +185,6 @@ class SinkMigrator(migrator.Migrator):
           )
           for sender_id, importer in self._new_importers.items()
       }
-
-      print('first swapped')
-      print(self._new_sender_id_to_first_swapped_sequence_number)
 
       self.send(self._migration, messages.migration.switched_flows())
       # self._linker should no longer be used.  Null it out.

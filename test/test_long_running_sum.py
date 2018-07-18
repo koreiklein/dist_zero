@@ -53,49 +53,12 @@ class TestLongRunningSum(object):
     self._spawn_inputs_loop(n_inputs=n_inputs_at_split, total_time_ms=20 * 1000)
     self.demo.run_for(ms=4000)
 
-    # FIXME(KK): Remove this block.
-    inputs = [
-        v
-        for k, v in self.demo.system._spawner._controller_by_id[self.machine_ids[0]]._node_by_id.items()
-        if k.startswith('SumNode_input_kid')]
-    total_before = sum(x._FIXME_total_before_swap for x in inputs)
-    total_after = sum(x._FIXME_total_after_swap for x in inputs)
-    midnodes = [
-        v
-        for k, v in self.demo.system._spawner._controller_by_id[self.machine_ids[0]]._node_by_id.items()
-        if k.startswith('SumNode_middle_for')]
-    mid_total_before = sum(x._FIXME_total_before_swap for x in midnodes)
-    mid_total_after = sum(x._FIXME_total_after_swap for x in midnodes)
-    lastnode = [
-        v
-        for k, v in self.demo.system._spawner._controller_by_id[self.machine_ids[0]]._node_by_id.items()
-        if k.startswith('SumNode_internal')][0]
-    fin_total_before = lastnode._FIXME_total_before_swap
-    fin_total_after =  lastnode._FIXME_total_after_swap
-    ex0 = list(midnodes[0]._exporters.values())[0]
-    ex1 = list(midnodes[1]._exporters.values())[0]
-    im0 = list(lastnode._importers.values())[0]
-    im1 = list(lastnode._importers.values())[1]
-    ex_pending = lambda ex: list(sorted(b for a, b, c in ex._pending_messages))
-    im_early = lambda im: list(sorted(im._remote_sequence_number_to_early_message.keys()))
-    print('ex0_pending {}'.format(ex_pending(ex0)))
-    print('ex1_pending {}'.format(ex_pending(ex1)))
-    print('im0_early {}'.format(im_early(im0)))
-    print('im1_early {}'.format(im_early(im1)))
-    print('total_after {}'.format(total_after))
-    print('fin_total_after {}'.format(fin_total_after))
-    if self._total_simulated_amount != self.demo.system.get_output_state(self.user_a_output_id):
-      import ipdb; ipdb.set_trace()
-
-
     assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
     assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
 
     # Assert that each input node has received acknowledgments for all its sent messages.
     for input_node_id in self.input_node_ids:
       stats = self.demo.system.get_stats(input_node_id)
-      if stats['sent_messages'] != stats['acknowledged_messages']:
-        import ipdb; ipdb.set_trace()
       assert stats['sent_messages'] == stats['acknowledged_messages']
 
   def test_single_node_hits_sender_limit(self, demo):

@@ -163,7 +163,6 @@ class Exporter(object):
     For internal nodes, this method sends a swapped to duplicate message
     to this exporters receiving node.
     '''
-    print('internal node swap at {}'.format(self._pending_messages))
     self._linker.send(self._receiver,
                       messages.migration.swapped_to_duplicate(
                           self._migration_id, first_live_sequence_number=self._internal_sequence_number))
