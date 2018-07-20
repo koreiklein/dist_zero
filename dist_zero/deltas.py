@@ -18,6 +18,8 @@ class Deltas(object):
     '''
     Start tracking deltas for a new sender.
     '''
+    if sender_id in self._sender_id_to_rsn_message_pairs or sender_id in self._first_unpopped:
+      raise errors.InternalError("Sender was already added")
     self._sender_id_to_rsn_message_pairs[sender_id] = []
     self._first_unpopped[sender_id] = 0
 
@@ -25,7 +27,18 @@ class Deltas(object):
     '''
     Store a message in self for use later on.
     '''
-    self._sender_id_to_rsn_message_pairs[sender_id].append((sequence_number, message))
+    if self.first_unseen_rsn(sender_id) == sequence_number:
+      self._sender_id_to_rsn_message_pairs[sender_id].append((sequence_number, message))
+    else:
+      raise errors.InternalError("add_message was not called on the next sequential sequence number.")
+
+  def first_unseen_rsn(self, sender_id):
+    pairs = self._sender_id_to_rsn_message_pairs[sender_id]
+    if pairs:
+      rsn, msg = pairs[-1]
+      return rsn + 1
+    else:
+      return self._first_unpopped[sender_id]
 
   def has_data(self):
     return any(self._sender_id_to_rsn_message_pairs.values())
@@ -37,11 +50,7 @@ class Deltas(object):
       sequence numbers before sequence_number for that sender.
     :rtype: bool
     '''
-    return all(
-        self._first_unpopped[sender_id] >= sequence_number \
-            or any(rsn + 1 >= sequence_number
-              for rsn, msg in self._sender_id_to_rsn_message_pairs[sender_id])
-        for sender_id, sequence_number in before.items())
+    return all(self.first_unseen_rsn(sender_id) >= sequence_number for sender_id, sequence_number in before.items())
 
   def pop_deltas(self, before=None):
     '''
@@ -56,6 +65,7 @@ class Deltas(object):
     for sender_id, pairs in list(self._sender_id_to_rsn_message_pairs.items()):
       new_pairs = []
       cap_number = before and before.get(sender_id, None)
+      # PERF(KK): binary search would be faster
       for rsn, delta_message in pairs:
         if cap_number is None or rsn < cap_number:
           if delta_message['type'] == 'increment':

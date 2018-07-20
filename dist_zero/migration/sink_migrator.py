@@ -91,7 +91,9 @@ class SinkMigrator(migrator.Migrator):
         and all(val is not None for val in self._old_sender_id_to_first_flow_sequence_number.values()):
       self._node.logger.info("SinkMigrator completed flow.", extra={'migration_id': self.migration_id})
       self._flow_is_started = True
-      self._node.deltas_only = False
+      # Leave the node in deltas only mode in case we are going to want to sync
+      # FIXME(KK): In the event that this sync node will *never* sync, we should really switch out of
+      # deltas_only mode at this point.
       sequence_number = self._node.send_forward_messages()
       self._node.send(self._migration, messages.migration.completed_flow(sequence_number=sequence_number))
 
@@ -120,9 +122,10 @@ class SinkMigrator(migrator.Migrator):
         self._node.send(self._migration, messages.migration.syncer_is_synced())
 
     elif message['type'] == 'prepare_for_switch':
+      # Sink nodes do not go into deltas_only mode before swaps, as the old flow will not send
+      # too many messages, and all messages in the new flow are collected in self._deltas.
       self._waiting_for_swap = True
       self._node.send(self._migration, messages.migration.prepared_for_switch())
-
     elif message['type'] == 'swapped_from_duplicate':
       self._old_sender_id_to_first_swapped_sequence_number[sender_id] = message['first_live_sequence_number']
       self._maybe_swap()
@@ -131,6 +134,8 @@ class SinkMigrator(migrator.Migrator):
       self._maybe_swap()
 
     elif message['type'] == 'terminate_migrator':
+      if self.migration_id in self._node.deltas_only:
+        self._node.deltas_only.remove(self.migration_id)
       self._node.remove_migrator(self.migration_id)
       self._node.send(self._migration, messages.migration.migrator_terminated())
     else:
@@ -158,7 +163,8 @@ class SinkMigrator(migrator.Migrator):
       self._deltas.pop_deltas(before=self._new_sender_id_to_first_swapped_sequence_number)
       self._node.send_forward_messages(before=self._old_sender_id_to_first_swapped_sequence_number)
       self._node._deltas = self._deltas
-      self._node.deltas_only = False
+      # Sink nodes do not go into deltas_only mode before swaps, as the old flow will not send
+      # too many messages, and all messages in the new flow are collected in self._deltas.
       self._node.linker.remove_importers(set(self._old_sender_id_to_first_flow_sequence_number.keys()))
       self._node.linker.absorb_linker(self._linker)
       self._node._importers = self._new_importers
@@ -174,8 +180,8 @@ class SinkMigrator(migrator.Migrator):
         self._node._deltas.covers(self._old_sender_id_to_first_flow_sequence_number):
 
       self._node.logger.info("SinkMigrator started syncing.", extra={'migration_id': self.migration_id})
+      self._node.deltas_only.remove(self.migration_id)
       self._node.send_forward_messages(before=self._old_sender_id_to_first_flow_sequence_number)
-      self._node.deltas_only = False
       receivers = self._start_syncing_message['receivers']
       self._sync_target_to_status = {receiver['id']: 'pending' for receiver in receivers}
 
@@ -209,5 +215,5 @@ class SinkMigrator(migrator.Migrator):
     return self._migration['id']
 
   def initialize(self):
-    self._node.deltas_only = True
+    self._node.deltas_only.add(self.migration_id)
     self._node.send(self._migration, messages.migration.attached_migrator())

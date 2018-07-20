@@ -68,7 +68,7 @@ class SumNode(Node):
 
     self._time_since_had_enough_receivers_ms = 0
 
-    self.deltas_only = False
+    self.deltas_only = set()
     '''
     When true, this node should never apply deltas to its current state.  It should collect them in the deltas
     map instead.
@@ -241,8 +241,9 @@ class SumNode(Node):
     SENDER_LIMIT = self.system_config['SUM_NODE_SENDER_LIMIT']
     TOO_FEW_RECEIVERS_TIME_MS = self.system_config['SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS']
     SUM_NODE_RECEIVER_LOWER_LIMIT = self.system_config['SUM_NODE_RECEIVER_LOWER_LIMIT']
+    SUM_NODE_SENDER_LOWER_LIMIT = self.system_config['SUM_NODE_SENDER_LOWER_LIMIT']
 
-    if len(self._exporters) >= SUM_NODE_RECEIVER_LOWER_LIMIT:
+    if len(self._exporters) >= SUM_NODE_RECEIVER_LOWER_LIMIT or len(self._importers) >= SUM_NODE_SENDER_LOWER_LIMIT:
       self._time_since_had_enough_receivers_ms = 0
     elif self._time_since_had_enough_receivers_ms > TOO_FEW_RECEIVERS_TIME_MS and \
         self._input_importer is None \
@@ -261,9 +262,26 @@ class SumNode(Node):
     '''
     Trigger a migration to remove self.
     '''
-    import ipdb
-    ipdb.set_trace()
-    #raise RuntimeError("Not Yet Implemented")
+    node_id = ids.new_id('MigrationNode_remove_sum_node')
+    return self._controller.spawn_node(
+        node_config=messages.migration.migration_node_config(
+            node_id=node_id,
+            source_nodes=[(self.transfer_handle(importer.sender, node_id),
+                           messages.migration.source_migrator_config(exporter_swaps=[(self.id,
+                                                                                      list(self._exporters.keys()))]))
+                          for importer in self._importers.values()],
+            sink_nodes=[(self.transfer_handle(exporter.receiver, node_id),
+                         messages.migration.sink_migrator_config(
+                             new_flow_sender_ids=list(self._importers.keys()), old_flow_sender_ids=[self.id]))
+                        for exporter in self._exporters.values()],
+            removal_nodes=[(self.new_handle(node_id),
+                            messages.migration.removal_migrator_config(
+                                sender_ids=list(self._importers.keys()),
+                                receiver_ids=list(self._exporters.keys()),
+                            ))],
+            insertion_node_configs=[],
+            sync_pairs=[],
+        ))
 
   def _spawn_new_senders_migration(self):
     '''

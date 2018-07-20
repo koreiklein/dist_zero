@@ -27,13 +27,12 @@ class TestLongRunningSum(object):
     network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
     network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
 
-    n_inputs_at_split = 15
-
     n_new_nodes = 1
 
     self._base_config = {
         'system_config': {
-            'SUM_NODE_SENDER_LIMIT': n_inputs_at_split,
+            'SUM_NODE_SENDER_LIMIT': 15,
+            'SUM_NODE_SENDER_LOWER_LIMIT': 4,
             'SUM_NODE_SPLIT_N_NEW_NODES': n_new_nodes,
             'SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS': 3 * 1000,
             'SUM_NODE_RECEIVER_LOWER_LIMIT': 3,
@@ -78,7 +77,7 @@ class TestLongRunningSum(object):
       assert self.total_nodes() == 7 + len(self.input_node_ids) * 2 + n_new_nodes
 
     # The newly spawned nodes should trigger migrations to excise themselves
-    self.demo.run_for(ms=6000)
+    self.demo.run_for(ms=9000)
     if self.demo.mode == spawners.MODE_SIMULATED:
       assert self.total_nodes() == 7 + len(self.input_node_ids) * 2
 
@@ -111,6 +110,7 @@ class TestLongRunningSum(object):
     self._base_config = {
         'system_config': {
             'SUM_NODE_SENDER_LIMIT': n_inputs_at_split,
+            'SUM_NODE_SENDER_LOWER_LIMIT': 3,
             'SUM_NODE_SPLIT_N_NEW_NODES': 2,
             'SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS': 3 * 1000,
             'SUM_NODE_RECEIVER_LOWER_LIMIT': 3,

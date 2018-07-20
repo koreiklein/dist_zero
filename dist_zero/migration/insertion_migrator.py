@@ -54,7 +54,7 @@ class InsertionMigrator(migrator.Migrator):
     if all(val == 'started_flow' for val in self._sender_id_to_status.values()):
       # Stay in deltas_only mode until after receiving set_sum_total.
       # Until then, the model state has not been initialized and the deltas can *not* be applied.
-      self._node.deltas_only = True
+      self._node.deltas_only.add(self.migration_id)
       self._flow_is_started = True
 
       for receiver in self._receivers.values():
@@ -82,11 +82,11 @@ class InsertionMigrator(migrator.Migrator):
       # Exit deltas only, add the exporters and start sending to them.
       for nid, receiver in self._receivers.items():
         self._node._exporters[nid] = self._node.linker.new_exporter(receiver, migration_id=self.migration_id)
-      self._node.deltas_only = False
+      self._node.deltas_only.remove(self.migration_id)
       self._node.send_forward_messages()
       self._node.send(message['from_node'], messages.migration.sum_total_set(self.migration_id))
     elif message['type'] == 'prepare_for_switch':
-      self._node.deltas_only = True
+      self._node.deltas_only.add(self.migration_id)
       self._node.send(self._migration, messages.migration.prepared_for_switch())
       self._waiting_for_swap = True
     elif message['type'] == 'swapped_to_duplicate':
@@ -106,7 +106,7 @@ class InsertionMigrator(migrator.Migrator):
         all(status == 'swapped' for status in self._sender_id_to_status.values()) and \
         self._node._deltas.covers(self._new_sender_id_to_first_live_sequence_number):
       self._node.send_forward_messages(self._new_sender_id_to_first_live_sequence_number)
-      self._node.deltas_only = False
+      self._node.deltas_only.remove(self.migration_id)
       self._waiting_for_swap = False
       for receiver_id in self._receivers.keys():
         exporter = self._node._exporters[receiver_id]
@@ -125,5 +125,5 @@ class InsertionMigrator(migrator.Migrator):
     self._maybe_swap()
 
   def initialize(self):
-    self._node.deltas_only = True
+    self._node.deltas_only.add(self.migration_id)
     self._node.send(self._migration, messages.migration.attached_migrator(self._node.new_handle(self.migration_id)))

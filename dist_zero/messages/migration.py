@@ -61,8 +61,14 @@ def sink_migrator_config(new_flow_sender_ids, old_flow_sender_ids):
   }
 
 
-def removal_migrator_config():
-  return {'type': 'removal_migrator'}
+def removal_migrator_config(sender_ids, receiver_ids):
+  '''
+  Configuration for a removal migrator.
+
+  :param list[str] sender_ids: The ids of the senders that will stop sending.
+  :param list[str] receiver_ids: The ids of the receivers that will stop receiving.
+  '''
+  return {'type': 'removal_migrator', 'sender_ids': sender_ids, 'receiver_ids': receiver_ids}
 
 
 def insertion_migrator_config(senders, receivers):
@@ -281,7 +287,7 @@ def swapped_from_duplicate(migration_id, first_live_sequence_number):
   These messages are sent along the old flow to indicate that the flows have been swapped.
 
   :param str migration_id: The id of the relevant migration.
-  :param int first_live_sequence_number: The first sequence number that the sender will new use after the swap.
+  :param int first_live_sequence_number: The first sequence number that the sender will never send along this old flow.
   '''
   return {
       'type': 'migration',

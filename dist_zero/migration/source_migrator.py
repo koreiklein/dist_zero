@@ -103,6 +103,8 @@ class SourceMigrator(migrator.Migrator):
   def _receive_terminate_migrator(self, sender_id, message):
     self._node.linker.remove_exporters(set(self._old_exporters.keys()))
     self._node.remove_migrator(self.migration_id)
+    for exporter in self._new_exporters.values():
+      exporter._migration_id = None
     self._node.send(self._migration, messages.migration.migrator_terminated())
 
   def receive(self, sender_id, message):
