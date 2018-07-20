@@ -267,15 +267,17 @@ class SumNode(Node):
         node_config=messages.migration.migration_node_config(
             node_id=node_id,
             source_nodes=[(self.transfer_handle(importer.sender, node_id),
-                           messages.migration.source_migrator_config(exporter_swaps=[(self.id,
-                                                                                      list(self._exporters.keys()))]))
+                           messages.migration.source_migrator_config(
+                               exporter_swaps=[(self.id, list(self._exporters.keys()))], will_sync=False))
                           for importer in self._importers.values()],
-            sink_nodes=[(self.transfer_handle(exporter.receiver, node_id),
-                         messages.migration.sink_migrator_config(
-                             new_flow_sender_ids=list(self._importers.keys()), old_flow_sender_ids=[self.id]))
+            sink_nodes=[(
+                self.transfer_handle(exporter.receiver, node_id),
+                messages.migration.sink_migrator_config(
+                    will_sync=False, new_flow_sender_ids=list(self._importers.keys()), old_flow_sender_ids=[self.id]))
                         for exporter in self._exporters.values()],
             removal_nodes=[(self.new_handle(node_id),
                             messages.migration.removal_migrator_config(
+                                will_sync=False,
                                 sender_ids=list(self._importers.keys()),
                                 receiver_ids=list(self._exporters.keys()),
                             ))],
@@ -298,10 +300,12 @@ class SumNode(Node):
             node_id=node_id,
             source_nodes=[(self.transfer_handle(importer.sender, node_id),
                            messages.migration.source_migrator_config(
-                               exporter_swaps=[(self.id, [reverse_partition[importer.sender_id]])], ))
-                          for importer in self._importers.values()],
+                               will_sync=False,
+                               exporter_swaps=[(self.id, [reverse_partition[importer.sender_id]])],
+                           )) for importer in self._importers.values()],
             sink_nodes=[(self.new_handle(node_id),
                          messages.migration.sink_migrator_config(
+                             will_sync=True,
                              new_flow_sender_ids=[
                                  insertion_node_config['id'] for insertion_node_config in insertion_node_configs
                              ],

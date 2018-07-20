@@ -54,7 +54,6 @@ class InsertionMigrator(migrator.Migrator):
     if all(val == 'started_flow' for val in self._sender_id_to_status.values()):
       # Stay in deltas_only mode until after receiving set_sum_total.
       # Until then, the model state has not been initialized and the deltas can *not* be applied.
-      self._node.deltas_only.add(self.migration_id)
       self._flow_is_started = True
 
       for receiver in self._receivers.values():

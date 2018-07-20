@@ -4,7 +4,7 @@ from . import migrator
 
 
 class RemovalMigrator(migrator.Migrator):
-  def __init__(self, migration, node, sender_ids, receiver_ids):
+  def __init__(self, migration, node, sender_ids, receiver_ids, will_sync):
     '''
     :param migration: The :ref:`handle` of the `MigrationNode` running the migration.
     :type migration: :ref:`handle`
@@ -12,9 +12,12 @@ class RemovalMigrator(migrator.Migrator):
     :type node: `Node`
     :param list[str] sender_ids: A list of ids of the `Node` s that will stop sending to self by the end of the migration.
     :param list[str] receiver_ids: A list of ids of the `Node` s that will stop receiving from self by the end of the migration.
+    :param bool will_sync: True iff this migrator will need to sync as part of the migration
     '''
     self._migration = migration
     self._node = node
+
+    self._will_sync = will_sync
 
     self._importers = {sender_id: self._node._importers[sender_id] for sender_id in sender_ids}
     self._exporters = {receiver_id: self._node._exporters[receiver_id] for receiver_id in receiver_ids}
@@ -42,6 +45,7 @@ class RemovalMigrator(migrator.Migrator):
         node=node,
         sender_ids=migrator_config['sender_ids'],
         receiver_ids=migrator_config['receiver_ids'],
+        will_sync=migrator_config['will_sync'],
     )
 
   def receive(self, sender_id, message):

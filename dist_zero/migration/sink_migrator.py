@@ -9,12 +9,13 @@ class SinkMigrator(migrator.Migrator):
   The number of milliseconds between points in time when the `SinkMigrator` acknowledges messages in the new flow.
   '''
 
-  def __init__(self, new_flow_sender_ids, old_flow_sender_ids, migration, node):
+  def __init__(self, new_flow_sender_ids, old_flow_sender_ids, migration, node, will_sync):
     '''
     :param migration: The :ref:`handle` of the `MigrationNode` running the migration.
     :type migration: :ref:`handle`
     :param node: The `Node` on which this migrator runs.
     :type node: `Node`
+    :param bool will_sync: True iff this migrator will need to sync as part of the migration
     '''
     self._migration = migration
     self._node = node
@@ -59,6 +60,8 @@ class SinkMigrator(migrator.Migrator):
     self._flow_is_started = False
     '''True iff the new flow has started'''
 
+    self._will_sync = will_sync
+
     self._start_syncing_message = None # A start_syncing message received by self if one exists.
 
     self._sync_target_to_status = None
@@ -84,6 +87,7 @@ class SinkMigrator(migrator.Migrator):
         new_flow_sender_ids=migrator_config['new_flow_sender_ids'],
         old_flow_sender_ids=migrator_config['old_flow_sender_ids'],
         migration=migrator_config['migration'],
+        will_sync=migrator_config['will_sync'],
         node=node)
 
   def _maybe_complete_flow(self):
@@ -91,8 +95,11 @@ class SinkMigrator(migrator.Migrator):
         and all(val is not None for val in self._old_sender_id_to_first_flow_sequence_number.values()):
       self._node.logger.info("SinkMigrator completed flow.", extra={'migration_id': self.migration_id})
       self._flow_is_started = True
-      # Leave the node in deltas only mode in case we are going to want to sync
-      # FIXME(KK): In the event that this sync node will *never* sync, we should really switch out of
+      if not self._will_sync:
+        self._node.deltas_only.remove(self.migration_id)
+      else:
+        pass # Leave the node in deltas only mode so that it can sync
+
       # deltas_only mode at this point.
       sequence_number = self._node.send_forward_messages()
       self._node.send(self._migration, messages.migration.completed_flow(sequence_number=sequence_number))

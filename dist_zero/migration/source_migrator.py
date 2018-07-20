@@ -4,7 +4,7 @@ from . import migrator
 
 
 class SourceMigrator(migrator.Migrator):
-  def __init__(self, migration, node, exporter_swaps):
+  def __init__(self, migration, node, exporter_swaps, will_sync):
     '''
     :param migration: The :ref:`handle` of the `MigrationNode` running the migration.
     :type migration: :ref:`handle`
@@ -13,9 +13,11 @@ class SourceMigrator(migrator.Migrator):
 
     :param list exporter_swaps: A list of pairs (receiver_id, new_receiver_handles) giving for each existing
       receiver, the set of new receivers that it should duplicate to.
+    :param bool will_sync: True iff this migrator will need to sync as part of the migration
     '''
     self._migration = migration
     self._node = node
+    self._will_sync = will_sync
 
     def _deliver(message, sequence_number, sender_id):
       # Impossible! Source migrators do not add any importers to their linkers, and thus the linker
@@ -48,7 +50,11 @@ class SourceMigrator(migrator.Migrator):
     :rtype: `SourceMigrator`
     '''
     return SourceMigrator(
-        migration=migrator_config['migration'], node=node, exporter_swaps=migrator_config['exporter_swaps'])
+        migration=migrator_config['migration'],
+        node=node,
+        will_sync=migrator_config['will_sync'],
+        exporter_swaps=migrator_config['exporter_swaps'],
+    )
 
   def _receive_start_flow(self, sender_id, message):
     self._node.send_forward_messages()
