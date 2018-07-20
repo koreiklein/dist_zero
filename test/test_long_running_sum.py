@@ -85,6 +85,10 @@ class TestLongRunningSum(object):
     assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
     assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
 
+    for input_node_id in self.input_node_ids:
+      stats = self.demo.system.get_stats(input_node_id)
+      assert stats['sent_messages'] == stats['acknowledged_messages']
+
   def total_nodes(self):
     return sum(
         self.system.get_simulated_spawner().get_machine_by_id(machine_id).n_nodes for machine_id in self.machine_ids)
