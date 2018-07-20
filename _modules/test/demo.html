@@ -44,10 +44,6 @@
 <span class="kn">from</span> <span class="nn">dist_zero.spawners.docker</span> <span class="k">import</span> <span class="n">DockerSpawner</span>
 <span class="kn">from</span> <span class="nn">dist_zero.spawners.cloud.aws</span> <span class="k">import</span> <span class="n">Ec2Spawner</span>
 
-<span class="n">DEFAULT_SYSTEM_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s1">&#39;SUM_NODE_SENDER_LIMIT&#39;</span><span class="p">:</span> <span class="mi">15</span><span class="p">,</span>
-<span class="p">}</span>
-
 
 <span class="nd">@pytest</span><span class="o">.</span><span class="n">fixture</span><span class="p">(</span><span class="n">params</span><span class="o">=</span><span class="p">[</span>
     <span class="n">pytest</span><span class="o">.</span><span class="n">param</span><span class="p">(</span><span class="n">spawners</span><span class="o">.</span><span class="n">MODE_SIMULATED</span><span class="p">,</span> <span class="n">marks</span><span class="o">=</span><span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">simulated</span><span class="p">),</span>

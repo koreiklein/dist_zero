@@ -37,7 +37,7 @@
 
 
 <div class="viewcode-block" id="SourceMigrator"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.source_migrator.SourceMigrator">[docs]</a><span class="k">class</span> <span class="nc">SourceMigrator</span><span class="p">(</span><span class="n">migrator</span><span class="o">.</span><span class="n">Migrator</span><span class="p">):</span>
-  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">migration</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">exporter_swaps</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">migration</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">exporter_swaps</span><span class="p">,</span> <span class="n">will_sync</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    :param migration: The :ref:`handle` of the `MigrationNode` running the migration.</span>
 <span class="sd">    :type migration: :ref:`handle`</span>
@@ -46,9 +46,11 @@
 
 <span class="sd">    :param list exporter_swaps: A list of pairs (receiver_id, new_receiver_handles) giving for each existing</span>
 <span class="sd">      receiver, the set of new receivers that it should duplicate to.</span>
+<span class="sd">    :param bool will_sync: True iff this migrator will need to sync as part of the migration</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_migration</span> <span class="o">=</span> <span class="n">migration</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_node</span> <span class="o">=</span> <span class="n">node</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_will_sync</span> <span class="o">=</span> <span class="n">will_sync</span>
 
     <span class="k">def</span> <span class="nf">_deliver</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">sequence_number</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
       <span class="c1"># Impossible! Source migrators do not add any importers to their linkers, and thus the linker</span>
@@ -81,7 +83,11 @@
 <span class="sd">    :rtype: `SourceMigrator`</span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="k">return</span> <span class="n">SourceMigrator</span><span class="p">(</span>
-        <span class="n">migration</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;migration&#39;</span><span class="p">],</span> <span class="n">node</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">exporter_swaps</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;exporter_swaps&#39;</span><span class="p">])</span></div>
+        <span class="n">migration</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;migration&#39;</span><span class="p">],</span>
+        <span class="n">node</span><span class="o">=</span><span class="n">node</span><span class="p">,</span>
+        <span class="n">will_sync</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;will_sync&#39;</span><span class="p">],</span>
+        <span class="n">exporter_swaps</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;exporter_swaps&#39;</span><span class="p">],</span>
+    <span class="p">)</span></div>
 
   <span class="k">def</span> <span class="nf">_receive_start_flow</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send_forward_messages</span><span class="p">()</span>
@@ -136,6 +142,8 @@
   <span class="k">def</span> <span class="nf">_receive_terminate_migrator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">remove_exporters</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_old_exporters</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">remove_migrator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">migration_id</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_exporters</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+      <span class="n">exporter</span><span class="o">.</span><span class="n">_migration_id</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_migration</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">migrator_terminated</span><span class="p">())</span>
 
 <div class="viewcode-block" id="SourceMigrator.receive"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.source_migrator.SourceMigrator.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>

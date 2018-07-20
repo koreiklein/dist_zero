@@ -99,7 +99,9 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">=</span> <span class="mi">0</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">deltas_only</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_had_enough_receivers_ms</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">deltas_only</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    When true, this node should never apply deltas to its current state.  It should collect them in the deltas</span>
 <span class="sd">    map instead.</span>
@@ -251,19 +253,13 @@
 
 <div class="viewcode-block" id="SumNode.elapse"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">+=</span> <span class="n">ms</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_had_enough_receivers_ms</span> <span class="o">+=</span> <span class="n">ms</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">deltas_only</span> <span class="ow">and</span> \
         <span class="bp">self</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">has_data</span><span class="p">()</span> <span class="ow">and</span> \
         <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">&gt;</span> <span class="n">SumNode</span><span class="o">.</span><span class="n">SEND_INTERVAL_MS</span><span class="p">:</span>
 
-      <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;current n_senders = </span><span class="si">{n_senders}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;n_senders&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">)})</span>
-
-      <span class="n">SENDER_LIMIT</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system_config</span><span class="p">[</span><span class="s1">&#39;SUM_NODE_SENDER_LIMIT&#39;</span><span class="p">]</span>
-      <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">SENDER_LIMIT</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">migrators</span><span class="p">:</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Hitting sender limit of </span><span class="si">{sender_limit}</span><span class="s2"> senders&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;sender_limit&#39;</span><span class="p">:</span> <span class="n">SENDER_LIMIT</span><span class="p">})</span>
-          <span class="bp">self</span><span class="o">.</span><span class="n">_hit_sender_limit</span><span class="p">()</span>
-
+      <span class="bp">self</span><span class="o">.</span><span class="n">_check_limits</span><span class="p">()</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">send_forward_messages</span><span class="p">()</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">_now_ms</span> <span class="o">+=</span> <span class="n">ms</span>
@@ -273,22 +269,76 @@
 
     <span class="bp">self</span><span class="o">.</span><span class="n">linker</span><span class="o">.</span><span class="n">elapse</span><span class="p">(</span><span class="n">ms</span><span class="p">)</span></div>
 
-  <span class="k">def</span> <span class="nf">_hit_sender_limit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">_check_limits</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Test for various kinds of load problems and take appropriate actions to remedy them.&#39;&#39;&#39;</span>
+    <span class="n">SENDER_LIMIT</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system_config</span><span class="p">[</span><span class="s1">&#39;SUM_NODE_SENDER_LIMIT&#39;</span><span class="p">]</span>
+    <span class="n">TOO_FEW_RECEIVERS_TIME_MS</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system_config</span><span class="p">[</span><span class="s1">&#39;SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS&#39;</span><span class="p">]</span>
+    <span class="n">SUM_NODE_RECEIVER_LOWER_LIMIT</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system_config</span><span class="p">[</span><span class="s1">&#39;SUM_NODE_RECEIVER_LOWER_LIMIT&#39;</span><span class="p">]</span>
+    <span class="n">SUM_NODE_SENDER_LOWER_LIMIT</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system_config</span><span class="p">[</span><span class="s1">&#39;SUM_NODE_SENDER_LOWER_LIMIT&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">SUM_NODE_RECEIVER_LOWER_LIMIT</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">SUM_NODE_SENDER_LOWER_LIMIT</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_had_enough_receivers_ms</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_had_enough_receivers_ms</span> <span class="o">&gt;</span> <span class="n">TOO_FEW_RECEIVERS_TIME_MS</span> <span class="ow">and</span> \
+        <span class="bp">self</span><span class="o">.</span><span class="n">_input_importer</span> <span class="ow">is</span> <span class="kc">None</span> \
+        <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_time_since_had_enough_receivers_ms</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_excise_self</span><span class="p">()</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;current n_senders = </span><span class="si">{n_senders}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;n_senders&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">)})</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">SENDER_LIMIT</span><span class="p">:</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">migrators</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Hitting sender limit of </span><span class="si">{sender_limit}</span><span class="s2"> senders&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;sender_limit&#39;</span><span class="p">:</span> <span class="n">SENDER_LIMIT</span><span class="p">})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_spawn_new_senders_migration</span><span class="p">()</span>
+
+  <span class="k">def</span> <span class="nf">_excise_self</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Trigger a migration to remove self.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">node_id</span> <span class="o">=</span> <span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;MigrationNode_remove_sum_node&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span>
+        <span class="n">node_config</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">migration_node_config</span><span class="p">(</span>
+            <span class="n">node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">,</span>
+            <span class="n">source_nodes</span><span class="o">=</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">transfer_handle</span><span class="p">(</span><span class="n">importer</span><span class="o">.</span><span class="n">sender</span><span class="p">,</span> <span class="n">node_id</span><span class="p">),</span>
+                           <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">source_migrator_config</span><span class="p">(</span>
+                               <span class="n">exporter_swaps</span><span class="o">=</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">keys</span><span class="p">()))],</span> <span class="n">will_sync</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+                          <span class="k">for</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span>
+            <span class="n">sink_nodes</span><span class="o">=</span><span class="p">[(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">transfer_handle</span><span class="p">(</span><span class="n">exporter</span><span class="o">.</span><span class="n">receiver</span><span class="p">,</span> <span class="n">node_id</span><span class="p">),</span>
+                <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">sink_migrator_config</span><span class="p">(</span>
+                    <span class="n">will_sync</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">new_flow_sender_ids</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span> <span class="n">old_flow_sender_ids</span><span class="o">=</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">]))</span>
+                        <span class="k">for</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span>
+            <span class="n">removal_nodes</span><span class="o">=</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="n">node_id</span><span class="p">),</span>
+                            <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">removal_migrator_config</span><span class="p">(</span>
+                                <span class="n">will_sync</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                                <span class="n">sender_ids</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span>
+                                <span class="n">receiver_ids</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span>
+                            <span class="p">))],</span>
+            <span class="n">insertion_node_configs</span><span class="o">=</span><span class="p">[],</span>
+            <span class="n">sync_pairs</span><span class="o">=</span><span class="p">[],</span>
+        <span class="p">))</span>
+
+  <span class="k">def</span> <span class="nf">_spawn_new_senders_migration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Trigger a migration to spawn new sender nodes between self and its current senders.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
     <span class="n">node_id</span> <span class="o">=</span> <span class="n">ids</span><span class="o">.</span><span class="n">new_id</span><span class="p">(</span><span class="s1">&#39;MigrationNode_add_layer_before_sum_node&#39;</span><span class="p">)</span>
     <span class="n">insertion_node_configs</span><span class="p">,</span> <span class="n">partition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_sender_configs</span><span class="p">()</span>
     <span class="n">reverse_partition</span> <span class="o">=</span> <span class="p">{</span>
         <span class="n">importer</span><span class="o">.</span><span class="n">sender_id</span><span class="p">:</span> <span class="n">middle_node_id</span>
         <span class="k">for</span> <span class="n">middle_node_id</span><span class="p">,</span> <span class="n">importers</span> <span class="ow">in</span> <span class="n">partition</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">for</span> <span class="n">importer</span> <span class="ow">in</span> <span class="n">importers</span>
     <span class="p">}</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">spawn_node</span><span class="p">(</span>
         <span class="n">node_config</span><span class="o">=</span><span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">migration_node_config</span><span class="p">(</span>
             <span class="n">node_id</span><span class="o">=</span><span class="n">node_id</span><span class="p">,</span>
             <span class="n">source_nodes</span><span class="o">=</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">transfer_handle</span><span class="p">(</span><span class="n">importer</span><span class="o">.</span><span class="n">sender</span><span class="p">,</span> <span class="n">node_id</span><span class="p">),</span>
                            <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">source_migrator_config</span><span class="p">(</span>
-                               <span class="n">exporter_swaps</span><span class="o">=</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="p">[</span><span class="n">reverse_partition</span><span class="p">[</span><span class="n">importer</span><span class="o">.</span><span class="n">sender_id</span><span class="p">]])],</span> <span class="p">))</span>
-                          <span class="k">for</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span>
+                               <span class="n">will_sync</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                               <span class="n">exporter_swaps</span><span class="o">=</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="p">[</span><span class="n">reverse_partition</span><span class="p">[</span><span class="n">importer</span><span class="o">.</span><span class="n">sender_id</span><span class="p">]])],</span>
+                           <span class="p">))</span> <span class="k">for</span> <span class="n">importer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span>
             <span class="n">sink_nodes</span><span class="o">=</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">new_handle</span><span class="p">(</span><span class="n">node_id</span><span class="p">),</span>
                          <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">sink_migrator_config</span><span class="p">(</span>
+                             <span class="n">will_sync</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                              <span class="n">new_flow_sender_ids</span><span class="o">=</span><span class="p">[</span>
                                  <span class="n">insertion_node_config</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">insertion_node_config</span> <span class="ow">in</span> <span class="n">insertion_node_configs</span>
                              <span class="p">],</span>
@@ -312,7 +362,7 @@
 <span class="sd">    Side effect: update self._partition to map each middle node id to the leftmost nodes that will send to it</span>
 <span class="sd">      once we reach the terminal state.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="n">n_new_nodes</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">n_new_nodes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system_config</span><span class="p">[</span><span class="s1">&#39;SUM_NODE_SPLIT_N_NEW_NODES&#39;</span><span class="p">]</span>
     <span class="n">n_senders_per_node</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">)</span> <span class="o">//</span> <span class="n">n_new_nodes</span>
 
     <span class="n">importers</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
@@ -346,6 +396,7 @@
 <div class="viewcode-block" id="SumNode.send_forward_messages"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.send_forward_messages">[docs]</a>  <span class="k">def</span> <span class="nf">send_forward_messages</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">before</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Generate a new sequence number, combine deltas into an update message, and send it on all exporters.</span>
+
 <span class="sd">    :param dict[str, int] before: An optional dictionary mapping sender ids to sequence_numbers.</span>
 <span class="sd">      If provided, process only up to the provided sequence number for each sender id.</span>
 <span class="sd">    :return: the next unused sequence number</span>
@@ -382,7 +433,13 @@
       <span class="n">message</span> <span class="o">=</span> <span class="n">messages</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">output_action</span><span class="p">(</span><span class="n">increment</span><span class="p">)</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_output_exporter</span><span class="o">.</span><span class="n">export_message</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">sequence_number</span><span class="p">)</span>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">=</span> <span class="mi">0</span></div>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_unsent_time_ms</span> <span class="o">=</span> <span class="mi">0</span>
+
+<div class="viewcode-block" id="SumNode.handle_api_message"><a class="viewcode-back" href="../../../doc/nodes.html#dist_zero.node.sum.SumNode.handle_api_message">[docs]</a>  <span class="k">def</span> <span class="nf">handle_api_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;spawn_new_senders&#39;</span><span class="p">:</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spawn_new_senders_migration</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">SumNode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">handle_api_message</span><span class="p">(</span><span class="n">message</span><span class="p">)</span></div></div>
 </pre></div>
 
           </div>

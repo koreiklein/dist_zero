@@ -161,8 +161,6 @@
 </li>
       <li><a href="doc/migrations.html#module-dist_zero.migration.migration_node">dist_zero.migration.migration_node (module)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/migrations.html#module-dist_zero.migration.migrator">dist_zero.migration.migrator (module)</a>
 </li>
       <li><a href="doc/migrations.html#module-dist_zero.migration.removal_migrator">dist_zero.migration.removal_migrator (module)</a>
@@ -170,6 +168,26 @@
       <li><a href="doc/migrations.html#module-dist_zero.migration.sink_migrator">dist_zero.migration.sink_migrator (module)</a>
 </li>
       <li><a href="doc/migrations.html#module-dist_zero.migration.source_migrator">dist_zero.migration.source_migrator (module)</a>
+</li>
+      <li><a href="doc/migrations.html#module-dist_zero.migration.state.state">dist_zero.migration.state.state (module)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="doc/migrations.html#module-dist_zero.migration.state.state_01_starting_new_nodes">dist_zero.migration.state.state_01_starting_new_nodes (module)</a>
+</li>
+      <li><a href="doc/migrations.html#module-dist_zero.migration.state.state_02_starting_node_migrators">dist_zero.migration.state.state_02_starting_node_migrators (module)</a>
+</li>
+      <li><a href="doc/migrations.html#module-dist_zero.migration.state.state_03_starting_new_flow">dist_zero.migration.state.state_03_starting_new_flow (module)</a>
+</li>
+      <li><a href="doc/migrations.html#module-dist_zero.migration.state.state_04_syncing_new_nodes">dist_zero.migration.state.state_04_syncing_new_nodes (module)</a>
+</li>
+      <li><a href="doc/migrations.html#module-dist_zero.migration.state.state_05_preparing_switching">dist_zero.migration.state.state_05_preparing_switching (module)</a>
+</li>
+      <li><a href="doc/migrations.html#module-dist_zero.migration.state.state_06_switching">dist_zero.migration.state.state_06_switching (module)</a>
+</li>
+      <li><a href="doc/migrations.html#module-dist_zero.migration.state.state_07_terminating_migrators">dist_zero.migration.state.state_07_terminating_migrators (module)</a>
+</li>
+      <li><a href="doc/migrations.html#module-dist_zero.migration.state.state_08_finished">dist_zero.migration.state.state_08_finished (module)</a>
 </li>
       <li><a href="doc/nodes.html#module-dist_zero.node.io.internal">dist_zero.node.io.internal (module)</a>
 </li>
@@ -216,6 +234,8 @@
 </li>
         <li><a href="doc/migrations.html#dist_zero.migration.migrator.Migrator.elapse">(dist_zero.migration.migrator.Migrator method)</a>
 </li>
+        <li><a href="doc/migrations.html#dist_zero.migration.removal_migrator.RemovalMigrator.elapse">(dist_zero.migration.removal_migrator.RemovalMigrator method)</a>
+</li>
         <li><a href="doc/migrations.html#dist_zero.migration.sink_migrator.SinkMigrator.elapse">(dist_zero.migration.sink_migrator.SinkMigrator method)</a>
 </li>
         <li><a href="doc/migrations.html#dist_zero.migration.source_migrator.SourceMigrator.elapse">(dist_zero.migration.source_migrator.SourceMigrator method)</a>
@@ -245,6 +265,10 @@
 <h2 id="F">F</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.FINISHED">FINISHED (dist_zero.migration.state.state.State attribute)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state_08_finished.FinishedState">FinishedState (class in dist_zero.migration.state.state_08_finished)</a>
+</li>
       <li><a href="doc/migrations.html#dist_zero.migration.insertion_migrator.InsertionMigrator.from_config">from_config() (dist_zero.migration.insertion_migrator.InsertionMigrator static method)</a>
 
       <ul>
@@ -300,6 +324,8 @@
 </li>
         <li><a href="doc/nodes.html#dist_zero.node.node.Node.handle_api_message">(dist_zero.node.node.Node method)</a>
 </li>
+        <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode.handle_api_message">(dist_zero.node.sum.SumNode method)</a>
+</li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
@@ -331,6 +357,24 @@
         <li><a href="doc/migrations.html#dist_zero.migration.sink_migrator.SinkMigrator.initialize">(dist_zero.migration.sink_migrator.SinkMigrator method)</a>
 </li>
         <li><a href="doc/migrations.html#dist_zero.migration.source_migrator.SourceMigrator.initialize">(dist_zero.migration.source_migrator.SourceMigrator method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.initialize">(dist_zero.migration.state.state.State method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState.initialize">(dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState.initialize">(dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState.initialize">(dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState.initialize">(dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState.initialize">(dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_06_switching.SwitchingState.initialize">(dist_zero.migration.state.state_06_switching.SwitchingState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState.initialize">(dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_08_finished.FinishedState.initialize">(dist_zero.migration.state.state_08_finished.FinishedState method)</a>
 </li>
         <li><a href="doc/nodes.html#dist_zero.node.io.internal.InternalNode.initialize">(dist_zero.node.io.internal.InternalNode method)</a>
 </li>
@@ -379,16 +423,28 @@
 </li>
       <li><a href="doc/machine.html#dist_zero.machine.NodeManager.MAX_POSTPONE_TIME_MS">MAX_POSTPONE_TIME_MS (dist_zero.machine.NodeManager attribute)</a>
 </li>
+      <li><a href="doc/migrations.html#dist_zero.migration.insertion_migrator.InsertionMigrator.migration_id">migration_id (dist_zero.migration.insertion_migrator.InsertionMigrator attribute)</a>
+
+      <ul>
+        <li><a href="doc/migrations.html#dist_zero.migration.migrator.Migrator.migration_id">(dist_zero.migration.migrator.Migrator attribute)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.removal_migrator.RemovalMigrator.migration_id">(dist_zero.migration.removal_migrator.RemovalMigrator attribute)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.sink_migrator.SinkMigrator.migration_id">(dist_zero.migration.sink_migrator.SinkMigrator attribute)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.source_migrator.SourceMigrator.migration_id">(dist_zero.migration.source_migrator.SourceMigrator attribute)</a>
+</li>
+      </ul></li>
       <li><a href="doc/migrations.html#dist_zero.migration.migration_node.MigrationNode">MigrationNode (class in dist_zero.migration.migration_node)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/migrations.html#dist_zero.migration.migrator.Migrator">Migrator (class in dist_zero.migration.migrator)</a>
 </li>
       <li><a href="doc/nodes.html#dist_zero.node.node.Node.migrators">migrators (dist_zero.node.node.Node attribute)</a>
 </li>
       <li><a href="doc/machine.html#dist_zero.machine.NodeManager.MIN_POSTPONE_TIME_MS">MIN_POSTPONE_TIME_MS (dist_zero.machine.NodeManager attribute)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/cloud.html#dist_zero.spawners.cloud.aws.Ec2Spawner.mode">mode() (dist_zero.spawners.cloud.aws.Ec2Spawner method)</a>
 
       <ul>
@@ -416,6 +472,8 @@
       <li><a href="doc/nodes.html#dist_zero.linker.Linker.n_reorders">n_reorders (dist_zero.linker.Linker attribute)</a>
 </li>
       <li><a href="doc/nodes.html#dist_zero.linker.Linker.n_retransmissions">n_retransmissions (dist_zero.linker.Linker attribute)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.NEW">NEW (dist_zero.migration.state.state.State attribute)</a>
 </li>
       <li><a href="doc/nodes.html#dist_zero.linker.Linker.new_exporter">new_exporter() (dist_zero.linker.Linker method)</a>
 </li>
@@ -458,6 +516,12 @@
       <li><a href="doc/nodes.html#dist_zero.exporter.Exporter.PENDING_EXPIRATION_TIME_MS">PENDING_EXPIRATION_TIME_MS (dist_zero.exporter.Exporter attribute)</a>
 </li>
   </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.PREPARING_SWITCHING">PREPARING_SWITCHING (dist_zero.migration.state.state.State attribute)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState">PreparingSwitchingState (class in dist_zero.migration.state.state_05_preparing_switching)</a>
+</li>
+  </ul></td>
 </tr></table>
 
 <h2 id="R">R</h2>
@@ -475,6 +539,24 @@
         <li><a href="doc/migrations.html#dist_zero.migration.sink_migrator.SinkMigrator.receive">(dist_zero.migration.sink_migrator.SinkMigrator method)</a>
 </li>
         <li><a href="doc/migrations.html#dist_zero.migration.source_migrator.SourceMigrator.receive">(dist_zero.migration.source_migrator.SourceMigrator method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.receive">(dist_zero.migration.state.state.State method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState.receive">(dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState.receive">(dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState.receive">(dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState.receive">(dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState.receive">(dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_06_switching.SwitchingState.receive">(dist_zero.migration.state.state_06_switching.SwitchingState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState.receive">(dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState method)</a>
+</li>
+        <li><a href="doc/migrations.html#dist_zero.migration.state.state_08_finished.FinishedState.receive">(dist_zero.migration.state.state_08_finished.FinishedState method)</a>
 </li>
         <li><a href="doc/nodes.html#dist_zero.node.io.internal.InternalNode.receive">(dist_zero.node.io.internal.InternalNode method)</a>
 </li>
@@ -543,8 +625,6 @@
 </li>
       <li><a href="doc/migrations.html#dist_zero.migration.sink_migrator.SinkMigrator">SinkMigrator (class in dist_zero.migration.sink_migrator)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/migrations.html#dist_zero.migration.source_migrator.SourceMigrator">SourceMigrator (class in dist_zero.migration.source_migrator)</a>
 </li>
       <li><a href="doc/machine.html#dist_zero.machine.MachineController.spawn_node">spawn_node() (dist_zero.machine.MachineController method)</a>
@@ -559,6 +639,8 @@
 </li>
       <li><a href="doc/system_controller.html#dist_zero.system_controller.SystemController.spawner">spawner (dist_zero.system_controller.SystemController attribute)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="doc/simulator.html#dist_zero.spawners.simulator.SimulatedSpawner.start">start() (dist_zero.spawners.simulator.SimulatedSpawner method)</a>
 
       <ul>
@@ -567,9 +649,31 @@
       </ul></li>
       <li><a href="doc/virtual.html#dist_zero.spawners.docker.DockerSpawner.started">started (dist_zero.spawners.docker.DockerSpawner attribute)</a>
 </li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.STARTING_NEW_FLOW">STARTING_NEW_FLOW (dist_zero.migration.state.state.State attribute)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.STARTING_NEW_NODES">STARTING_NEW_NODES (dist_zero.migration.state.state.State attribute)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.STARTING_NODE_MIGRATORS">STARTING_NODE_MIGRATORS (dist_zero.migration.state.state.State attribute)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState">StartingNewFlowState (class in dist_zero.migration.state.state_03_starting_new_flow)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState">StartingNewNodesState (class in dist_zero.migration.state.state_01_starting_new_nodes)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState">StartingNodeMigratorsState (class in dist_zero.migration.state.state_02_starting_node_migrators)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state.State">State (class in dist_zero.migration.state.state)</a>
+</li>
       <li><a href="doc/nodes.html#dist_zero.node.node.Node.stats">stats() (dist_zero.node.node.Node method)</a>
 </li>
       <li><a href="doc/nodes.html#dist_zero.node.sum.SumNode">SumNode (class in dist_zero.node.sum)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.SWITCHING">SWITCHING (dist_zero.migration.state.state.State attribute)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state_06_switching.SwitchingState">SwitchingState (class in dist_zero.migration.state.state_06_switching)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.SYNCING_NEW_NODES">SYNCING_NEW_NODES (dist_zero.migration.state.state.State attribute)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState">SyncingNewNodesState (class in dist_zero.migration.state.state_04_syncing_new_nodes)</a>
 </li>
       <li><a href="doc/nodes.html#dist_zero.node.node.Node.system_config">system_config (dist_zero.node.node.Node attribute)</a>
 </li>
@@ -589,10 +693,14 @@
         <li><a href="doc/machine.html#dist_zero.machine.NodeManager.terminate_node">(dist_zero.machine.NodeManager method)</a>
 </li>
       </ul></li>
-      <li><a href="doc/demo.html#module-test.demo">test.demo (module)</a>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state.State.TERMINATING_MIGRATORS">TERMINATING_MIGRATORS (dist_zero.migration.state.state.State attribute)</a>
+</li>
+      <li><a href="doc/migrations.html#dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState">TerminatingMigratorsState (class in dist_zero.migration.state.state_07_terminating_migrators)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="doc/demo.html#module-test.demo">test.demo (module)</a>
+</li>
       <li><a href="doc/nodes.html#dist_zero.linker.Linker.TIME_BETWEEN_ACKNOWLEDGEMENTS_MS">TIME_BETWEEN_ACKNOWLEDGEMENTS_MS (dist_zero.linker.Linker attribute)</a>
 </li>
       <li><a href="doc/nodes.html#dist_zero.linker.Linker.TIME_BETWEEN_RETRANSMISSION_CHECKS_MS">TIME_BETWEEN_RETRANSMISSION_CHECKS_MS (dist_zero.linker.Linker attribute)</a>

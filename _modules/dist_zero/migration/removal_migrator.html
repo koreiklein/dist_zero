@@ -37,6 +37,30 @@
 
 
 <div class="viewcode-block" id="RemovalMigrator"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.removal_migrator.RemovalMigrator">[docs]</a><span class="k">class</span> <span class="nc">RemovalMigrator</span><span class="p">(</span><span class="n">migrator</span><span class="o">.</span><span class="n">Migrator</span><span class="p">):</span>
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">migration</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">sender_ids</span><span class="p">,</span> <span class="n">receiver_ids</span><span class="p">,</span> <span class="n">will_sync</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    :param migration: The :ref:`handle` of the `MigrationNode` running the migration.</span>
+<span class="sd">    :type migration: :ref:`handle`</span>
+<span class="sd">    :param node: The `Node` on which this migrator runs.</span>
+<span class="sd">    :type node: `Node`</span>
+<span class="sd">    :param list[str] sender_ids: A list of ids of the `Node` s that will stop sending to self by the end of the migration.</span>
+<span class="sd">    :param list[str] receiver_ids: A list of ids of the `Node` s that will stop receiving from self by the end of the migration.</span>
+<span class="sd">    :param bool will_sync: True iff this migrator will need to sync as part of the migration</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_migration</span> <span class="o">=</span> <span class="n">migration</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_node</span> <span class="o">=</span> <span class="n">node</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_will_sync</span> <span class="o">=</span> <span class="n">will_sync</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span> <span class="o">=</span> <span class="p">{</span><span class="n">sender_id</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">_importers</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">sender_id</span> <span class="ow">in</span> <span class="n">sender_ids</span><span class="p">}</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span> <span class="o">=</span> <span class="p">{</span><span class="n">receiver_id</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">_exporters</span><span class="p">[</span><span class="n">receiver_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">receiver_id</span> <span class="ow">in</span> <span class="n">receiver_ids</span><span class="p">}</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_sender_id_to_first_flow_sequence_number</span> <span class="o">=</span> <span class="p">{</span><span class="n">sender_id</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">sender_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">}</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_sender_id_to_first_live_sequence_number</span> <span class="o">=</span> <span class="p">{</span><span class="n">sender_id</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">sender_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_importers</span><span class="p">}</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_flow_is_started</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_swapped</span> <span class="o">=</span> <span class="kc">False</span>
+
 <div class="viewcode-block" id="RemovalMigrator.from_config"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.removal_migrator.RemovalMigrator.from_config">[docs]</a>  <span class="nd">@staticmethod</span>
   <span class="k">def</span> <span class="nf">from_config</span><span class="p">(</span><span class="n">migrator_config</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
     <span class="sd">&#39;&#39;&#39;</span>
@@ -49,35 +73,64 @@
 <span class="sd">    :return: The appropriate `RemovalMigrator` instance.</span>
 <span class="sd">    :rtype: `RemovalMigrator`</span>
 <span class="sd">    &#39;&#39;&#39;</span>
-    <span class="k">return</span> <span class="n">RemovalMigrator</span><span class="p">(</span><span class="n">migration</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;migration&#39;</span><span class="p">],</span> <span class="n">node</span><span class="o">=</span><span class="n">node</span><span class="p">)</span></div>
-
-  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">migration</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
-    <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">    :param migration: The :ref:`handle` of the `MigrationNode` running the migration.</span>
-<span class="sd">    :type migration: :ref:`handle`</span>
-<span class="sd">    :param node: The `Node` on which this migrator runs.</span>
-<span class="sd">    :type node: `Node`</span>
-<span class="sd">    &#39;&#39;&#39;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_migration</span> <span class="o">=</span> <span class="n">migration</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_node</span> <span class="o">=</span> <span class="n">node</span>
+    <span class="k">return</span> <span class="n">RemovalMigrator</span><span class="p">(</span>
+        <span class="n">migration</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;migration&#39;</span><span class="p">],</span>
+        <span class="n">node</span><span class="o">=</span><span class="n">node</span><span class="p">,</span>
+        <span class="n">sender_ids</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;sender_ids&#39;</span><span class="p">],</span>
+        <span class="n">receiver_ids</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;receiver_ids&#39;</span><span class="p">],</span>
+        <span class="n">will_sync</span><span class="o">=</span><span class="n">migrator_config</span><span class="p">[</span><span class="s1">&#39;will_sync&#39;</span><span class="p">],</span>
+    <span class="p">)</span></div>
 
 <div class="viewcode-block" id="RemovalMigrator.receive"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.removal_migrator.RemovalMigrator.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
-    <span class="c1"># FIXME(KK): Write tests that require a complete implementation of this method, and then implement it.</span>
-    <span class="k">if</span> <span class="kc">False</span><span class="p">:</span>
-      <span class="k">pass</span>
+    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;replacing_flow&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_sender_id_to_first_flow_sequence_number</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_send_replacing_flow</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;swapped_from_duplicate&#39;</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_sender_id_to_first_live_sequence_number</span><span class="p">[</span><span class="n">sender_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;first_live_sequence_number&#39;</span><span class="p">]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_send_swapped</span><span class="p">()</span>
     <span class="k">elif</span> <span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;terminate_migrator&#39;</span><span class="p">:</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">remove_migrator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">migration_id</span><span class="p">)</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_migration</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">migrator_terminated</span><span class="p">())</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">_controller</span><span class="o">.</span><span class="n">terminate_node</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
       <span class="k">raise</span> <span class="n">errors</span><span class="o">.</span><span class="n">InternalError</span><span class="p">(</span><span class="s1">&#39;Unrecognized migration message type &quot;</span><span class="si">{}</span><span class="s1">&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]))</span></div>
+
+  <span class="k">def</span> <span class="nf">_maybe_send_swapped</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_swapped</span> <span class="ow">and</span> \
+        <span class="nb">all</span><span class="p">(</span><span class="n">sn</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">sn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sender_id_to_first_live_sequence_number</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="ow">and</span> \
+        <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">covers</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sender_id_to_first_live_sequence_number</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_swapped</span> <span class="o">=</span> <span class="kc">True</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send_forward_messages</span><span class="p">(</span><span class="n">before</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_sender_id_to_first_live_sequence_number</span><span class="p">)</span>
+      <span class="k">for</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">exporter</span><span class="o">.</span><span class="n">receiver</span><span class="p">,</span>
+                        <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">swapped_from_duplicate</span><span class="p">(</span>
+                            <span class="n">migration_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">migration_id</span><span class="p">,</span>
+                            <span class="n">first_live_sequence_number</span><span class="o">=</span><span class="n">exporter</span><span class="o">.</span><span class="n">internal_sequence_number</span><span class="p">))</span>
+
+  <span class="k">def</span> <span class="nf">_maybe_send_replacing_flow</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flow_is_started</span> <span class="ow">and</span> \
+        <span class="nb">all</span><span class="p">(</span><span class="n">sn</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">sn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sender_id_to_first_flow_sequence_number</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="ow">and</span> \
+        <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">_deltas</span><span class="o">.</span><span class="n">covers</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sender_id_to_first_flow_sequence_number</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_flow_is_started</span> <span class="o">=</span> <span class="kc">True</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_will_sync</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">deltas_only</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">migration_id</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send_forward_messages</span><span class="p">(</span><span class="n">before</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_sender_id_to_first_flow_sequence_number</span><span class="p">)</span>
+      <span class="k">for</span> <span class="n">exporter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exporters</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">exporter</span><span class="o">.</span><span class="n">receiver</span><span class="p">,</span>
+                        <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">replacing_flow</span><span class="p">(</span>
+                            <span class="n">migration_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">migration_id</span><span class="p">,</span> <span class="n">sequence_number</span><span class="o">=</span><span class="n">exporter</span><span class="o">.</span><span class="n">internal_sequence_number</span><span class="p">))</span>
 
   <span class="nd">@property</span>
   <span class="k">def</span> <span class="nf">migration_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_migration</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span>
 
+<div class="viewcode-block" id="RemovalMigrator.elapse"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.removal_migrator.RemovalMigrator.elapse">[docs]</a>  <span class="k">def</span> <span class="nf">elapse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_send_replacing_flow</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_send_swapped</span><span class="p">()</span></div>
+
 <div class="viewcode-block" id="RemovalMigrator.initialize"><a class="viewcode-back" href="../../../doc/migrations.html#dist_zero.migration.removal_migrator.RemovalMigrator.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">deltas_only</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_migration</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">attached_migrator</span><span class="p">())</span></div></div>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">deltas_only</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">migration_id</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_node</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_migration</span><span class="p">,</span> <span class="n">messages</span><span class="o">.</span><span class="n">migration</span><span class="o">.</span><span class="n">attached_migrator</span><span class="p">())</span></div></div>
 </pre></div>
 
           </div>

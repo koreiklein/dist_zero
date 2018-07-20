@@ -1,0 +1,194 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>dist_zero.migration.state.state &#8212; DistZero  documentation</title>
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for dist_zero.migration.state.state</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">dist_zero</span> <span class="k">import</span> <span class="n">errors</span>
+
+
+<div class="viewcode-block" id="State"><a class="viewcode-back" href="../../../../doc/migrations.html#dist_zero.migration.state.state.State">[docs]</a><span class="k">class</span> <span class="nc">State</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Abstract base class for migration states.  Each `State` instance represents a phase of a migration,</span>
+<span class="sd">  that runs for a period of time on a `MigrationNode`.</span>
+
+<span class="sd">  Each state begins with a call to `State.initialize`  Starting then, the `MigrationNode` will be in that state,</span>
+<span class="sd">  and forward all its messages to the state&#39;s `State.receive` method.</span>
+
+<span class="sd">  For some period of time, the `MigrationNode` will remain in that state. During this time, the `State` instance may</span>
+<span class="sd">  process messages, send messages, and collect data.</span>
+
+<span class="sd">  Finally, the state ends when the `State` instance makes a call to one of the ``finish_state_*`` methods</span>
+<span class="sd">  of a `MigrationNode`.  At the point, the `MigrationNode` leaves that state and enters a new state (or terminates).</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="c1"># Names for the possible states, in the order in which they occur.</span>
+
+  <span class="n">NEW</span> <span class="o">=</span> <span class="s1">&#39;NEW&#39;</span>
+  <span class="sd">&#39;&#39;&#39;The initial state of the migration.&#39;&#39;&#39;</span>
+
+  <span class="n">STARTING_NEW_NODES</span> <span class="o">=</span> <span class="s1">&#39;STARTING_NEW_NODES&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The migration enters this state immediately upon initialization.</span>
+
+<span class="sd">  Action: The migrator spawns new nodes each with an attached `InsertionMigrator`.</span>
+<span class="sd">    These nodes are part of the new flow only.</span>
+
+<span class="sd">  Description: The migration is waiting until the new nodes have started.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="n">STARTING_NODE_MIGRATORS</span> <span class="o">=</span> <span class="s1">&#39;STARTING_NODE_MIGRATORS&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The migrator has received confirmations that all the new nodes have started.</span>
+
+<span class="sd">  Action: The migrator</span>
+<span class="sd">    a) Adds one `SourceMigrator` to each node that is part of the source set of the migration.</span>
+<span class="sd">       These nodes are part of both the new and old flows of the migration.</span>
+<span class="sd">    b) Adds one `RemovalMigrator` to each node that is internal to the old flow.</span>
+<span class="sd">    c) Adds one `SinkMigrator` to each node that is part of the sink set of the migration.</span>
+<span class="sd">       These nodes are part of both the new and old flows of the migration.</span>
+
+<span class="sd">  Description: The migration is waiting until all `Migrator` subclasses are attached and have</span>
+<span class="sd">    sent an attached_migrator message.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="n">STARTING_NEW_FLOW</span> <span class="o">=</span> <span class="s1">&#39;STARTING_NEW_FLOW&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: attached_migrator messages have arrived from every migrator.</span>
+
+<span class="sd">  Action: The migration node sends start_flow message to the sources.  This will simultaneously</span>
+<span class="sd">    a) trigger a cascade of started_flow messages for the new flow</span>
+<span class="sd">    b) trigger a cascade of replacing_flow messages for the old flow</span>
+
+<span class="sd">  Description: The cascades of started_flow and replacing_flow messages are propogating through the network.</span>
+<span class="sd">  Once each sink receives both the requisite started_flow and replacing_flow messages, it will send a</span>
+<span class="sd">  completed_flow message to the migration node.  The migration node is waiting for all those completed_flow messages.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="n">SYNCING_NEW_NODES</span> <span class="o">=</span> <span class="s1">&#39;SYNCING_NEW_NODES&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The migration node has received started_flow messages from all the sink migrators.</span>
+
+<span class="sd">  Action: The migration syncs some data between the old and new data nodes.  The details depend on the type of nodes</span>
+<span class="sd">    involved in the migration.  Any data synced will reflect precisely the source node messages with sequence numbers</span>
+<span class="sd">    strictly less than the first sequence number of the new flow.</span>
+
+<span class="sd">  Description: Data is being synced with the new data nodes.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="n">PREPARING_SWITCHING</span> <span class="o">=</span> <span class="s1">&#39;PREPARING_SWITCHING&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The sync is finished.</span>
+<span class="sd">  Action: The migration node sends prepare_for_switch message to insertion, removal, and sink nodes.</span>
+<span class="sd">  Description: The migration waits until all the recipients have confirmed that they are prepared to switch.</span>
+
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="n">SWITCHING</span> <span class="o">=</span> <span class="s1">&#39;SWITCHING&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The migration has received confirmations that the insertion, removal, and sink nodes are prepared to switch.</span>
+<span class="sd">  Action: The migration node sends switch_flow messages to the sources.  The will simultaneously</span>
+<span class="sd">  a) trigger a cascade of activate_flow messages for the new flow</span>
+<span class="sd">  b) trigger a cascade of deactivate_flow messages for the old flow</span>
+
+<span class="sd">  Description: The old flow is being deactivated while the new flow is being activated.</span>
+
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="n">TERMINATING_MIGRATORS</span> <span class="o">=</span> <span class="s1">&#39;TERMINATING_MIGRATORS&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: The migration node has received switched_flows messages from all the sinks.</span>
+<span class="sd">  Action: Send terminate_migrator messages to all migrators.</span>
+<span class="sd">  Description: The migration is over, remove the migrators entirely.</span>
+
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="n">FINISHED</span> <span class="o">=</span> <span class="s1">&#39;FINISHED&#39;</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Trigger: A migrator_terminated message from each migrator has arrived on the migration node.</span>
+<span class="sd">  Action: None.</span>
+<span class="sd">  Description: The migration is over.</span>
+
+<span class="sd">  &#39;&#39;&#39;</span>
+
+<div class="viewcode-block" id="State.initialize"><a class="viewcode-back" href="../../../../doc/migrations.html#dist_zero.migration.state.state.State.initialize">[docs]</a>  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Perform any initializations when entering this state.&#39;&#39;&#39;</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="State.receive"><a class="viewcode-back" href="../../../../doc/migrations.html#dist_zero.migration.state.state.State.receive">[docs]</a>  <span class="k">def</span> <span class="nf">receive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">sender_id</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Process a message to a `MigrationNode` while in this state.  See `Node.receive`</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Abstract Superclass&quot;</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Korei Klein.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

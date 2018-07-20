@@ -54,7 +54,7 @@ will be attached to a separate <a class="reference internal" href="#dist_zero.mi
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>migration_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The node id of this migration.</li>
 <li><strong>migration_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.7)"><em>object</em></a>) – Configuration parameters for the migration.
-These parameters will be parsed by the different <code class="xref any docutils literal notranslate"><span class="pre">State</span></code> classes responsible for each state of the migration.</li>
+These parameters will be parsed by the different <a class="reference internal" href="#dist_zero.migration.state.state.State" title="dist_zero.migration.state.state.State"><code class="xref any py py-class docutils literal notranslate"><span class="pre">State</span></code></a> classes responsible for each state of the migration.</li>
 <li><strong>controller</strong> (<a class="reference internal" href="machine.html#dist_zero.machine.MachineController" title="dist_zero.machine.MachineController"><em>MachineController</em></a>) – the controller for this node’s machine.</li>
 </ul>
 </td>
@@ -102,14 +102,277 @@ These parameters will be parsed by the different <code class="xref any docutils 
 
 </dd></dl>
 
-<span class="target" id="module-dist_zero.migration.migrator"></span><dl class="class">
+<p>Each <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> will move through a series of <a class="reference internal" href="#dist_zero.migration.state.state.State" title="dist_zero.migration.state.state.State"><code class="xref any py py-class docutils literal notranslate"><span class="pre">State</span></code></a> s in order to complete its behavior.</p>
+<span class="target" id="module-dist_zero.migration.state.state"></span><dl class="class">
+<dt id="dist_zero.migration.state.state.State">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.state.state.</code><code class="descname">State</code><a class="reference internal" href="../_modules/dist_zero/migration/state/state.html#State"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state.State" title="Permalink to this definition">¶</a></dt>
+<dd><p>Abstract base class for migration states.  Each <a class="reference internal" href="#dist_zero.migration.state.state.State" title="dist_zero.migration.state.state.State"><code class="xref any py py-class docutils literal notranslate"><span class="pre">State</span></code></a> instance represents a phase of a migration,
+that runs for a period of time on a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a>.</p>
+<p>Each state begins with a call to <a class="reference internal" href="#dist_zero.migration.state.state.State.initialize" title="dist_zero.migration.state.state.State.initialize"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">State.initialize</span></code></a>  Starting then, the <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> will be in that state,
+and forward all its messages to the state’s <a class="reference internal" href="#dist_zero.migration.state.state.State.receive" title="dist_zero.migration.state.state.State.receive"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">State.receive</span></code></a> method.</p>
+<p>For some period of time, the <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> will remain in that state. During this time, the <a class="reference internal" href="#dist_zero.migration.state.state.State" title="dist_zero.migration.state.state.State"><code class="xref any py py-class docutils literal notranslate"><span class="pre">State</span></code></a> instance may
+process messages, send messages, and collect data.</p>
+<p>Finally, the state ends when the <a class="reference internal" href="#dist_zero.migration.state.state.State" title="dist_zero.migration.state.state.State"><code class="xref any py py-class docutils literal notranslate"><span class="pre">State</span></code></a> instance makes a call to one of the <code class="docutils literal notranslate"><span class="pre">finish_state_*</span></code> methods
+of a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a>.  At the point, the <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> leaves that state and enters a new state (or terminates).</p>
+<dl class="attribute">
+<dt id="dist_zero.migration.state.state.State.FINISHED">
+<code class="descname">FINISHED</code><em class="property"> = 'FINISHED'</em><a class="headerlink" href="#dist_zero.migration.state.state.State.FINISHED" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trigger: A migrator_terminated message from each migrator has arrived on the migration node.
+Action: None.
+Description: The migration is over.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.migration.state.state.State.NEW">
+<code class="descname">NEW</code><em class="property"> = 'NEW'</em><a class="headerlink" href="#dist_zero.migration.state.state.State.NEW" title="Permalink to this definition">¶</a></dt>
+<dd><p>The initial state of the migration.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.migration.state.state.State.PREPARING_SWITCHING">
+<code class="descname">PREPARING_SWITCHING</code><em class="property"> = 'PREPARING_SWITCHING'</em><a class="headerlink" href="#dist_zero.migration.state.state.State.PREPARING_SWITCHING" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trigger: The sync is finished.
+Action: The migration node sends prepare_for_switch message to insertion, removal, and sink nodes.
+Description: The migration waits until all the recipients have confirmed that they are prepared to switch.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.migration.state.state.State.STARTING_NEW_FLOW">
+<code class="descname">STARTING_NEW_FLOW</code><em class="property"> = 'STARTING_NEW_FLOW'</em><a class="headerlink" href="#dist_zero.migration.state.state.State.STARTING_NEW_FLOW" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trigger: attached_migrator messages have arrived from every migrator.</p>
+<dl class="docutils">
+<dt>Action: The migration node sends start_flow message to the sources.  This will simultaneously</dt>
+<dd><ol class="first last loweralpha simple">
+<li>trigger a cascade of started_flow messages for the new flow</li>
+<li>trigger a cascade of replacing_flow messages for the old flow</li>
+</ol>
+</dd>
+</dl>
+<p>Description: The cascades of started_flow and replacing_flow messages are propogating through the network.
+Once each sink receives both the requisite started_flow and replacing_flow messages, it will send a
+completed_flow message to the migration node.  The migration node is waiting for all those completed_flow messages.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.migration.state.state.State.STARTING_NEW_NODES">
+<code class="descname">STARTING_NEW_NODES</code><em class="property"> = 'STARTING_NEW_NODES'</em><a class="headerlink" href="#dist_zero.migration.state.state.State.STARTING_NEW_NODES" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trigger: The migration enters this state immediately upon initialization.</p>
+<dl class="docutils">
+<dt>Action: The migrator spawns new nodes each with an attached <a class="reference internal" href="#dist_zero.migration.insertion_migrator.InsertionMigrator" title="dist_zero.migration.insertion_migrator.InsertionMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">InsertionMigrator</span></code></a>.</dt>
+<dd>These nodes are part of the new flow only.</dd>
+</dl>
+<p>Description: The migration is waiting until the new nodes have started.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.migration.state.state.State.STARTING_NODE_MIGRATORS">
+<code class="descname">STARTING_NODE_MIGRATORS</code><em class="property"> = 'STARTING_NODE_MIGRATORS'</em><a class="headerlink" href="#dist_zero.migration.state.state.State.STARTING_NODE_MIGRATORS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trigger: The migrator has received confirmations that all the new nodes have started.</p>
+<dl class="docutils">
+<dt>Action: The migrator</dt>
+<dd><ol class="first last loweralpha simple">
+<li>Adds one <a class="reference internal" href="#dist_zero.migration.source_migrator.SourceMigrator" title="dist_zero.migration.source_migrator.SourceMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SourceMigrator</span></code></a> to each node that is part of the source set of the migration.
+These nodes are part of both the new and old flows of the migration.</li>
+<li>Adds one <a class="reference internal" href="#dist_zero.migration.removal_migrator.RemovalMigrator" title="dist_zero.migration.removal_migrator.RemovalMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">RemovalMigrator</span></code></a> to each node that is internal to the old flow.</li>
+<li>Adds one <a class="reference internal" href="#dist_zero.migration.sink_migrator.SinkMigrator" title="dist_zero.migration.sink_migrator.SinkMigrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">SinkMigrator</span></code></a> to each node that is part of the sink set of the migration.
+These nodes are part of both the new and old flows of the migration.</li>
+</ol>
+</dd>
+<dt>Description: The migration is waiting until all <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> subclasses are attached and have</dt>
+<dd>sent an attached_migrator message.</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.migration.state.state.State.SWITCHING">
+<code class="descname">SWITCHING</code><em class="property"> = 'SWITCHING'</em><a class="headerlink" href="#dist_zero.migration.state.state.State.SWITCHING" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trigger: The migration has received confirmations that the insertion, removal, and sink nodes are prepared to switch.
+Action: The migration node sends switch_flow messages to the sources.  The will simultaneously
+a) trigger a cascade of activate_flow messages for the new flow
+b) trigger a cascade of deactivate_flow messages for the old flow</p>
+<p>Description: The old flow is being deactivated while the new flow is being activated.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.migration.state.state.State.SYNCING_NEW_NODES">
+<code class="descname">SYNCING_NEW_NODES</code><em class="property"> = 'SYNCING_NEW_NODES'</em><a class="headerlink" href="#dist_zero.migration.state.state.State.SYNCING_NEW_NODES" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trigger: The migration node has received started_flow messages from all the sink migrators.</p>
+<dl class="docutils">
+<dt>Action: The migration syncs some data between the old and new data nodes.  The details depend on the type of nodes</dt>
+<dd>involved in the migration.  Any data synced will reflect precisely the source node messages with sequence numbers
+strictly less than the first sequence number of the new flow.</dd>
+</dl>
+<p>Description: Data is being synced with the new data nodes.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.migration.state.state.State.TERMINATING_MIGRATORS">
+<code class="descname">TERMINATING_MIGRATORS</code><em class="property"> = 'TERMINATING_MIGRATORS'</em><a class="headerlink" href="#dist_zero.migration.state.state.State.TERMINATING_MIGRATORS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trigger: The migration node has received switched_flows messages from all the sinks.
+Action: Send terminate_migrator messages to all migrators.
+Description: The migration is over, remove the migrators entirely.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.state.state.State.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state.html#State.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state.State.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform any initializations when entering this state.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.state.state.State.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state.html#State.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state.State.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process a message to a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> while in this state.  See <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.receive" title="dist_zero.node.node.Node.receive"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.receive</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.state.state_01_starting_new_nodes"></span><dl class="class">
+<dt id="dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.state.state_01_starting_new_nodes.</code><code class="descname">StartingNewNodesState</code><span class="sig-paren">(</span><em>migration</em>, <em>controller</em>, <em>migration_config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_01_starting_new_nodes.html#StartingNewNodesState"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_01_starting_new_nodes.html#StartingNewNodesState.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform any initializations when entering this state.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_01_starting_new_nodes.html#StartingNewNodesState.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_01_starting_new_nodes.StartingNewNodesState.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process a message to a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> while in this state.  See <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.receive" title="dist_zero.node.node.Node.receive"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.receive</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.state.state_02_starting_node_migrators"></span><dl class="class">
+<dt id="dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.state.state_02_starting_node_migrators.</code><code class="descname">StartingNodeMigratorsState</code><span class="sig-paren">(</span><em>migration</em>, <em>controller</em>, <em>migration_config</em>, <em>insertion_nodes</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_02_starting_node_migrators.html#StartingNodeMigratorsState"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_02_starting_node_migrators.html#StartingNodeMigratorsState.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform any initializations when entering this state.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_02_starting_node_migrators.html#StartingNodeMigratorsState.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_02_starting_node_migrators.StartingNodeMigratorsState.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process a message to a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> while in this state.  See <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.receive" title="dist_zero.node.node.Node.receive"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.receive</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.state.state_03_starting_new_flow"></span><dl class="class">
+<dt id="dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.state.state_03_starting_new_flow.</code><code class="descname">StartingNewFlowState</code><span class="sig-paren">(</span><em>migration</em>, <em>controller</em>, <em>migration_config</em>, <em>source_nodes</em>, <em>sink_nodes</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_03_starting_new_flow.html#StartingNewFlowState"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_03_starting_new_flow.html#StartingNewFlowState.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform any initializations when entering this state.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_03_starting_new_flow.html#StartingNewFlowState.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_03_starting_new_flow.StartingNewFlowState.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process a message to a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> while in this state.  See <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.receive" title="dist_zero.node.node.Node.receive"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.receive</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.state.state_04_syncing_new_nodes"></span><dl class="class">
+<dt id="dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.state.state_04_syncing_new_nodes.</code><code class="descname">SyncingNewNodesState</code><span class="sig-paren">(</span><em>migration</em>, <em>controller</em>, <em>migration_config</em>, <em>insertion_nodes</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_04_syncing_new_nodes.html#SyncingNewNodesState"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_04_syncing_new_nodes.html#SyncingNewNodesState.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform any initializations when entering this state.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_04_syncing_new_nodes.html#SyncingNewNodesState.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_04_syncing_new_nodes.SyncingNewNodesState.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process a message to a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> while in this state.  See <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.receive" title="dist_zero.node.node.Node.receive"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.receive</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.state.state_05_preparing_switching"></span><dl class="class">
+<dt id="dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.state.state_05_preparing_switching.</code><code class="descname">PreparingSwitchingState</code><span class="sig-paren">(</span><em>migration</em>, <em>controller</em>, <em>migration_config</em>, <em>insertion_nodes</em>, <em>sink_nodes</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_05_preparing_switching.html#PreparingSwitchingState"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_05_preparing_switching.html#PreparingSwitchingState.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform any initializations when entering this state.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_05_preparing_switching.html#PreparingSwitchingState.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_05_preparing_switching.PreparingSwitchingState.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process a message to a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> while in this state.  See <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.receive" title="dist_zero.node.node.Node.receive"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.receive</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.state.state_06_switching"></span><dl class="class">
+<dt id="dist_zero.migration.state.state_06_switching.SwitchingState">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.state.state_06_switching.</code><code class="descname">SwitchingState</code><span class="sig-paren">(</span><em>migration</em>, <em>controller</em>, <em>migration_config</em>, <em>source_nodes</em>, <em>sink_nodes</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_06_switching.html#SwitchingState"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_06_switching.SwitchingState" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="dist_zero.migration.state.state_06_switching.SwitchingState.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_06_switching.html#SwitchingState.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_06_switching.SwitchingState.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform any initializations when entering this state.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.state.state_06_switching.SwitchingState.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_06_switching.html#SwitchingState.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_06_switching.SwitchingState.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process a message to a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> while in this state.  See <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.receive" title="dist_zero.node.node.Node.receive"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.receive</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.state.state_07_terminating_migrators"></span><dl class="class">
+<dt id="dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.state.state_07_terminating_migrators.</code><code class="descname">TerminatingMigratorsState</code><span class="sig-paren">(</span><em>migration</em>, <em>controller</em>, <em>migration_config</em>, <em>all_nodes</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_07_terminating_migrators.html#TerminatingMigratorsState"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_07_terminating_migrators.html#TerminatingMigratorsState.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform any initializations when entering this state.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_07_terminating_migrators.html#TerminatingMigratorsState.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_07_terminating_migrators.TerminatingMigratorsState.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process a message to a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> while in this state.  See <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.receive" title="dist_zero.node.node.Node.receive"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.receive</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-dist_zero.migration.state.state_08_finished"></span><dl class="class">
+<dt id="dist_zero.migration.state.state_08_finished.FinishedState">
+<em class="property">class </em><code class="descclassname">dist_zero.migration.state.state_08_finished.</code><code class="descname">FinishedState</code><span class="sig-paren">(</span><em>migration</em>, <em>controller</em>, <em>migration_config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_08_finished.html#FinishedState"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_08_finished.FinishedState" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="dist_zero.migration.state.state_08_finished.FinishedState.initialize">
+<code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_08_finished.html#FinishedState.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_08_finished.FinishedState.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform any initializations when entering this state.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="dist_zero.migration.state.state_08_finished.FinishedState.receive">
+<code class="descname">receive</code><span class="sig-paren">(</span><em>message</em>, <em>sender_id</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/state/state_08_finished.html#FinishedState.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.state.state_08_finished.FinishedState.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process a message to a <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> while in this state.  See <a class="reference internal" href="nodes.html#dist_zero.node.node.Node.receive" title="dist_zero.node.node.Node.receive"><code class="xref any py py-meth docutils literal notranslate"><span class="pre">Node.receive</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<div class="section" id="module-dist_zero.migration.migrator">
+<span id="migrators"></span><h2>Migrators<a class="headerlink" href="#module-dist_zero.migration.migrator" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
 <dt id="dist_zero.migration.migrator.Migrator">
 <em class="property">class </em><code class="descclassname">dist_zero.migration.migrator.</code><code class="descname">Migrator</code><a class="reference internal" href="../_modules/dist_zero/migration/migrator.html#Migrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migrator.Migrator" title="Permalink to this definition">¶</a></dt>
 <dd><p>Abstract base class for the different kinds of migrators.</p>
 <p>Each <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> instance will be initialized on a <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> and added to that
 node’s set of active migrators.</p>
 <p>Each <a class="reference internal" href="#dist_zero.migration.migrator.Migrator" title="dist_zero.migration.migrator.Migrator"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Migrator</span></code></a> is also associated with a unique <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> identified
-by <code class="xref any docutils literal notranslate"><span class="pre">Migrator.migration_id</span></code></p>
+by <a class="reference internal" href="#dist_zero.migration.migrator.Migrator.migration_id" title="dist_zero.migration.migrator.Migrator.migration_id"><code class="xref any py py-attr docutils literal notranslate"><span class="pre">Migrator.migration_id</span></code></a></p>
 <dl class="method">
 <dt id="dist_zero.migration.migrator.Migrator.elapse">
 <code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/migrator.html#Migrator.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migrator.Migrator.elapse" title="Permalink to this definition">¶</a></dt>
@@ -121,6 +384,12 @@ by <code class="xref any docutils literal notranslate"><span class="pre">Migrato
 <dt id="dist_zero.migration.migrator.Migrator.initialize">
 <code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/migrator.html#Migrator.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.migrator.Migrator.initialize" title="Permalink to this definition">¶</a></dt>
 <dd><p>Subclasses may override initialize.  It will be called when the migrator is first created.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.migration.migrator.Migrator.migration_id">
+<code class="descname">migration_id</code><a class="headerlink" href="#dist_zero.migration.migrator.Migrator.migration_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The unique id of the relevant migration</p>
 </dd></dl>
 
 <dl class="method">
@@ -145,7 +414,7 @@ by <code class="xref any docutils literal notranslate"><span class="pre">Migrato
 
 <span class="target" id="module-dist_zero.migration.source_migrator"></span><dl class="class">
 <dt id="dist_zero.migration.source_migrator.SourceMigrator">
-<em class="property">class </em><code class="descclassname">dist_zero.migration.source_migrator.</code><code class="descname">SourceMigrator</code><span class="sig-paren">(</span><em>migration</em>, <em>node</em>, <em>exporter_swaps</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/source_migrator.html#SourceMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.source_migrator.SourceMigrator" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">dist_zero.migration.source_migrator.</code><code class="descname">SourceMigrator</code><span class="sig-paren">(</span><em>migration</em>, <em>node</em>, <em>exporter_swaps</em>, <em>will_sync</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/source_migrator.html#SourceMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.source_migrator.SourceMigrator" title="Permalink to this definition">¶</a></dt>
 <dd><table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -155,6 +424,7 @@ by <code class="xref any docutils literal notranslate"><span class="pre">Migrato
 <li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> on which this migrator runs.</li>
 <li><strong>exporter_swaps</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – A list of pairs (receiver_id, new_receiver_handles) giving for each existing
 receiver, the set of new receivers that it should duplicate to.</li>
+<li><strong>will_sync</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – True iff this migrator will need to sync as part of the migration</li>
 </ul>
 </td>
 </tr>
@@ -197,6 +467,12 @@ receiver, the set of new receivers that it should duplicate to.</li>
 <dd><p>Subclasses may override initialize.  It will be called when the migrator is first created.</p>
 </dd></dl>
 
+<dl class="attribute">
+<dt id="dist_zero.migration.source_migrator.SourceMigrator.migration_id">
+<code class="descname">migration_id</code><a class="headerlink" href="#dist_zero.migration.source_migrator.SourceMigrator.migration_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The unique id of the relevant migration</p>
+</dd></dl>
+
 <dl class="method">
 <dt id="dist_zero.migration.source_migrator.SourceMigrator.receive">
 <code class="descname">receive</code><span class="sig-paren">(</span><em>sender_id</em>, <em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/source_migrator.html#SourceMigrator.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.source_migrator.SourceMigrator.receive" title="Permalink to this definition">¶</a></dt>
@@ -219,7 +495,7 @@ receiver, the set of new receivers that it should duplicate to.</li>
 
 <span class="target" id="module-dist_zero.migration.sink_migrator"></span><dl class="class">
 <dt id="dist_zero.migration.sink_migrator.SinkMigrator">
-<em class="property">class </em><code class="descclassname">dist_zero.migration.sink_migrator.</code><code class="descname">SinkMigrator</code><span class="sig-paren">(</span><em>new_flow_sender_ids</em>, <em>old_flow_sender_ids</em>, <em>migration</em>, <em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/sink_migrator.html#SinkMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.sink_migrator.SinkMigrator" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">dist_zero.migration.sink_migrator.</code><code class="descname">SinkMigrator</code><span class="sig-paren">(</span><em>new_flow_sender_ids</em>, <em>old_flow_sender_ids</em>, <em>migration</em>, <em>node</em>, <em>will_sync</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/sink_migrator.html#SinkMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.sink_migrator.SinkMigrator" title="Permalink to this definition">¶</a></dt>
 <dd><table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -227,6 +503,7 @@ receiver, the set of new receivers that it should duplicate to.</li>
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>migration</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> running the migration.</li>
 <li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> on which this migrator runs.</li>
+<li><strong>will_sync</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – True iff this migrator will need to sync as part of the migration</li>
 </ul>
 </td>
 </tr>
@@ -273,6 +550,12 @@ receiver, the set of new receivers that it should duplicate to.</li>
 <dt id="dist_zero.migration.sink_migrator.SinkMigrator.initialize">
 <code class="descname">initialize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/sink_migrator.html#SinkMigrator.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.sink_migrator.SinkMigrator.initialize" title="Permalink to this definition">¶</a></dt>
 <dd><p>Subclasses may override initialize.  It will be called when the migrator is first created.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="dist_zero.migration.sink_migrator.SinkMigrator.migration_id">
+<code class="descname">migration_id</code><a class="headerlink" href="#dist_zero.migration.sink_migrator.SinkMigrator.migration_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The unique id of the relevant migration</p>
 </dd></dl>
 
 <dl class="method">
@@ -349,6 +632,12 @@ receiver, the set of new receivers that it should duplicate to.</li>
 <dd><p>Subclasses may override initialize.  It will be called when the migrator is first created.</p>
 </dd></dl>
 
+<dl class="attribute">
+<dt id="dist_zero.migration.insertion_migrator.InsertionMigrator.migration_id">
+<code class="descname">migration_id</code><a class="headerlink" href="#dist_zero.migration.insertion_migrator.InsertionMigrator.migration_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The unique id of the relevant migration</p>
+</dd></dl>
+
 <dl class="method">
 <dt id="dist_zero.migration.insertion_migrator.InsertionMigrator.receive">
 <code class="descname">receive</code><span class="sig-paren">(</span><em>sender_id</em>, <em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/insertion_migrator.html#InsertionMigrator.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.insertion_migrator.InsertionMigrator.receive" title="Permalink to this definition">¶</a></dt>
@@ -371,7 +660,7 @@ receiver, the set of new receivers that it should duplicate to.</li>
 
 <span class="target" id="module-dist_zero.migration.removal_migrator"></span><dl class="class">
 <dt id="dist_zero.migration.removal_migrator.RemovalMigrator">
-<em class="property">class </em><code class="descclassname">dist_zero.migration.removal_migrator.</code><code class="descname">RemovalMigrator</code><span class="sig-paren">(</span><em>migration</em>, <em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/removal_migrator.html#RemovalMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.removal_migrator.RemovalMigrator" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">dist_zero.migration.removal_migrator.</code><code class="descname">RemovalMigrator</code><span class="sig-paren">(</span><em>migration</em>, <em>node</em>, <em>sender_ids</em>, <em>receiver_ids</em>, <em>will_sync</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/removal_migrator.html#RemovalMigrator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.removal_migrator.RemovalMigrator" title="Permalink to this definition">¶</a></dt>
 <dd><table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -379,11 +668,21 @@ receiver, the set of new receivers that it should duplicate to.</li>
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>migration</strong> (<a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a>) – The <a class="reference internal" href="handle.html#handle"><span class="std std-ref">Handle</span></a> of the <a class="reference internal" href="#dist_zero.migration.migration_node.MigrationNode" title="dist_zero.migration.migration_node.MigrationNode"><code class="xref any py py-class docutils literal notranslate"><span class="pre">MigrationNode</span></code></a> running the migration.</li>
 <li><strong>node</strong> (<a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a>) – The <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> on which this migrator runs.</li>
+<li><strong>sender_ids</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>]</em>) – A list of ids of the <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> s that will stop sending to self by the end of the migration.</li>
+<li><strong>receiver_ids</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>]</em>) – A list of ids of the <a class="reference internal" href="nodes.html#dist_zero.node.node.Node" title="dist_zero.node.node.Node"><code class="xref any py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> s that will stop receiving from self by the end of the migration.</li>
+<li><strong>will_sync</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – True iff this migrator will need to sync as part of the migration</li>
 </ul>
 </td>
 </tr>
 </tbody>
 </table>
+<dl class="method">
+<dt id="dist_zero.migration.removal_migrator.RemovalMigrator.elapse">
+<code class="descname">elapse</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/removal_migrator.html#RemovalMigrator.elapse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.removal_migrator.RemovalMigrator.elapse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subclasses may override elapse.  It will be called as time passes.
+:param int ms: The number of elapsed milliseconds since the last call to elapse, or since initialization.</p>
+</dd></dl>
+
 <dl class="staticmethod">
 <dt id="dist_zero.migration.removal_migrator.RemovalMigrator.from_config">
 <em class="property">static </em><code class="descname">from_config</code><span class="sig-paren">(</span><em>migrator_config</em>, <em>node</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/removal_migrator.html#RemovalMigrator.from_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.removal_migrator.RemovalMigrator.from_config" title="Permalink to this definition">¶</a></dt>
@@ -414,6 +713,12 @@ receiver, the set of new receivers that it should duplicate to.</li>
 <dd><p>Subclasses may override initialize.  It will be called when the migrator is first created.</p>
 </dd></dl>
 
+<dl class="attribute">
+<dt id="dist_zero.migration.removal_migrator.RemovalMigrator.migration_id">
+<code class="descname">migration_id</code><a class="headerlink" href="#dist_zero.migration.removal_migrator.RemovalMigrator.migration_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The unique id of the relevant migration</p>
+</dd></dl>
+
 <dl class="method">
 <dt id="dist_zero.migration.removal_migrator.RemovalMigrator.receive">
 <code class="descname">receive</code><span class="sig-paren">(</span><em>sender_id</em>, <em>message</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dist_zero/migration/removal_migrator.html#RemovalMigrator.receive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#dist_zero.migration.removal_migrator.RemovalMigrator.receive" title="Permalink to this definition">¶</a></dt>
@@ -435,13 +740,22 @@ receiver, the set of new receivers that it should duplicate to.</li>
 </dd></dl>
 
 </div>
+</div>
 
 
           </div>
         </div>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
-        <div class="sphinxsidebarwrapper"><div class="relations">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Migrations</a><ul>
+<li><a class="reference internal" href="#module-dist_zero.migration.migrator">Migrators</a></li>
+</ul>
+</li>
+</ul>
+<div class="relations">
 <h3>Related Topics</h3>
 <ul>
   <li><a href="../index.html">Documentation overview</a><ul>
