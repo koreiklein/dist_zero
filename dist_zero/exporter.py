@@ -67,7 +67,6 @@ class Exporter(object):
 
   def switch_linker(self, linker):
     self._linker = linker
-    self._migration_id = None
 
   def has_pending_messages(self):
     '''return True iff this exporter has pending messages for which it is waiting for an acknowledgement.'''

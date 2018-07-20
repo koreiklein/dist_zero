@@ -24,6 +24,7 @@ class State(object):
   STARTING_NEW_NODES = 'STARTING_NEW_NODES'
   '''
   Trigger: The migration enters this state immediately upon initialization.
+
   Action: The migrator spawns new nodes each with an attached `InsertionMigrator`.
     These nodes are part of the new flow only.
 
@@ -33,6 +34,7 @@ class State(object):
   STARTING_NODE_MIGRATORS = 'STARTING_NODE_MIGRATORS'
   '''
   Trigger: The migrator has received confirmations that all the new nodes have started.
+
   Action: The migrator
     a) Adds one `SourceMigrator` to each node that is part of the source set of the migration.
        These nodes are part of both the new and old flows of the migration.
@@ -47,20 +49,24 @@ class State(object):
   STARTING_NEW_FLOW = 'STARTING_NEW_FLOW'
   '''
   Trigger: attached_migrator messages have arrived from every migrator.
+
   Action: The migration node sends start_flow message to the sources.  This will simultaneously
     a) trigger a cascade of started_flow messages for the new flow
     b) trigger a cascade of replacing_flow messages for the old flow
+
   Description: The cascades of started_flow and replacing_flow messages are propogating through the network.
-    Once each sink receives both the requisite started_flow and replacing_flow messages, it will send a
-    completed_flow message to the migration node.  The migration node is waiting for all those completed_flow messages.
+  Once each sink receives both the requisite started_flow and replacing_flow messages, it will send a
+  completed_flow message to the migration node.  The migration node is waiting for all those completed_flow messages.
   '''
 
   SYNCING_NEW_NODES = 'SYNCING_NEW_NODES'
   '''
   Trigger: The migration node has received started_flow messages from all the sink migrators.
+
   Action: The migration syncs some data between the old and new data nodes.  The details depend on the type of nodes
     involved in the migration.  Any data synced will reflect precisely the source node messages with sequence numbers
     strictly less than the first sequence number of the new flow.
+
   Description: Data is being synced with the new data nodes.
   '''
 
@@ -69,15 +75,18 @@ class State(object):
   Trigger: The sync is finished.
   Action: The migration node sends prepare_for_switch message to insertion, removal, and sink nodes.
   Description: The migration waits until all the recipients have confirmed that they are prepared to switch.
+
   '''
 
   SWITCHING = 'SWITCHING'
   '''
   Trigger: The migration has received confirmations that the insertion, removal, and sink nodes are prepared to switch.
   Action: The migration node sends switch_flow messages to the sources.  The will simultaneously
-    a) trigger a cascade of activate_flow messages for the new flow
-    b) trigger a cascade of deactivate_flow messages for the old flow
+  a) trigger a cascade of activate_flow messages for the new flow
+  b) trigger a cascade of deactivate_flow messages for the old flow
+
   Description: The old flow is being deactivated while the new flow is being activated.
+
   '''
 
   TERMINATING_MIGRATORS = 'TERMINATING_MIGRATORS'
@@ -85,6 +94,7 @@ class State(object):
   Trigger: The migration node has received switched_flows messages from all the sinks.
   Action: Send terminate_migrator messages to all migrators.
   Description: The migration is over, remove the migrators entirely.
+
   '''
 
   FINISHED = 'FINISHED'
@@ -92,10 +102,15 @@ class State(object):
   Trigger: A migrator_terminated message from each migrator has arrived on the migration node.
   Action: None.
   Description: The migration is over.
+
   '''
 
   def initialize(self):
+    '''Perform any initializations when entering this state.'''
     raise RuntimeError("Abstract Superclass")
 
   def receive(self, message, sender_id):
+    '''
+    Process a message to a `MigrationNode` while in this state.  See `Node.receive`
+    '''
     raise RuntimeError("Abstract Superclass")

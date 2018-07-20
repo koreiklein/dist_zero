@@ -66,7 +66,9 @@ class SumNode(Node):
     self._unsent_time_ms = 0
     self._now_ms = 0
 
-    self.deltas_only = False
+    self._time_since_had_enough_receivers_ms = 0
+
+    self.deltas_only = set()
     '''
     When true, this node should never apply deltas to its current state.  It should collect them in the deltas
     map instead.
@@ -218,19 +220,13 @@ class SumNode(Node):
 
   def elapse(self, ms):
     self._unsent_time_ms += ms
+    self._time_since_had_enough_receivers_ms += ms
 
     if not self.deltas_only and \
         self._deltas.has_data() and \
         self._unsent_time_ms > SumNode.SEND_INTERVAL_MS:
 
-      self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
-
-      SENDER_LIMIT = self.system_config['SUM_NODE_SENDER_LIMIT']
-      if len(self._importers) >= SENDER_LIMIT:
-        if not self.migrators:
-          self.logger.info("Hitting sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
-          self._hit_sender_limit()
-
+      self._check_limits()
       self.send_forward_messages()
 
     self._now_ms += ms
@@ -240,22 +236,76 @@ class SumNode(Node):
 
     self.linker.elapse(ms)
 
-  def _hit_sender_limit(self):
+  def _check_limits(self):
+    '''Test for various kinds of load problems and take appropriate actions to remedy them.'''
+    SENDER_LIMIT = self.system_config['SUM_NODE_SENDER_LIMIT']
+    TOO_FEW_RECEIVERS_TIME_MS = self.system_config['SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS']
+    SUM_NODE_RECEIVER_LOWER_LIMIT = self.system_config['SUM_NODE_RECEIVER_LOWER_LIMIT']
+    SUM_NODE_SENDER_LOWER_LIMIT = self.system_config['SUM_NODE_SENDER_LOWER_LIMIT']
+
+    if len(self._exporters) >= SUM_NODE_RECEIVER_LOWER_LIMIT or len(self._importers) >= SUM_NODE_SENDER_LOWER_LIMIT:
+      self._time_since_had_enough_receivers_ms = 0
+    elif self._time_since_had_enough_receivers_ms > TOO_FEW_RECEIVERS_TIME_MS and \
+        self._input_importer is None \
+        and self._output_exporter is None:
+      self._time_since_had_enough_receivers_ms = 0
+      self._excise_self()
+
+    self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
+
+    if len(self._importers) >= SENDER_LIMIT:
+      if not self.migrators:
+        self.logger.info("Hitting sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
+        self._spawn_new_senders_migration()
+
+  def _excise_self(self):
+    '''
+    Trigger a migration to remove self.
+    '''
+    node_id = ids.new_id('MigrationNode_remove_sum_node')
+    return self._controller.spawn_node(
+        node_config=messages.migration.migration_node_config(
+            node_id=node_id,
+            source_nodes=[(self.transfer_handle(importer.sender, node_id),
+                           messages.migration.source_migrator_config(
+                               exporter_swaps=[(self.id, list(self._exporters.keys()))], will_sync=False))
+                          for importer in self._importers.values()],
+            sink_nodes=[(
+                self.transfer_handle(exporter.receiver, node_id),
+                messages.migration.sink_migrator_config(
+                    will_sync=False, new_flow_sender_ids=list(self._importers.keys()), old_flow_sender_ids=[self.id]))
+                        for exporter in self._exporters.values()],
+            removal_nodes=[(self.new_handle(node_id),
+                            messages.migration.removal_migrator_config(
+                                will_sync=False,
+                                sender_ids=list(self._importers.keys()),
+                                receiver_ids=list(self._exporters.keys()),
+                            ))],
+            insertion_node_configs=[],
+            sync_pairs=[],
+        ))
+
+  def _spawn_new_senders_migration(self):
+    '''
+    Trigger a migration to spawn new sender nodes between self and its current senders.
+    '''
     node_id = ids.new_id('MigrationNode_add_layer_before_sum_node')
     insertion_node_configs, partition = self._new_sender_configs()
     reverse_partition = {
         importer.sender_id: middle_node_id
         for middle_node_id, importers in partition.items() for importer in importers
     }
-    self._controller.spawn_node(
+    return self._controller.spawn_node(
         node_config=messages.migration.migration_node_config(
             node_id=node_id,
             source_nodes=[(self.transfer_handle(importer.sender, node_id),
                            messages.migration.source_migrator_config(
-                               exporter_swaps=[(self.id, [reverse_partition[importer.sender_id]])], ))
-                          for importer in self._importers.values()],
+                               will_sync=False,
+                               exporter_swaps=[(self.id, [reverse_partition[importer.sender_id]])],
+                           )) for importer in self._importers.values()],
             sink_nodes=[(self.new_handle(node_id),
                          messages.migration.sink_migrator_config(
+                             will_sync=True,
                              new_flow_sender_ids=[
                                  insertion_node_config['id'] for insertion_node_config in insertion_node_configs
                              ],
@@ -279,7 +329,7 @@ class SumNode(Node):
     Side effect: update self._partition to map each middle node id to the leftmost nodes that will send to it
       once we reach the terminal state.
     '''
-    n_new_nodes = 2
+    n_new_nodes = self.system_config['SUM_NODE_SPLIT_N_NEW_NODES']
     n_senders_per_node = len(self._importers) // n_new_nodes
 
     importers = list(self._importers.values())
@@ -313,6 +363,7 @@ class SumNode(Node):
   def send_forward_messages(self, before=None):
     '''
     Generate a new sequence number, combine deltas into an update message, and send it on all exporters.
+
     :param dict[str, int] before: An optional dictionary mapping sender ids to sequence_numbers.
       If provided, process only up to the provided sequence number for each sender id.
     :return: the next unused sequence number
@@ -350,3 +401,9 @@ class SumNode(Node):
       self._output_exporter.export_message(message=message, sequence_number=sequence_number)
 
     self._unsent_time_ms = 0
+
+  def handle_api_message(self, message):
+    if message['type'] == 'spawn_new_senders':
+      return self._spawn_new_senders_migration()
+    else:
+      return super(SumNode, self).handle_api_message(message)

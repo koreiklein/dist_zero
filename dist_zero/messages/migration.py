@@ -36,7 +36,7 @@ def migration_node_config(
   }
 
 
-def source_migrator_config(exporter_swaps):
+def source_migrator_config(exporter_swaps, will_sync):
   '''
   Migrator configuration for a `SourceMigrator`
 
@@ -45,24 +45,34 @@ def source_migrator_config(exporter_swaps):
     In the config used to spawn a source node, each receiver will be identified by a handle.
     In the configs sent to migration nodes, each receiver will be identified by id as the `MigrationNode`
     often must first spawn new receiver nodes in order to have handles with which to identify them.
+  :param bool will_sync: True iff the migrator will need to sync its data during a syncing stage.
   '''
-  return {'type': 'source_migrator', 'exporter_swaps': exporter_swaps}
+  return {'type': 'source_migrator', 'exporter_swaps': exporter_swaps, 'will_sync': will_sync}
 
 
-def sink_migrator_config(new_flow_sender_ids, old_flow_sender_ids):
+def sink_migrator_config(new_flow_sender_ids, old_flow_sender_ids, will_sync):
   '''
   :param list[str] new_flow_sender_ids: The list of ids of the nodes that sent to this sink in the new flow.
   :param list[str] old_flow_sender_ids: The list of ids of the nodes that sent to this sink in the old flow.
+  :param bool will_sync: True iff the migrator will need to sync its data during a syncing stage.
   '''
   return {
       'type': 'sink_migrator',
       'new_flow_sender_ids': new_flow_sender_ids,
       'old_flow_sender_ids': old_flow_sender_ids,
+      'will_sync': will_sync,
   }
 
 
-def removal_migrator_config():
-  return {'type': 'removal_migrator'}
+def removal_migrator_config(sender_ids, receiver_ids, will_sync):
+  '''
+  Configuration for a removal migrator.
+
+  :param list[str] sender_ids: The ids of the senders that will stop sending.
+  :param list[str] receiver_ids: The ids of the receivers that will stop receiving.
+  :param bool will_sync: True iff the migrator will need to sync its data during a syncing stage.
+  '''
+  return {'type': 'removal_migrator', 'sender_ids': sender_ids, 'receiver_ids': receiver_ids, 'will_sync': will_sync}
 
 
 def insertion_migrator_config(senders, receivers):
@@ -281,7 +291,7 @@ def swapped_from_duplicate(migration_id, first_live_sequence_number):
   These messages are sent along the old flow to indicate that the flows have been swapped.
 
   :param str migration_id: The id of the relevant migration.
-  :param int first_live_sequence_number: The first sequence number that the sender will new use after the swap.
+  :param int first_live_sequence_number: The first sequence number that the sender will never send along this old flow.
   '''
   return {
       'type': 'migration',

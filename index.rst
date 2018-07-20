@@ -30,6 +30,8 @@ Welcome to DistZero's documentation!
    doc/errors
    doc/recorded
 
+   doc/migrations
+
    doc/demo
 
 Indices and tables

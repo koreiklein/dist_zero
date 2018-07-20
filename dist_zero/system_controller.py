@@ -51,16 +51,11 @@ class SystemController(object):
     :return: A node_config for creating the new kid node.
     :rtype: :ref:`message`
     '''
-    machine_id = self._node_id_to_machine_id[internal_node_id]
-    return self._send_to_machine(
-        machine_id=machine_id,
-        message=messages.machine.api_node_message(
-            node_id=internal_node_id,
-            message=messages.machine.create_kid_config(
-                new_node_name=new_node_name,
-                machine_id=machine_id,
-            )),
-        sock_type='tcp')
+    return self.send_api_message(internal_node_id,
+                                 messages.machine.create_kid_config(
+                                     new_node_name=new_node_name,
+                                     machine_id=machine_id,
+                                 ))
 
   def create_kid(self, parent_node_id, new_node_name, machine_id, recorded_user=None):
     '''
@@ -154,11 +149,7 @@ class SystemController(object):
 
     :return: The state of that node at about the current time.
     '''
-    machine_id = self._node_id_to_machine_id[output_node_id]
-    return self._send_to_machine(
-        machine_id=machine_id,
-        message=messages.machine.api_node_message(node_id=output_node_id, message=messages.machine.get_output_state()),
-        sock_type='tcp')
+    return self.send_api_message(output_node_id, messages.machine.get_output_state())
 
   def get_stats(self, node_id):
     '''
@@ -168,10 +159,12 @@ class SystemController(object):
 
     :return: The stats of that node at about the current time.
     '''
-    machine_id = self._node_id_to_machine_id[node_id]
+    return self.send_api_message(node_id, messages.machine.get_stats())
+
+  def send_api_message(self, node_id, message):
     return self._send_to_machine(
-        machine_id=machine_id,
-        message=messages.machine.api_node_message(node_id=node_id, message=messages.machine.get_stats()),
+        machine_id=self._node_id_to_machine_id[node_id],
+        message=messages.machine.api_node_message(node_id=node_id, message=message),
         sock_type='tcp')
 
   def generate_new_handle(self, new_node_id, existing_node_id):
@@ -184,12 +177,7 @@ class SystemController(object):
     :return: A :ref:`handle` that the new `Node` (once spawned) can use to send to the existing `Node`.
     :rtype: :ref:`handle`
     '''
-    machine_id = self._node_id_to_machine_id[existing_node_id]
-    return self._send_to_machine(
-        machine_id=machine_id,
-        message=messages.machine.api_node_message(
-            node_id=existing_node_id, message=messages.machine.new_handle(new_node_id=new_node_id)),
-        sock_type='tcp')
+    return self.send_api_message(existing_node_id, messages.machine.new_handle(new_node_id=new_node_id))
 
   def send_to_node(self, node_id, message):
     '''
