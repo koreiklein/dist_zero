@@ -363,6 +363,7 @@ class SumNode(Node):
   def send_forward_messages(self, before=None):
     '''
     Generate a new sequence number, combine deltas into an update message, and send it on all exporters.
+
     :param dict[str, int] before: An optional dictionary mapping sender ids to sequence_numbers.
       If provided, process only up to the provided sequence number for each sender id.
     :return: the next unused sequence number

@@ -11,6 +11,9 @@ class Migrator(object):
 
   @property
   def migration_id(self):
+    '''
+    The unique id of the relevant migration
+    '''
     raise RuntimeError("Abstract Superclass")
 
   def receive(self, sender_id, message):

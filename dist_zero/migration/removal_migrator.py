@@ -79,9 +79,8 @@ class RemovalMigrator(migrator.Migrator):
         all(sn is not None for sn in self._sender_id_to_first_flow_sequence_number.values()) and \
         self._node._deltas.covers(self._sender_id_to_first_flow_sequence_number):
       self._flow_is_started = True
-      # Exit deltas only mode as in the cases so far (7/19/2018) removal nodes do not sync.
-      # FIXME(KK): In the event that this node will sync, we should stay in deltas_only mode at this point.
-      self._node.deltas_only.remove(self.migration_id)
+      if not self._will_sync:
+        self._node.deltas_only.remove(self.migration_id)
       self._node.send_forward_messages(before=self._sender_id_to_first_flow_sequence_number)
       for exporter in self._exporters.values():
         self._node.send(exporter.receiver,
