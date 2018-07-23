@@ -182,7 +182,7 @@ class MachineRunner(object):
     json_formatter = dist_zero.logging.JsonFormatter('(asctime) (levelname) (name) (message)')
 
     # Handlers
-    stdout_handler = logging.StreamHandler(sys.stdout)
+    stderr_handler = logging.StreamHandler(sys.stderr)
     human_file_handler = logging.FileHandler(os.path.join(docker.DockerSpawner.CONTAINER_LOGS_DIR, 'output.log'))
     json_file_handler = logging.FileHandler(os.path.join(docker.DockerSpawner.CONTAINER_LOGS_DIR, 'output.json.log'))
     logstash_handler = AsynchronousLogstashHandler(
@@ -191,17 +191,17 @@ class MachineRunner(object):
         database_path='/logs/.logstash.db',
     )
 
-    stdout_handler.setLevel(logging.ERROR)
+    stderr_handler.setLevel(logging.ERROR)
     human_file_handler.setLevel(logging.DEBUG)
     json_file_handler.setLevel(logging.DEBUG)
     logstash_handler.setLevel(logging.DEBUG)
 
-    stdout_handler.setFormatter(human_formatter)
+    stderr_handler.setFormatter(human_formatter)
     human_file_handler.setFormatter(human_formatter)
     json_file_handler.setFormatter(json_formatter)
     logstash_handler.setFormatter(json_formatter)
 
-    stdout_handler.addFilter(str_format_filter)
+    stderr_handler.addFilter(str_format_filter)
     human_file_handler.addFilter(str_format_filter)
     json_file_handler.addFilter(str_format_filter)
     json_file_handler.addFilter(context_filter)
@@ -216,7 +216,7 @@ class MachineRunner(object):
     main_handlers = [
         json_file_handler,
         human_file_handler,
-        stdout_handler,
+        stderr_handler,
     ]
 
     if settings.LOGSTASH_HOST:

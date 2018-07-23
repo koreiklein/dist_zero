@@ -1,0 +1,12 @@
+[Unit]
+Description=DistZero daemon process
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pipenv run python -m dist_zero.machine_init /dist_zero/machine_config.json
+WorkingDirectory=/dist_zero
+User=dist_zero
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

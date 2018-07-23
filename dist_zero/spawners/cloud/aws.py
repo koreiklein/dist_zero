@@ -64,7 +64,7 @@ class Ec2Spawner(spawner.Spawner):
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
 
-  def _remote_spawner_json(self):
+  def remote_spawner_json(self):
     '''Generate an `Ec2Spawner` config for a new machine.'''
     return {
         'system_id': self._system_id,
@@ -160,126 +160,14 @@ class Ec2Spawner(spawner.Spawner):
     # NOTE(KK): reachability can take longer than it takes before ssh works.  We should skip this check to run faster.
     #self._wait_for_reachable_instances(instances)
 
-    return [
-        self._configure_instance(instance, machine_config)
-        for instance, machine_config in zip(instances, machine_configs)
-    ]
+    result = []
+    for instance, machine_config in zip(instances, machine_configs):
+      machine_controller_id = _AwsInstanceProvisioner(
+          instance=instance, machine_config=machine_config, ec2_spawner=self).configure_instance()
+      self.aws_instance_by_id[machine_controller_id] = instance
+      result.append(machine_controller_id)
 
-  def _configure_instance(self, instance, machine_config):
-    machine_name = machine_config['machine_name']
-    machine_controller_id = machine_config['id']
-    extra = {
-        'machine_name': machine_name,
-        'machine_controller_id': machine_controller_id,
-        'aws_instance_id': instance.id,
-        'provisioning_aws_instance': True,
-    }
-    logger.info("Configuring instance '{machine_name}' id='{machine_controller_id}'", extra=extra)
-
-    logger.debug("Configuring machine specific tags", extra=extra)
-    instance.create_tags(Tags=[
-        {
-            'Key': 'Name',
-            'Value': machine_name
-        },
-        {
-            'Key': 'machine_controller_id',
-            'Value': machine_controller_id
-        },
-    ])
-
-    ssh = paramiko.SSHClient()
-
-    def _exec_command(command):
-      stdin, stdout, stderr = ssh.exec_command(command)
-      # Wait for the command to finish
-      status = stdout.channel.recv_exit_status()
-      if 0 != status:
-        raise RuntimeError("Command did not execute with 0 exit status. Got {} for {}".format(status, command))
-
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    connected = False
-    logger.debug("Connecting to aws instance {aws_instance_id} over ssh", extra=extra)
-    for i in range(8):
-      try:
-        ssh.connect(hostname=instance.public_dns_name, key_filename='.keys/dist_zero.pem', username='ec2-user')
-        connected = True
-        break
-      except paramiko.ssh_exception.NoValidConnectionsError:
-        logger.debug("Ssh failed to connect to instance {aws_instance_id}", extra=extra)
-        time.sleep(2)
-
-    if not connected:
-      raise RuntimeError("Could not connect via ssh")
-
-    for command in [
-        "sudo yum update -y",
-        "sudo yum install -y python36",
-        "sudo easy_install-3.6 pip",
-        "sudo pip install pipenv==2018.5.18",
-        "sudo mkdir -p /dist_zero",
-        "sudo mkdir -p /logs",
-        "sudo chown ec2-user /dist_zero",
-        "sudo chown ec2-user /logs",
-    ]:
-      _exec_command(command)
-
-    logger.info("Rsyncing dist_zero files to aws instance {aws_instance_id}", extra=extra)
-
-    machine_config_with_spawner = {'spawner': {'type': 'aws', 'value': self._remote_spawner_json()}}
-    machine_config_with_spawner.update(machine_config)
-    # Create local machine config file
-    local_config_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
-    json.dump(machine_config_with_spawner, local_config_file)
-    local_config_file.close()
-
-    # Do the rsync
-    rsync_ssh_params = 'ssh -oStrictHostKeyChecking=no -i {keyfile}'
-    rsync_excludes = ''.join(' --exclude "{}"'.format(exp) for exp in [
-        "*.pyc",
-        "*__pycache__*",
-        ".pytest_cache*",
-        ".tmp*",
-        ".git*",
-        ".keys*",
-    ])
-    for precommand in [
-        'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} dist_zero {user}@{instance}:/dist_zero/ >> {outfile}',
-        'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} Pipfile {user}@{instance}:/dist_zero/Pipfile >> {outfile}',
-        'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} Pipfile.lock {user}@{instance}:/dist_zero/Pipfile.lock >> {outfile}',
-        ('rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} ' + local_config_file.name +
-         ' {user}@{instance}:/dist_zero/machine_config.json >> {outfile}'),
-    ]:
-      command = precommand.format(
-          rsync_ssh_params=rsync_ssh_params.format(keyfile='.keys/dist_zero.pem'),
-          rsync_excludes=rsync_excludes,
-          user='ec2-user',
-          instance=instance.public_dns_name,
-          outfile='.rsync.output.log',
-      )
-      logger.debug(
-          "Running rsync command",
-          extra={
-              'aws_instance_id': instance.id,
-              'provisioning_aws_instance': True,
-              'command': command,
-              'machine_name': machine_name,
-              'machine_controller_id': machine_controller_id,
-          })
-      os.system(command)
-
-    logger.debug("Copying relevant environment variables", extra=extra)
-    _exec_command('''cat << EOF > /dist_zero/.env\n\n{}\nEOF\n'''.format('\n'.join(
-        "{}='{}'".format(variable, getattr(settings, variable)) for variable in settings.CLOUD_ENV_VARS)))
-
-    logger.debug("Running pip install", extra=extra)
-    _exec_command("cd /dist_zero && pipenv --python 3.6.5 && pipenv sync")
-
-    logger.info("Starting dist_zero.machine_init process on remote machine", extra=extra)
-    _exec_command("cd /dist_zero; nohup pipenv run python -m dist_zero.machine_init /dist_zero/machine_config.json &")
-
-    self.aws_instance_by_id[machine_controller_id] = instance
-    return machine_controller_id
+    return result
 
   def _instance_status_is_reachable(self, status):
     '''
@@ -362,3 +250,130 @@ class Ec2Spawner(spawner.Spawner):
         return True
       else:
         return False
+
+
+class _AwsInstanceProvisioner(object):
+  RSYNC_SSH_PARAMS = 'ssh -oStrictHostKeyChecking=no -i {keyfile}'
+  RSYNC_EXCLUDES = ''.join(' --exclude "{}"'.format(exp) for exp in [
+      "*.pyc",
+      "*__pycache__*",
+      ".pytest_cache*",
+      ".tmp*",
+      ".git*",
+      ".keys*",
+  ])
+
+  def __init__(self, instance, machine_config, ec2_spawner):
+    self._instance = instance
+    self._machine_config = machine_config
+    self._ec2_spawner = ec2_spawner
+
+    self._machine_name = self._machine_config['machine_name']
+    self._machine_controller_id = self._machine_config['id']
+    self._extra = {
+        'machine_name': self._machine_name,
+        'machine_controller_id': self._machine_controller_id,
+        'aws_instance_id': self._instance.id,
+        'provisioning_aws_instance': True,
+    }
+
+  def _exec_command(self, ssh, command):
+    stdin, stdout, stderr = ssh.exec_command(command)
+    # Wait for the command to finish
+    status = stdout.channel.recv_exit_status()
+    if 0 != status:
+      raise RuntimeError("Command did not execute with 0 exit status. Got {} for {}".format(status, command))
+
+  def _connect_as(self, key_filename, username):
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    connected = False
+    logger.debug("Connecting to aws instance {aws_instance_id} over ssh", extra=self._extra)
+    for i in range(8):
+      try:
+        ssh.connect(hostname=self._instance.public_dns_name, key_filename=key_filename, username=username)
+        connected = True
+        break
+      except paramiko.ssh_exception.NoValidConnectionsError:
+        logger.debug("Ssh failed to connect to instance {aws_instance_id}", extra=self._extra)
+        time.sleep(2)
+
+    if not connected:
+      raise RuntimeError("Could not connect via ssh")
+
+    return ssh
+
+  def _write_machine_config_locally(self):
+    '''Write a local file for this instance's machine_config.json and return the filename'''
+    machine_config_with_spawner = {'spawner': {'type': 'aws', 'value': self._ec2_spawner.remote_spawner_json()}}
+    machine_config_with_spawner.update(self._machine_config)
+    # Create local machine config file
+    local_config_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
+    json.dump(machine_config_with_spawner, local_config_file)
+    local_config_file.close()
+    return local_config_file.name
+
+  def _rsync(self, source, target):
+    '''Rsync as the dist_zero user on the remote instance.'''
+    command = 'rsync -avz -e "{rsync_ssh_params}" {rsync_excludes} {source} {user}@{instance}:{target} >> {outfile}'.format(
+        source=source,
+        target=target,
+        rsync_ssh_params=_AwsInstanceProvisioner.RSYNC_SSH_PARAMS.format(keyfile='.keys/dist_zero.pem'),
+        rsync_excludes=_AwsInstanceProvisioner.RSYNC_EXCLUDES,
+        user='dist_zero',
+        instance=self._instance.public_dns_name,
+        outfile='.rsync.output.log',
+    )
+    logger.debug(
+        "Running rsync command",
+        extra={
+            'aws_instance_id': self._instance.id,
+            'provisioning_aws_instance': True,
+            'command': command,
+            'machine_name': self._machine_name,
+            'machine_controller_id': self._machine_controller_id,
+        })
+    os.system(command)
+
+  def configure_instance(self):
+    logger.info("Configuring instance '{machine_name}' id='{machine_controller_id}'", extra=self._extra)
+
+    logger.debug("Configuring machine specific tags", extra=self._extra)
+    self._instance.create_tags(Tags=[
+        {
+            'Key': 'Name',
+            'Value': self._machine_name
+        },
+        {
+            'Key': 'machine_controller_id',
+            'Value': self._machine_controller_id
+        },
+    ])
+
+    logger.info("Rsyncing dist_zero files to aws instance {aws_instance_id}", extra=self._extra)
+
+    # Wait for ssh to be up and running *before* running any rsync.
+    ssh = self._connect_as(key_filename='.keys/dist_zero.pem', username='dist_zero')
+
+    # Do the rsync
+    self._rsync('dist_zero', '/dist_zero/')
+    self._rsync('Pipfile', '/dist_zero/Pipfile')
+    self._rsync('Pipfile.lock', '/dist_zero/Pipfile.lock')
+    local_config_filename = self._write_machine_config_locally()
+    self._rsync(local_config_filename, '/dist_zero/machine_config.json')
+
+    logger.debug("Copying relevant environment variables", extra=self._extra)
+    self._exec_command(ssh, '''cat << EOF > /dist_zero/.env\n\n{}\nEOF\n'''.format('\n'.join(
+        "{}='{}'".format(variable, getattr(settings, variable)) for variable in settings.CLOUD_ENV_VARS)))
+
+    logger.debug("Running pip install", extra=self._extra)
+    self._exec_command(ssh, "cd /dist_zero && pipenv sync")
+
+    logger.info("Configuring systemd on an AWS centos instance to run the DistZero daemon", extra=self._extra)
+    ssh = self._connect_as(
+        key_filename='.keys/dist_zero.pem', username='centos') # Reconnect as 'centos' to get sudo permissions.
+    self._exec_command(ssh, "sudo systemctl enable dist-zero")
+    self._exec_command(ssh, "sudo systemctl start dist-zero")
+
+    return self._machine_controller_id
