@@ -1,0 +1,55 @@
+{
+    "spawner": {
+        "type": "aws",
+        "value": {
+            "system_id": "System_LGF7WexiHWGb",
+            "aws_region": "us-west-2",
+            "base_ami": "fake",
+            "security_group": "fake",
+            "instance_type": "t2.micro"
+        }
+    },
+    "type": "machine_config",
+    "machine_name": "machine 2",
+    "id": "Machine_tw4GDcGJlzDf",
+    "mode": "virtual",
+    "system_id": "System_LGF7WexiHWGb",
+    "network_errors_config": {
+        "incomming": {
+            "drop": {
+                "rate": 0.0,
+                "regexp": ".*"
+            },
+            "reorder": {
+                "rate": 0.0,
+                "regexp": ".*"
+            },
+            "duplicate": {
+                "rate": 0.0,
+                "regexp": ".*"
+            }
+        },
+        "outgoing": {
+            "drop": {
+                "rate": 0.0,
+                "regexp": ".*increment.*"
+            },
+            "reorder": {
+                "rate": 0.0,
+                "regexp": ".*"
+            },
+            "duplicate": {
+                "rate": 0.0,
+                "regexp": ".*"
+            }
+        }
+    },
+    "system_config": {
+        "SUM_NODE_SENDER_LIMIT": 15,
+        "SUM_NODE_SENDER_LOWER_LIMIT": 4,
+        "SUM_NODE_SPLIT_N_NEW_NODES": 1,
+        "SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS": 3000,
+        "SUM_NODE_RECEIVER_LOWER_LIMIT": 3
+    },
+    "random_seed": null
+}
