@@ -33,12 +33,13 @@ def set_adjacent(node):
   return {'type': 'set_adjacent', 'node': node}
 
 
-def internal_node_config(node_id, variant, adjacent, initial_state=None):
+def internal_node_config(node_id, variant, depth, adjacent, initial_state=None):
   '''
   A node config for creating an internal node to manage a new list of io nodes.
 
   :param str node_id: The id of the new node.
   :param str variant: 'input' or 'output'
+  :param int depth: The depth of the node in the tree.  See `InternalNode`
   :param adjacent: The :ref:`handle` adjacent node to either receiver from or forward to.
   :type adjacent: :ref:`handle`
   :param object initial_state: The initial state to use for new nodes.
@@ -47,6 +48,7 @@ def internal_node_config(node_id, variant, adjacent, initial_state=None):
       'type': 'InternalNode',
       'id': node_id,
       'variant': variant,
+      'depth': depth,
       'adjacent': adjacent,
       'initial_state': initial_state
   }

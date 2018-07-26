@@ -14,12 +14,16 @@ class InternalNode(Node):
   Each `InternalNode` instance is responsible for keeping track of the state of its subtree, and for growing
   or shrinking it as necessary.  In particular, when new leaves are created, `InternalNode.create_kid_config` must
   be called on the desired immediate parent to generate the node config for starting that child.
+
+  Each `InternalNode` will have an associated depth.  The assignment of depths to internal nodes is the unique
+  minimal assignment such that n.depth+1 == n.parent.depth for every node n that has a parent.
   '''
 
-  def __init__(self, node_id, variant, adjacent, initial_state, controller):
+  def __init__(self, node_id, variant, depth, adjacent, initial_state, controller):
     '''
     :param str node_id: The id to use for this node
     :param str variant: 'input' or 'output'
+    :param int depth: The depth of the node in the tree.  See `InternalNode`
     :param adjacent: The :ref:`handle` of the adjacent node.  It must be provided when this internal node starts.
     :type adjacent: :ref:`handle`
     :param `MachineController` controller: The controller for this node.
@@ -28,11 +32,17 @@ class InternalNode(Node):
     '''
     self._controller = controller
     self._variant = variant
+    self._depth = depth
     self.id = node_id
     self._kids = {} # A map from kid node id to either 'pending' or 'active'
     self._initial_state = initial_state
     self._adjacent = adjacent
+
     super(InternalNode, self).__init__(logger)
+
+  @property
+  def depth(self):
+    return self._depth
 
   def get_adjacent_id(self):
     return None if self._adjacent is None else self._adjacent['id']
@@ -62,6 +72,7 @@ class InternalNode(Node):
         controller=controller,
         adjacent=node_config['adjacent'],
         variant=node_config['variant'],
+        depth=node_config['depth'],
         initial_state=node_config['initial_state'])
 
   def elapse(self, ms):
