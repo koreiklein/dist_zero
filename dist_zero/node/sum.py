@@ -1,6 +1,6 @@
 import logging
 
-from dist_zero import messages, errors, ids, migration, deltas, settings
+from dist_zero import messages, errors, ids, migration, deltas, settings, misc
 from .node import Node
 
 logger = logging.getLogger(__name__)
@@ -203,8 +203,18 @@ class SumNode(Node):
         self._exporters[node['id']] = self.linker.new_exporter(receiver=node)
       else:
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
+    elif message['type'] == 'adjacent_has_split':
+      # Spawn a new adjacent for the newly spawned io node and remove any kids stolen from self.
+      node_id = ids.new_id('SumNode_adjacent_for_split')
+      new_node = message['new_node']
+      self._controller.spawn_node(
+          messages.sum.sum_node_config(
+              node_id=node_id,
+              senders=[new_node],
+              receivers=[self.transfer_handle(exporter.receiver, node_id) for exporter in self._exporters.values()],
+          ))
     else:
-      self.logger.error("Unrecognized message {bad_msg}", extra={'bad_msg': message})
+      raise errors.InternalError("Unrecognized message {}".format(message['type']))
 
   def import_from_node(self, node, first_sequence_number=0):
     '''
@@ -289,12 +299,30 @@ class SumNode(Node):
     '''
     Trigger a migration to spawn new sender nodes between self and its current senders.
     '''
-    node_id = ids.new_id('MigrationNode_add_layer_before_sum_node')
-    insertion_node_configs, partition = self._new_sender_configs()
+    partition = {
+        ids.new_id('SumNode_middle_for_migration'): importers
+        for importers in misc.partition(
+            items=list(self._importers.values()), n_buckets=self.system_config['SUM_NODE_SPLIT_N_NEW_NODES'])
+    }
     reverse_partition = {
         importer.sender_id: middle_node_id
         for middle_node_id, importers in partition.items() for importer in importers
     }
+
+    insertion_node_configs = [
+        messages.sum.sum_node_config(
+            node_id=nid,
+            senders=[],
+            receivers=[],
+            migrator=messages.migration.insertion_migrator_config(
+                senders=[self.transfer_handle(importer.sender, for_node_id=nid) for importer in importers],
+                receivers=[self_handle],
+            ),
+        ) for nid, importers in partition.items() for self_handle in [self.new_handle(nid)]
+    ]
+
+    node_id = ids.new_id('MigrationNode_add_layer_before_sum_node')
+
     return self._controller.spawn_node(
         node_config=messages.migration.migration_node_config(
             node_id=node_id,
@@ -319,46 +347,6 @@ class SumNode(Node):
                  [insertion_node_config['id'] for insertion_node_config in insertion_node_configs])
             ],
         ))
-
-  def _new_sender_configs(self):
-    '''
-    Calculate which middle nodes to spawn in order to protect the current node against a high load from the leftmost
-    sender nodes, and return a pair
-      (the middle nodes' configs, the partition assigning to each new id the list of importers it will use)
-
-    Side effect: update self._partition to map each middle node id to the leftmost nodes that will send to it
-      once we reach the terminal state.
-    '''
-    n_new_nodes = self.system_config['SUM_NODE_SPLIT_N_NEW_NODES']
-    n_senders_per_node = len(self._importers) // n_new_nodes
-
-    importers = list(self._importers.values())
-
-    partition = {}
-
-    for i in range(n_new_nodes):
-      new_id = ids.new_id('SumNode_middle_for_migration')
-
-      partition[new_id] = importers[i * n_senders_per_node:(i + 1) * n_senders_per_node]
-
-    new_node_ids = list(partition.keys())
-
-    # allocate the remaining senders as evenly as possible
-    for j, extra_importer in enumerate(importers[n_new_nodes * n_senders_per_node:]):
-      partition[new_node_ids[j]].append(extra_importer)
-
-    configs = [
-        messages.sum.sum_node_config(
-            node_id=node_id,
-            senders=[],
-            receivers=[],
-            migrator=messages.migration.insertion_migrator_config(
-                senders=[self.transfer_handle(importer.sender, for_node_id=node_id) for importer in importers],
-                receivers=[self_handle],
-            ),
-        ) for node_id, importers in partition.items() for self_handle in [self.new_handle(node_id)]
-    ]
-    return configs, partition
 
   def send_forward_messages(self, before=None):
     '''

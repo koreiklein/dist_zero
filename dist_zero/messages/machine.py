@@ -15,6 +15,9 @@ def std_system_config():
   Miscellaneous configuration for the overall system.
   '''
   return {
+      # The maximum number of kids an `InternalNode` will have before splitting.
+      'INTERNAL_NODE_KIDS_LIMIT': 200,
+
       # If a sum node has more than this many senders, it will trigger a
       # "sum node split migration" to create a middle layer of senders.
       'SUM_NODE_SENDER_LIMIT': 15,
