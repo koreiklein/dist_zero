@@ -66,10 +66,14 @@ class Linker(object):
     self._initialized = True
 
     for importer in self._importers.values():
+      import ipdb
+      ipdb.set_trace()
       self.send(importer.sender,
                 messages.migration.connect_node(node=self.new_handle(importer.sender_id), direction='receiver'))
 
     for exporter in self._exporters.values():
+      import ipdb
+      ipdb.set_trace()
       self.send(exporter.receiver,
                 messages.migration.connect_node(node=self.new_handle(exporter.receiver_id), direction='sender'))
 

@@ -18,9 +18,11 @@ def std_system_config():
       # The maximum number of kids an `InternalNode` will have before splitting.
       'INTERNAL_NODE_KIDS_LIMIT': 200,
 
-      # If a sum node has more than this many senders, it will trigger a
-      # "sum node split migration" to create a middle layer of senders.
+      # If a sum node has more than this many senders/receivers, it will trigger a
+      # "sum node split migration" to create a middle layer of senders/receivers.
       'SUM_NODE_SENDER_LIMIT': 15,
+      'SUM_NODE_RECEIVER_LIMIT': 15,
+
       # A sum node split will create this many new nodes
       'SUM_NODE_SPLIT_N_NEW_NODES': 2,
 

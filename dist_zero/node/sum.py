@@ -1,6 +1,6 @@
 import logging
 
-from dist_zero import messages, errors, ids, migration, deltas, settings, misc
+from dist_zero import messages, errors, ids, deltas, settings, misc
 from .node import Node
 
 logger = logging.getLogger(__name__)
@@ -62,17 +62,10 @@ class SumNode(Node):
     #     have been added to self._current_state or sent to receivers.
     self._current_state = 0
     # Map from sender_id to a list of pairs (remote_sequence_number, message)
-    self._deltas = deltas.Deltas()
     self._unsent_time_ms = 0
     self._now_ms = 0
 
     self._time_since_had_enough_receivers_ms = 0
-
-    self.deltas_only = set()
-    '''
-    When true, this node should never apply deltas to its current state.  It should collect them in the deltas
-    map instead.
-    '''
 
     super(SumNode, self).__init__(logger)
 
@@ -101,9 +94,25 @@ class SumNode(Node):
             'output_node_id': self._output_exporter.receiver_id if self._output_exporter is not None else None,
         })
     if self._initial_migrator_config:
-      self._initial_migrator = self._attach_migrator(self._initial_migrator_config)
+      self._initial_migrator = self.attach_migrator(self._initial_migrator_config)
 
     self.linker.initialize()
+
+  def send_forward_messages(self, before=None):
+    '''
+    Generate a new sequence number, combine deltas into an update message, and send it on all exporters.
+
+    :param dict[str, int] before: An optional dictionary mapping sender ids to sequence_numbers.
+      If provided, process only up to the provided sequence number for each sender id.
+    :return: the next unused sequence number
+    :rtype: int
+    '''
+    new_state, increment = self._deltas.pop_deltas(state=self._current_state, before=before)
+    self.logger.debug("Sending new increment of {increment}.", extra={'increment': increment})
+    self._current_state = new_state
+    sequence_number = self.linker.advance_sequence_number()
+    self._send_increment(increment=increment, sequence_number=sequence_number)
+    return sequence_number + 1
 
   @staticmethod
   def from_config(node_config, controller):
@@ -124,40 +133,8 @@ class SumNode(Node):
     # Don't update any internal state just yet, but wait until the next sequence number is generated.
     self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
 
-  def _attach_migrator(self, migrator_config):
-    migration_id = migrator_config['migration']['id']
-    if migration_id in self.migrators:
-      self.logger.error(
-          "There is already a migration running on {cur_node_id} for migration {migration_id}",
-          extra={'migration_id': migration_id})
-    else:
-      migrator = migration.migrator_from_config(migrator_config=migrator_config, node=self)
-      self.migrators[migration_id] = migrator
-      migrator.initialize()
-
-  def remove_migrator(self, migration_id):
-    '''Remove a migrator for self.migrators.'''
-    self.migrators.pop(migration_id)
-
   def receive(self, sender_id, message):
-    if message['type'] == 'sequence_message':
-      self.linker.receive_sequence_message(message['value'], sender_id)
-    elif message['type'] == 'attach_migrator':
-      self._attach_migrator(message['migrator_config'])
-    elif message['type'] == 'migration':
-      migration_id, migration_message = message['migration_id'], message['message']
-      if migration_id not in self.migrators:
-        # Possible, when a migration was removed at about the same time as some of the last few
-        # acknowledgement or retransmission messages came through.
-        self.logger.warning(
-            "Got a migration message for a migration which is not running on this node.",
-            extra={
-                'migration_id': migration_id,
-                'migration_message_type': migration_message['type']
-            })
-      else:
-        self.migrators[migration_id].receive(sender_id=sender_id, message=migration_message)
-    elif message['type'] == 'set_input':
+    if message['type'] == 'set_input':
       if self._input_importer is not None:
         raise errors.InternalError("Can not set a new input node when one already exists.")
       self._input_importer = self.linker.new_importer(message['input_node'])
@@ -166,31 +143,6 @@ class SumNode(Node):
       if self._output_exporter is not None:
         raise errors.InternalError("Can not set a new output node when one already exists.")
       self._output_exporter = self.linker.new_exporter(message['output_node'])
-    elif message['type'] == 'added_adjacent_leaf':
-      if message['variant'] == 'input':
-        if self._input_importer is not None:
-          node_id = ids.new_id('SumNode_input_kid')
-          self_handle = self.new_handle(node_id)
-          self._controller.spawn_node(
-              messages.sum.sum_node_config(
-                  node_id=node_id,
-                  senders=[],
-                  receivers=[self_handle],
-                  input_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
-              ))
-      elif message['variant'] == 'output':
-        if self._output_exporter is not None:
-          node_id = ids.new_id('SumNode_output_kid')
-          self_handle = self.new_handle(node_id)
-          self._controller.spawn_node(
-              messages.sum.sum_node_config(
-                  node_id=node_id,
-                  senders=[self_handle],
-                  receivers=[],
-                  output_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
-              ))
-      else:
-        raise errors.InternalError("Unrecognized variant {}".format(message['variant']))
     elif message['type'] == 'connect_node':
       node = message['node']
       direction = message['direction']
@@ -214,7 +166,7 @@ class SumNode(Node):
               receivers=[self.transfer_handle(exporter.receiver, node_id) for exporter in self._exporters.values()],
           ))
     else:
-      raise errors.InternalError("Unrecognized message {}".format(message['type']))
+      super(SumNode, self).receive(message=message, sender_id=sender_id)
 
   def import_from_node(self, node, first_sequence_number=0):
     '''
@@ -348,29 +300,6 @@ class SumNode(Node):
             ],
         ))
 
-  def send_forward_messages(self, before=None):
-    '''
-    Generate a new sequence number, combine deltas into an update message, and send it on all exporters.
-
-    :param dict[str, int] before: An optional dictionary mapping sender ids to sequence_numbers.
-      If provided, process only up to the provided sequence number for each sender id.
-    :return: the next unused sequence number
-    :rtype: int
-    '''
-    unsent_total = self._deltas.pop_deltas(before=before)
-
-    self.logger.debug(
-        "Sending new increment of {unsent_total} to all {n_receivers} receivers",
-        extra={
-            'unsent_total': unsent_total,
-            'n_receivers': len(self._exporters)
-        })
-
-    sequence_number = self.linker.advance_sequence_number()
-    self._send_increment(increment=unsent_total, sequence_number=sequence_number)
-    self._current_state += unsent_total
-    return sequence_number + 1
-
   def _send_increment(self, increment, sequence_number):
     if settings.IS_TESTING_ENV:
       if self._TESTING_swapped_once:
@@ -389,6 +318,44 @@ class SumNode(Node):
       self._output_exporter.export_message(message=message, sequence_number=sequence_number)
 
     self._unsent_time_ms = 0
+
+  def switch_flows(self, migration_id, old_exporters, new_exporters, new_receivers):
+    for receiver_id in old_exporters:
+      exporter = self._exporters.pop(receiver_id)
+      self.send(exporter.receiver,
+                messages.migration.swapped_from_duplicate(
+                    migration_id, first_live_sequence_number=exporter.internal_sequence_number))
+
+    for exporter in new_exporters.values():
+      self.send(exporter.receiver,
+                messages.migration.swapped_to_duplicate(
+                    migration_id, first_live_sequence_number=exporter.internal_sequence_number))
+
+    self._exporters.update(new_exporters)
+
+  def activate_swap(self, migration_id, new_receiver_ids):
+    for receiver_id in new_receiver_ids:
+      exporter = self._exporters[receiver_id]
+      self.send(exporter.receiver,
+                messages.migration.swapped_to_duplicate(
+                    migration_id, first_live_sequence_number=exporter._internal_sequence_number))
+
+  def checkpoint(self, before=None):
+    self.send_forward_messages(before=before)
+
+  def remove_migrator(self, migration_id):
+    for nid in self.migrators[migration_id]._receivers:
+      self._exporters[nid]._migration_id = None
+
+    super(SumNode, self).remove_migrator(migration_id)
+
+  def sink_swap(self, migration, deltas, old_sender_ids, new_senders, new_importers, linker):
+    self._deltas = deltas
+    self.linker.remove_importers(old_sender_ids)
+    self.linker.absorb_linker(linker)
+    self._importers = new_importers
+
+    self.send(migration, messages.migration.switched_flows())
 
   def handle_api_message(self, message):
     if message['type'] == 'spawn_new_senders':

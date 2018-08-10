@@ -15,7 +15,29 @@ class StartingNewNodesState(State):
 
   def initialize(self):
     for insertion_node_config in self._insertion_node_configs:
-      insertion_node_config['migrator']['migration'] = self._migration.new_handle(insertion_node_config['id'])
+      if 'senders' in insertion_node_config:
+        insertion_node_config['senders'] = [
+            self._migration.transfer_handle(sender, for_node_id=insertion_node_config['id'])
+            for sender in insertion_node_config['senders']
+        ]
+      if 'receivers' in insertion_node_config:
+        insertion_node_config['receivers'] = [
+            self._migration.transfer_handle(receiver, for_node_id=insertion_node_config['id'])
+            for receiver in insertion_node_config['receivers']
+        ]
+      migrator = insertion_node_config['migrator']
+      migrator['migration'] = self._migration.new_handle(insertion_node_config['id'])
+      if 'senders' in migrator:
+        migrator['senders'] = [
+            self._migration.transfer_handle(sender, for_node_id=insertion_node_config['id'])
+            for sender in migrator['senders']
+        ]
+      if 'receivers' in migrator:
+        migrator['receivers'] = [
+            self._migration.transfer_handle(receiver, for_node_id=insertion_node_config['id'])
+            for receiver in migrator['receivers']
+        ]
+      insertion_node_config['migrator'] = migrator
       insertion_node_id = self._controller.spawn_node(insertion_node_config)
 
     self._maybe_finish()

@@ -9,7 +9,7 @@ class SinkMigrator(migrator.Migrator):
   The number of milliseconds between points in time when the `SinkMigrator` acknowledges messages in the new flow.
   '''
 
-  def __init__(self, new_flow_sender_ids, old_flow_sender_ids, migration, node, will_sync):
+  def __init__(self, new_flow_senders, old_flow_sender_ids, migration, node, will_sync):
     '''
     :param migration: The :ref:`handle` of the `MigrationNode` running the migration.
     :type migration: :ref:`handle`
@@ -27,7 +27,11 @@ class SinkMigrator(migrator.Migrator):
     self._swapped = False
     '''True once this migrator has swapped to the new flow.'''
 
-    self._new_sender_id_to_first_flow_sequence_number = {sender_id: None for sender_id in new_flow_sender_ids}
+    self._new_flow_senders = {sender['id']: sender for sender in new_flow_senders}
+    self._left_configurations = {sender_id: None for sender_id in self._new_flow_senders.keys()}
+    self._kid_started_flows = {kid_id: None for kid_id in self._node._kids.keys()}
+
+    self._new_sender_id_to_first_flow_sequence_number = {sender_id: None for sender_id in self._new_flow_senders.keys()}
     '''
     Once the flow has started, this map will assign to each new sender_id its first sequence_number
     that reflects the new flow.
@@ -38,11 +42,11 @@ class SinkMigrator(migrator.Migrator):
     that reflects the new flow.
     '''
 
-    self._new_importers = {sender_id: None for sender_id in new_flow_sender_ids}
+    self._new_importers = {sender_id: None for sender_id in self._new_flow_senders.keys()}
     '''Sender id to the new importer'''
 
     self._deltas = deltas.Deltas()
-    for sender_id in new_flow_sender_ids:
+    for sender_id in self._new_flow_senders.keys():
       self._deltas.add_sender(sender_id)
 
     self._linker = linker.Linker(
@@ -54,7 +58,10 @@ class SinkMigrator(migrator.Migrator):
 
     self._old_sender_id_to_first_swapped_sequence_number = {sender_id: None for sender_id in old_flow_sender_ids}
     '''Maps each old sender_id to the first sequence number after it has swapped to the new flow.'''
-    self._new_sender_id_to_first_swapped_sequence_number = {sender_id: None for sender_id in new_flow_sender_ids}
+    self._new_sender_id_to_first_swapped_sequence_number = {
+        sender_id: None
+        for sender_id in self._new_flow_senders.keys()
+    }
     '''Maps each new sender_id to the first sequence number after it has swapped to the new flow.'''
 
     self._flow_is_started = False
@@ -71,6 +78,13 @@ class SinkMigrator(migrator.Migrator):
       'synced' if it is
     '''
 
+  @property
+  def parent(self):
+    if self._node._parent is not None:
+      return self._node._parent
+    else:
+      return self._migration
+
   @staticmethod
   def from_config(migrator_config, node):
     '''
@@ -84,7 +98,7 @@ class SinkMigrator(migrator.Migrator):
     :rtype: `SinkMigrator`
     '''
     return SinkMigrator(
-        new_flow_sender_ids=migrator_config['new_flow_sender_ids'],
+        new_flow_senders=migrator_config['new_flow_senders'],
         old_flow_sender_ids=migrator_config['old_flow_sender_ids'],
         migration=migrator_config['migration'],
         will_sync=migrator_config['will_sync'],
@@ -105,11 +119,37 @@ class SinkMigrator(migrator.Migrator):
       self._node.send(self._migration, messages.migration.completed_flow(sequence_number=sequence_number))
 
   def receive(self, sender_id, message):
-    if message['type'] == 'started_flow':
+    if message['type'] == 'start_flow':
+      for sender in self._new_flow_senders.values():
+        from dist_zero.node.io.internal import InternalNode
+        if self._node.__class__ == InternalNode:
+          n_kids = len(self._node._kids)
+          connection_limit = n_kids
+        else:
+          # FIXME(KK): Test and implement this
+          import ipdb
+          ipdb.set_trace()
+          raise RuntimeError("Not Yet Implemented")
+        self._node.send(sender,
+                        messages.migration.configure_new_flow_right(
+                            self.migration_id,
+                            n_kids=n_kids,
+                            connection_limit=connection_limit,
+                        ))
+    elif message['type'] == 'started_flow':
       self._new_importers[sender_id] = self._linker.new_importer(
           sender=message['sender'], first_sequence_number=message['sequence_number'])
       self._new_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
       self._maybe_complete_flow()
+    elif message['type'] == 'configure_new_flow_left':
+      self._left_configurations[sender_id] = message
+      if all(val is not None for val in self._left_configurations.values()) and \
+          all(val is not None for val in self._kid_started_flows.values()):
+        self._node.send(self.parent,
+                        messages.migration.started_flow(
+                            self.migration_id,
+                            sequence_number=self._linker.advance_sequence_number(),
+                            sender=self._node.new_handle(self.parent['id'])))
     elif message['type'] == 'replacing_flow':
       self._old_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
       self._maybe_complete_flow()
@@ -167,16 +207,18 @@ class SinkMigrator(migrator.Migrator):
 
       # Discard deltas before _new_sender_id_to_first_swapped_sequence_number, as they were exactly
       # what was represented from the old flow as of the above call to send_forward_messages.
-      self._deltas.pop_deltas(before=self._new_sender_id_to_first_swapped_sequence_number)
-      self._node.send_forward_messages(before=self._old_sender_id_to_first_swapped_sequence_number)
-      self._node._deltas = self._deltas
-      # Sink nodes do not go into deltas_only mode before swaps, as the old flow will not send
-      # too many messages, and all messages in the new flow are collected in self._deltas.
-      self._node.linker.remove_importers(set(self._old_sender_id_to_first_flow_sequence_number.keys()))
-      self._node.linker.absorb_linker(self._linker)
-      self._node._importers = self._new_importers
+      self._deltas.pop_deltas(
+          state=self._node._current_state, before=self._new_sender_id_to_first_swapped_sequence_number)
+      self._node.checkpoint(before=self._old_sender_id_to_first_swapped_sequence_number)
 
-      self._node.send(self._migration, messages.migration.switched_flows())
+      self._node.sink_swap(
+          migration=self._migration,
+          deltas=self._deltas,
+          old_sender_ids=set(self._old_sender_id_to_first_flow_sequence_number.keys()),
+          new_senders=list(self._new_flow_senders.values()),
+          new_importers=self._new_importers,
+          linker=self._linker,
+      )
 
       # self._linker should no longer be used.  Null it out.
       self._linker = None

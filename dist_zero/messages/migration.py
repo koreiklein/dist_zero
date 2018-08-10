@@ -36,29 +36,39 @@ def migration_node_config(
   }
 
 
-def source_migrator_config(exporter_swaps, will_sync):
+def source_migrator_config(exporter_swaps, new_receivers, will_sync):
   '''
   Migrator configuration for a `SourceMigrator`
 
   :param list exporter_swaps: A list of pairs (receiver_id, new_receivers) giving for each existing
     receiver, the set of new receivers that it should duplicate to.
     In the config used to spawn a source node, each receiver will be identified by a handle.
-    In the configs sent to migration nodes, each receiver will be identified by id as the `MigrationNode`
-    often must first spawn new receiver nodes in order to have handles with which to identify them.
+    In the config sent to the migration node, each receiver will be identified by id.  An id is used because
+    the `MigrationNode` often must first spawn new receiver nodes in order to have handles with which to identify them.
+  :param list new_receivers: A list of the new nodes to send to.
+    In the config used to spawn a source node, each receiver will be identified by a handle.
+    In the config sent to the migration node, each receiver will be identified by id. An id is used because
+    the `MigrationNode` often must first spawn new receiver nodes in order to have handles with which to identify them.
   :param bool will_sync: True iff the migrator will need to sync its data during a syncing stage.
   '''
-  return {'type': 'source_migrator', 'exporter_swaps': exporter_swaps, 'will_sync': will_sync}
+  return {
+      'type': 'source_migrator',
+      'exporter_swaps': exporter_swaps,
+      'new_receivers': new_receivers,
+      'will_sync': will_sync
+  }
 
 
-def sink_migrator_config(new_flow_sender_ids, old_flow_sender_ids, will_sync):
+def sink_migrator_config(new_flow_senders, old_flow_sender_ids, will_sync):
   '''
-  :param list[str] new_flow_sender_ids: The list of ids of the nodes that sent to this sink in the new flow.
-  :param list[str] old_flow_sender_ids: The list of ids of the nodes that sent to this sink in the old flow.
+  :param list new_flow_senders: The list of of the nodes that send to this sink in the new flow.
+    When send to the migration node it contains ids, when sent to the migrator it will contain handles.
+  :param list[str] old_flow_sender_ids: The list of ids of the nodes that send to this sink in the old flow.
   :param bool will_sync: True iff the migrator will need to sync its data during a syncing stage.
   '''
   return {
       'type': 'sink_migrator',
-      'new_flow_sender_ids': new_flow_sender_ids,
+      'new_flow_senders': new_flow_senders,
       'old_flow_sender_ids': old_flow_sender_ids,
       'will_sync': will_sync,
   }
@@ -315,3 +325,48 @@ def migrator_terminated():
   Sent from the migrator nodes to the migration node to indicate that they have been terminated.
   '''
   return {'type': 'migrator_terminated'}
+
+
+def configure_new_flow_right(migration_id, n_kids, connection_limit):
+  '''
+  The 'right' configuration, sent while starting a new flow.
+
+  Either `InsertionMigrator` or `SourceMigrator` can receive this message.
+
+  :param str migration_id: The id of the relevant migration.
+  :param n_kids: If the right node is a data node with a set number of kids, n_kids will give that number.
+    Otherwise, n_kids will be `None`
+  :type n_kids: int or None
+  :param int connection_limit: The maximum number of connections the receiving node is allowed to add to all kids of its
+    right parent.
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'configure_new_flow_right',
+          'n_kids': n_kids,
+          'connection_limit': connection_limit
+      }
+  }
+
+
+def configure_new_flow_left(migration_id, kids):
+  '''
+  The 'left' configuration, sent while starting a new flow.
+
+  Either `InsertionMigrator` or `SinkMigrator` can receive this message.
+
+  :param str migration_id: The id of the relevant migration.
+  :param list kids: A list of dictionaries each with the following keys:
+     'handle': A :ref:`handle` for a kid
+     'connection_limit': The maximum number of outgoing nodes the next node is allowed to add to that kid
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'configure_new_flow_left',
+          'kids': kids
+      }
+  }

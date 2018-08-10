@@ -37,7 +37,7 @@ def internal_node_config(node_id,
                          parent,
                          variant,
                          depth,
-                         adjacent,
+                         adjacent=None,
                          spawner_adjacent=None,
                          adoptees=None,
                          initial_state=None):
@@ -49,8 +49,8 @@ def internal_node_config(node_id,
   :type parent: :ref:`handle` or `None`
   :param str variant: 'input' or 'output'
   :param int depth: The depth of the node in the tree.  See `InternalNode`
-  :param adjacent: The :ref:`handle` adjacent node to either receiver from or forward to.
-  :type adjacent: :ref:`handle`
+  :param adjacent: The :ref:`handle` adjacent node to either receiver from or forward to or `None`
+  :type adjacent: :ref:`handle` or `None`
   :param spawner_adjacent: The node adjacent to the node that spawned self.  When provided, adjacent should be None,
     and the spawner_adjacent node will be responsible for setting up an adjacent node for self.
   :type spawner_adjacent: `None` or :ref:`handle`

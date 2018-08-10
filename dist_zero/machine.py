@@ -10,6 +10,7 @@ from dist_zero import errors, messages
 
 from .node import io
 from .node.sum import SumNode
+from .node.computation import ComputationNode
 from .migration.migration_node import MigrationNode
 
 logger = logging.getLogger(__name__)
@@ -246,6 +247,8 @@ class NodeManager(MachineController):
       node = SumNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'MigrationNode':
       node = MigrationNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'ComputationNode':
+      node = ComputationNode.from_config(node_config, controller=self)
     else:
       raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 

@@ -9,6 +9,9 @@ that run on that machine.
 .. automodule:: dist_zero.node.node
    :members:
 
+.. automodule:: dist_zero.node.computation
+   :members:
+
 .. automodule:: dist_zero.linker
    :members:
 

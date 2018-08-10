@@ -26,8 +26,8 @@ class InternalNode(Node):
     :type parent: :ref:`handle` or `None`
     :param str variant: 'input' or 'output'
     :param int depth: The depth of the node in the tree.  See `InternalNode`
-    :param adjacent: The :ref:`handle` of the adjacent node.  It must be provided when this internal node starts.
-    :type adjacent: :ref:`handle`
+    :param adjacent: The :ref:`handle` of the adjacent node or `None` if this node should not start with an adjacent.
+    :type adjacent: :ref:`handle` or `None`
     :param adoptees: Nodes to adopt upon initialization.
     :type adoptees: list[:ref:`handle`]
     :param spawner_adjacent: The node adjacent to the node that spawned self.  When provided, adjacent should be None,
@@ -46,6 +46,8 @@ class InternalNode(Node):
     self._initial_state = initial_state
     self._adjacent = adjacent
 
+    self._current_state = None
+
     # When being spawned as part of a split:
     self._adoptees = {adoptee['id']: adoptee for adoptee in adoptees} if adoptees is not None else None
     self._spawner_adjacent = spawner_adjacent
@@ -63,6 +65,39 @@ class InternalNode(Node):
 
   def get_adjacent_id(self):
     return None if self._adjacent is None else self._adjacent['id']
+
+  def checkpoint(self, before=None):
+    pass
+
+  def sink_swap(self, migration, deltas, old_sender_ids, new_senders, new_importers, linker):
+    if self._variant == 'output':
+      if len(new_senders) != 1:
+        raise errors.InternalError(
+            "sink_swap should be called on an edge internal node only when there is a unique new sender.")
+      self._adjacent = new_senders[0]
+    elif self._variant == 'input':
+      # FIXME(KK): Test and implement this
+      import ipdb
+      ipdb.set_trace()
+    else:
+      raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
+
+  def switch_flows(self, migration_id, old_exporters, new_exporters, new_receivers):
+    if self._variant == 'input':
+      if len(new_receivers) != 1:
+        raise errors.InternalError("Not sure how to set an input node's receives to a list not of length 1.")
+      if self._adjacent is not None:
+        raise errors.InternalError("Not sure how to set an input node's receives when it already has an adjacent.")
+      self._adjacent = new_receivers[0]
+      self.send(self._adjacent, messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
+    elif self._variant == 'output':
+      import ipdb
+      ipdb.set_trace()
+    else:
+      raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
+
+    for kid in self._kids.values():
+      self._node.send(kid, messages.migration.switch_flows(migration_id))
 
   def initialize(self):
     if self._adoptees is not None:
@@ -83,9 +118,7 @@ class InternalNode(Node):
         raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
   def receive(self, message, sender_id):
-    if message['type'] == 'sequence_message':
-      self.linker.receive_sequence_message(message['value'], sender_id)
-    elif message['type'] == 'added_leaf':
+    if message['type'] == 'added_leaf':
       self.added_leaf(message['kid'])
     elif message['type'] == 'adopted_by':
       if self._current_split is None:
@@ -95,9 +128,7 @@ class InternalNode(Node):
     elif message['type'] == 'adopted':
       self._kids[sender_id] = self._adoptees[sender_id]
     else:
-      import ipdb
-      ipdb.set_trace()
-      raise errors.InternalError("Unrecognized message type {}".format(message['type']))
+      super(InternalNode, self).receive(message=message, sender_id=sender_id)
 
   @staticmethod
   def from_config(node_config, controller):
@@ -182,6 +213,8 @@ class InternalNode(Node):
           "added_leaf: Could not find node matching id {missing_child_node_id}",
           extra={'missing_child_node_id': kid['id']})
     elif self._adjacent is None:
+      import ipdb
+      ipdb.set_trace()
       self.logger.error(
           "added_leaf: No adjacent was set in time.  Unable to forward an added_leaf message to the adjacent.")
     else:

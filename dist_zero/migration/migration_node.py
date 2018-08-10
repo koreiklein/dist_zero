@@ -58,6 +58,11 @@ class MigrationNode(node.Node):
     return MigrationNode(migration_id=node_config['id'], controller=controller, migration_config=node_config)
 
   def receive(self, message, sender_id):
+    if message['type'] == 'migration':
+      if message['migration_id'] != self.id:
+        raise errors.InternalError("MigrationNode received a message build for a different migration.")
+      message = message['message']
+
     self._state_controller.receive(message=message, sender_id=sender_id)
 
   def _transition_state(self, from_state, to_state):
@@ -93,7 +98,7 @@ class MigrationNode(node.Node):
     self.removal_nodes = removal_nodes
 
     self._state_controller = StartingNewFlowState(
-        self, self._controller, self._migration_config, source_nodes=self.source_nodes, sink_nodes=self.sink_nodes)
+        self, self._controller, self._migration_config, sink_nodes=self.sink_nodes)
     self._state_controller.initialize()
 
   def finish_state_starting_new_flow(self):

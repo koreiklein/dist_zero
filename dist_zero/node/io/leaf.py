@@ -93,16 +93,13 @@ class LeafNode(Node):
 
     elif message['type'] == 'input_action':
       self._receive_input_action(message)
-    elif message['type'] == 'sequence_message':
-      self.linker.receive_sequence_message(message['value'], sender_id)
-
     elif message['type'] == 'adopt':
       new_parent = message['new_parent']
       self.send(self.parent, messages.io.adopted_by(new_parent['id']))
       self.send(new_parent, messages.io.adopted())
       self.parent = new_parent
     else:
-      raise RuntimeError("Unrecognized message type {}".format(message['type']))
+      super(LeafNode, self).receive(message=message, sender_id=sender_id)
 
   def _receive_input_action(self, message):
     if self._variant != 'input':

@@ -30,6 +30,7 @@ class StartingNodeMigratorsState(State):
 
     for node, migrator_config in self._sink_handles_and_configs:
       migrator_config['migration'] = self._migration.new_handle(node['id'])
+      self._prepare_sink_node_migrator_config(node, migrator_config)
       self._migrator_states[node['id']] = 'pending'
       self._migration.send(node, messages.migration.attach_migrator(migrator_config))
 
@@ -70,6 +71,12 @@ class StartingNodeMigratorsState(State):
     else:
       raise errors.InternalError("Receiver could not be found among the receiving nodes of the migration.")
 
+  def _prepare_sink_node_migrator_config(self, sink_node, sink_migrator_config):
+    sink_migrator_config['new_flow_senders'] = [
+        self._migration.transfer_handle(self._receiver_to_handle(sender_id), for_node_id=sink_node['id'])
+        for sender_id in sink_migrator_config['new_flow_senders']
+    ]
+
   def _prepare_source_node_migrator_config(self, source_node, source_migrator_config):
     '''
     Update source_migrator_config so that it is ready to be used to spawn a new migrator.
@@ -85,3 +92,9 @@ class StartingNodeMigratorsState(State):
           self._migration.transfer_handle(self._receiver_to_handle(new_receiver_id), for_node_id=source_node['id'])
           for new_receiver_id in new_receiver_ids
       ]) for receiver_id, new_receiver_ids in source_migrator_config['exporter_swaps']]
+
+    if 'new_receivers' in source_migrator_config:
+      source_migrator_config['new_receivers'] = [
+          self._migration.transfer_handle(self._receiver_to_handle(new_receiver_id), for_node_id=source_node['id'])
+          for new_receiver_id in source_migrator_config['new_receivers']
+      ]

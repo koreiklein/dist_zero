@@ -54,33 +54,56 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
 
   demo.run_for(ms=200)
 
-  sum_node_id = demo.system.spawn_node(
-      on_machine=machine_a,
-      node_config=messages.sum.sum_node_config(
-          node_id=dist_zero.ids.new_id('SumNode_middle'),
-          senders=[],
-          receivers=[],
-      ))
-
-  demo.run_for(ms=200)
-
   # Configure the starting network topology
   root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
   demo.system.spawn_node(
       on_machine=machine_a,
-      node_config=messages.io.internal_node_config(
-          root_input_node_id,
-          variant='input',
-          adjacent=demo.system.generate_new_handle(new_node_id=root_input_node_id, existing_node_id=sum_node_id)))
+      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, depth=0, variant='input'))
 
   root_output_node_id = dist_zero.ids.new_id('InternalNode_output')
   demo.system.spawn_node(
-      on_machine=machine_a,
+      on_machine=machine_c,
       node_config=messages.io.internal_node_config(
-          root_output_node_id,
-          variant='output',
-          adjacent=demo.system.generate_new_handle(new_node_id=root_output_node_id, existing_node_id=sum_node_id),
-          initial_state=0))
+          root_output_node_id, parent=None, depth=0, variant='output', initial_state=0))
+
+  demo.run_for(ms=200)
+
+  # Set up the sum computation with a migration:
+  node_id = dist_zero.ids.new_id('MigrationNode_add_sum_computation')
+  sum_node_id = dist_zero.ids.new_id('ComputationNode_root')
+  input_handle_for_migration = demo.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_node_id)
+  output_handle_for_migration = demo.system.generate_new_handle(
+      new_node_id=node_id, existing_node_id=root_output_node_id)
+  demo.system.spawn_node(
+      on_machine=machine_b,
+      node_config=messages.migration.migration_node_config(
+          node_id=node_id,
+          source_nodes=[(input_handle_for_migration,
+                         messages.migration.source_migrator_config(
+                             will_sync=False,
+                             exporter_swaps=[],
+                             new_receivers=[sum_node_id],
+                         ))],
+          sink_nodes=[(output_handle_for_migration,
+                       messages.migration.sink_migrator_config(
+                           new_flow_senders=[sum_node_id],
+                           old_flow_sender_ids=[],
+                           will_sync=False,
+                       ))],
+          removal_nodes=[],
+          sync_pairs=[],
+          insertion_node_configs=[
+              messages.computation.computation_node_config(
+                  node_id=sum_node_id,
+                  parent=None,
+                  senders=[input_handle_for_migration],
+                  receivers=[output_handle_for_migration],
+                  migrator=messages.migration.insertion_migrator_config(
+                      senders=[input_handle_for_migration],
+                      receivers=[output_handle_for_migration],
+                  ),
+              )
+          ]))
 
   demo.run_for(ms=1000)
 
