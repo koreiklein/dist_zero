@@ -98,7 +98,9 @@ class SourceMigrator(migrator.Migrator):
       self._node._TESTING_swapped_once = True
 
   def _receive_terminate_migrator(self, sender_id, message):
-    self._node.linker.remove_exporters(set(self._old_exporters.keys()))
+    # FIXME(KK): Test and implement the logic regarding setting up duplications.  Then there may actually
+    # be a reason to remove old exporters that are done duplicating.
+    #self._node.linker.remove_exporters(set(self._old_exporters.keys()))
     self._node.remove_migrator(self.migration_id)
     for exporter in self._new_exporters.values():
       exporter._migration_id = None
@@ -125,7 +127,11 @@ class SourceMigrator(migrator.Migrator):
 
       self._node.send(new_receiver,
                       messages.migration.configure_new_flow_left(
-                          self.migration_id, kids=kids, is_data=self._node.is_data(), depth=self._node.depth))
+                          self.migration_id,
+                          kids=kids,
+                          node=self._node.new_handle(new_receiver['id']),
+                          is_data=self._node.is_data(),
+                          depth=self._node.depth))
 
   def receive(self, sender_id, message):
     if message['type'] == 'attached_migrator':
@@ -137,7 +143,6 @@ class SourceMigrator(migrator.Migrator):
         self._right_configurations = [None for i in range(n_total_right_configs)]
       self._right_configurations[right_config_index] = message
       self._maybe_has_right_configurations()
-
     elif message['type'] == 'switch_flows':
       self._receive_switch_flows(sender_id, message)
     elif message['type'] == 'terminate_migrator':

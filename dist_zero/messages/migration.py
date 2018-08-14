@@ -266,14 +266,14 @@ def prepare_for_switch(migration_id):
   return {'type': 'migration', 'migration_id': migration_id, 'message': {'type': 'prepare_for_switch'}}
 
 
-def prepared_for_switch():
+def prepared_for_switch(migration_id):
   '''
   Sent from insertion, removal, and sink nodes back to the migration node to indicate
   that they have prepared for a switch.
 
   :param str migration_id: The id of the relevant migration.
   '''
-  return {'type': 'prepared_for_switch'}
+  return {'type': 'migration', 'migration_id': migration_id, 'message': {'type': 'prepared_for_switch'}}
 
 
 def switch_flows(migration_id):
@@ -285,11 +285,11 @@ def switch_flows(migration_id):
   return {'type': 'migration', 'migration_id': migration_id, 'message': {'type': 'switch_flows'}}
 
 
-def switched_flows():
+def switched_flows(migration_id):
   '''
   Informs the `MigrationNode` that a sink node has swapped to the new flow.
   '''
-  return {'type': 'switched_flows'}
+  return {'type': 'migration', 'migration_id': migration_id, 'message': {'type': 'switched_flows'}}
 
 
 def swapped_to_duplicate(migration_id, first_live_sequence_number):
@@ -373,7 +373,7 @@ def configure_new_flow_right(migration_id, parent_handle, configuration_place, i
   }
 
 
-def configure_new_flow_left(migration_id, depth, is_data, kids):
+def configure_new_flow_left(migration_id, depth, is_data, node, kids):
   '''
   The 'left' configuration, sent while starting a new flow.
 
@@ -382,6 +382,8 @@ def configure_new_flow_left(migration_id, depth, is_data, kids):
   :param str migration_id: The id of the relevant migration.
   :param int depth: The depth of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
   :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
+  :param node: The :ref:`handle` of the sending node.
+  :type node: :ref:`handle`
   :param list kids: A list of dictionaries each with the following keys:
      'handle': A :ref:`handle` for a kid
      'connection_limit': The maximum number of outgoing nodes the next node is allowed to add to that kid
@@ -393,6 +395,7 @@ def configure_new_flow_left(migration_id, depth, is_data, kids):
           'type': 'configure_new_flow_left',
           'depth': depth,
           'is_data': is_data,
+          'node': node,
           'kids': kids
       }
   }

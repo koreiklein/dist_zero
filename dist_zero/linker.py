@@ -65,13 +65,14 @@ class Linker(object):
 
     self._initialized = True
 
-    for importer in self._importers.values():
-      self.send(importer.sender,
-                messages.migration.connect_node(node=self.new_handle(importer.sender_id), direction='receiver'))
+    # FIXME(KK): Become sure we really want to get rid of the below code.
+    #for importer in self._importers.values():
+    #  self.send(importer.sender,
+    #            messages.migration.connect_node(node=self.new_handle(importer.sender_id), direction='receiver'))
 
-    for exporter in self._exporters.values():
-      self.send(exporter.receiver,
-                messages.migration.connect_node(node=self.new_handle(exporter.receiver_id), direction='sender'))
+    #for exporter in self._exporters.values():
+    #  self.send(exporter.receiver,
+    #            messages.migration.connect_node(node=self.new_handle(exporter.receiver_id), direction='sender'))
 
   def remove_exporters(self, receiver_ids):
     for receiver_id in receiver_ids:

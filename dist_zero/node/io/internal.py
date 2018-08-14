@@ -75,9 +75,11 @@ class InternalNode(Node):
   def checkpoint(self, before=None):
     pass
 
-  def sink_swap(self, migration, deltas, old_sender_ids, new_senders, new_importers, linker):
+  def sink_swap(self, deltas, old_sender_ids, new_senders, new_importers, linker):
     if self._variant == 'output':
       if len(new_senders) != 1:
+        import ipdb
+        ipdb.set_trace()
         raise errors.InternalError(
             "sink_swap should be called on an edge internal node only when there is a unique new sender.")
       self._adjacent = new_senders[0]
@@ -89,12 +91,10 @@ class InternalNode(Node):
       raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
   def switch_flows(self, migration_id, old_exporters, new_exporters, new_receivers):
-    import ipdb
-    ipdb.set_trace()
     if self._variant == 'input':
       if len(new_receivers) != 1:
         raise errors.InternalError("Not sure how to set an input node's receives to a list not of length 1.")
-      if self._adjacent is not None:
+      if self._adjacent is not None and self._adjacent['id'] != new_receivers[0]['id']:
         import ipdb
         ipdb.set_trace()
         raise errors.InternalError("Not sure how to set an input node's receives when it already has an adjacent.")

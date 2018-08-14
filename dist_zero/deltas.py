@@ -64,10 +64,12 @@ class Deltas(object):
       When this parameter is provided, pop_deltas will not remove only deltas for a sender_id and sequence_number
       where before[sender_id] < sequence_number.
 
-    :return: A pair (new_state, increment) where increment is a transition: state --> new_state
+    :return: A triple (new_state, increment, updated) where increment is a transition: state --> new_state
+      and updated is True iff the transition is not the identity transition
     :rtype: tuple
     '''
     increment = 0
+    updated = False
     for sender_id, pairs in list(self._sender_id_to_rsn_message_pairs.items()):
       new_pairs = []
       cap_number = before and before.get(sender_id, None)
@@ -75,8 +77,10 @@ class Deltas(object):
       for rsn, delta_message in pairs:
         if cap_number is None or rsn < cap_number:
           if delta_message['type'] == 'increment':
+            updated = True
             increment += delta_message['amount']
           elif delta_message['type'] == 'input_action':
+            updated = True
             increment += delta_message['number']
           else:
             raise errors.InternalError('Unrecognized message type "{}"'.format(delta_message['type']))
@@ -86,7 +90,7 @@ class Deltas(object):
 
       self._sender_id_to_rsn_message_pairs[sender_id] = new_pairs
 
-    if increment == 0:
-      return state, increment
+    if updated:
+      return state + increment, increment, updated
     else:
-      return state + increment, increment
+      return state, increment, updated

@@ -116,12 +116,15 @@ class SumNode(Node):
     :return: the next unused sequence number
     :rtype: int
     '''
-    new_state, increment = self._deltas.pop_deltas(state=self._current_state, before=before)
-    self.logger.debug("Sending new increment of {increment}.", extra={'increment': increment})
-    self._current_state = new_state
-    sequence_number = self.linker.advance_sequence_number()
-    self._send_increment(increment=increment, sequence_number=sequence_number)
-    return sequence_number + 1
+    new_state, increment, updated = self._deltas.pop_deltas(state=self._current_state, before=before)
+    if not updated:
+      return self.least_unused_sequence_number
+    else:
+      self.logger.debug("Sending new increment of {increment}.", extra={'increment': increment})
+      self._current_state = new_state
+      sequence_number = self.linker.advance_sequence_number()
+      self._send_increment(increment=increment, sequence_number=sequence_number)
+      return sequence_number + 1
 
   @staticmethod
   def from_config(node_config, controller):
@@ -162,7 +165,7 @@ class SumNode(Node):
       elif direction == 'receiver':
         if node['id'] in self._exporters:
           raise errors.InternalError("Received connect_node for an exporter that had already been added.")
-        self._exporters[node['id']] = self.linker.new_exporter(receiver=node)
+        self.export_to_node(node)
       else:
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
     elif message['type'] == 'adjacent_has_split':
@@ -186,9 +189,14 @@ class SumNode(Node):
     :type node: :ref:`handle`
     '''
     if node['id'] in self._importers:
-      raise errors.InternalError("Received connect_node for an importer that had already been added.")
+      raise errors.InternalError("Already importing from this node.", extra={'existing_node_id': node['id']})
     self._importers[node['id']] = self.linker.new_importer(sender=node, first_sequence_number=first_sequence_number)
     self._deltas.add_sender(node['id'])
+
+  def export_to_node(self, receiver):
+    if receiver['id'] in self._exporters:
+      raise errors.InternalError("Already exporting to this node.", extra={'existing_node_id': receiver['id']})
+    self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
 
   def elapse(self, ms):
     self._unsent_time_ms += ms
@@ -345,6 +353,9 @@ class SumNode(Node):
 
   def activate_swap(self, migration_id, new_receiver_ids):
     for receiver_id in new_receiver_ids:
+      if receiver_id not in self._exporters:
+        import ipdb
+        ipdb.set_trace()
       exporter = self._exporters[receiver_id]
       self.send(exporter.receiver,
                 messages.migration.swapped_to_duplicate(
@@ -359,13 +370,11 @@ class SumNode(Node):
 
     super(SumNode, self).remove_migrator(migration_id)
 
-  def sink_swap(self, migration, deltas, old_sender_ids, new_senders, new_importers, linker):
+  def sink_swap(self, deltas, old_sender_ids, new_senders, new_importers, linker):
     self._deltas = deltas
     self.linker.remove_importers(old_sender_ids)
     self.linker.absorb_linker(linker)
     self._importers = new_importers
-
-    self.send(migration, messages.migration.switched_flows())
 
   def handle_api_message(self, message):
     if message['type'] == 'spawn_new_senders':

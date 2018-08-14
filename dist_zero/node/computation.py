@@ -18,6 +18,8 @@ class ComputationNode(Node):
     self._kid_n_senders = {}
     self._kid_n_receivers = {}
 
+    self._exporters = {}
+
     self._senders = {sender['id']: sender for sender in migrator_config['senders']}
     self._receivers = {receiver['id']: receiver for receiver in migrator_config['receivers']}
 
@@ -25,6 +27,9 @@ class ComputationNode(Node):
     self._initial_migrator = None # It will be initialized later.
 
     super(ComputationNode, self).__init__(logger)
+
+    for sender_id in self._senders.keys():
+      self._deltas.add_sender(sender_id)
 
   def is_data(self):
     return False
@@ -64,6 +69,11 @@ class ComputationNode(Node):
 
   def send_forward_messages(self, before=None):
     return 1 + self._linker.advance_sequence_number()
+
+  def export_to_node(self, receiver):
+    if receiver['id'] in self._exporters:
+      raise errors.InternalError("Already exporting to this node.", extra={'existing_node_id': receiver['id']})
+    self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
 
   def receive(self, message, sender_id):
     if message['type'] == 'added_adjacent_leaf':

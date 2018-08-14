@@ -22,10 +22,14 @@ class SinkMigrator(migrator.Migrator):
 
     self._waiting_for_swap = False
 
+    self._kids_switched = {}
+
     self._now_ms = 0
 
     self._swapped = False
     '''True once this migrator has swapped to the new flow.'''
+
+    self._kids_ready_for_switch = None
 
     self._deltas = deltas.Deltas()
 
@@ -166,6 +170,8 @@ class SinkMigrator(migrator.Migrator):
       #self._new_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
       #self._maybe_complete_flow()
     elif message['type'] == 'configure_new_flow_left':
+      if sender_id not in self._new_flow_senders:
+        self._add_sender(message['node'])
       self._left_configurations[sender_id] = message
       self._maybe_has_left_configurations()
       self._maybe_flow_is_started()
@@ -190,15 +196,24 @@ class SinkMigrator(migrator.Migrator):
     elif message['type'] == 'prepare_for_switch':
       # Sink nodes do not go into deltas_only mode before swaps, as the old flow will not send
       # too many messages, and all messages in the new flow are collected in self._deltas.
-      self._waiting_for_swap = True
-      self._node.send(self._migration, messages.migration.prepared_for_switch())
+      self._kids_ready_for_switch = {}
+      for kid in self._node._kids.values():
+        self._kids_switched[kid['id']] = False
+        self._kids_ready_for_switch[kid['id']] = False
+        self._node.send(kid, messages.migration.prepare_for_switch(self.migration_id))
+      self._maybe_prepared_for_switch()
+    elif message['type'] == 'prepared_for_switch':
+      self._kids_ready_for_switch[sender_id] = True
+      self._maybe_prepared_for_switch()
     elif message['type'] == 'swapped_from_duplicate':
       self._old_sender_id_to_first_swapped_sequence_number[sender_id] = message['first_live_sequence_number']
       self._maybe_swap()
     elif message['type'] == 'swapped_to_duplicate':
       self._new_sender_id_to_first_swapped_sequence_number[sender_id] = message['first_live_sequence_number']
       self._maybe_swap()
-
+    elif message['type'] == 'switched_flows':
+      self._kids_switched[sender_id] = True
+      self._maybe_swap()
     elif message['type'] == 'terminate_migrator':
       if self.migration_id in self._node.deltas_only:
         self._node.deltas_only.remove(self.migration_id)
@@ -222,6 +237,11 @@ class SinkMigrator(migrator.Migrator):
       ipdb.set_trace()
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
 
+  def _maybe_prepared_for_switch(self):
+    if all(self._kids_ready_for_switch.values()):
+      self._node.send(self.parent, messages.migration.prepared_for_switch(self.migration_id))
+      self._waiting_for_swap = True
+
   def _maybe_has_left_configurations(self):
     if all(val is not None for val in self._left_configurations.values()):
       all_kids = [kid['handle'] for left_config in self._left_configurations.values() for kid in left_config['kids']]
@@ -241,11 +261,22 @@ class SinkMigrator(migrator.Migrator):
                           sender=self._node.new_handle(self.parent['id'])))
 
   def _maybe_swap(self):
+    # FIXME(KK): Remove this
+    try:
+      self._deltas.covers(self._new_sender_id_to_first_swapped_sequence_number)
+    except Exception as e:
+      import ipdb
+      ipdb.set_trace()
+      print(e)
+
     if self._waiting_for_swap and not self._swapped \
         and all(sn is not None for sn in self._old_sender_id_to_first_swapped_sequence_number.values()) \
         and all(sn is not None for sn in self._new_sender_id_to_first_swapped_sequence_number.values()) \
         and self._node._deltas.covers(self._old_sender_id_to_first_swapped_sequence_number) \
-        and self._deltas.covers(self._new_sender_id_to_first_swapped_sequence_number):
+        and self._deltas.covers(self._new_sender_id_to_first_swapped_sequence_number) \
+        and all(self._kids_switched.values()):
+      import ipdb
+      ipdb.set_trace()
       self._node.logger.info("SinkMigrator swapping flows.", extra={'migration_id': self.migration_id})
       if settings.IS_TESTING_ENV:
         self._node._TESTING_swapped_once = True
@@ -264,13 +295,14 @@ class SinkMigrator(migrator.Migrator):
       self._node.checkpoint(before=self._old_sender_id_to_first_swapped_sequence_number)
 
       self._node.sink_swap(
-          migration=self._migration,
           deltas=self._deltas,
           old_sender_ids=set(self._old_sender_id_to_first_flow_sequence_number.keys()),
           new_senders=list(self._new_flow_senders.values()),
           new_importers=self._new_importers,
           linker=self._linker,
       )
+
+      self._node.send(self.parent, messages.migration.switched_flows(self.migration_id))
 
       # self._linker should no longer be used.  Null it out.
       self._linker = None
