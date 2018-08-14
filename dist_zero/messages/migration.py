@@ -36,41 +36,35 @@ def migration_node_config(
   }
 
 
-def source_migrator_config(exporter_swaps, new_receivers, will_sync):
+def source_migrator_config(will_sync, migration=None):
   '''
   Migrator configuration for a `SourceMigrator`
 
-  :param list exporter_swaps: A list of pairs (receiver_id, new_receivers) giving for each existing
-    receiver, the set of new receivers that it should duplicate to.
-    In the config used to spawn a source node, each receiver will be identified by a handle.
-    In the config sent to the migration node, each receiver will be identified by id.  An id is used because
-    the `MigrationNode` often must first spawn new receiver nodes in order to have handles with which to identify them.
-  :param list new_receivers: A list of the new nodes to send to.
-    In the config used to spawn a source node, each receiver will be identified by a handle.
-    In the config sent to the migration node, each receiver will be identified by id. An id is used because
-    the `MigrationNode` often must first spawn new receiver nodes in order to have handles with which to identify them.
   :param bool will_sync: True iff the migrator will need to sync its data during a syncing stage.
+  :param migration: The :ref:`handle` of the relevant migration, or `None` if it has not yet been spawned.
+  :param migration: :ref:`handle`
   '''
   return {
       'type': 'source_migrator',
-      'exporter_swaps': exporter_swaps,
-      'new_receivers': new_receivers,
-      'will_sync': will_sync
+      'will_sync': will_sync,
+      'migration': migration,
   }
 
 
-def sink_migrator_config(new_flow_senders, old_flow_sender_ids, will_sync):
+def sink_migrator_config(new_flow_senders, old_flow_sender_ids, will_sync, migration=None):
   '''
   :param list new_flow_senders: The list of of the nodes that send to this sink in the new flow.
     When send to the migration node it contains ids, when sent to the migrator it will contain handles.
   :param list[str] old_flow_sender_ids: The list of ids of the nodes that send to this sink in the old flow.
   :param bool will_sync: True iff the migrator will need to sync its data during a syncing stage.
+  :param object migration: A migration config, or `None` if the migration is not yet spawned.
   '''
   return {
       'type': 'sink_migrator',
       'new_flow_senders': new_flow_senders,
       'old_flow_sender_ids': old_flow_sender_ids,
       'will_sync': will_sync,
+      'migration': migration,
   }
 
 
@@ -85,12 +79,23 @@ def removal_migrator_config(sender_ids, receiver_ids, will_sync):
   return {'type': 'removal_migrator', 'sender_ids': sender_ids, 'receiver_ids': receiver_ids, 'will_sync': will_sync}
 
 
-def insertion_migrator_config(senders, receivers):
+def insertion_migrator_config(configure_right_places, senders, receivers, migration=None):
   '''
+  :param dict[str, (int, int)] configure_right_places: A dictionary taking each sender to the pair (k, n) where
+    this insertion node is sending that node its kth right_configuration message of n.
   :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
   :param list receivers: A list of :ref:`handle` of the `Node` s that will receive from self by the end of the migration.
+  :param migration: If the insertion node will communicate directly with the migration node, this is a handle for it.
+    Otherwise, it is `None`
+  :type migration: :ref:`handle` or `None`
   '''
-  return {'type': 'insertion_migrator', 'senders': senders, 'receivers': receivers}
+  return {
+      'type': 'insertion_migrator',
+      'configure_right_places': configure_right_places,
+      'senders': senders,
+      'receivers': receivers,
+      'migration': migration
+  }
 
 
 def connect_node(node, direction):
@@ -116,15 +121,23 @@ def attach_migrator(migrator_config):
   return {'type': 'attach_migrator', 'migrator_config': migrator_config}
 
 
-def attached_migrator(insertion_node_handle=None):
+def attached_migrator(migration_id, insertion_node_handle=None):
   '''
   Informs the receiving `MigrationNode` that the sending node has attached the requested `Migrator` subclass.
 
+  :param str migration_id: The id of the relevant migration.
   :param insertion_node_handle: The :ref:`handle` of the insertion node that just attached, or `None` if the attaching
     `Node` did not have an `InsertionMigrator` migrator.
   :type insertion_node_handle: :ref:`handle`
   '''
-  return {'type': 'attached_migrator', 'insertion_node_handle': insertion_node_handle}
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'attached_migrator',
+          'insertion_node_handle': insertion_node_handle
+      }
+  }
 
 
 def start_flow(migration_id):
@@ -180,9 +193,9 @@ def replacing_flow(migration_id, sequence_number):
   }
 
 
-def new_flow_sequence_message(migration_id, sequence_message):
-  '''Wrap a sequence message in a migration message.'''
-  return {'type': 'migration', 'migration_id': migration_id, 'message': sequence_message}
+def migration_message(migration_id, message):
+  '''Wrap a message in a migration message.'''
+  return {'type': 'migration', 'migration_id': migration_id, 'message': message}
 
 
 def start_syncing(migration_id, receivers):
@@ -327,13 +340,18 @@ def migrator_terminated():
   return {'type': 'migrator_terminated'}
 
 
-def configure_new_flow_right(migration_id, n_kids, connection_limit):
+def configure_new_flow_right(migration_id, parent_handle, configuration_place, is_data, depth, n_kids,
+                             connection_limit):
   '''
   The 'right' configuration, sent while starting a new flow.
 
   Either `InsertionMigrator` or `SourceMigrator` can receive this message.
 
   :param str migration_id: The id of the relevant migration.
+  :param parent_handle: The :ref:`handle` of the sender. A sibling node to the right of the node receiving the message.
+  :param tuple[int, int] configuration_place: A tuple giving (k, n) where this configuration is the kth configuration of n.
+  :param int depth: The depth of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
+  :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
   :param n_kids: If the right node is a data node with a set number of kids, n_kids will give that number.
     Otherwise, n_kids will be `None`
   :type n_kids: int or None
@@ -345,19 +363,25 @@ def configure_new_flow_right(migration_id, n_kids, connection_limit):
       'migration_id': migration_id,
       'message': {
           'type': 'configure_new_flow_right',
+          'parent_handle': parent_handle,
+          'configuration_place': configuration_place,
+          'is_data': is_data,
+          'depth': depth,
           'n_kids': n_kids,
           'connection_limit': connection_limit
       }
   }
 
 
-def configure_new_flow_left(migration_id, kids):
+def configure_new_flow_left(migration_id, depth, is_data, kids):
   '''
   The 'left' configuration, sent while starting a new flow.
 
   Either `InsertionMigrator` or `SinkMigrator` can receive this message.
 
   :param str migration_id: The id of the relevant migration.
+  :param int depth: The depth of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
+  :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
   :param list kids: A list of dictionaries each with the following keys:
      'handle': A :ref:`handle` for a kid
      'connection_limit': The maximum number of outgoing nodes the next node is allowed to add to that kid
@@ -367,6 +391,24 @@ def configure_new_flow_left(migration_id, kids):
       'migration_id': migration_id,
       'message': {
           'type': 'configure_new_flow_left',
+          'depth': depth,
+          'is_data': is_data,
           'kids': kids
+      }
+  }
+
+
+def set_new_flow_adjacent(migration_id, adjacent):
+  '''
+  :param str migration_id: The id of the relevant migration.
+  :param adjacent: The :ref:`handle` of a new adjacent node.
+  :type adjacent: :ref:`handle`
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'set_new_flow_adjacent',
+          'adjacent': adjacent,
       }
   }

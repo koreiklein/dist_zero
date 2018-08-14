@@ -166,5 +166,5 @@ class Exporter(object):
     self._pending_messages.append((self._linker.now_ms, internal_sequence_number, message))
     sequence_message = messages.linker.sequence_message_send(message=message, sequence_number=internal_sequence_number)
     if self._migration_id is not None:
-      sequence_message = messages.migration.new_flow_sequence_message(self._migration_id, sequence_message)
+      sequence_message = messages.migration.migration_message(self._migration_id, sequence_message)
     self._linker.send(self._receiver, sequence_message)

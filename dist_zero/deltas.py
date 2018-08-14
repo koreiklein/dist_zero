@@ -19,6 +19,8 @@ class Deltas(object):
     Start tracking deltas for a new sender.
     '''
     if sender_id in self._sender_id_to_rsn_message_pairs or sender_id in self._first_unpopped:
+      import ipdb
+      ipdb.set_trace()
       raise errors.InternalError("Sender was already added")
     self._sender_id_to_rsn_message_pairs[sender_id] = []
     self._first_unpopped[sender_id] = 0

@@ -8,11 +8,12 @@ logger = logging.getLogger(__name__)
 
 
 class ComputationNode(Node):
-  def __init__(self, node_id, parent, migrator_config, controller):
+  def __init__(self, node_id, parent, depth, migrator_config, controller):
     self.id = node_id
     self._controller = controller
 
     self.parent = parent
+    self.depth = depth
     self.kids = {}
     self._kid_n_senders = {}
     self._kid_n_receivers = {}
@@ -24,6 +25,9 @@ class ComputationNode(Node):
     self._initial_migrator = None # It will be initialized later.
 
     super(ComputationNode, self).__init__(logger)
+
+  def is_data(self):
+    return False
 
   def checkpoint(self, before=None):
     pass
@@ -48,6 +52,7 @@ class ComputationNode(Node):
     return ComputationNode(
         node_id=node_config['id'],
         parent=node_config['parent'],
+        depth=node_config['depth'],
         migrator_config=node_config['migrator'],
         controller=controller)
 

@@ -27,7 +27,7 @@ class SumNode(Node):
   SEND_INTERVAL_MS = 30
   '''The number of ms between sends to receivers.'''
 
-  def __init__(self, node_id, senders, receivers, input_node, output_node, controller, migrator_config=None):
+  def __init__(self, node_id, senders, receivers, input_node, output_node, parent, controller, migrator_config=None):
     '''
     :param str node_id: The node id for this node.
     :param list senders: A list of :ref:`handle` of the nodes sending increments
@@ -39,6 +39,9 @@ class SumNode(Node):
     :param output_node: The :ref:`handle` of the output node to this node if it has one.
     :type output_node: :ref:`handle` or None
 
+    :param parent: The :ref:`handle` of the parent node that spawned this node.
+    :type parent: :ref:`handle`
+
     :param object migrator_config: Configuration for an initializing migrator, or None if the node
       is not being initialized as part of a migration.
 
@@ -47,6 +50,9 @@ class SumNode(Node):
     self._controller = controller
 
     self.id = node_id
+    self.parent = parent
+
+    self.depth = 0
 
     if settings.IS_TESTING_ENV:
       self._TESTING_total_before_first_swap = 0
@@ -85,6 +91,9 @@ class SumNode(Node):
     for sender in senders:
       self.import_from_node(sender)
 
+  def is_data(self):
+    return False
+
   def initialize(self):
     self.logger.info(
         'Starting sum node {sum_node_id}. input={input_node_id}, output={output_node_id}',
@@ -122,6 +131,7 @@ class SumNode(Node):
         receivers=node_config['receivers'],
         output_node=node_config['output_node'],
         input_node=node_config['input_node'],
+        parent=node_config['parent'],
         migrator_config=node_config['migrator'],
         controller=controller)
 

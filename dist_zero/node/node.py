@@ -85,6 +85,9 @@ class Node(object):
     }
 
   def attach_migrator(self, migrator_config):
+    if 'migration' not in migrator_config:
+      import ipdb
+      ipdb.set_trace()
     migration_id = migrator_config['migration']['id']
     if len(self.migrators) > 0:
       # At some point, it may make sense to allow multiple migrators to run at once.  For now,
@@ -138,6 +141,8 @@ class Node(object):
       if migration_id not in self.migrators:
         # Possible, when a migration was removed at about the same time as some of the last few
         # acknowledgement or retransmission messages came through.
+        import ipdb
+        ipdb.set_trace()
         self.logger.warning(
             "Got a migration message for a migration which is not running on this node.",
             extra={

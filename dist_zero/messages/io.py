@@ -180,3 +180,13 @@ def added_adjacent_leaf(kid, variant):
   :param str variant: 'input' or 'output'
   '''
   return {'type': 'added_adjacent_leaf', 'kid': kid, 'variant': variant}
+
+
+def hello_parent(kid):
+  '''
+  Sent by a newly spawned kid node to its parent to indicate that it is now live.
+
+  :param kid: The :ref:`handle` of the newly added kid.
+  :type kid: :ref:`handle`
+  '''
+  return {'type': 'hello_parent', 'kid': kid}

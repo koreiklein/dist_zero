@@ -4,25 +4,20 @@ from . import migrator
 
 
 class SourceMigrator(migrator.Migrator):
-  def __init__(self, migration, node, exporter_swaps, new_receivers, will_sync):
+  def __init__(self, migration, node, will_sync):
     '''
     :param migration: The :ref:`handle` of the `MigrationNode` running the migration.
     :type migration: :ref:`handle`
     :param node: The `Node` on which this migrator runs.
     :type node: `Node`
 
-    :param list exporter_swaps: A list of pairs (receiver_id, new_receiver_handles) giving for each existing
-      receiver, the set of new receivers that it should duplicate to.
-    :param list new_receivers: A list of :ref:`handle` s of new receivers to send to that are not duplicates
-      of any existing receivers.
     :param bool will_sync: True iff this migrator will need to sync as part of the migration
     '''
     self._migration = migration
     self._node = node
     self._will_sync = will_sync
-    self._new_receivers = new_receivers
 
-    self._right_configurations = {receiver['id']: None for receiver in new_receivers}
+    self._right_configurations = None
 
     def _deliver(message, sequence_number, sender_id):
       # Impossible! Source migrators do not add any importers to their linkers, and thus the linker
@@ -31,12 +26,7 @@ class SourceMigrator(migrator.Migrator):
 
     self._linker = linker.Linker(self._node, logger=self._node.logger, deliver=_deliver)
 
-    self._exporter_swaps = exporter_swaps
-
-    self._old_exporters = {
-        old_receiver_id: self._node._exporters[old_receiver_id]
-        for old_receiver_id, new_receivers in self._exporter_swaps
-    }
+    self._kid_has_migrator = {kid_id: False for kid_id in self._node._kids.keys()}
 
     self._new_exporters = {}
 
@@ -58,8 +48,6 @@ class SourceMigrator(migrator.Migrator):
         migration=migrator_config['migration'],
         node=node,
         will_sync=migrator_config['will_sync'],
-        exporter_swaps=migrator_config['exporter_swaps'],
-        new_receivers=migrator_config['new_receivers'],
     )
 
   # FIXME(KK): Perhaps this method should be removed entirely, especially if it is unused.
@@ -100,7 +88,8 @@ class SourceMigrator(migrator.Migrator):
     # Clear out any messages that can still be sent on the old flow.
     self._node.checkpoint()
 
-    self._node.switch_flows(self.migration_id, self._old_exporters, self._new_exporters, self._new_receivers)
+    self._node.switch_flows(
+        self.migration_id, old_exporters=[], new_exporters=[], new_receivers=list(self._new_receivers.values()))
 
     self._node.linker.absorb_linker(self._linker)
 
@@ -115,20 +104,40 @@ class SourceMigrator(migrator.Migrator):
       exporter._migration_id = None
     self._node.send(self._migration, messages.migration.migrator_terminated())
 
+  def _maybe_has_right_configurations(self):
+    if all(val is not None for val in self._right_configurations):
+      self._new_receivers = {
+          config['parent_handle']['id']: config['parent_handle']
+          for config in self._right_configurations
+      }
+      self._send_configure_new_flow_left_to_right()
+
+  def _send_configure_new_flow_left_to_right(self):
+    for new_receiver in self._new_receivers.values():
+      from dist_zero.node.io.internal import InternalNode
+      if self._node.__class__ == InternalNode:
+        kids = [{'handle': kid, 'connection_limit': 1} for kid in self._node._kids.values() if kid is not None]
+      else:
+        # FIXME(KK): Test and implement!
+        import ipdb
+        ipdb.set_trace()
+        raise RuntimeError("Not Yet Implemented")
+
+      self._node.send(new_receiver,
+                      messages.migration.configure_new_flow_left(
+                          self.migration_id, kids=kids, is_data=self._node.is_data(), depth=self._node.depth))
+
   def receive(self, sender_id, message):
-    if message['type'] == 'configure_new_flow_right':
-      self._right_configurations[sender_id] = message
-      if all(val is not None for val in self._right_configurations.values()):
-        for new_receiver in self._new_receivers:
-          from dist_zero.node.io.internal import InternalNode
-          if self._node.__class__ == InternalNode:
-            kids = [{'handle': kid, 'connection_limit': 1} for kid in self._node._kids.values() if kid is not None]
-          else:
-            # FIXME(KK): Test and implement!
-            import ipdb
-            ipdb.set_trace()
-            raise RuntimeError("Not Yet Implemented")
-          self._node.send(new_receiver, messages.migration.configure_new_flow_left(self.migration_id, kids=kids))
+    if message['type'] == 'attached_migrator':
+      self._kid_has_migrator[sender_id] = True
+      self._maybe_send_attached_migrator()
+    elif message['type'] == 'configure_new_flow_right':
+      right_config_index, n_total_right_configs = message['configuration_place']
+      if self._right_configurations is None:
+        self._right_configurations = [None for i in range(n_total_right_configs)]
+      self._right_configurations[right_config_index] = message
+      self._maybe_has_right_configurations()
+
     elif message['type'] == 'switch_flows':
       self._receive_switch_flows(sender_id, message)
     elif message['type'] == 'terminate_migrator':
@@ -144,5 +153,17 @@ class SourceMigrator(migrator.Migrator):
     if not self._swapped:
       self._linker.elapse(ms)
 
+  def _maybe_send_attached_migrator(self):
+    if all(self._kid_has_migrator.values()):
+      self._node.send(self._node._parent or self._migration, messages.migration.attached_migrator(self.migration_id))
+
   def initialize(self):
-    self._node.send(self._migration, messages.migration.attached_migrator())
+    for kid in self._node._kids.values():
+      self._kid_has_migrator[kid['id']] = False
+      self._node.send(kid,
+                      messages.migration.attach_migrator(
+                          messages.migration.source_migrator_config(
+                              migration=self._node.transfer_handle(self._migration, kid['id']),
+                              will_sync=self._will_sync)))
+
+    self._maybe_send_attached_migrator()

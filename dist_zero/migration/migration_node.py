@@ -60,7 +60,9 @@ class MigrationNode(node.Node):
   def receive(self, message, sender_id):
     if message['type'] == 'migration':
       if message['migration_id'] != self.id:
-        raise errors.InternalError("MigrationNode received a message build for a different migration.")
+        import ipdb
+        ipdb.set_trace()
+        raise errors.InternalError("MigrationNode received a message from  a different migration.")
       message = message['message']
 
     self._state_controller.receive(message=message, sender_id=sender_id)
@@ -98,7 +100,11 @@ class MigrationNode(node.Node):
     self.removal_nodes = removal_nodes
 
     self._state_controller = StartingNewFlowState(
-        self, self._controller, self._migration_config, sink_nodes=self.sink_nodes)
+        self,
+        self._controller,
+        self._migration_config,
+        insertion_nodes=self.insertion_nodes,
+        sink_nodes=self.sink_nodes)
     self._state_controller.initialize()
 
   def finish_state_starting_new_flow(self):

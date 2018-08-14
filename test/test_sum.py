@@ -78,12 +78,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
       on_machine=machine_b,
       node_config=messages.migration.migration_node_config(
           node_id=node_id,
-          source_nodes=[(input_handle_for_migration,
-                         messages.migration.source_migrator_config(
-                             will_sync=False,
-                             exporter_swaps=[],
-                             new_receivers=[sum_node_id],
-                         ))],
+          source_nodes=[(input_handle_for_migration, messages.migration.source_migrator_config(will_sync=False, ))],
           sink_nodes=[(output_handle_for_migration,
                        messages.migration.sink_migrator_config(
                            new_flow_senders=[sum_node_id],
@@ -95,10 +90,12 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           insertion_node_configs=[
               messages.computation.computation_node_config(
                   node_id=sum_node_id,
+                  depth=1,
                   parent=None,
                   senders=[input_handle_for_migration],
                   receivers=[output_handle_for_migration],
                   migrator=messages.migration.insertion_migrator_config(
+                      configure_right_places={input_handle_for_migration['id']: (0, 1)},
                       senders=[input_handle_for_migration],
                       receivers=[output_handle_for_migration],
                   ),
@@ -106,6 +103,8 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           ]))
 
   demo.run_for(ms=1000)
+  import ipdb
+  ipdb.set_trace()
 
   user_b_output_id = demo.system.create_kid(
       parent_node_id=root_output_node_id, new_node_name='output_b', machine_id=machine_b)

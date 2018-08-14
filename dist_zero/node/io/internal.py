@@ -2,6 +2,7 @@ import logging
 
 import dist_zero.ids
 from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids
+from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
 
 logger = logging.getLogger(__name__)
@@ -52,9 +53,14 @@ class InternalNode(Node):
     self._adoptees = {adoptee['id']: adoptee for adoptee in adoptees} if adoptees is not None else None
     self._spawner_adjacent = spawner_adjacent
 
+    self._graph = NetworkGraph()
+
     self._current_split = None
 
     super(InternalNode, self).__init__(logger)
+
+  def is_data(self):
+    return True
 
   def _finish_split(self):
     self._current_split = None
@@ -83,10 +89,14 @@ class InternalNode(Node):
       raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
   def switch_flows(self, migration_id, old_exporters, new_exporters, new_receivers):
+    import ipdb
+    ipdb.set_trace()
     if self._variant == 'input':
       if len(new_receivers) != 1:
         raise errors.InternalError("Not sure how to set an input node's receives to a list not of length 1.")
       if self._adjacent is not None:
+        import ipdb
+        ipdb.set_trace()
         raise errors.InternalError("Not sure how to set an input node's receives when it already has an adjacent.")
       self._adjacent = new_receivers[0]
       self.send(self._adjacent, messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
@@ -97,7 +107,7 @@ class InternalNode(Node):
       raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
     for kid in self._kids.values():
-      self._node.send(kid, messages.migration.switch_flows(migration_id))
+      self.send(kid, messages.migration.switch_flows(migration_id))
 
   def initialize(self):
     if self._adoptees is not None:
@@ -117,8 +127,32 @@ class InternalNode(Node):
       else:
         raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
+    if self._parent is not None:
+      self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
+
+    if self._parent is None:
+      # Root nodes must spawn their unique depth 0 kid.
+      node_id = ids.new_id("InternalNode_first_root_kid")
+      if self._depth != 0:
+        raise errors.InternalError("Root node must be spawned with depth 0")
+      self._depth += 1
+      self._controller.spawn_node(
+          messages.io.internal_node_config(
+              node_id=node_id,
+              parent=self.new_handle(node_id),
+              variant=self._variant,
+              depth=0,
+              adjacent=None,
+              spawner_adjacent=None
+              if self._adjacent is None else self.transfer_handle(self._adjacent, for_node_id=node_id),
+              adoptees=None,
+          ))
+
   def receive(self, message, sender_id):
-    if message['type'] == 'added_leaf':
+    if message['type'] == 'hello_parent':
+      self._kids[sender_id] = message['kid']
+      self._graph.add_node(sender_id)
+    elif message['type'] == 'added_leaf':
       self.added_leaf(message['kid'])
     elif message['type'] == 'adopted_by':
       if self._current_split is None:
@@ -127,8 +161,27 @@ class InternalNode(Node):
         self._current_split.adopted_by(kid_id=sender_id, new_parent_id=message['new_parent_id'])
     elif message['type'] == 'adopted':
       self._kids[sender_id] = self._adoptees[sender_id]
+    elif message['type'] == 'connect_node':
+      if message['direction'] == 'receiver':
+        self._set_output(message['node'])
+      elif message['direction'] == 'sender':
+        self._set_input(message['node'])
+      else:
+        raise errors.InternalError('Unrecognized direction "{}"'.format(message['direction']))
     else:
       super(InternalNode, self).receive(message=message, sender_id=sender_id)
+
+  def _set_input(self, node):
+    if self._adjacent is not None:
+      raise errors.InternalError("InternalNodes can have only a single adjacent node.")
+    self._adjacent = node
+
+  def _set_output(self, node):
+    if self._adjacent is not None:
+      import ipdb
+      ipdb.set_trace()
+      raise errors.InternalError("InternalNodes can have only a single adjacent node.")
+    self._adjacent = node
 
   @staticmethod
   def from_config(node_config, controller):

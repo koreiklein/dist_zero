@@ -1,20 +1,28 @@
 from dist_zero import errors, deltas, messages, linker, settings
+from dist_zero.network_graph import NetworkGraph
 
 from . import migrator, topology_picker
 
 
 class InsertionMigrator(migrator.Migrator):
-  def __init__(self, migration, senders, receivers, node):
+  def __init__(self, migration, configure_right_places, senders, receivers, node):
     '''
     :param migration: The :ref:`handle` of the `MigrationNode` running the migration.
     :type migration: :ref:`handle`
     :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
     :param list receivers: A list of :ref:`handle` of the `Node` s that will receive from self by the end of the migration.
+    :param dict[str, (int, int)] configure_right_places: A dictionary taking each sender to the pair (k, n) where
+      this insertion node is sending that node its kth right_configuration message of n.
     :param node: The `Node` on which this migrator runs.
     :type node: `Node`
     '''
     self._migration = migration
     self._node = node
+
+    # depth may not yet be determined.  Set to 2 (meaning not a leaf or leaf-parent for now, and perhaps change it later)
+    self._depth = 2
+
+    self._configure_right_places = configure_right_places
 
     # When true, the swap has been prepared, and the migrator should be checking whether it's time to swap.
     self._waiting_for_swap = False
@@ -24,7 +32,11 @@ class InsertionMigrator(migrator.Migrator):
 
     self._kids = {} # node_id to either None (if the node has not yet reported that it is live) or the kid's handle.
 
-    self._right_configurations = {receiver_id: None for receiver_id in self._receivers.keys()}
+    # If the topology picker has determined multiple layers of nodes to spawn, this tracks which layer we are
+    # currently spawning
+    self._current_spawning_layer = None
+
+    self._right_configurations = None
     self._left_configurations = {sender_id: None for sender_id in self._senders.keys()}
 
     self._sender_id_to_status = {sender_id: 'new' for sender_id in self._senders}
@@ -51,6 +63,7 @@ class InsertionMigrator(migrator.Migrator):
     '''
     return InsertionMigrator(
         migration=migrator_config['migration'],
+        configure_right_places=migrator_config['configure_right_places'],
         senders=migrator_config['senders'],
         receivers=migrator_config['receivers'],
         node=node)
@@ -73,6 +86,9 @@ class InsertionMigrator(migrator.Migrator):
     if message['type'] == 'sequence_message':
       self._node.linker.receive_sequence_message(message['value'], sender_id=sender_id)
       self._maybe_swap()
+    elif message['type'] == 'hello_parent':
+      self._kids[sender_id] = message['kid']
+      self._maybe_all_kids_are_live()
     elif message['type'] == 'started_flow':
       self._node.import_from_node(message['sender'], first_sequence_number=message['sequence_number'])
       self._sender_id_to_status[sender_id] = 'started_flow'
@@ -100,65 +116,137 @@ class InsertionMigrator(migrator.Migrator):
     elif message['type'] == 'terminate_migrator':
       self._node.remove_migrator(self.migration_id)
       self._node.send(self._migration, messages.migration.migrator_terminated())
+    elif message['type'] == 'start_flow':
+      self._send_configure_right_to_left()
     elif message['type'] == 'configure_new_flow_right':
-      self._right_configurations[sender_id] = message
-      if self._node.parent is None:
-        if all(val is not None for val in self._right_configurations.values()):
-          for sender in self._senders.values():
-            self._node.send(sender,
-                            messages.migration.configure_new_flow_right(
-                                self.migration_id,
-                                n_kids=None,
-                                connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
-      else:
-        self._maybe_has_left_and_right_configurations()
+      right_config_index, n_total_right_configs = message['configuration_place']
+      if self._right_configurations is None:
+        self._right_configurations = [None for i in range(n_total_right_configs)]
+      self._right_configurations[right_config_index] = message
+      self._receivers[message['parent_handle']['id']] = message['parent_handle']
+      self._maybe_has_left_and_right_configurations()
     elif message['type'] == 'configure_new_flow_left':
       self._left_configurations[sender_id] = message
       self._maybe_has_left_and_right_configurations()
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
 
+  def _send_configure_right_to_left(self):
+    for sender in self._senders.values():
+      self._node.send(sender,
+                      messages.migration.configure_new_flow_right(
+                          self.migration_id,
+                          n_kids=None,
+                          configuration_place=self._configure_right_places[sender['id']],
+                          parent_handle=self._node.new_handle(sender['id']),
+                          depth=self._depth,
+                          is_data=self._node.is_data(),
+                          connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
+
   def _maybe_has_left_and_right_configurations(self):
-    if all(val is not None for val in self._right_configurations.values()) and \
+    if not self._flow_is_started and \
+        self._right_configurations is not None and \
+        all(val is not None for val in self._right_configurations) and \
         all(val is not None for val in self._left_configurations.values()):
 
-      # Decide on a network topology and spawn new kids
-      self._picker = topology_picker.TopologyPicker(
-          left_layer=[
-              kid['handle']['id'] for left_configuration in self._left_configurations.values()
-              for kid in left_configuration['kids']
-          ],
-          right_layer=[kid_id for kid_id in self._right_configurations.keys()],
-          outgoing_edge_limit={
-              kid['handle']['id']: kid['connection_limit']
-              for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
-          },
-          incomming_edge_limit={
-              kid_id: config['connection_limit']
-              for kid_id, config in self._right_configurations.items()
-          },
-          right_n_kids=({kid_id: config['n_kids']
-                         for kid_id, config in self._right_configurations.items()} if any(
-                             config['n_kids'] is not None for config in self._right_configurations.values()) else None))
-      self._picker.fix_all_violations()
-      for node_id in self._picker.new_nodes():
-        # FIXME(KK): Spawn the new node
-        self._kids[node_id] = None
-        raise RuntimeError("Not Yet Implemented")
+      from dist_zero.node.computation import ComputationNode
+      if self._node.__class__ != ComputationNode:
+        self._flow_is_started = True
+        self._depth = 0
+        self._send_configure_left_to_right()
+      else:
+        self._left_layer = {
+            kid['handle']['id']: kid['handle']
+            for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
+        }
+        self._graph = NetworkGraph()
+        for left_id in self._left_layer.keys():
+          self._graph.add_node(left_id)
 
-      self._maybe_all_kids_are_live()
+        # Decide on a network topology and spawn new kids
+        self._picker = topology_picker.TopologyPicker(
+            graph=self._graph,
+            max_outputs={
+                kid['handle']['id']: kid['connection_limit']
+                for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
+            },
+            max_inputs={
+                kid_id: self._node.system_config['SUM_NODE_SENDER_LIMIT']
+                for kid_id in self._left_layer.keys()
+            },
+            # TODO(KK): There is probably a better way to configure these standard limits than the below.
+            # Look into it, write up some notes, and fix it.
+            new_node_max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
+            new_node_max_inputs=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
+            new_node_name_prefix='SumNode',
+        )
+        self._picker.fill_graph(
+            left_is_data=any(config['is_data'] for config in self._left_configurations.values()),
+            right_is_data=any(config['is_data'] for config in self._right_configurations),
+            right_configurations=self._right_configurations)
+
+        self._spawn_layer(1)
+
+  def _spawn_layer(self, layer_index):
+    self._current_spawning_layer = layer_index
+    # Set which numbered receiver each node is of its sender.
+    k_of_n = {(left_id, receiver_id): i
+              for left_id in self._graph.nodes() for i, receiver_id in enumerate(self._graph.node_receivers(left_id))}
+
+    for node_id in self._picker.get_layer(layer_index):
+      self._kids[node_id] = None
+      if layer_index == 1:
+        senders = [self._left_layer[sender_id] for sender_id in self._graph.node_senders(node_id)]
+      else:
+        senders = [self._kids[sender_id] for sender_id in self._graph.node_senders(node_id)]
+
+      self._depth = 1
+      # FIXME(KK): Spawn the appropriate node here.  SumNodes are good sometimes, but at other times,
+      #   we should be spawning a ComputationNode.
+      self._node._controller.spawn_node(
+          messages.sum.sum_node_config(
+              node_id=node_id,
+              senders=senders,
+              receivers=[],
+              parent=self._node.new_handle(node_id),
+              migrator=messages.migration.insertion_migrator_config(
+                  senders=senders,
+                  configure_right_places={
+                      sender['id']: (k_of_n[(sender['id'], node_id)], len(self._graph.node_receivers(sender['id'])))
+                      for sender in senders
+                  },
+                  receivers=[],
+                  migration=self._node.transfer_handle(self._migration, node_id),
+              ),
+          ))
+
+    self._maybe_all_kids_are_live()
 
   def _maybe_all_kids_are_live(self):
-    if not self._flow_is_started and all(val is not None for val in self._kids.values()):
-      self._flow_is_started = True
-      for receiver in self._receivers.values():
-        self._node.send(receiver,
-                        messages.migration.configure_new_flow_left(
-                            self.migration_id,
-                            kids=[{
-                                'handle': self._kids[kid_id],
-                                'connection_limit': self._node.system_config['SUM_NODE_RECEIVER_LIMIT']
-                            } for kid_id in self._picker.new_rightmost_nodes()]))
+    if not self._flow_is_started and \
+        all(val is not None for val in self._kids.values()):
+      if self._current_spawning_layer + 1 < self._picker.n_layers:
+        self._spawn_layer(self._current_spawning_layer + 1)
+      else:
+        self._flow_is_started = True
+        self._send_configure_left_to_right()
+
+  def _send_configure_left_to_right(self):
+    for receiver in self._receivers.values():
+      if self._depth == 0:
+        message = messages.migration.configure_new_flow_left(
+            self.migration_id, depth=self._depth, is_data=self._node.is_data(), kids=[])
+      else:
+        message = messages.migration.configure_new_flow_left(
+            self.migration_id,
+            depth=self._depth,
+            is_data=self._node.is_data(),
+            kids=[{
+                'handle': self._node.transfer_handle(self._kids[kid_id], receiver['id']),
+                'connection_limit': self._node.system_config['SUM_NODE_RECEIVER_LIMIT']
+            } for kid_id in self._picker.new_rightmost_nodes()])
+
+      self._node.send(receiver, message)
 
   def _maybe_swap(self):
     if self._waiting_for_swap and \
@@ -181,6 +269,14 @@ class InsertionMigrator(migrator.Migrator):
 
   def initialize(self):
     self._node.deltas_only.add(self.migration_id)
-    for sender_id in self._senders.keys():
-      self._node._deltas.add_sender(sender_id)
-    self._node.send(self._migration, messages.migration.attached_migrator(self._node.new_handle(self.migration_id)))
+
+    if self._node.parent is None:
+      self._node.send(self._migration,
+                      messages.migration.attached_migrator(self.migration_id, self._node.new_handle(self.migration_id)))
+    else:
+      # FIXME(KK): Figure out a better place to keep the hello_parent message than in the dist_zero.messages.io module.
+      self._node.send(self._node.parent,
+                      messages.migration.migration_message(
+                          self.migration_id,
+                          message=messages.io.hello_parent(self._node.new_handle(self._node.parent['id']))))
+      self._send_configure_right_to_left()

@@ -27,11 +27,25 @@ class SinkMigrator(migrator.Migrator):
     self._swapped = False
     '''True once this migrator has swapped to the new flow.'''
 
-    self._new_flow_senders = {sender['id']: sender for sender in new_flow_senders}
-    self._left_configurations = {sender_id: None for sender_id in self._new_flow_senders.keys()}
-    self._kid_started_flows = {kid_id: None for kid_id in self._node._kids.keys()}
+    self._deltas = deltas.Deltas()
 
-    self._new_sender_id_to_first_flow_sequence_number = {sender_id: None for sender_id in self._new_flow_senders.keys()}
+    self._new_flow_senders = {}
+    self._left_configurations = {}
+    self._new_sender_id_to_first_flow_sequence_number = {}
+    self._new_importers = {}
+    '''Sender id to the new importer'''
+
+    self._old_sender_id_to_first_swapped_sequence_number = {sender_id: None for sender_id in old_flow_sender_ids}
+    '''Maps each old sender_id to the first sequence number after it has swapped to the new flow.'''
+    self._new_sender_id_to_first_swapped_sequence_number = {}
+    '''Maps each new sender_id to the first sequence number after it has swapped to the new flow.'''
+
+    if new_flow_senders is not None:
+      for sender in new_flow_senders:
+        self._add_sender(sender)
+
+    self._kid_started_flows = {kid_id: False for kid_id in self._node._kids.keys()}
+    self._kid_has_migrator = {kid_id: False for kid_id in self._node._kids.keys()}
     '''
     Once the flow has started, this map will assign to each new sender_id its first sequence_number
     that reflects the new flow.
@@ -42,27 +56,12 @@ class SinkMigrator(migrator.Migrator):
     that reflects the new flow.
     '''
 
-    self._new_importers = {sender_id: None for sender_id in self._new_flow_senders.keys()}
-    '''Sender id to the new importer'''
-
-    self._deltas = deltas.Deltas()
-    for sender_id in self._new_flow_senders.keys():
-      self._deltas.add_sender(sender_id)
-
     self._linker = linker.Linker(
         self._node,
         logger=self._node.logger,
         deliver=lambda message, sequence_number, sender_id: self._deltas.add_message(
           sender_id=sender_id, sequence_number=sequence_number, message=message)
         )
-
-    self._old_sender_id_to_first_swapped_sequence_number = {sender_id: None for sender_id in old_flow_sender_ids}
-    '''Maps each old sender_id to the first sequence number after it has swapped to the new flow.'''
-    self._new_sender_id_to_first_swapped_sequence_number = {
-        sender_id: None
-        for sender_id in self._new_flow_senders.keys()
-    }
-    '''Maps each new sender_id to the first sequence number after it has swapped to the new flow.'''
 
     self._flow_is_started = False
     '''True iff the new flow has started'''
@@ -77,6 +76,14 @@ class SinkMigrator(migrator.Migrator):
       'pending' if the node is not yet synced
       'synced' if it is
     '''
+
+  def _add_sender(self, sender):
+    self._new_flow_senders[sender['id']] = sender
+    self._left_configurations[sender['id']] = None
+    self._new_sender_id_to_first_flow_sequence_number[sender['id']] = None
+    self._new_importers[sender['id']] = None
+    self._new_sender_id_to_first_swapped_sequence_number[sender['id']] = None
+    self._deltas.add_sender(sender['id'])
 
   @property
   def parent(self):
@@ -118,38 +125,50 @@ class SinkMigrator(migrator.Migrator):
       sequence_number = self._node.send_forward_messages()
       self._node.send(self._migration, messages.migration.completed_flow(sequence_number=sequence_number))
 
+  def _send_configure_right_to_left(self):
+    for sender in self._new_flow_senders.values():
+      from dist_zero.node.io.internal import InternalNode
+      if self._node.__class__ == InternalNode:
+        n_kids = len(self._node._kids)
+        connection_limit = n_kids
+      else:
+        # FIXME(KK): Test and implement this
+        import ipdb
+        ipdb.set_trace()
+        raise RuntimeError("Not Yet Implemented")
+      self._node.send(
+          sender,
+          messages.migration.configure_new_flow_right(
+              self.migration_id,
+              n_kids=n_kids,
+              # FIXME(KK): For internal nodes, they are always sending the unique right configuration
+              #   message.  In the future, make sure this value is determined in a suitably abstract manner.
+              configuration_place=(0, 1),
+              parent_handle=self._node.new_handle(sender['id']),
+              depth=self._node.depth,
+              connection_limit=connection_limit,
+              is_data=self._node.is_data(),
+          ))
+
   def receive(self, sender_id, message):
     if message['type'] == 'start_flow':
-      for sender in self._new_flow_senders.values():
-        from dist_zero.node.io.internal import InternalNode
-        if self._node.__class__ == InternalNode:
-          n_kids = len(self._node._kids)
-          connection_limit = n_kids
-        else:
-          # FIXME(KK): Test and implement this
-          import ipdb
-          ipdb.set_trace()
-          raise RuntimeError("Not Yet Implemented")
-        self._node.send(sender,
-                        messages.migration.configure_new_flow_right(
-                            self.migration_id,
-                            n_kids=n_kids,
-                            connection_limit=connection_limit,
-                        ))
+      self._send_configure_right_to_left()
+    elif message['type'] == 'attached_migrator':
+      self._kid_has_migrator[sender_id] = True
+      self._maybe_send_attached_migrator()
     elif message['type'] == 'started_flow':
-      self._new_importers[sender_id] = self._linker.new_importer(
-          sender=message['sender'], first_sequence_number=message['sequence_number'])
-      self._new_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
-      self._maybe_complete_flow()
+      self._kid_started_flows[sender_id] = True
+      self._maybe_flow_is_started()
+      # FIXME(KK): Figure out what to do with this old code.
+      # started_flow used to come from nodes to the left, but now it comes from kids.
+      #self._new_importers[sender_id] = self._linker.new_importer(
+      #    sender=message['sender'], first_sequence_number=message['sequence_number'])
+      #self._new_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
+      #self._maybe_complete_flow()
     elif message['type'] == 'configure_new_flow_left':
       self._left_configurations[sender_id] = message
-      if all(val is not None for val in self._left_configurations.values()) and \
-          all(val is not None for val in self._kid_started_flows.values()):
-        self._node.send(self.parent,
-                        messages.migration.started_flow(
-                            self.migration_id,
-                            sequence_number=self._linker.advance_sequence_number(),
-                            sender=self._node.new_handle(self.parent['id'])))
+      self._maybe_has_left_configurations()
+      self._maybe_flow_is_started()
     elif message['type'] == 'replacing_flow':
       self._old_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
       self._maybe_complete_flow()
@@ -185,8 +204,41 @@ class SinkMigrator(migrator.Migrator):
         self._node.deltas_only.remove(self.migration_id)
       self._node.remove_migrator(self.migration_id)
       self._node.send(self._migration, messages.migration.migrator_terminated())
+    elif message['type'] == 'set_new_flow_adjacent':
+      adjacent = message['adjacent']
+      self._node.send(
+          adjacent,
+          messages.migration.configure_new_flow_right(
+              self.migration_id,
+              parent_handle=self._node.new_handle(adjacent['id']),
+              # FIXME(KK): Check whether this is always an appropriate way to set the configuration place.
+              configuration_place=(0, 1),
+              depth=self._node._depth,
+              is_data=self._node.is_data(),
+              n_kids=len(self._node._kids),
+              connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
     else:
+      import ipdb
+      ipdb.set_trace()
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
+
+  def _maybe_has_left_configurations(self):
+    if all(val is not None for val in self._left_configurations.values()):
+      all_kids = [kid['handle'] for left_config in self._left_configurations.values() for kid in left_config['kids']]
+      for adjacent_to_kid, kid in zip(all_kids, self._node._kids.values()):
+        self._node.send(kid,
+                        messages.migration.set_new_flow_adjacent(self.migration_id,
+                                                                 self._node.transfer_handle(adjacent_to_kid,
+                                                                                            kid['id'])))
+
+  def _maybe_flow_is_started(self):
+    if all(val is not None for val in self._left_configurations.values()) and \
+        all(self._kid_started_flows.values()):
+      self._node.send(self.parent,
+                      messages.migration.started_flow(
+                          self.migration_id,
+                          sequence_number=self._linker.advance_sequence_number(),
+                          sender=self._node.new_handle(self.parent['id'])))
 
   def _maybe_swap(self):
     if self._waiting_for_swap and not self._swapped \
@@ -263,6 +315,20 @@ class SinkMigrator(migrator.Migrator):
   def migration_id(self):
     return self._migration['id']
 
+  def _maybe_send_attached_migrator(self):
+    if all(self._kid_has_migrator.values()):
+      self._node.send(self._node._parent or self._migration, messages.migration.attached_migrator(self.migration_id))
+
   def initialize(self):
     self._node.deltas_only.add(self.migration_id)
-    self._node.send(self._migration, messages.migration.attached_migrator())
+    for kid in self._node._kids.values():
+      self._kid_has_migrator[kid['id']] = False
+      self._node.send(kid,
+                      messages.migration.attach_migrator(
+                          messages.migration.sink_migrator_config(
+                              migration=self._node.transfer_handle(self._migration, kid['id']),
+                              old_flow_sender_ids=self._node._graph.node_senders(kid['id']),
+                              new_flow_senders=None,
+                              will_sync=self._will_sync)))
+
+    self._maybe_send_attached_migrator()
