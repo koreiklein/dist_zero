@@ -21,7 +21,6 @@ class ComputationNode(Node):
     self._exporters = {}
 
     self._senders = {sender['id']: sender for sender in migrator_config['senders']}
-    self._receivers = {receiver['id']: receiver for receiver in migrator_config['receivers']}
 
     self._initial_migrator_config = migrator_config
     self._initial_migrator = None # It will be initialized later.
@@ -39,7 +38,10 @@ class ComputationNode(Node):
 
   def activate_swap(self, migration_id, new_receiver_ids):
     for receiver_id in new_receiver_ids:
-      receiver = self._receivers[receiver_id]
+      if receiver_id not in self._exporters:
+        import ipdb
+        ipdb.set_trace()
+      receiver = self._exporters[receiver_id].receiver
       self.send(receiver, messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
 
   def initialize(self):
@@ -92,7 +94,7 @@ class ComputationNode(Node):
         else:
           self.logger.warning("An input node received added_adjacent_leaf when there was not a unique sender")
       elif message['variant'] == 'output':
-        if len(self._receivers) == 1:
+        if len(self._exporters) == 1:
           node_id = ids.new_id('SumNode_output_kid')
           self_handle = self.new_handle(node_id)
           self._controller.spawn_node(

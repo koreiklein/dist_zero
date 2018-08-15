@@ -115,6 +115,7 @@ class SourceMigrator(migrator.Migrator):
       self._send_configure_new_flow_left_to_right()
 
   def _send_configure_new_flow_left_to_right(self):
+    self._node.logger.info("Sending configure_new_flow_left")
     for new_receiver in self._new_receivers.values():
       from dist_zero.node.io.internal import InternalNode
       if self._node.__class__ == InternalNode:
@@ -138,6 +139,7 @@ class SourceMigrator(migrator.Migrator):
       self._kid_has_migrator[sender_id] = True
       self._maybe_send_attached_migrator()
     elif message['type'] == 'configure_new_flow_right':
+      self._node.logger.info("Received configure_new_flow_right")
       right_config_index, n_total_right_configs = message['configuration_place']
       if self._right_configurations is None:
         self._right_configurations = [None for i in range(n_total_right_configs)]
@@ -160,6 +162,7 @@ class SourceMigrator(migrator.Migrator):
 
   def _maybe_send_attached_migrator(self):
     if all(self._kid_has_migrator.values()):
+      self._node.logger.info("sending attached_migrator")
       self._node.send(self._node._parent or self._migration, messages.migration.attached_migrator(self.migration_id))
 
   def initialize(self):

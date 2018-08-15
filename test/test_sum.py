@@ -103,6 +103,8 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           ]))
 
   demo.run_for(ms=1000)
+  print(demo.system._spawner.node_by_id().keys())
+  node_by_id = demo.system._spawner.node_by_id()
   import ipdb
   ipdb.set_trace()
 

@@ -28,32 +28,83 @@ class TopologyPicker(object):
     return self._layers[i]
 
   def fill_graph(self, left_is_data, right_is_data, right_configurations):
-    if not (left_is_data and right_is_data):
+    if left_is_data and right_is_data:
+      left_layer = []
+      for left in self._graph.nodes():
+        node_id = self._new_node()
+        self._graph.add_edge(left, node_id)
+        left_layer.append(node_id)
+
+      right_layer = []
+      right_map = {}
+      for right_config in right_configurations:
+        for i in range(right_config['n_kids']):
+          node_id = self._new_node()
+          right_map[node_id] = [right_config['parent_handle']['id']]
+          right_layer.append(node_id)
+
+      if len(right_layer) <= self._new_node_max_outputs and len(left_layer) <= self._new_node_max_inputs:
+        self._layers.append(left_layer)
+        self._layers.append(right_layer)
+        for right in right_layer:
+          for left in left_layer:
+            self._graph.add_edge(left, right)
+        return right_map
+      else:
+        # FIXME(KK): Test and implement more cases.
+        raise RuntimeError("Not Yet Implemented")
+    elif left_is_data and not right_is_data:
+      if len(self._graph.nodes()) == 0 and len(right_configurations) > 0:
+        layer = [self._new_node()]
+        self._layers.append(layer)
+        return {layer[0]: [right_config['parent_handle']['id'] for right_config in right_configurations]}
+      else:
+        left_layer = []
+        for left in self._graph.nodes():
+          node_id = self._new_node()
+          self._graph.add_edge(left, node_id)
+          left_layer.append(node_id)
+        if len(right_configurations) <= self._new_node_max_outputs:
+          if all(config['connection_limit'] >= len(left_layer) for config in right_configurations):
+            self._layers.append(left_layer)
+            right_map = {
+                left: [right_config['parent_handle']['id'] for right_config in right_configurations]
+                for left in left_layer
+            }
+            return right_map
+          else:
+            # FIXME(KK): In this case, we should probably be spawning more layers.
+            raise RuntimeError("Not Yet Implemented")
+        else:
+          # FIXME(KK): In this case, we should probably be spawning more layers.
+          raise RuntimeError("Not Yet Implemented")
+    elif not left_is_data and right_is_data:
+      left_nodes = self._graph.nodes()
+      right_layer = []
+      right_map = {}
+      for right_config in right_configurations:
+        for i in range(right_config['n_kids']):
+          node_id = self._new_node()
+          right_map[node_id] = [right_config['parent_handle']['id']]
+          right_layer.append(node_id)
+      if len(right_layer) > 0:
+        # FIXME(KK): In this case, we should probably try a complete connection
+        raise RuntimeError("Not Yet Implemented")
+      else:
+        if len(left_nodes) <= self._new_node_max_inputs:
+          right_layer = [self._new_node()]
+          self._layers.append(right_layer)
+          for left in left_nodes:
+            self._graph.add_edge(left, right_layer[0])
+          return {right_layer[0]: [right_config['parent_handle']['id'] for right_config in right_configurations]}
+        else:
+          # FIXME(KK): In this case, we should probably try a complete connection
+          raise RuntimeError("Not Yet Implemented")
+    else:
       # FIXME(KK): We are currently implementing only one very specific special case.
       #   Test and implement the other more general cases.
       import ipdb
       ipdb.set_trace()
-      raise RuntimeError("Not Yet Implemented")
-
-    left_layer = []
-    for left in self._graph.nodes():
-      node_id = self._new_node()
-      self._graph.add_edge(left, node_id)
-      left_layer.append(node_id)
-
-    right_layer = []
-    for right_config in right_configurations:
-      for i in range(right_config['n_kids']):
-        right_layer.append(self._new_node())
-
-    if len(right_layer) <= self._new_node_max_outputs and len(left_layer) <= self._new_node_max_inputs:
-      self._layers.append(left_layer)
-      self._layers.append(right_layer)
-      for right in right_layer:
-        for left in left_layer:
-          self._graph.add_edge(left, right)
-    else:
-      # FIXME(KK): Test and implement more cases.
       raise RuntimeError("Not Yet Implemented")
 
   def _new_node(self):
