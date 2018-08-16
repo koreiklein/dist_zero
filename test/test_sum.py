@@ -45,10 +45,14 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   network_errors_config = messages.machine.std_simulated_network_errors_config()
   network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
   network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
+  system_config = messages.machine.std_system_config()
 
   machine_a, machine_b, machine_c = demo.new_machine_controllers(
       3,
-      base_config={'network_errors_config': network_errors_config},
+      base_config={
+          'system_config': system_config,
+          'network_errors_config': network_errors_config,
+      },
       random_seed=seed,
   )
 
@@ -70,7 +74,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
 
   # Set up the sum computation with a migration:
   node_id = dist_zero.ids.new_id('MigrationNode_add_sum_computation')
-  sum_node_id = dist_zero.ids.new_id('ComputationNode_root')
+  root_computation_node_id = dist_zero.ids.new_id('ComputationNode_root')
   input_handle_for_migration = demo.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_node_id)
   output_handle_for_migration = demo.system.generate_new_handle(
       new_node_id=node_id, existing_node_id=root_output_node_id)
@@ -81,7 +85,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           source_nodes=[(input_handle_for_migration, messages.migration.source_migrator_config(will_sync=False, ))],
           sink_nodes=[(output_handle_for_migration,
                        messages.migration.sink_migrator_config(
-                           new_flow_senders=[sum_node_id],
+                           new_flow_senders=[root_computation_node_id],
                            old_flow_sender_ids=[],
                            will_sync=False,
                        ))],
@@ -89,7 +93,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           sync_pairs=[],
           insertion_node_configs=[
               messages.computation.computation_node_config(
-                  node_id=sum_node_id,
+                  node_id=root_computation_node_id,
                   depth=1,
                   parent=None,
                   senders=[input_handle_for_migration],
@@ -103,21 +107,50 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           ]))
 
   demo.run_for(ms=1000)
-  print(demo.system._spawner.node_by_id().keys())
-  node_by_id = demo.system._spawner.node_by_id()
-  import ipdb
-  ipdb.set_trace()
 
-  user_b_output_id = demo.system.create_kid(
-      parent_node_id=root_output_node_id, new_node_name='output_b', machine_id=machine_b)
-  user_c_output_id = demo.system.create_kid(
-      parent_node_id=root_output_node_id, new_node_name='output_c', machine_id=machine_c)
+  assert root_computation_node_id == demo.system.get_adjacent(root_input_node_id)
+  assert root_computation_node_id == demo.system.get_adjacent(root_output_node_id)
+  input_kids, output_kids, computation_kids = [
+      demo.system.get_kids(nid) for nid in [root_input_node_id, root_output_node_id, root_computation_node_id]
+  ]
+  assert 1 == len(input_kids)
+  assert 1 == len(output_kids)
+  assert 2 == len(computation_kids)
+
+  input_kid, output_kid = input_kids[0], output_kids[0]
+  computation_kid_a, computation_kid_b = computation_kids
+  if input_kid not in demo.system.get_senders(computation_kid_a):
+    computation_kid_a, computation_kid_b = (computation_kid_b, computation_kid_a)
+
+  assert input_kid in demo.system.get_senders(computation_kid_a)
+  assert computation_kid_a in demo.system.get_senders(computation_kid_b)
+  assert computation_kid_b == demo.system.get_adjacent(output_kid)
+  comp_a_kids, comp_b_kids = [demo.system.get_kids(nid) for nid in [computation_kid_a, computation_kid_b]]
+  assert 1 == len(comp_a_kids)
+  assert 1 == len(comp_b_kids)
+  sum_kid_a, sum_kid_b = comp_a_kids[0], comp_b_kids[0]
+
+  a_sends_to, b_sends_to = [demo.system.get_receivers(nid) for nid in [sum_kid_a, sum_kid_b]]
+  assert 1 == len(a_sends_to)
+  assert 0 == len(b_sends_to)
+  assert a_sends_to[0] == sum_kid_b
+
+  a_receives_from, b_receives_from = [demo.system.get_senders(nid) for nid in [sum_kid_a, sum_kid_b]]
+  assert 0 == len(a_receives_from)
+  assert 1 == len(b_receives_from)
+  assert b_receives_from[0] == sum_kid_a
+
+  output_kid = demo.system.get_kids(root_output_node_id)[0]
+  input_kid = demo.system.get_kids(root_input_node_id)[0]
+
+  user_b_output_id = demo.system.create_kid(parent_node_id=output_kid, new_node_name='output_b', machine_id=machine_b)
+  user_c_output_id = demo.system.create_kid(parent_node_id=output_kid, new_node_name='output_c', machine_id=machine_c)
 
   # Wait for the output nodes to start up
   demo.run_for(ms=200)
 
   user_b_input_id = demo.system.create_kid(
-      parent_node_id=root_input_node_id,
+      parent_node_id=input_kid,
       new_node_name='input_b',
       machine_id=machine_b,
       recorded_user=RecordedUser('user b', [
@@ -125,7 +158,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           (2060, messages.io.input_action(1)),
       ]))
   user_c_input_id = demo.system.create_kid(
-      parent_node_id=root_input_node_id,
+      parent_node_id=input_kid,
       new_node_name='input_c',
       machine_id=machine_c,
       recorded_user=RecordedUser('user c', [
@@ -137,21 +170,27 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   demo.run_for(ms=5000)
 
   # Smoke test that at least one message was acknowledged by the middle sum node.
-  sum_node_stats = demo.system.get_stats(sum_node_id)
-  assert sum_node_stats['acknowledged_messages'] > 0
-  if network_error_type == 'duplicate':
-    assert sum_node_stats['n_duplicates'] > 0
+  #import ipdb; ipdb.set_trace()
+  # FIXME(KK): Figure out whether we can still have code like this in a test,
+  #   even though it investigates details in a node whose id we know, but which was spawned
+  #   by a node internal to the system, and not by the system_controller.
+  #sum_node_stats = demo.system.get_stats(root_computation_node_id)
+  #assert sum_node_stats['acknowledged_messages'] > 0
+  #if network_error_type == 'duplicate':
+  #  assert sum_node_stats['n_duplicates'] > 0
 
   # Check that the output nodes receive the correct sum
   user_b_state = demo.system.get_output_state(user_b_output_id)
   user_c_state = demo.system.get_output_state(user_c_output_id)
+
   assert 6 == user_b_state
   assert 6 == user_c_state
 
   # At this point, the nodes should be done sending meaningful messages, run for some more time
   # and assert that certain stats have not changed.
+  sum_node_stats = demo.system.get_stats(sum_kid_a)
   demo.run_for(ms=2000)
-  later_sum_node_stats = demo.system.get_stats(sum_node_id)
+  later_sum_node_stats = demo.system.get_stats(sum_kid_a)
   for stat in ['n_retransmissions', 'n_reorders', 'n_duplicates', 'sent_messages', 'acknowledged_messages']:
     assert (sum_node_stats[stat] == later_sum_node_stats[stat]), 'Values were unequal for the stat "{}"'.format(stat)
 

@@ -106,6 +106,10 @@ class SumNode(Node):
       self._initial_migrator = self.attach_migrator(self._initial_migrator_config)
 
     self.linker.initialize()
+    # FIXME(KK): Remove
+    #if self._input_importer:
+    #  self.send(self._input_importer.sender,
+    #            messages.migration.connect_node(node=self.new_handle(self._input_importer.sender_id), direction='receiver'))
 
   def send_forward_messages(self, before=None):
     '''
@@ -161,11 +165,11 @@ class SumNode(Node):
       direction = message['direction']
 
       if direction == 'sender':
-        self.import_from_node(node)
+        if node['id'] not in self._importers:
+          self.import_from_node(node)
       elif direction == 'receiver':
-        if node['id'] in self._exporters:
-          raise errors.InternalError("Received connect_node for an exporter that had already been added.")
-        self.export_to_node(node)
+        if node['id'] not in self._exporters:
+          self.export_to_node(node)
       else:
         raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
     elif message['type'] == 'adjacent_has_split':
@@ -225,11 +229,14 @@ class SumNode(Node):
 
     if len(self._exporters) >= SUM_NODE_RECEIVER_LOWER_LIMIT or len(self._importers) >= SUM_NODE_SENDER_LOWER_LIMIT:
       self._time_since_had_enough_receivers_ms = 0
-    elif self._time_since_had_enough_receivers_ms > TOO_FEW_RECEIVERS_TIME_MS and \
-        self._input_importer is None \
-        and self._output_exporter is None:
-      self._time_since_had_enough_receivers_ms = 0
-      self._excise_self()
+
+    # FIXME(KK): This logic should probably go in the parent instead!
+    #elif self._time_since_had_enough_receivers_ms > TOO_FEW_RECEIVERS_TIME_MS and \
+    #    self._input_importer is None \
+    #    and self._output_exporter is None:
+    #  self._time_since_had_enough_receivers_ms = 0
+    #  import ipdb; ipdb.set_trace()
+    #  self._excise_self()
 
     self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
@@ -351,7 +358,10 @@ class SumNode(Node):
 
     self._exporters.update(new_exporters)
 
-  def activate_swap(self, migration_id, new_receiver_ids):
+  def activate_swap(self, migration_id, new_receiver_ids, kids):
+    if len(kids) != 0:
+      raise errors.InternalError("Sum nodes should never be passed kids by a migrator.")
+
     for receiver_id in new_receiver_ids:
       if receiver_id not in self._exporters:
         import ipdb
@@ -379,5 +389,9 @@ class SumNode(Node):
   def handle_api_message(self, message):
     if message['type'] == 'spawn_new_senders':
       return self._spawn_new_senders_migration()
+    elif message['type'] == 'get_senders':
+      return {sender_id: importer.sender for sender_id, importer in self._importers.items()}
+    elif message['type'] == 'get_receivers':
+      return {receiver_id: exporter.receiver for receiver_id, exporter in self._exporters.items()}
     else:
       return super(SumNode, self).handle_api_message(message)

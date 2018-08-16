@@ -166,6 +166,26 @@ def get_stats():
   return {'type': 'get_stats'}
 
 
+def get_kids():
+  '''API message to a node to get its dictionary of kids.'''
+  return {'type': 'get_kids'}
+
+
+def get_senders():
+  '''API message to a node to get its dictionary of senders.'''
+  return {'type': 'get_senders'}
+
+
+def get_receivers():
+  '''API message to a node to get its dictionary of receivers.'''
+  return {'type': 'get_receivers'}
+
+
+def get_adjacent_handle():
+  '''API message to a node to get the handle of its adjacent (for internal and leaf nodes).'''
+  return {'type': 'get_adjacent_handle'}
+
+
 def create_kid_config(new_node_name, machine_id):
   '''
   Create a node_config for a new kid node of an internal io node.

@@ -145,6 +145,7 @@ class InternalNode(Node):
               adjacent=None,
               spawner_adjacent=None
               if self._adjacent is None else self.transfer_handle(self._adjacent, for_node_id=node_id),
+              initial_state=self._initial_state,
               adoptees=None,
           ))
 
@@ -202,6 +203,10 @@ class InternalNode(Node):
   def handle_api_message(self, message):
     if message['type'] == 'create_kid_config':
       return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
+    elif message['type'] == 'get_kids':
+      return self._kids
+    elif message['type'] == 'get_adjacent_handle':
+      return self._adjacent
     else:
       return super(InternalNode, self).handle_api_message(message)
 

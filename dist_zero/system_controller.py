@@ -42,6 +42,39 @@ class SystemController(object):
     '''The underlying spawner of this `SystemController`'''
     return self._spawner
 
+  def get_adjacent(self, node_id):
+    adjacent_handle = self.send_api_message(node_id, messages.machine.get_adjacent_handle())
+    if adjacent_handle is None:
+      return None
+    else:
+      self._add_node_machine_mapping(adjacent_handle)
+      return adjacent_handle['id']
+
+  def get_kids(self, node_id):
+    result = self.send_api_message(node_id, messages.machine.get_kids())
+    for handle in result.values():
+      self._add_node_machine_mapping(handle)
+
+    return list(result.keys())
+
+  def get_senders(self, node_id):
+    result = self.send_api_message(node_id, messages.machine.get_senders())
+    for handle in result.values():
+      self._add_node_machine_mapping(handle)
+
+    return list(result.keys())
+
+  def get_receivers(self, node_id):
+    result = self.send_api_message(node_id, messages.machine.get_receivers())
+    for handle in result.values():
+      self._add_node_machine_mapping(handle)
+
+    return list(result.keys())
+
+  def _add_node_machine_mapping(self, handle):
+    if handle['id'] not in self._node_id_to_machine_id:
+      self._node_id_to_machine_id[handle['id']] = handle['controller_id']
+
   def create_kid_config(self, internal_node_id, new_node_name, machine_id):
     '''
     :param internal_node_id: The id of the parent `InternalNode`.

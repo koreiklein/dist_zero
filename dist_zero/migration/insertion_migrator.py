@@ -313,7 +313,7 @@ class InsertionMigrator(migrator.Migrator):
       self._node.checkpoint(self._new_sender_id_to_first_live_sequence_number)
       self._node.deltas_only.remove(self.migration_id)
       self._waiting_for_swap = False
-      self._node.activate_swap(self.migration_id, new_receiver_ids=list(self._receivers.keys()))
+      self._node.activate_swap(self.migration_id, new_receiver_ids=list(self._receivers.keys()), kids=self._kids)
 
       if settings.IS_TESTING_ENV:
         self._node._TESTING_swapped_once = True

@@ -36,7 +36,9 @@ class ComputationNode(Node):
   def checkpoint(self, before=None):
     pass
 
-  def activate_swap(self, migration_id, new_receiver_ids):
+  def activate_swap(self, migration_id, new_receiver_ids, kids):
+    self.kids.update(kids)
+
     for receiver_id in new_receiver_ids:
       if receiver_id not in self._exporters:
         import ipdb
@@ -80,34 +82,45 @@ class ComputationNode(Node):
   def receive(self, message, sender_id):
     if message['type'] == 'added_adjacent_leaf':
       if message['variant'] == 'input':
-        if len(self._senders) == 1:
-          node_id = ids.new_id('SumNode_input_kid')
-          self_handle = self.new_handle(node_id)
-          self._controller.spawn_node(
-              messages.sum.sum_node_config(
-                  node_id=node_id,
-                  senders=[],
-                  parent=self_handle,
-                  receivers=[self_handle],
-                  input_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
-              ))
-        else:
-          self.logger.warning("An input node received added_adjacent_leaf when there was not a unique sender")
+        possible_receivers = list(self.kids.values())
+        if len(possible_receivers) == 0:
+          raise errors.InternalError("ComputationNode did not have a child to which to connect its new adjacent.")
+        # FIXME(KK): Instead of the below, always pick the 'best' child (in some reasonable sense).
+        receiver = possible_receivers[0]
+        node_id = ids.new_id('SumNode_input_adjacent')
+        self._controller.spawn_node(
+            messages.sum.sum_node_config(
+                node_id=node_id,
+                senders=[],
+                parent=self.new_handle(node_id),
+                receivers=[self.transfer_handle(receiver, node_id)],
+                input_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
+            ))
       elif message['variant'] == 'output':
-        if len(self._exporters) == 1:
-          node_id = ids.new_id('SumNode_output_kid')
-          self_handle = self.new_handle(node_id)
-          self._controller.spawn_node(
-              messages.sum.sum_node_config(
-                  node_id=node_id,
-                  parent=self_handle,
-                  senders=[self_handle],
-                  receivers=[],
-                  output_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
-              ))
-        else:
-          self.logger.warning("An output node received added_adjacent_leaf when there was not a unique receiver")
+        possible_senders = list(self.kids.values())
+        if len(possible_senders) == 0:
+          raise errors.InternalError("ComputationNode did not have a child to which to connect its new adjacent.")
+        # FIXME(KK): Instead of the below, always pick the 'best' child (in some reasonable sense).
+        sender = possible_senders[0]
+
+        node_id = ids.new_id('SumNode_output_adjacent')
+        self._controller.spawn_node(
+            messages.sum.sum_node_config(
+                node_id=node_id,
+                parent=self.new_handle(node_id),
+                senders=[self.transfer_handle(sender, node_id)],
+                receivers=[],
+                output_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
+            ))
       else:
         raise errors.InternalError("Unrecognized variant {}".format(message['variant']))
     else:
       super(ComputationNode, self).receive(message=message, sender_id=sender_id)
+
+  def handle_api_message(self, message):
+    if message['type'] == 'get_kids':
+      return self.kids
+    elif message['type'] == 'get_senders':
+      return self._senders
+    else:
+      return super(InternalNode, self).handle_api_message(message)
