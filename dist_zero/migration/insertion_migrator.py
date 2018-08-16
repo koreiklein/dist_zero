@@ -103,8 +103,8 @@ class InsertionMigrator(migrator.Migrator):
     if message['type'] == 'sequence_message':
       self._node.linker.receive_sequence_message(message['value'], sender_id=sender_id)
       self._maybe_swap()
-    elif message['type'] == 'hello_parent':
-      self._kids[sender_id] = message['kid']
+    elif message['type'] == 'attached_migrator':
+      self._kids[sender_id] = message['insertion_node_handle']
       self._maybe_all_kids_are_live()
     elif message['type'] == 'started_flow':
       self._node.import_from_node(message['sender'], first_sequence_number=message['sequence_number'])
@@ -334,13 +334,9 @@ class InsertionMigrator(migrator.Migrator):
   def initialize(self):
     self._node.deltas_only.add(self.migration_id)
 
-    if self._node.parent is None:
-      self._node.send(self._migration,
-                      messages.migration.attached_migrator(self.migration_id, self._node.new_handle(self.migration_id)))
-    else:
-      # FIXME(KK): Figure out a better place to keep the hello_parent message than in the dist_zero.messages.io module.
-      self._node.send(self._node.parent,
-                      messages.migration.migration_message(
-                          self.migration_id,
-                          message=messages.io.hello_parent(self._node.new_handle(self._node.parent['id']))))
+    self._node.send(
+        self.parent,
+        message=messages.migration.attached_migrator(self.migration_id, self._node.new_handle(self.parent['id'])))
+
+    if self._node.parent is not None:
       self._send_configure_right_to_left()

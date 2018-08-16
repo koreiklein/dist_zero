@@ -50,40 +50,6 @@ class SourceMigrator(migrator.Migrator):
         will_sync=migrator_config['will_sync'],
     )
 
-  # FIXME(KK): Perhaps this method should be removed entirely, especially if it is unused.
-  def _receive_start_flow(self, sender_id, message):
-    self._node.send_forward_messages()
-
-    for new_receiver in self._new_receivers:
-      self._create_new_exporter(new_receiver)
-
-    for old_receiver_id, new_receivers in self._exporter_swaps:
-      self._node.logger.info(
-          "Starting duplication phase for {cur_node_id} . {new_receivers} will now receive duplicates from {old_receiver_id}.",
-          extra={
-              'new_receivers': new_receivers,
-              'old_receiver_id': old_receiver_id,
-          })
-      exporter = self._node._exporters[old_receiver_id]
-      if exporter.duplicated_exporters is not None:
-        raise errors.InternalError("Refusing to start duplicating an exporter that is already duplicating.")
-
-      exporter.duplicated_exporters = [self._create_new_exporter(new_receiver) for new_receiver in new_receivers]
-
-      self._node.send(exporter.receiver,
-                      messages.migration.replacing_flow(
-                          migration_id=self.migration_id, sequence_number=exporter.internal_sequence_number))
-
-  def _create_new_exporter(new_receiver):
-    new_exporter = self._linker.new_exporter(new_receiver, migration_id=self.migration_id)
-    self._new_exporters[new_receiver['id']] = new_exporter
-    self._node.send(new_receiver,
-                    messages.migration.started_flow(
-                        migration_id=self.migration_id,
-                        sequence_number=new_exporter.internal_sequence_number,
-                        sender=self._node.new_handle(new_receiver['id'])))
-    return new_exporter
-
   def _receive_switch_flows(self, sender_id, message):
     # Clear out any messages that can still be sent on the old flow.
     self._node.checkpoint()
