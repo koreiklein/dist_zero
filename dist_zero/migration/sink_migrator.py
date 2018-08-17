@@ -23,6 +23,7 @@ class SinkMigrator(migrator.Migrator):
     self._waiting_for_swap = False
 
     self._kids_switched = {}
+    self._kid_migrator_is_terminated = {}
 
     self._now_ms = 0
 
@@ -226,10 +227,13 @@ class SinkMigrator(migrator.Migrator):
       self._maybe_swap()
     elif message['type'] == 'terminate_migrator':
       self._node.logger.info("terminating migrator")
-      if self.migration_id in self._node.deltas_only:
-        self._node.deltas_only.remove(self.migration_id)
-      self._node.remove_migrator(self.migration_id)
-      self._node.send(self._migration, messages.migration.migrator_terminated())
+      for kid in self._node._kids.values():
+        self._kid_migrator_is_terminated[kid['id']] = False
+        self._node.send(kid, messages.migration.terminate_migrator(self.migration_id))
+      self._maybe_kids_are_terminated()
+    elif message['type'] == 'migrator_terminated':
+      self._kid_migrator_is_terminated[sender_id] = True
+      self._maybe_kids_are_terminated()
     elif message['type'] == 'set_new_flow_adjacent':
       adjacent = message['adjacent']
       self._node.send(
@@ -247,6 +251,13 @@ class SinkMigrator(migrator.Migrator):
       import ipdb
       ipdb.set_trace()
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
+
+  def _maybe_kids_are_terminated(self):
+    if all(self._kid_migrator_is_terminated.values()):
+      if self.migration_id in self._node.deltas_only:
+        self._node.deltas_only.remove(self.migration_id)
+      self._node.remove_migrator(self.migration_id)
+      self._node.send(self.parent, messages.migration.migrator_terminated(self.migration_id))
 
   def _maybe_prepared_for_switch(self):
     if all(self._kids_ready_for_switch.values()):

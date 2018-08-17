@@ -27,6 +27,7 @@ class SourceMigrator(migrator.Migrator):
     self._linker = linker.Linker(self._node, logger=self._node.logger, deliver=_deliver)
 
     self._kid_has_migrator = {kid_id: False for kid_id in self._node._kids.keys()}
+    self._kid_migrator_is_terminated = {}
 
     self._new_exporters = {}
 
@@ -67,10 +68,17 @@ class SourceMigrator(migrator.Migrator):
     # FIXME(KK): Test and implement the logic regarding setting up duplications.  Then there may actually
     # be a reason to remove old exporters that are done duplicating.
     #self._node.linker.remove_exporters(set(self._old_exporters.keys()))
-    self._node.remove_migrator(self.migration_id)
     for exporter in self._new_exporters.values():
       exporter._migration_id = None
-    self._node.send(self._migration, messages.migration.migrator_terminated())
+    for kid in self._node._kids.values():
+      self._kid_migrator_is_terminated[kid['id']] = False
+      self._node.send(kid, messages.migration.terminate_migrator(self.migration_id))
+    self._maybe_kids_are_terminated()
+
+  def _maybe_kids_are_terminated(self):
+    if all(self._kid_migrator_is_terminated.values()):
+      self._node.remove_migrator(self.migration_id)
+      self._node.send(self.parent, messages.migration.migrator_terminated(self.migration_id))
 
   def _maybe_has_right_configurations(self):
     if all(val is not None for val in self._right_configurations):
@@ -115,6 +123,9 @@ class SourceMigrator(migrator.Migrator):
       self._receive_switch_flows(sender_id, message)
     elif message['type'] == 'terminate_migrator':
       self._receive_terminate_migrator(sender_id, message)
+    elif message['type'] == 'migrator_terminated':
+      self._kid_migrator_is_terminated[sender_id] = True
+      self._maybe_kids_are_terminated()
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
 
@@ -125,6 +136,13 @@ class SourceMigrator(migrator.Migrator):
   def elapse(self, ms):
     if not self._swapped:
       self._linker.elapse(ms)
+
+  @property
+  def parent(self):
+    if self._node._parent is not None:
+      return self._node._parent
+    else:
+      return self._migration
 
   def _maybe_send_attached_migrator(self):
     if all(self._kid_has_migrator.values()):

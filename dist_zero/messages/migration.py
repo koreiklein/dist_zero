@@ -329,15 +329,19 @@ def swapped_from_duplicate(migration_id, first_live_sequence_number):
 def terminate_migrator(migration_id):
   '''
   Sent from the migration node to migrators to indicate that the migration is over.
+
+  :param str migration_id: The id of the relevant migration.
   '''
   return {'type': 'migration', 'migration_id': migration_id, 'message': {'type': 'terminate_migrator'}}
 
 
-def migrator_terminated():
+def migrator_terminated(migration_id):
   '''
   Sent from the migrator nodes to the migration node to indicate that they have been terminated.
+
+  :param str migration_id: The id of the relevant migration.
   '''
-  return {'type': 'migrator_terminated'}
+  return {'type': 'migration', 'migration_id': migration_id, 'message': {'type': 'migrator_terminated'}}
 
 
 def configure_new_flow_right(migration_id, parent_handle, configuration_place, is_data, depth, n_kids,

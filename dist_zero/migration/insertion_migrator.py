@@ -51,6 +51,7 @@ class InsertionMigrator(migrator.Migrator):
     self._flow_is_started = False
 
     self._kids_ready_for_switch = None
+    self._kid_migrator_is_terminated = {}
 
   @property
   def parent(self):
@@ -139,8 +140,10 @@ class InsertionMigrator(migrator.Migrator):
       self._new_sender_id_to_first_live_sequence_number[sender_id] = message['first_live_sequence_number']
       self._maybe_swap()
     elif message['type'] == 'terminate_migrator':
-      self._node.remove_migrator(self.migration_id)
-      self._node.send(self._migration, messages.migration.migrator_terminated())
+      self._receive_terminate_migrator(sender_id, message)
+    elif message['type'] == 'migrator_terminated':
+      self._kid_migrator_is_terminated[sender_id] = True
+      self._maybe_kids_are_terminated()
     elif message['type'] == 'start_flow':
       self._send_configure_right_to_left()
     elif message['type'] == 'configure_new_flow_right':
@@ -158,6 +161,17 @@ class InsertionMigrator(migrator.Migrator):
       self._maybe_has_left_and_right_configurations()
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
+
+  def _receive_terminate_migrator(self, sender_id, message):
+    for kid in self._kids.values():
+      self._kid_migrator_is_terminated[kid['id']] = False
+      self._node.send(kid, messages.migration.terminate_migrator(self.migration_id))
+    self._maybe_kids_are_terminated()
+
+  def _maybe_kids_are_terminated(self):
+    if all(self._kid_migrator_is_terminated.values()):
+      self._node.remove_migrator(self.migration_id)
+      self._node.send(self.parent, messages.migration.migrator_terminated(self.migration_id))
 
   def _send_configure_right_to_left(self):
     self._node.logger.info("Sending configure_new_flow_right", extra={'receiver_ids': list(self._senders.keys())})
