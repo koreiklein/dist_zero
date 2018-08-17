@@ -140,7 +140,10 @@ class InsertionMigrator(migrator.Migrator):
       self._new_sender_id_to_first_live_sequence_number[sender_id] = message['first_live_sequence_number']
       self._maybe_swap()
     elif message['type'] == 'terminate_migrator':
-      self._receive_terminate_migrator(sender_id, message)
+      for kid in self._kids.values():
+        self._kid_migrator_is_terminated[kid['id']] = False
+        self._node.send(kid, messages.migration.terminate_migrator(self.migration_id))
+      self._maybe_kids_are_terminated()
     elif message['type'] == 'migrator_terminated':
       self._kid_migrator_is_terminated[sender_id] = True
       self._maybe_kids_are_terminated()
@@ -161,12 +164,6 @@ class InsertionMigrator(migrator.Migrator):
       self._maybe_has_left_and_right_configurations()
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
-
-  def _receive_terminate_migrator(self, sender_id, message):
-    for kid in self._kids.values():
-      self._kid_migrator_is_terminated[kid['id']] = False
-      self._node.send(kid, messages.migration.terminate_migrator(self.migration_id))
-    self._maybe_kids_are_terminated()
 
   def _maybe_kids_are_terminated(self):
     if all(self._kid_migrator_is_terminated.values()):
