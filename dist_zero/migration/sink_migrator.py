@@ -164,12 +164,6 @@ class SinkMigrator(migrator.Migrator):
       self._node.logger.info("Received 'started_flow'")
       self._kid_started_flows[sender_id] = True
       self._maybe_flow_is_started()
-      # FIXME(KK): Figure out what to do with this old code.
-      # started_flow used to come from nodes to the left, but now it comes from kids.
-      #self._new_importers[sender_id] = self._linker.new_importer(
-      #    sender=message['sender'], first_sequence_number=message['sequence_number'])
-      #self._new_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
-      #self._maybe_complete_flow()
     elif message['type'] == 'configure_new_flow_left':
       self._node.logger.info("Received 'configure_new_flow_left'")
       if sender_id not in self._new_flow_senders:
@@ -299,14 +293,6 @@ class SinkMigrator(migrator.Migrator):
                           sender=self._node.new_handle(self.parent['id'])))
 
   def _maybe_swap(self):
-    # FIXME(KK): Remove this
-    try:
-      self._deltas.covers(self._new_sender_id_to_first_swapped_sequence_number)
-    except Exception as e:
-      import ipdb
-      ipdb.set_trace()
-      print(e)
-
     if self._waiting_for_swap and not self._swapped \
         and all(sn is not None for sn in self._old_sender_id_to_first_swapped_sequence_number.values()) \
         and all(sn is not None for sn in self._new_sender_id_to_first_swapped_sequence_number.values()) \

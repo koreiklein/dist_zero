@@ -106,10 +106,6 @@ class SumNode(Node):
       self._initial_migrator = self.attach_migrator(self._initial_migrator_config)
 
     self.linker.initialize()
-    # FIXME(KK): Remove
-    #if self._input_importer:
-    #  self.send(self._input_importer.sender,
-    #            messages.migration.connect_node(node=self.new_handle(self._input_importer.sender_id), direction='receiver'))
 
   def send_forward_messages(self, before=None):
     '''

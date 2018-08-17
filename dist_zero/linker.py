@@ -65,7 +65,6 @@ class Linker(object):
 
     self._initialized = True
 
-    # FIXME(KK): Become sure we really want to get rid of the below code, or decide to keep it.
     for importer in self._importers.values():
       self.send(importer.sender,
                 messages.migration.connect_node(node=self.new_handle(importer.sender_id), direction='receiver'))
