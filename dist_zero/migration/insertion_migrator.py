@@ -2,6 +2,7 @@ from dist_zero import errors, deltas, messages, linker, settings
 from dist_zero.network_graph import NetworkGraph
 
 from . import migrator, topology_picker
+from .right_configuration import RightConfigurationReceiver
 
 
 class InsertionMigrator(migrator.Migrator):
@@ -35,19 +36,11 @@ class InsertionMigrator(migrator.Migrator):
     # currently spawning
     self._current_spawning_layer = None
 
-    self._right_parent_ids = set(configure_right_parent_ids)
-    self._received_right_parent_ids = set()
+    self._right_config_receiver = RightConfigurationReceiver(has_parents=True)
+    self._right_config_receiver.set_parents(configure_right_parent_ids) # configure_right_parent_ids may be empty
 
-    self._right_configurations = {}
     self._left_configurations = {sender_id: None for sender_id in self._senders.keys()}
 
-    self._sender_id_to_status = {sender_id: 'new' for sender_id in self._senders}
-    '''
-    Map each sender node id to either
-      'new' at first
-      'started_flow' once the node is sending flow here
-      'swapped' once the node has swapped to the new flow
-    '''
     self._new_sender_id_to_first_live_sequence_number = {}
     self._flow_is_started = False
 
@@ -80,21 +73,6 @@ class InsertionMigrator(migrator.Migrator):
         receivers=migrator_config['receivers'],
         node=node)
 
-  def _maybe_send_started_flow(self):
-    if all(val == 'started_flow' for val in self._sender_id_to_status.values()):
-      # Stay in deltas_only mode until after receiving set_sum_total.
-      # Until then, the model state has not been initialized and the deltas can *not* be applied.
-      self._node.logger.info("New flow has started")
-      self._flow_is_started = True
-
-      for receiver in self._receivers.values():
-        self._node.send(
-            receiver,
-            messages.migration.started_flow(
-                migration_id=self.migration_id,
-                sequence_number=0, # Insertion nodes always start at sequence number 0
-                sender=self._node.new_handle(receiver['id'])))
-
   def _maybe_prepared_for_switch(self):
     if all(self._kids_ready_for_switch.values()):
       self._node.logger.info("Migrator is prepared for switch. Sending 'prepared_for_switch' to parent")
@@ -108,14 +86,10 @@ class InsertionMigrator(migrator.Migrator):
     elif message['type'] == 'attached_migrator':
       self._kids[sender_id] = message['insertion_node_handle']
       self._maybe_all_kids_are_live()
-    elif message['type'] == 'started_flow':
-      self._node.import_from_node(message['sender'], first_sequence_number=message['sequence_number'])
-      self._sender_id_to_status[sender_id] = 'started_flow'
-      self._maybe_send_started_flow()
     elif message['type'] == 'set_sum_total':
       if not self._flow_is_started:
         raise errors.InternalError("Migrator should not receive set_sum_total before the flow has started.")
-      # Set the starting state, as of the state on inputs when they sent started_flow.
+      # Set the starting state, as of the state on inputs when the new flow started
       self._node._current_state = message['total']
 
       # Exit deltas only, add the exporters and start sending to them.
@@ -137,7 +111,6 @@ class InsertionMigrator(migrator.Migrator):
       self._kids_ready_for_switch[sender_id] = True
       self._maybe_prepared_for_switch()
     elif message['type'] == 'swapped_to_duplicate':
-      self._sender_id_to_status[sender_id] = 'swapped'
       self._new_sender_id_to_first_live_sequence_number[sender_id] = message['first_live_sequence_number']
       self._maybe_swap()
     elif message['type'] == 'terminate_migrator':
@@ -152,7 +125,7 @@ class InsertionMigrator(migrator.Migrator):
       self._send_configure_right_to_left()
     elif message['type'] == 'configure_new_flow_right':
       self._node.logger.info("Received 'configure_new_flow_right'", extra={'sender_id': sender_id})
-      self._right_configurations[sender_id] = message
+      self._right_config_receiver.got_configuration(sender_id, message)
       self._receivers[message['parent_handle']['id']] = message['parent_handle']
       self._node.export_to_node(message['parent_handle'])
       self._maybe_has_left_and_right_configurations()
@@ -161,10 +134,7 @@ class InsertionMigrator(migrator.Migrator):
       self._left_configurations[sender_id] = message
       self._maybe_has_left_and_right_configurations()
     elif message['type'] == 'configure_right_parent':
-      self._received_right_parent_ids.add(sender_id)
-      for kid_id in message['kid_ids']:
-        if kid_id not in self._right_configurations:
-          self._right_configurations[kid_id] = None
+      self._right_config_receiver.got_parent_configuration(sender_id, kid_ids=message['kid_ids'])
       self._maybe_has_left_and_right_configurations()
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
@@ -188,8 +158,7 @@ class InsertionMigrator(migrator.Migrator):
 
   def _maybe_has_left_and_right_configurations(self):
     if not self._flow_is_started and \
-        self._right_parent_ids == self._received_right_parent_ids and \
-        all(val is not None for val in self._right_configurations.values()) and \
+        self._right_config_receiver.ready and \
         all(val is not None for val in self._left_configurations.values()):
 
       from dist_zero.node.computation import ComputationNode
@@ -226,8 +195,8 @@ class InsertionMigrator(migrator.Migrator):
         )
         self._right_map = self._picker.fill_graph(
             left_is_data=any(config['is_data'] for config in self._left_configurations.values()),
-            right_is_data=any(config['is_data'] for config in self._right_configurations.values()),
-            right_configurations=self._right_configurations.values())
+            right_is_data=any(config['is_data'] for config in self._right_config_receiver.configs.values()),
+            right_configurations=self._right_config_receiver.configs.values())
 
         self._spawn_layer(1)
 
@@ -235,7 +204,7 @@ class InsertionMigrator(migrator.Migrator):
     return max(config['depth'] for config in self._left_configurations.values())
 
   def _max_right_depth(self):
-    return max(config['depth'] for config in self._right_configurations.values())
+    return max(config['depth'] for config in self._right_config_receiver.configs.values())
 
   def _id_to_handle(self, node_id):
     '''
@@ -334,7 +303,7 @@ class InsertionMigrator(migrator.Migrator):
 
   def _maybe_swap(self):
     if self._waiting_for_swap and \
-        all(status == 'swapped' for status in self._sender_id_to_status.values()) and \
+        len(self._new_sender_id_to_first_live_sequence_number) == len(self._senders) and \
         self._node._deltas.covers(self._new_sender_id_to_first_live_sequence_number):
       self._node.logger.info("Insertion node is swapping flows.")
       self._node.checkpoint(self._new_sender_id_to_first_live_sequence_number)

@@ -1,6 +1,7 @@
 from dist_zero import errors, settings, linker, messages
 
 from . import migrator
+from .right_configuration import RightConfigurationReceiver
 
 
 class SourceMigrator(migrator.Migrator):
@@ -17,9 +18,7 @@ class SourceMigrator(migrator.Migrator):
     self._node = node
     self._will_sync = will_sync
 
-    self._right_configurations = {}
-    self._right_parent_ids = set() if self._node._parent is None else None
-    self._received_right_parent_ids = set()
+    self._right_config_receiver = RightConfigurationReceiver(has_parents=self._node._parent is not None)
 
     def _deliver(message, sequence_number, sender_id):
       # Impossible! Source migrators do not add any importers to their linkers, and thus the linker
@@ -83,12 +82,10 @@ class SourceMigrator(migrator.Migrator):
       self._node.send(self.parent, messages.migration.migrator_terminated(self.migration_id))
 
   def _maybe_has_right_configurations(self):
-    if self._right_parent_ids is not None and \
-        self._right_parent_ids == self._received_right_parent_ids and \
-        all(val is not None for val in self._right_configurations.values()):
+    if self._right_config_receiver.ready:
       self._new_receivers = {
           config['parent_handle']['id']: config['parent_handle']
-          for config in self._right_configurations.values()
+          for config in self._right_config_receiver.configs.values()
       }
       self._send_configure_new_flow_left_to_right()
 
@@ -127,17 +124,14 @@ class SourceMigrator(migrator.Migrator):
       self._kid_has_migrator[sender_id] = True
       self._maybe_send_attached_migrator()
     elif message['type'] == 'set_source_right_parents':
-      self._right_parent_ids = set(message['configure_right_parent_ids'])
+      self._right_config_receiver.set_parents(parent_ids=message['configure_right_parent_ids'])
       self._maybe_has_right_configurations()
     elif message['type'] == 'configure_right_parent':
-      self._received_right_parent_ids.add(sender_id)
-      for kid_id in message['kid_ids']:
-        if kid_id not in self._right_configurations:
-          self._right_configurations[kid_id] = None
+      self._right_config_receiver.got_parent_configuration(sender_id, kid_ids=message['kid_ids'])
       self._maybe_has_right_configurations()
     elif message['type'] == 'configure_new_flow_right':
       self._node.logger.info("Received configure_new_flow_right")
-      self._right_configurations[sender_id] = message
+      self._right_config_receiver.got_configuration(sender_id, message)
       self._maybe_has_right_configurations()
     elif message['type'] == 'switch_flows':
       self._receive_switch_flows(sender_id, message)

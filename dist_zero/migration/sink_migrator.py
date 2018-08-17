@@ -51,10 +51,7 @@ class SinkMigrator(migrator.Migrator):
 
     self._kid_started_flows = {kid_id: False for kid_id in self._node._kids.keys()}
     self._kid_has_migrator = {kid_id: False for kid_id in self._node._kids.keys()}
-    '''
-    Once the flow has started, this map will assign to each new sender_id its first sequence_number
-    that reflects the new flow.
-    '''
+
     self._old_sender_id_to_first_flow_sequence_number = {sender_id: None for sender_id in old_flow_sender_ids}
     '''
     Once the flow has started, this map will assign to each old sender_id its first sequence_number
@@ -175,7 +172,6 @@ class SinkMigrator(migrator.Migrator):
       self._node.logger.info("Received 'replacing_flow'")
       self._old_sender_id_to_first_flow_sequence_number[sender_id] = message['sequence_number']
       self._maybe_complete_flow()
-
     elif message['type'] == 'sequence_message':
       # After the swap, sequence_messages for the migration should go directly to the node's linker.
       linker = self._node.linker if self._swapped else self._linker
@@ -286,11 +282,7 @@ class SinkMigrator(migrator.Migrator):
     if all(val is not None for val in self._left_configurations.values()) and \
         all(self._kid_started_flows.values()):
       self._node.logger.info("Sending 'started_flow'")
-      self._node.send(self.parent,
-                      messages.migration.started_flow(
-                          self.migration_id,
-                          sequence_number=self._linker.advance_sequence_number(),
-                          sender=self._node.new_handle(self.parent['id'])))
+      self._node.send(self.parent, messages.migration.started_flow(self.migration_id))
 
   def _maybe_swap(self):
     if self._waiting_for_swap and not self._swapped \

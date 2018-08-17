@@ -164,26 +164,13 @@ def completed_flow(sequence_number):
   return {'type': 'completed_flow', 'sequence_number': sequence_number}
 
 
-def started_flow(migration_id, sequence_number, sender):
+def started_flow(migration_id):
   '''
-  Informs a `Node` on the path of a new flow for a migration that the preceeding `Node`
-  is now sending messages of the new flow through it.
+  Send up the tree of sink nodes to indicate that they have started to receive the new flow.
 
   :param str migration_id: The id of the relevant migration.
-  :param int sequence_number: The sequence number of the first message the receiver will receive
-    as part of the new flow.
-  :param sender: The :ref:`handle` of the `Node` that will now be sending messages in the new flow.
-  :type sender: :ref:`handle`
   '''
-  return {
-      'type': 'migration',
-      'migration_id': migration_id,
-      'message': {
-          'type': 'started_flow',
-          'sequence_number': sequence_number,
-          'sender': sender
-      }
-  }
+  return {'type': 'migration', 'migration_id': migration_id, 'message': {'type': 'started_flow'}}
 
 
 def replacing_flow(migration_id, sequence_number):
