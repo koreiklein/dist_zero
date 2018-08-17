@@ -17,7 +17,9 @@ class SourceMigrator(migrator.Migrator):
     self._node = node
     self._will_sync = will_sync
 
-    self._right_configurations = None
+    self._right_configurations = {}
+    self._right_parent_ids = set() if self._node._parent is None else None
+    self._received_right_parent_ids = set()
 
     def _deliver(message, sequence_number, sender_id):
       # Impossible! Source migrators do not add any importers to their linkers, and thus the linker
@@ -81,15 +83,27 @@ class SourceMigrator(migrator.Migrator):
       self._node.send(self.parent, messages.migration.migrator_terminated(self.migration_id))
 
   def _maybe_has_right_configurations(self):
-    if all(val is not None for val in self._right_configurations):
+    if self._right_parent_ids is not None and \
+        self._right_parent_ids == self._received_right_parent_ids and \
+        all(val is not None for val in self._right_configurations.values()):
       self._new_receivers = {
           config['parent_handle']['id']: config['parent_handle']
-          for config in self._right_configurations
+          for config in self._right_configurations.values()
       }
       self._send_configure_new_flow_left_to_right()
 
   def _send_configure_new_flow_left_to_right(self):
     self._node.logger.info("Sending configure_new_flow_left")
+    if len(self._new_receivers) == 1:
+      new_receiver_id = list(self._new_receivers.keys())[0]
+      for kid in self._node._kids.values():
+        self._node.send(kid,
+                        messages.migration.set_source_right_parents(
+                            migration_id=self.migration_id, configure_right_parent_ids=[new_receiver_id]))
+    else:
+      # FIXME(KK): Figure out what to do about this
+      raise RuntimeError("Not Yet Implemented")
+
     for new_receiver in self._new_receivers.values():
       from dist_zero.node.io.internal import InternalNode
       if self._node.__class__ == InternalNode:
@@ -112,12 +126,18 @@ class SourceMigrator(migrator.Migrator):
     if message['type'] == 'attached_migrator':
       self._kid_has_migrator[sender_id] = True
       self._maybe_send_attached_migrator()
+    elif message['type'] == 'set_source_right_parents':
+      self._right_parent_ids = set(message['configure_right_parent_ids'])
+      self._maybe_has_right_configurations()
+    elif message['type'] == 'configure_right_parent':
+      self._received_right_parent_ids.add(sender_id)
+      for kid_id in message['kid_ids']:
+        if kid_id not in self._right_configurations:
+          self._right_configurations[kid_id] = None
+      self._maybe_has_right_configurations()
     elif message['type'] == 'configure_new_flow_right':
       self._node.logger.info("Received configure_new_flow_right")
-      right_config_index, n_total_right_configs = message['configuration_place']
-      if self._right_configurations is None:
-        self._right_configurations = [None for i in range(n_total_right_configs)]
-      self._right_configurations[right_config_index] = message
+      self._right_configurations[sender_id] = message
       self._maybe_has_right_configurations()
     elif message['type'] == 'switch_flows':
       self._receive_switch_flows(sender_id, message)

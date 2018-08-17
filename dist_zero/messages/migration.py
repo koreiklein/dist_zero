@@ -79,19 +79,23 @@ def removal_migrator_config(sender_ids, receiver_ids, will_sync):
   return {'type': 'removal_migrator', 'sender_ids': sender_ids, 'receiver_ids': receiver_ids, 'will_sync': will_sync}
 
 
-def insertion_migrator_config(configure_right_places, senders, receivers, migration=None):
+def insertion_migrator_config(configure_right_parent_ids, senders, receivers, migration=None):
   '''
-  :param dict[str, (int, int)] configure_right_places: A dictionary taking each sender to the pair (k, n) where
-    this insertion node is sending that node its kth right_configuration message of n.
+  :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
+    insertion node.
   :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
   :param list receivers: A list of :ref:`handle` of the `Node` s that will receive from self by the end of the migration.
   :param migration: If the insertion node will communicate directly with the migration node, this is a handle for it.
     Otherwise, it is `None`
   :type migration: :ref:`handle` or `None`
   '''
+  for x in configure_right_parent_ids:
+    if x.__class__ != str:
+      import ipdb
+      ipdb.set_trace()
   return {
       'type': 'insertion_migrator',
-      'configure_right_places': configure_right_places,
+      'configure_right_parent_ids': configure_right_parent_ids,
       'senders': senders,
       'receivers': receivers,
       'migration': migration
@@ -344,8 +348,27 @@ def migrator_terminated(migration_id):
   return {'type': 'migration', 'migration_id': migration_id, 'message': {'type': 'migrator_terminated'}}
 
 
-def configure_new_flow_right(migration_id, parent_handle, configuration_place, is_data, depth, n_kids,
-                             connection_limit):
+def configure_right_parent(migration_id, kid_ids):
+  '''
+  A node will receive this message from the parents of its eventual receivers to indicate
+  which nodes will eventually receive from it.
+
+  Those same nodes that will eventually receive from it should each be expected to send it a right_configuration.
+
+  :param str migration_id: The id of the relevant migration.
+  :param list[str] kid_ids: The ids of the `Node` instances that will receive from the node getting this message.
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'configure_right_parent',
+          'kid_ids': kid_ids
+      }
+  }
+
+
+def configure_new_flow_right(migration_id, parent_handle, is_data, depth, n_kids, connection_limit):
   '''
   The 'right' configuration, sent while starting a new flow.
 
@@ -353,7 +376,6 @@ def configure_new_flow_right(migration_id, parent_handle, configuration_place, i
 
   :param str migration_id: The id of the relevant migration.
   :param parent_handle: The :ref:`handle` of the sender. A sibling node to the right of the node receiving the message.
-  :param tuple[int, int] configuration_place: A tuple giving (k, n) where this configuration is the kth configuration of n.
   :param int depth: The depth of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
   :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
   :param n_kids: If the right node is a data node with a set number of kids, n_kids will give that number.
@@ -368,11 +390,28 @@ def configure_new_flow_right(migration_id, parent_handle, configuration_place, i
       'message': {
           'type': 'configure_new_flow_right',
           'parent_handle': parent_handle,
-          'configuration_place': configuration_place,
           'is_data': is_data,
           'depth': depth,
           'n_kids': n_kids,
           'connection_limit': connection_limit
+      }
+  }
+
+
+def set_source_right_parents(migration_id, configure_right_parent_ids):
+  '''
+  Sent from a source parent to each of its kids to let them know which right parents to wait for.
+
+  :param str migration_id: The id of the relevant migration.
+  :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
+    source node.
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'set_source_right_parents',
+          'configure_right_parent_ids': configure_right_parent_ids
       }
   }
 

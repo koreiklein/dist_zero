@@ -99,7 +99,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
                   senders=[input_handle_for_migration],
                   receivers=[output_handle_for_migration],
                   migrator=messages.migration.insertion_migrator_config(
-                      configure_right_places={input_handle_for_migration['id']: (0, 1)},
+                      configure_right_parent_ids=[],
                       senders=[input_handle_for_migration],
                       receivers=[output_handle_for_migration],
                   ),
