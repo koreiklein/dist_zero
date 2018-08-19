@@ -85,7 +85,7 @@ class InsertionMigrator(migrator.Migrator):
       self._maybe_swap()
     elif message['type'] == 'attached_migrator':
       self._kids[sender_id] = message['insertion_node_handle']
-      self._maybe_all_kids_are_live()
+      self._maybe_spawned_kids()
     elif message['type'] == 'set_sum_total':
       if not self._flow_is_started:
         raise errors.InternalError("Migrator should not receive set_sum_total before the flow has started.")
@@ -156,6 +156,22 @@ class InsertionMigrator(migrator.Migrator):
                           is_data=self._node.is_data(),
                           connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
 
+  def _new_topology_picker(self):
+    return topology_picker.TopologyPicker(
+        graph=self._graph,
+        max_outputs={
+            kid['handle']['id']: kid['connection_limit']
+            for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
+        },
+        max_inputs={kid_id: self._node.system_config['SUM_NODE_SENDER_LIMIT']
+                    for kid_id in self._left_layer.keys()},
+        # TODO(KK): There is probably a better way to configure these standard limits than the below.
+        # Look into it, write up some notes, and fix it.
+        new_node_max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
+        new_node_max_inputs=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
+        new_node_name_prefix='SumNode' if self._depth == 0 else 'ComputationNode',
+    )
+
   def _maybe_has_left_and_right_configurations(self):
     if not self._flow_is_started and \
         self._right_config_receiver.ready and \
@@ -177,22 +193,7 @@ class InsertionMigrator(migrator.Migrator):
 
         # Decide on a network topology and spawn new kids
         self._depth = max(self._max_left_depth(), self._max_right_depth())
-        self._picker = topology_picker.TopologyPicker(
-            graph=self._graph,
-            max_outputs={
-                kid['handle']['id']: kid['connection_limit']
-                for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
-            },
-            max_inputs={
-                kid_id: self._node.system_config['SUM_NODE_SENDER_LIMIT']
-                for kid_id in self._left_layer.keys()
-            },
-            # TODO(KK): There is probably a better way to configure these standard limits than the below.
-            # Look into it, write up some notes, and fix it.
-            new_node_max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
-            new_node_max_inputs=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
-            new_node_name_prefix='SumNode' if self._depth == 0 else 'ComputationNode',
-        )
+        self._picker = self._new_topology_picker()
         self._right_map = self._picker.fill_graph(
             left_is_data=any(config['is_data'] for config in self._left_configurations.values()),
             right_is_data=any(config['is_data'] for config in self._right_config_receiver.configs.values()),
@@ -266,9 +267,9 @@ class InsertionMigrator(migrator.Migrator):
                 receivers=[],
                 migrator=migrator))
 
-    self._maybe_all_kids_are_live()
+    self._maybe_spawned_kids()
 
-  def _maybe_all_kids_are_live(self):
+  def _maybe_spawned_kids(self):
     if not self._flow_is_started and \
         all(val is not None for val in self._kids.values()):
       if self._current_spawning_layer + 1 < self._picker.n_layers:
@@ -276,18 +277,24 @@ class InsertionMigrator(migrator.Migrator):
       else:
         self._send_configure_left_to_right()
 
-  def _send_configure_left_to_right(self):
-    self._node.logger.info("Sending configure_new_flow_left", extra={'receiver_ids': list(self._receivers.keys())})
+  def _receiver_to_kids(self):
     if self._right_map is not None:
-      receiver_to_assigned_kids = {}
+      result = {}
       for right_node_id, receiver_ids in self._right_map.items():
         for receiver_id in receiver_ids:
-          if receiver_id not in receiver_to_assigned_kids:
-            receiver_to_assigned_kids[receiver_id] = [right_node_id]
+          if receiver_id not in result:
+            result[receiver_id] = [right_node_id]
           else:
-            receiver_to_assigned_kids[receiver_id].append(right_node_id)
+            result[receiver_id].append(right_node_id)
+      return result
     else:
-      receiver_to_assigned_kids = {receiver_id: [] for receiver_id in self._receivers.keys()}
+      return {receiver_id: [] for receiver_id in self._receivers.keys()}
+
+  def _send_configure_left_to_right(self):
+    self._node.logger.info("Sending configure_new_flow_left", extra={'receiver_ids': list(self._receivers.keys())})
+
+    receiver_to_kids = self._receiver_to_kids()
+
     for receiver in self._receivers.values():
       message = messages.migration.configure_new_flow_left(
           self.migration_id,
@@ -297,7 +304,7 @@ class InsertionMigrator(migrator.Migrator):
           kids=[{
               'handle': self._node.transfer_handle(self._kids[kid_id], receiver['id']),
               'connection_limit': self._node.system_config['SUM_NODE_RECEIVER_LIMIT']
-          } for kid_id in receiver_to_assigned_kids[receiver['id']]])
+          } for kid_id in receiver_to_kids[receiver['id']]])
 
       self._node.send(receiver, message)
 

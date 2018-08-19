@@ -50,13 +50,29 @@ class State(object):
   '''
   Trigger: attached_migrator messages have arrived from every migrator.
 
-  Action: The migration node sends start_flow message to the sources.  This will simultaneously
-    a) trigger a cascade of started_flow messages for the new flow
-    b) trigger a cascade of replacing_flow messages for the old flow
+  Action: The migration node sends start_flow message to the insertion and sink nodes.
 
-  Description: The cascades of started_flow and replacing_flow messages are propogating through the network.
-  Once each sink receives both the requisite started_flow and replacing_flow messages, it will send a
-  completed_flow message to the migration node.  The migration node is waiting for all those completed_flow messages.
+  Description:
+  The migration node's start_flow messages inform each root insertion and root sink node
+  to send right_configuration to its left.  Every root insertion and root source node will thus receive a
+  right_configuration.
+
+  Insertion nodes will expect both a right_configuration and a left_configuration before they are fully configured.
+  Sink nodes need only a left_configuration.
+  Source nodes need only a right configuration.
+
+  Once a node is fully configured, it
+    - spawns any kids it will need
+    - has its kids send right_configurations to their left
+    (and once the kids send back their handles)
+    - sends a left_configuration to its right
+
+  These rules lead to every node producing a full tree of kids, and every node in that tree becoming fully configured.
+  By using this scheme for spawning new nodes, we ensure that each parent has enough configuration information from
+  its left and right to pick a good network topology for its kids.  A good topology will always satisfy any limits
+  on node connectivity and data flux.
+
+  Once the entire tree of sink nodes is fully configured, its root will send started_flow back to the migration node.
   '''
 
   SYNCING_NEW_NODES = 'SYNCING_NEW_NODES'

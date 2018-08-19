@@ -34,6 +34,4 @@ class StartingNewFlowState(State):
       self._sink_id_to_new_flow_state[sender_id] = 'completed_flow'
       self._maybe_finish()
     else:
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError('Unrecognized message type "{}"'.format(message['type']))
