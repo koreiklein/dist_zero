@@ -2,6 +2,8 @@
 Messages to be received by input and output nodes.
 '''
 
+from dist_zero import errors
+
 
 def input_action(number):
   '''
@@ -36,7 +38,7 @@ def set_adjacent(node):
 def internal_node_config(node_id,
                          parent,
                          variant,
-                         depth,
+                         height,
                          adjacent=None,
                          spawner_adjacent=None,
                          adoptees=None,
@@ -48,7 +50,7 @@ def internal_node_config(node_id,
   :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
   :type parent: :ref:`handle` or `None`
   :param str variant: 'input' or 'output'
-  :param int depth: The depth of the node in the tree.  See `InternalNode`
+  :param int height: The height of the node in the tree.  See `InternalNode`
   :param adjacent: The :ref:`handle` adjacent node to either receiver from or forward to or `None`
   :type adjacent: :ref:`handle` or `None`
   :param spawner_adjacent: The node adjacent to the node that spawned self.  When provided, adjacent should be None,
@@ -59,15 +61,18 @@ def internal_node_config(node_id,
   :type adoptees: list[:ref:`handle`] or `None`
   :param object initial_state: The initial state to use for new nodes.
   '''
+  if parent is None and height == 0:
+    raise errors.InternalError("internal_node_config for root nodes must have nonzero height.")
+
   return {
       'type': 'InternalNode',
       'id': node_id,
       'parent': parent,
       'variant': variant,
-      'depth': depth,
+      'height': height,
       'adjacent': adjacent,
       'spawner_adjacent': spawner_adjacent,
-      'adoptees': adoptees,
+      'adoptees': [] if adoptees is None else adoptees,
       'initial_state': initial_state
   }
 
@@ -190,3 +195,16 @@ def hello_parent(kid):
   :type kid: :ref:`handle`
   '''
   return {'type': 'hello_parent', 'kid': kid}
+
+
+def kid_summary(size, n_kids):
+  '''
+  Periodically sent by `InternalNode` kids to their parents to give generally summary information
+  that the parent needs to know about that kid.
+
+  :param int size: An estimate of the number of `LeafNode` instances descended from the sender.
+    It need not be perfectly accurate, but should be fairly close, especially if new descendents haven't been
+    added in a while.
+  :param n_kids: The number of immediate kids of the sender.
+  '''
+  return {'type': 'kid_summary', 'size': size, 'n_kids': n_kids}

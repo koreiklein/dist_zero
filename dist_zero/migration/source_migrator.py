@@ -117,7 +117,7 @@ class SourceMigrator(migrator.Migrator):
                           kids=kids,
                           node=self._node.new_handle(new_receiver['id']),
                           is_data=self._node.is_data(),
-                          depth=self._node.depth))
+                          height=self._node.height))
 
   def receive(self, sender_id, message):
     if message['type'] == 'attached_migrator':

@@ -46,6 +46,8 @@
     },
     "system_config": {
         "INTERNAL_NODE_KIDS_LIMIT": 200,
+        "KID_SUMMARY_INTERVAL": 600,
+        "TOTAL_KID_CAPACITY_TRIGGER": 5,
         "SUM_NODE_SENDER_LIMIT": 15,
         "SUM_NODE_RECEIVER_LIMIT": 15,
         "SUM_NODE_SENDER_LOWER_LIMIT": 4,

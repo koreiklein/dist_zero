@@ -15,8 +15,16 @@ def std_system_config():
   Miscellaneous configuration for the overall system.
   '''
   return {
-      # The maximum number of kids an `InternalNode` will have before splitting.
+      # When an `InternalNode` has this many kids, it will trigger a split.
       'INTERNAL_NODE_KIDS_LIMIT': 200,
+
+      # Every time this many milliseconds pass on an internal node, it should send a kid_summary message
+      # to its parent.
+      'KID_SUMMARY_INTERVAL': 600,
+
+      # When all the kids of an internal node have less than this much capacity,
+      # it should spawn a new kid
+      'TOTAL_KID_CAPACITY_TRIGGER': 5,
 
       # If a sum node has more than this many senders/receivers, it will trigger a
       # "sum node split migration" to create a middle layer of senders/receivers.
@@ -179,6 +187,11 @@ def get_senders():
 def get_receivers():
   '''API message to a node to get its dictionary of receivers.'''
   return {'type': 'get_receivers'}
+
+
+def get_capacity():
+  '''API message to a node to get its dictionary of capacity data.'''
+  return {'type': 'get_capacity'}
 
 
 def get_adjacent_handle():

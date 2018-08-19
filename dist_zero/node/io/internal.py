@@ -1,7 +1,7 @@
 import logging
 
 import dist_zero.ids
-from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids
+from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids, ticker
 from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
 
@@ -16,17 +16,17 @@ class InternalNode(Node):
   or shrinking it as necessary.  In particular, when new leaves are created, `InternalNode.create_kid_config` must
   be called on the desired immediate parent to generate the node config for starting that child.
 
-  Each `InternalNode` will have an associated depth.  The assignment of depths to internal nodes is the unique
-  minimal assignment such that n.depth+1 == n.parent.depth for every node n that has a parent.
+  Each `InternalNode` will have an associated height.  The assignment of heights to internal nodes is the unique
+  minimal assignment such that n.height+1 == n.parent.height for every node n that has a parent.
   '''
 
-  def __init__(self, node_id, parent, variant, depth, adjacent, adoptees, spawner_adjacent, initial_state, controller):
+  def __init__(self, node_id, parent, variant, height, adjacent, adoptees, spawner_adjacent, initial_state, controller):
     '''
     :param str node_id: The id to use for this node
     :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
     :type parent: :ref:`handle` or `None`
     :param str variant: 'input' or 'output'
-    :param int depth: The depth of the node in the tree.  See `InternalNode`
+    :param int height: The height of the node in the tree.  See `InternalNode`
     :param adjacent: The :ref:`handle` of the adjacent node or `None` if this node should not start with an adjacent.
     :type adjacent: :ref:`handle` or `None`
     :param adoptees: Nodes to adopt upon initialization.
@@ -41,33 +41,41 @@ class InternalNode(Node):
     self._controller = controller
     self._parent = parent
     self._variant = variant
-    self._depth = depth
+    self._height = height
     self.id = node_id
-    self._kids = {} # A map from kid node id to either None or its handle
+    self._pending_adoptees = None if parent is None else {adoptee['id']: False for adoptee in adoptees}
+    self._kids = {adoptee['id']: adoptee for adoptee in adoptees}
+    self._kid_summaries = {}
     self._initial_state = initial_state
     self._adjacent = adjacent
 
     self._current_state = None
 
     # When being spawned as part of a split:
-    self._adoptees = {adoptee['id']: adoptee for adoptee in adoptees} if adoptees is not None else None
+    # FIXME(KK): Check that we actually want to track this.
     self._spawner_adjacent = spawner_adjacent
 
     self._graph = NetworkGraph()
 
-    self._current_split = None
+    self._root_proxy_id = None
+    '''
+    While in the process of bumping its height, the root node sets this to the id of the node that will take over as its
+    proxy.
+    '''
+
+    # To limit excessive warnings regarding being at low capacity.
+    self._warned_low_capacity = False
 
     super(InternalNode, self).__init__(logger)
+
+    self._ticker = ticker.Ticker(interval_ms=self.system_config['KID_SUMMARY_INTERVAL'])
 
   def is_data(self):
     return True
 
-  def _finish_split(self):
-    self._current_split = None
-
   @property
-  def depth(self):
-    return self._depth
+  def height(self):
+    return self._height
 
   def get_adjacent_id(self):
     return None if self._adjacent is None else self._adjacent['id']
@@ -78,8 +86,6 @@ class InternalNode(Node):
   def sink_swap(self, deltas, old_sender_ids, new_senders, new_importers, linker):
     if self._variant == 'output':
       if len(new_senders) != 1:
-        import ipdb
-        ipdb.set_trace()
         raise errors.InternalError(
             "sink_swap should be called on an edge internal node only when there is a unique new sender.")
       self._adjacent = new_senders[0]
@@ -95,8 +101,6 @@ class InternalNode(Node):
       if len(new_receivers) != 1:
         raise errors.InternalError("Not sure how to set an input node's receives to a list not of length 1.")
       if self._adjacent is not None and self._adjacent['id'] != new_receivers[0]['id']:
-        import ipdb
-        ipdb.set_trace()
         raise errors.InternalError("Not sure how to set an input node's receives when it already has an adjacent.")
       self._adjacent = new_receivers[0]
       self.send(self._adjacent, messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
@@ -110,12 +114,16 @@ class InternalNode(Node):
       self.send(kid, messages.migration.switch_flows(migration_id))
 
   def initialize(self):
-    if self._adoptees is not None:
-      for kid in self._adoptees.values():
+    if self._kids:
+      # Must adopt any kids that were added before initialization.
+      for kid in self._kids.values():
         self.send(kid, messages.io.adopt(self.new_handle(kid['id'])))
-      self.send(self._spawner_adjacent,
-                messages.io.adjacent_has_split(
-                    self.new_handle(self._spawner_adjacent['id']), stolen_io_kid_ids=list(self._adoptees.keys())))
+
+      if self._spawner_adjacent:
+        # FIXME(KK): Check that this message makes any sense.
+        self.send(self._spawner_adjacent,
+                  messages.io.adjacent_has_split(
+                      self.new_handle(self._spawner_adjacent['id']), stolen_io_kid_ids=list(self._adoptees.keys())))
 
     if self._adjacent is not None:
       if self._variant == 'input':
@@ -127,32 +135,110 @@ class InternalNode(Node):
       else:
         raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
-    if self._parent is not None:
-      self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
+    if self._height > 0 and len(self._kids) == 0:
+      # unless we are height 0, we must have a new kid.
+      self._spawn_kid()
 
-    if self._parent is None:
-      # Root nodes must spawn their unique depth 0 kid.
-      node_id = ids.new_id("InternalNode_first_root_kid")
-      if self._depth != 0:
-        raise errors.InternalError("Root node must be spawned with depth 0")
-      self._depth += 1
+    if self._parent is not None and not self._pending_adoptees:
+      self._send_hello_parent()
+
+  def _send_hello_parent(self):
+    self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
+
+  def _spawn_kid(self):
+    if self._height == 0:
+      raise errors.InternalError("height 0 InternalNode instances can not spawn kids")
+    elif self._root_proxy_id is not None:
+      raise errors.InternalError("Root nodes may not spawn new kids while their are bumping their height.")
+    else:
+      node_id = ids.new_id("InternalNode_kid")
+      self.logger.info("InternalNode is spawning a new kid", extra={'new_kid_id': node_id})
       self._controller.spawn_node(
           messages.io.internal_node_config(
               node_id=node_id,
               parent=self.new_handle(node_id),
               variant=self._variant,
-              depth=0,
+              height=self._height - 1,
               adjacent=None,
               spawner_adjacent=None
               if self._adjacent is None else self.transfer_handle(self._adjacent, for_node_id=node_id),
               initial_state=self._initial_state,
-              adoptees=None,
+              adoptees=[],
           ))
+
+  def _check_kid_limits(self):
+    '''In case the kids of self are hitting any limits, address them.'''
+    if self._height > 0:
+      self._check_kid_capacity()
+
+  def _check_kid_capacity(self):
+    total_kid_capacity = sum(
+        self._kid_capacity_limit - kid_summary['size'] for kid_summary in self._kid_summaries.values())
+
+    if total_kid_capacity <= self.system_config['TOTAL_KID_CAPACITY_TRIGGER']:
+      if len(self._kids) < self.system_config['INTERNAL_NODE_KIDS_LIMIT']:
+        if self._root_proxy_id is None:
+          self._spawn_kid()
+        else:
+          self.logger.warning("Can't spawn children while bumping root node height.")
+      else:
+        if self._parent is None:
+          if self._root_proxy_id is None:
+            self._bump_height()
+          else:
+            # This happens when we've tried to bump the height once already, and the trigger fires again
+            # while the newly spawned node bumping the height has not yet confirmed that it is running properly.
+            self.logger.warning("Can't bump root node height, as we are waiting for a proxy to spawn.")
+        else:
+          if not self._warned_low_capacity:
+            self._warned_low_capacity = True
+            self.logger.warning("nonroot InternalNode instance had too little capacity and no room to spawn more kids. "
+                                "Capacity is remaining low and is not being increased.")
+    else:
+      self._warned_low_capacity = False
+
+  def _bump_height(self):
+    if self._parent is not None:
+      raise errors.InternalError("Only the root node may bump its height.")
+
+    self._root_proxy_id = ids.new_id('InternalNode_root_proxy')
+    self._height += 1
+    self._controller.spawn_node(
+        messages.io.internal_node_config(
+            node_id=self._root_proxy_id,
+            parent=self.new_handle(self._root_proxy_id),
+            variant=self._variant,
+            height=self._height - 1,
+            adjacent=None,
+            spawner_adjacent=None
+            if self._adjacent is None else self.transfer_handle(self._adjacent, for_node_id=node_id),
+            initial_state=self._initial_state,
+            adoptees=[self.transfer_handle(kid, self._root_proxy_id) for kid in self._kids.values()],
+        ))
 
   def receive(self, message, sender_id):
     if message['type'] == 'hello_parent':
-      self._kids[sender_id] = message['kid']
-      self._graph.add_node(sender_id)
+      if sender_id == self._root_proxy_id:
+        self._kid_summaries = {}
+        self._kids = {sender_id: message['kid']}
+        self._graph = NetworkGraph()
+        self._root_proxy_id = None
+      else:
+        self._kids[sender_id] = message['kid']
+        if self._pending_adoptees is not None:
+          if sender_id in self._pending_adoptees:
+            self._pending_adoptees[sender_id] = True
+          if all(self._pending_adoptees.values()):
+            self._pending_adoptees = None
+            self._send_hello_parent()
+
+        self._graph.add_node(sender_id)
+    elif message['type'] == 'kid_summary':
+      self._kid_summaries[sender_id] = message
+      self._check_kid_limits()
+    elif message['type'] == 'adopt':
+      self._parent = message['new_parent']
+      self._send_hello_parent()
     elif message['type'] == 'added_leaf':
       self.added_leaf(message['kid'])
     elif message['type'] == 'adopted_by':
@@ -194,44 +280,64 @@ class InternalNode(Node):
         adoptees=node_config['adoptees'],
         spawner_adjacent=node_config['spawner_adjacent'],
         variant=node_config['variant'],
-        depth=node_config['depth'],
+        height=node_config['height'],
         initial_state=node_config['initial_state'])
 
   def elapse(self, ms):
-    pass
+    if self._ticker.elapse(ms) > 0:
+      self._send_kid_summary()
+
+  def _send_kid_summary(self):
+    if self._parent is not None:
+      self.send(self._parent,
+                messages.io.kid_summary(
+                    size=(sum(kid_summary['size'] for kid_summary in self._kid_summaries.values())
+                          if self._height > 0 else len(self._kids)),
+                    n_kids=len(self._kids)))
+
+  @property
+  def _branching_factor(self):
+    return self.system_config['INTERNAL_NODE_KIDS_LIMIT']
+
+  @property
+  def _kid_capacity_limit(self):
+    return self._branching_factor**self._height
+
+  def _get_capacity(self):
+    # find the best kid
+    highest_capacity_kid_id, max_kid_capacity, size = None, 0, 0
+    for kid_id, kid_summary in self._kid_summaries.items():
+      size += kid_summary['size']
+      kid_capacity = self._kid_capacity_limit - kid_summary['size']
+      if kid_capacity > max_kid_capacity:
+        highest_capacity_kid_id, max_kid_capacity = kid_id, kid_capacity
+
+    if highest_capacity_kid_id is None:
+      if self._height == 0:
+        highest_capacity_kid = None
+      else:
+        raise errors.NoCapacityError()
+    else:
+      highest_capacity_kid = self._kids[highest_capacity_kid_id]
+
+    return {
+        'height': self._height,
+        'size': size,
+        'max_size': self._kid_capacity_limit * self._branching_factor,
+        'highest_capacity_kid': highest_capacity_kid,
+    }
 
   def handle_api_message(self, message):
     if message['type'] == 'create_kid_config':
       return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
+    elif message['type'] == 'get_capacity':
+      return self._get_capacity()
     elif message['type'] == 'get_kids':
       return self._kids
     elif message['type'] == 'get_adjacent_handle':
       return self._adjacent
     else:
       return super(InternalNode, self).handle_api_message(message)
-
-  def _maybe_too_many_kids(self):
-    '''If there are too many kids, then remedy that problem.'''
-    KIDS_LIMIT = self.system_config['INTERNAL_NODE_KIDS_LIMIT']
-    if len([val for val in self._kids.values() if val is not None]) > KIDS_LIMIT:
-      if self._current_split is None:
-        if self._parent is None:
-          self._root_split()
-        else:
-          self._non_root_split()
-      else:
-        self.logger.warning(
-            "InternalNode is not splitting in response to too many kids, as there as already a split in progress.")
-
-  def _root_split(self):
-    '''Split a root node'''
-    self._current_split = _RootSplit(self)
-    self._current_split.split()
-
-  def _non_root_split(self):
-    '''Split a non-root node'''
-    # FIXME(KK): Implement this
-    raise RuntimeError("Not Yet Implemented")
 
   def create_kid_config(self, name, machine_id):
     '''
@@ -270,104 +376,17 @@ class InternalNode(Node):
       self.logger.error(
           "added_leaf: Could not find node matching id {missing_child_node_id}",
           extra={'missing_child_node_id': kid['id']})
-    elif self._adjacent is None:
-      import ipdb
-      ipdb.set_trace()
-      self.logger.error(
-          "added_leaf: No adjacent was set in time.  Unable to forward an added_leaf message to the adjacent.")
     else:
       self._kids[kid['id']] = kid
-      self._maybe_too_many_kids()
 
-      self.send(self._adjacent,
-                messages.io.added_adjacent_leaf(
-                    kid=self.transfer_handle(handle=kid, for_node_id=self._adjacent['id']), variant=self._variant))
+      if self._adjacent is None:
+        self.logger.warning(
+            "added_leaf: No adjacent was set when a kid was added.  Unable to forward an added_leaf message to the adjacent."
+        )
+      else:
+        self.send(self._adjacent,
+                  messages.io.added_adjacent_leaf(
+                      kid=self.transfer_handle(handle=kid, for_node_id=self._adjacent['id']), variant=self._variant))
 
   def deliver(self, message, sequence_number, sender_id):
     raise errors.InternalError("Messages should not be delivered to internal nodes.")
-
-
-class _RootSplit(object):
-  '''
-  For splitting up the root node when it has too many kids.
-  This class manages a change in topology whereby a root node spawns an intermediate non-root node between
-  itself and its kids.
-
-    Root                     Root
-  |   |   |         ->        |
-  k0  k1  k2               new_parent
-                           |   |   |
-                           k0  k1  k2
-
-  The corresponding topology on adjacent nodes will also be updated to match.
-  '''
-
-  def __init__(self, node):
-    self._node = node
-    self._new_node_ready = False
-
-  def adopted_by(self, kid_id, new_parent_id):
-    if new_parent_id != self._new_parent_id:
-      raise errors.InternalError("Impossible!  A kid got the wrong parent.")
-
-    self._kid_has_left[kid_id]
-    self._maybe_ready()
-
-  def _maybe_ready(self):
-    if self._new_node_ready and all(self._kid_has_left.values()):
-      import ipdb
-      ipdb.set_trace()
-
-  def split(self):
-    self._kid_has_left = {kid_id: False for kid_id in self._node._kids.keys()}
-    node_id = ids.new_id('InternalNode_root_child')
-    self._node._controller.spawn_node(
-        messages.io.internal_node_config(
-            node_id=node_id,
-            parent=self._node.new_handle(node_id),
-            adoptees=[self._node.transfer_handle(kid, for_node_id=node_id) for kid in self._node._kids.values()],
-            spawner_adjacent=self._node.transfer_handle(self._node._adjacent, for_node_id=node_id),
-            variant=self._node._variant,
-            depth=self._node._depth,
-            adjacent=None))
-    self._new_parent_id = node_id
-    self._node._depth += 1
-
-
-class _NonRootSplit(object):
-  def __init__(self, node):
-    self._node = node
-    self._has_left = {} # Map each kid id to whether it has confirmed that it has left for a newly spawned parent.
-    self._partition = {} # Map each newly spawned node id to the list of kids that it should steal.
-
-  def adopted_by(self, kid_id, new_parent_id):
-    self._has_left[kid_id] = True
-    if kid_id in self._node._kids:
-      self._node._kids.pop(kid_id)
-    else:
-      self._node.logger.warning("Received adopted_by for a node that isn't currently a kid.")
-
-    if all(self._has_left.values()):
-      self._node.logger.info("Finished RootSplit")
-      self._node._finish_split()
-
-  def split(self):
-    N_NEW_NODES = 2
-
-    self._partition = {
-        ids.new_id('InternalNode_from_root_split'): kids
-        for kids in misc.partition(items=list(self._node._kids.values()), n_buckets=N_NEW_NODES)
-    }
-    for kid in self._node._kids.values():
-      self._has_left[kid['id']] = False
-
-    for node_id, kids in self._partition.items():
-      self._node._controller.spawn_node(
-          messages.io.internal_node_config(
-              node_id=node_id,
-              parent=self._node.new_handle(node_id),
-              adoptees=[self._node.transfer_handle(kid, for_node_id=node_id) for kid in kids],
-              spawner_adjacent=self._node.transfer_handle(self._node._adjacent, for_node_id=node_id),
-              variant=self._node._variant,
-              depth=self._node._depth,
-              adjacent=None))

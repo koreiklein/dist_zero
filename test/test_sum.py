@@ -26,6 +26,50 @@ def test_times_in_order():
     ])
 
 
+def test_scale_unconnected_io_tree(demo):
+  system_config = messages.machine.std_system_config()
+  system_config['INTERNAL_NODE_KIDS_LIMIT'] = 3
+  system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 2
+  machine, = demo.new_machine_controllers(
+      1,
+      base_config={
+          'system_config': system_config,
+          'network_errors_config': messages.machine.std_simulated_network_errors_config(),
+      },
+      random_seed='test_scale_unconnected_io_tree')
+  demo.run_for(ms=200)
+  root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
+  demo.system.spawn_node(
+      on_machine=machine,
+      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, height=1, variant='input'))
+  demo.run_for(ms=2000)
+
+  create_new_leaf = lambda name: demo.system.create_descendant(
+      internal_node_id=root_input_node_id,
+      new_node_name=name,
+      machine_id=machine)
+
+  assert 1 == demo.system.get_capacity(root_input_node_id)['height']
+
+  n_new_leaves = 9
+  for i in range(n_new_leaves):
+    create_new_leaf(name='test_leaf_{}'.format(i))
+    demo.run_for(ms=2000)
+
+  demo.run_for(ms=4000)
+
+  assert 2 == demo.system.get_capacity(root_input_node_id)['height']
+
+  n_new_leaves = 27 - 9
+  for i in range(n_new_leaves):
+    create_new_leaf(name='test_leaf_{}'.format(i))
+    demo.run_for(ms=2000)
+
+  demo.run_for(ms=4000)
+
+  assert 3 == demo.system.get_capacity(root_input_node_id)['height']
+
+
 @pytest.mark.parametrize('error_regexp,drop_rate,network_error_type,seed', [
     ('.*increment.*', 0.0, 'drop', 'a'),
     ('.*increment.*', 0.02, 'drop', 'a'),
@@ -62,13 +106,13 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
   demo.system.spawn_node(
       on_machine=machine_a,
-      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, depth=0, variant='input'))
+      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, height=1, variant='input'))
 
   root_output_node_id = dist_zero.ids.new_id('InternalNode_output')
   demo.system.spawn_node(
       on_machine=machine_c,
       node_config=messages.io.internal_node_config(
-          root_output_node_id, parent=None, depth=0, variant='output', initial_state=0))
+          root_output_node_id, parent=None, height=1, variant='output', initial_state=0))
 
   demo.run_for(ms=200)
 
@@ -94,7 +138,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           insertion_node_configs=[
               messages.computation.computation_node_config(
                   node_id=root_computation_node_id,
-                  depth=1,
+                  height=1,
                   parent=None,
                   senders=[input_handle_for_migration],
                   receivers=[output_handle_for_migration],

@@ -20,7 +20,7 @@ class InsertionMigrator(migrator.Migrator):
     self._migration = migration
     self._node = node
 
-    self._depth = self._node.depth
+    self._height = self._node.height
 
     self._right_map = None
 
@@ -152,7 +152,7 @@ class InsertionMigrator(migrator.Migrator):
                           self.migration_id,
                           n_kids=None,
                           parent_handle=self._node.new_handle(sender['id']),
-                          depth=self._depth,
+                          height=self._height,
                           is_data=self._node.is_data(),
                           connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
 
@@ -169,7 +169,7 @@ class InsertionMigrator(migrator.Migrator):
         # Look into it, write up some notes, and fix it.
         new_node_max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
         new_node_max_inputs=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
-        new_node_name_prefix='SumNode' if self._depth == 0 else 'ComputationNode',
+        new_node_name_prefix='SumNode' if self._height == 0 else 'ComputationNode',
     )
 
   def _maybe_has_left_and_right_configurations(self):
@@ -180,7 +180,7 @@ class InsertionMigrator(migrator.Migrator):
       from dist_zero.node.computation import ComputationNode
       self._node.logger.info("Insertion migrator has received all Left and Right configurations. Ready to spawn.")
       if self._node.__class__ != ComputationNode:
-        self._depth = 0
+        self._height = 0
         self._send_configure_left_to_right()
       else:
         self._left_layer = {
@@ -192,7 +192,7 @@ class InsertionMigrator(migrator.Migrator):
           self._graph.add_node(left_id)
 
         # Decide on a network topology and spawn new kids
-        self._depth = max(self._max_left_depth(), self._max_right_depth())
+        self._height = max(self._max_left_height(), self._max_right_height())
         self._picker = self._new_topology_picker()
         self._right_map = self._picker.fill_graph(
             left_is_data=any(config['is_data'] for config in self._left_configurations.values()),
@@ -201,11 +201,11 @@ class InsertionMigrator(migrator.Migrator):
 
         self._spawn_layer(1)
 
-  def _max_left_depth(self):
-    return max(config['depth'] for config in self._left_configurations.values())
+  def _max_left_height(self):
+    return max(config['height'] for config in self._left_configurations.values())
 
-  def _max_right_depth(self):
-    return max(config['depth'] for config in self._right_config_receiver.configs.values())
+  def _max_right_height(self):
+    return max(config['height'] for config in self._right_config_receiver.configs.values())
 
   def _id_to_handle(self, node_id):
     '''
@@ -248,7 +248,7 @@ class InsertionMigrator(migrator.Migrator):
           receivers=[],
           migration=self._node.transfer_handle(self._migration, node_id),
       )
-      if self._depth == 0:
+      if self._height == 0:
         self._node._controller.spawn_node(
             messages.sum.sum_node_config(
                 node_id=node_id,
@@ -262,7 +262,7 @@ class InsertionMigrator(migrator.Migrator):
             messages.computation.computation_node_config(
                 node_id=node_id,
                 parent=self._node.new_handle(node_id),
-                depth=self._depth - 1,
+                height=self._height - 1,
                 senders=senders,
                 receivers=[],
                 migrator=migrator))
@@ -299,7 +299,7 @@ class InsertionMigrator(migrator.Migrator):
       message = messages.migration.configure_new_flow_left(
           self.migration_id,
           node=self._node.new_handle(receiver['id']),
-          depth=self._depth,
+          height=self._height,
           is_data=self._node.is_data(),
           kids=[{
               'handle': self._node.transfer_handle(self._kids[kid_id], receiver['id']),

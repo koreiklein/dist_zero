@@ -355,7 +355,7 @@ def configure_right_parent(migration_id, kid_ids):
   }
 
 
-def configure_new_flow_right(migration_id, parent_handle, is_data, depth, n_kids, connection_limit):
+def configure_new_flow_right(migration_id, parent_handle, is_data, height, n_kids, connection_limit):
   '''
   The 'right' configuration, sent while starting a new flow.
 
@@ -363,7 +363,7 @@ def configure_new_flow_right(migration_id, parent_handle, is_data, depth, n_kids
 
   :param str migration_id: The id of the relevant migration.
   :param parent_handle: The :ref:`handle` of the sender. A sibling node to the right of the node receiving the message.
-  :param int depth: The depth of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
+  :param int height: The height of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
   :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
   :param n_kids: If the right node is a data node with a set number of kids, n_kids will give that number.
     Otherwise, n_kids will be `None`
@@ -378,7 +378,7 @@ def configure_new_flow_right(migration_id, parent_handle, is_data, depth, n_kids
           'type': 'configure_new_flow_right',
           'parent_handle': parent_handle,
           'is_data': is_data,
-          'depth': depth,
+          'height': height,
           'n_kids': n_kids,
           'connection_limit': connection_limit
       }
@@ -403,14 +403,14 @@ def set_source_right_parents(migration_id, configure_right_parent_ids):
   }
 
 
-def configure_new_flow_left(migration_id, depth, is_data, node, kids):
+def configure_new_flow_left(migration_id, height, is_data, node, kids):
   '''
   The 'left' configuration, sent while starting a new flow.
 
   Either `InsertionMigrator` or `SinkMigrator` can receive this message.
 
   :param str migration_id: The id of the relevant migration.
-  :param int depth: The depth of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
+  :param int height: The height of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
   :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
   :param node: The :ref:`handle` of the sending node.
   :type node: :ref:`handle`
@@ -423,7 +423,7 @@ def configure_new_flow_left(migration_id, depth, is_data, node, kids):
       'migration_id': migration_id,
       'message': {
           'type': 'configure_new_flow_left',
-          'depth': depth,
+          'height': height,
           'is_data': is_data,
           'node': node,
           'kids': kids

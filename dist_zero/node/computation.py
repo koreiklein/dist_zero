@@ -8,12 +8,12 @@ logger = logging.getLogger(__name__)
 
 
 class ComputationNode(Node):
-  def __init__(self, node_id, parent, depth, migrator_config, controller):
+  def __init__(self, node_id, parent, height, migrator_config, controller):
     self.id = node_id
     self._controller = controller
 
     self.parent = parent
-    self.depth = depth
+    self.height = height
     self.kids = {}
     self._kid_n_senders = {}
     self._kid_n_receivers = {}
@@ -61,7 +61,7 @@ class ComputationNode(Node):
     return ComputationNode(
         node_id=node_config['id'],
         parent=node_config['parent'],
-        depth=node_config['depth'],
+        height=node_config['height'],
         migrator_config=node_config['migrator'],
         controller=controller)
 

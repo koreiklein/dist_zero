@@ -166,7 +166,7 @@ class TestLongRunningSum(object):
     self._spawn_inputs_loop(n_inputs=n_inputs_at_split, total_time_ms=20 * 1000)
     self.demo.run_for(ms=4000)
 
-    # Uncomment the below line to do more in depth debugging regarding why totals might not add up properly.
+    # Uncomment the below line to do more in height debugging regarding why totals might not add up properly.
     #self._debug_node_spltting()
 
     assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
@@ -259,7 +259,7 @@ class TestLongRunningSum(object):
         node_config=messages.io.internal_node_config(
             self.root_input_node_id,
             parent=None,
-            depth=0,
+            height=1,
             adjacent=self.demo.system.generate_new_handle(
                 new_node_id=self.root_input_node_id, existing_node_id=self.sum_node_id),
             variant='input'))
@@ -270,7 +270,7 @@ class TestLongRunningSum(object):
             self.root_output_node_id,
             variant='output',
             parent=None,
-            depth=0,
+            height=1,
             adjacent=self.demo.system.generate_new_handle(
                 new_node_id=self.root_output_node_id, existing_node_id=self.sum_node_id),
             initial_state=0))

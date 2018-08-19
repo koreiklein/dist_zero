@@ -71,6 +71,15 @@ class SystemController(object):
 
     return list(result.keys())
 
+  def get_capacity(self, node_id):
+    result = self.send_api_message(node_id, messages.machine.get_capacity())
+    highest_capacity_kid = result['highest_capacity_kid']
+    if highest_capacity_kid is not None:
+      self._add_node_machine_mapping(highest_capacity_kid)
+      result['highest_capacity_kid'] = highest_capacity_kid['id']
+
+    return result
+
   def _add_node_machine_mapping(self, handle):
     if handle['id'] not in self._node_id_to_machine_id:
       self._node_id_to_machine_id[handle['id']] = handle['controller_id']
@@ -90,9 +99,33 @@ class SystemController(object):
                                      machine_id=machine_id,
                                  ))
 
+  def create_descendant(self, internal_node_id, new_node_name, machine_id, recorded_user=None):
+    '''
+    Create a new descendant of an `InternalNode` in this system.
+    The kid will be added at a height 0 `InternalNode` with capacity, that is descended from the node
+    identified by ``internal_node_id``.
+
+    :param str internal_node_id: The id of the ancestor node.
+    :param str new_node_name: The name to use for the new node.
+    :param str machine_id: The id of the `MachineController` that should run the new node.
+    :param recorded_user: An optional recording of a user to be played back on the new node.
+    :type recorded_user: :RecordedUser`
+
+    :return: The id of the newly created node
+
+    One of the nodes involved will raise a `NoCapacityError` if the subtree identified by ``internal_node_id`` has no
+      capacity to accomodate new nodes.
+    '''
+    capacity = self.get_capacity(internal_node_id)
+    kid_id = capacity['highest_capacity_kid']
+    if kid_id is None:
+      return self.create_kid(internal_node_id, new_node_name, machine_id, recorded_user=recorded_user)
+    else:
+      return self.create_descendant(kid_id, new_node_name, machine_id, recorded_user=recorded_user)
+
   def create_kid(self, parent_node_id, new_node_name, machine_id, recorded_user=None):
     '''
-    Create a new kid of an `InternalNode` in this system.
+    Create a new kid of a height 0 `InternalNode` in this system.
 
     :param str parent_node_id: The id of the parent node.
     :param str new_node_name: The name to use for the new node.

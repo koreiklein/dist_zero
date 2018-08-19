@@ -52,7 +52,7 @@ class SumNode(Node):
     self.id = node_id
     self.parent = parent
 
-    self.depth = 0
+    self.height = 0
 
     if settings.IS_TESTING_ENV:
       self._TESTING_total_before_first_swap = 0
