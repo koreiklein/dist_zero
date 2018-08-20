@@ -103,8 +103,6 @@ class TopologyPicker(object):
     else:
       # FIXME(KK): We are currently implementing only one very specific special case.
       #   Test and implement the other more general cases.
-      import ipdb
-      ipdb.set_trace()
       raise RuntimeError("Not Yet Implemented")
 
   def _new_node(self):
@@ -212,8 +210,6 @@ class TopologyPicker(object):
     if violation['type'] == 'too_many_incomming_edges':
       raise RuntimeError("Not Yet Implemented")
     elif violation['type'] == 'too_many_outgoing_edges':
-      import ipdb
-      ipdb.set_trace()
       raise RuntimeError("Not Yet Implemented")
     else:
       raise errors.InternalError('Unrecognized node topology violation type "{}"'.format(violation['type']))

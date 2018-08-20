@@ -328,9 +328,6 @@ class SumNode(Node):
       raise errors.InternalError("Sum nodes should never be passed kids by a migrator.")
 
     for receiver_id in new_receiver_ids:
-      if receiver_id not in self._exporters:
-        import ipdb
-        ipdb.set_trace()
       exporter = self._exporters[receiver_id]
       self.send(exporter.receiver,
                 messages.migration.swapped_to_duplicate(

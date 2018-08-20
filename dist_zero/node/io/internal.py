@@ -101,9 +101,7 @@ class InternalNode(Node):
             "sink_swap should be called on an edge internal node only when there is a unique new sender.")
       self._adjacent = new_senders[0]
     elif self._variant == 'input':
-      # FIXME(KK): Test and implement this
-      import ipdb
-      ipdb.set_trace()
+      raise errors.InternalError("An input InternalNode should never function as a sink node in a migration.")
     else:
       raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
@@ -116,8 +114,7 @@ class InternalNode(Node):
       self._adjacent = new_receivers[0]
       self.send(self._adjacent, messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
     elif self._variant == 'output':
-      import ipdb
-      ipdb.set_trace()
+      raise errors.InternalError("Output InternalNode should never function as a source migrator in a migration.")
     else:
       raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
@@ -368,8 +365,6 @@ class InternalNode(Node):
 
   def _set_output(self, node):
     if self._adjacent is not None:
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError("InternalNodes can have only a single adjacent node.")
     self._adjacent = node
 

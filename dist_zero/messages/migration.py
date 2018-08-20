@@ -89,10 +89,6 @@ def insertion_migrator_config(configure_right_parent_ids, senders, receivers, mi
     Otherwise, it is `None`
   :type migration: :ref:`handle` or `None`
   '''
-  for x in configure_right_parent_ids:
-    if x.__class__ != str:
-      import ipdb
-      ipdb.set_trace()
   return {
       'type': 'insertion_migrator',
       'configure_right_parent_ids': configure_right_parent_ids,

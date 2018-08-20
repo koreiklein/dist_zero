@@ -224,9 +224,6 @@ class NodeManager(MachineController):
     return len(self._node_by_id)
 
   def _update_output_node_state(self, node_id, f):
-    if self._output_node_state_by_id[node_id] is None:
-      import ipdb
-      ipdb.set_trace()
     new_state = f(self._output_node_state_by_id[node_id])
     self._output_node_state_by_id[node_id] = new_state
 

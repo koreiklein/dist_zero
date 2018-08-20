@@ -107,8 +107,6 @@ class SourceMigrator(migrator.Migrator):
         kids = [{'handle': kid, 'connection_limit': 1} for kid in self._node._kids.values() if kid is not None]
       else:
         # FIXME(KK): Test and implement!
-        import ipdb
-        ipdb.set_trace()
         raise RuntimeError("Not Yet Implemented")
 
       self._node.send(new_receiver,

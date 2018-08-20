@@ -40,9 +40,6 @@ class ComputationNode(Node):
     self.kids.update(kids)
 
     for receiver_id in new_receiver_ids:
-      if receiver_id not in self._exporters:
-        import ipdb
-        ipdb.set_trace()
       receiver = self._exporters[receiver_id].receiver
       self.send(receiver, messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
 

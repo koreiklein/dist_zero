@@ -138,8 +138,6 @@ class SinkMigrator(migrator.Migrator):
         connection_limit = n_kids
       else:
         # FIXME(KK): Test and implement this
-        import ipdb
-        ipdb.set_trace()
         raise RuntimeError("Not Yet Implemented")
       self._node.send(sender,
                       messages.migration.configure_new_flow_right(
@@ -231,8 +229,6 @@ class SinkMigrator(migrator.Migrator):
                           n_kids=len(self._node._kids),
                           connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
     else:
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
 
   def _maybe_kids_are_terminated(self):

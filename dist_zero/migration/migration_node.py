@@ -60,8 +60,6 @@ class MigrationNode(node.Node):
   def receive(self, message, sender_id):
     if message['type'] == 'migration':
       if message['migration_id'] != self.id:
-        import ipdb
-        ipdb.set_trace()
         raise errors.InternalError("MigrationNode received a message from  a different migration.")
       message = message['message']
 
