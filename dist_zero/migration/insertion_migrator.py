@@ -189,6 +189,7 @@ class InsertionMigrator(migrator.Migrator):
             for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
         }
         self._graph = NetworkGraph()
+
         for left_id in self._left_layer.keys():
           self._graph.add_node(left_id)
 

@@ -54,7 +54,10 @@ class LeafNode(Node):
 
     self._now_ms = 0
 
-    self.parent = parent
+    # To look more like InternalNode
+    self._kids = {}
+
+    self._parent = parent
 
     # Messages received before becoming active.
     self._pre_active_messages = []
@@ -62,6 +65,10 @@ class LeafNode(Node):
     self._update_state = update_state
 
     super(LeafNode, self).__init__(logger)
+
+  @property
+  def height(self):
+    return 0
 
   def _set_input(self, node):
     if self._importer is not None:
@@ -94,8 +101,8 @@ class LeafNode(Node):
     elif message['type'] == 'input_action':
       self._receive_input_action(message)
     elif message['type'] == 'adopt':
-      self.send(self.parent, messages.io.goodbye_parent())
-      self.parent = message['new_parent']
+      self.send(self._parent, messages.io.goodbye_parent())
+      self._parent = message['new_parent']
       self._send_hello_parent()
     else:
       super(LeafNode, self).receive(message=message, sender_id=sender_id)
@@ -151,7 +158,7 @@ class LeafNode(Node):
 
   def _send_hello_parent(self):
     self.logger.info("leaf node sending new 'hello_parent' message to parent")
-    self.send(self.parent, messages.io.hello_parent(self.new_handle(self.parent['id'])))
+    self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
 
   def elapse(self, ms):
     self._now_ms += ms
@@ -163,11 +170,14 @@ class LeafNode(Node):
         self.logger.info("Simulated user generated a message", extra={'recorded_message': msg})
         self.receive(msg, sender_id=None)
 
+  def is_data(self):
+    return True
+
   def handle_api_message(self, message):
     if message['type'] == 'get_output_state':
       return self._controller.get_output_state(self.id)
     elif message['type'] == 'kill_node':
-      self.send(self.parent, messages.io.goodbye_parent())
+      self.send(self._parent, messages.io.goodbye_parent())
       self._controller.terminate_node(self.id)
     else:
       return super(LeafNode, self).handle_api_message(message)

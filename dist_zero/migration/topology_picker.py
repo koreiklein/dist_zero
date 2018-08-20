@@ -27,7 +27,60 @@ class TopologyPicker(object):
   def get_layer(self, i):
     return self._layers[i]
 
+  def _add_left_adjacents_layer(self):
+    left_layer = []
+    for left in self._graph.nodes():
+      node_id = self._new_node()
+      self._graph.add_edge(left, node_id)
+      left_layer.append(node_id)
+
+    self._layers.append(left_layer)
+
+  def _add_partition_layer(self):
+    import ipdb
+    ipdb.set_trace()
+
+  def _add_right_adjacents_layer(self, right_configurations):
+    right_map = {}
+
+    right_layer = []
+    for right_config in right_configurations:
+      if right_config['n_kids'] is None:
+        raise errors.InternalError("right_config must have n_kids when right_is_data == True")
+      for i in range(right_config['n_kids']):
+        node_id = self._new_node()
+        right_layer.append(node_id)
+        right_map[node_id] = [right_config['parent_handle']['id']]
+
+    for left in self._layers[-1]:
+      for right in right_layer:
+        self._graph.add_edge(left, right)
+    self._layers.append(right_layer)
+
+    return right_map
+
   def fill_graph(self, left_is_data, right_is_data, right_configurations):
+    if left_is_data:
+      self._add_left_adjacents_layer()
+
+    max_in_last_layer = max(right_config['connection_limit'] for right_config in right_configurations)
+
+    while len(self._layers[-1]) > max_in_last_layer:
+      self._add_partition_layer()
+
+    if right_is_data:
+      return self._add_right_adjacents_layer(right_configurations)
+    else:
+      if len(self._layers[-1]) == 0:
+        singleton = self._new_node()
+        self._layers.append([singleton])
+
+      return {
+          node: [right_config['parent_handle']['id'] for right_config in right_configurations]
+          for node in self._layers[-1]
+      }
+
+  def fill_graph_old(self, left_is_data, right_is_data, right_configurations):
     if left_is_data and right_is_data:
       left_layer = []
       for left in self._graph.nodes():
@@ -88,6 +141,8 @@ class TopologyPicker(object):
           right_map[node_id] = [right_config['parent_handle']['id']]
           right_layer.append(node_id)
       if len(right_layer) > 0:
+        import ipdb
+        ipdb.set_trace()
         # FIXME(KK): In this case, we should probably try a complete connection
         raise RuntimeError("Not Yet Implemented")
       else:
@@ -186,19 +241,11 @@ class TopologyPicker(object):
     '''For connecting a node to a rightmost parent.'''
     self._rightmost_connections.append((left, right))
 
-  def _new_id(self):
-    node_id = ids.new_id(self._name_prefix)
-    self._incomming_edges[node_id] = []
-    self._outgoing_edges[node_id] = []
-    self._outgoing_edge_limit[node_id] = self._std_outgoing_edge_limit
-    self._incomming_edge_limit[node_id] = self._std_incomming_edge_limit
-    return node_id
-
   def _add_right_layer(self, right_n_kids):
     new_layer_of_right_adjacents = []
     for right, n_kids in right_n_kids.items():
       for i in range(n_kids):
-        kid = self._new_id()
+        kid = self._new_node()
         self._connect_to_right(kid, right)
         new_layer_of_right_adjacents.append(kid)
 

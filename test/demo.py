@@ -6,6 +6,7 @@ import time
 import dist_zero.ids
 
 from dist_zero import spawners, messages
+from dist_zero.recorded import RecordedUser
 from dist_zero.system_controller import SystemController
 from dist_zero.spawners.simulator import SimulatedSpawner
 from dist_zero.spawners.docker import DockerSpawner
@@ -66,6 +67,9 @@ class Demo(object):
     self.cloud_spawner = None
 
     self.random_seed = 'TestSimulatedSpawner' if random_seed is None else random_seed
+    self._rand = random.Random(self.random_seed + '_for__demo')
+
+    self.total_simulated_amount = 0
 
   def start(self):
     '''Start the demo.'''
@@ -155,3 +159,67 @@ class Demo(object):
   def new_machine_controller(self):
     '''Like `Demo.new_machine_controllers` but only creates and returns one.'''
     return self.new_machine_controllers(1)[0]
+
+  def connect_trees_with_sum_network(self, root_input_id, root_output_id, machine):
+    '''
+    Create a sum network between input and output trees.
+
+    :param str root_input_id: The id of the root of a data tree.
+    :param str root_output_id: The id of the root of a data tree.
+
+    :return: The id of the root computation node for the newly spawned network.
+    :rtype: str
+    '''
+    node_id = dist_zero.ids.new_id('MigrationNode_add_sum_computation')
+    root_computation_node_id = dist_zero.ids.new_id('ComputationNode_root')
+    input_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_id)
+    output_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_output_id)
+
+    self.system.spawn_node(
+        on_machine=machine,
+        node_config=messages.migration.migration_node_config(
+            node_id=node_id,
+            source_nodes=[(input_handle_for_migration, messages.migration.source_migrator_config(will_sync=False, ))],
+            sink_nodes=[(output_handle_for_migration,
+                         messages.migration.sink_migrator_config(
+                             new_flow_senders=[root_computation_node_id],
+                             old_flow_sender_ids=[],
+                             will_sync=False,
+                         ))],
+            removal_nodes=[],
+            sync_pairs=[],
+            insertion_node_configs=[
+                messages.computation.computation_node_config(
+                    node_id=root_computation_node_id,
+                    height=1,
+                    parent=None,
+                    senders=[input_handle_for_migration],
+                    receivers=[output_handle_for_migration],
+                    migrator=messages.migration.insertion_migrator_config(
+                        configure_right_parent_ids=[],
+                        senders=[input_handle_for_migration],
+                        receivers=[output_handle_for_migration],
+                    ),
+                )
+            ]))
+    return root_computation_node_id
+
+  def all_io_kids(self, internal_node_id):
+    if self.system.get_stats(internal_node_id)['height'] == 0:
+      return self.system.get_kids(internal_node_id)
+    else:
+      return [
+          descendant for kid_id in self.system.get_kids(internal_node_id) for descendant in self.all_io_kids(kid_id)
+      ]
+
+  def new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms):
+    time_message_pairs = []
+    times_to_send = sorted(
+        self._rand.random() * send_messages_for_ms for x in range(send_messages_for_ms // ave_inter_message_time_ms))
+
+    for t in times_to_send:
+      amount_to_send = int(self._rand.random() * 20)
+      self.total_simulated_amount += amount_to_send
+      time_message_pairs.append((t, messages.io.input_action(amount_to_send)))
+
+    return RecordedUser(name, time_message_pairs)

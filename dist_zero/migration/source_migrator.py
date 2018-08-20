@@ -102,12 +102,7 @@ class SourceMigrator(migrator.Migrator):
       raise RuntimeError("Not Yet Implemented")
 
     for new_receiver in self._new_receivers.values():
-      from dist_zero.node.io.internal import InternalNode
-      if self._node.__class__ == InternalNode:
-        kids = [{'handle': kid, 'connection_limit': 1} for kid in self._node._kids.values() if kid is not None]
-      else:
-        # FIXME(KK): Test and implement!
-        raise RuntimeError("Not Yet Implemented")
+      kids = [{'handle': kid, 'connection_limit': 1} for kid in self._node._kids.values() if kid is not None]
 
       self._node.send(new_receiver,
                       messages.migration.configure_new_flow_left(

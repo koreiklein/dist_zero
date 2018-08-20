@@ -224,7 +224,7 @@ class SinkMigrator(migrator.Migrator):
                       messages.migration.configure_new_flow_right(
                           self.migration_id,
                           parent_handle=self._node.new_handle(adjacent['id']),
-                          height=self._node._height,
+                          height=self._node.height,
                           is_data=self._node.is_data(),
                           n_kids=len(self._node._kids),
                           connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))

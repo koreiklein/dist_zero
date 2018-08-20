@@ -290,9 +290,11 @@ class InternalNode(Node):
         self._kid_summaries = {}
         self._kids = {sender_id: message['kid']}
         self._graph = NetworkGraph()
+        self._graph.add_node(sender_id)
         self._root_proxy_id = None
       else:
         self._kids[sender_id] = message['kid']
+        self._graph.add_node(sender_id)
         if self._pending_adoptees is not None:
           if sender_id in self._pending_adoptees:
             self._pending_adoptees[sender_id] = True
@@ -427,6 +429,16 @@ class InternalNode(Node):
         'highest_capacity_kid': highest_capacity_kid,
     }
 
+  def stats(self):
+    return {
+        'height': self._height,
+        'n_retransmissions': self.linker.n_retransmissions,
+        'n_reorders': self.linker.n_reorders,
+        'n_duplicates': self.linker.n_duplicates,
+        'sent_messages': self.linker.least_unused_sequence_number,
+        'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
+    }
+
   def handle_api_message(self, message):
     if message['type'] == 'create_kid_config':
       return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
@@ -480,6 +492,7 @@ class InternalNode(Node):
           "added_leaf: Could not find node matching id {missing_child_node_id}",
           extra={'missing_child_node_id': kid['id']})
     else:
+      self._graph.add_node(kid['id'])
       self._kids[kid['id']] = kid
 
       if self._adjacent is None:
