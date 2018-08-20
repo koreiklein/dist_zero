@@ -230,43 +230,12 @@ class SumNode(Node):
         self._input_importer is None \
         and self._output_exporter is None:
       self._time_since_had_enough_receivers_ms = 0
-      self._excise_self()
-
     self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
     if len(self._importers) >= SENDER_LIMIT:
       if not self.migrators:
         self.logger.info("Hitting sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
         self._spawn_new_senders_migration()
-
-  def _excise_self(self):
-    '''
-    Trigger a migration to remove self.
-    '''
-    # FIXME(KK): This logic should probably go in the parent instead.
-    return
-    node_id = ids.new_id('MigrationNode_remove_sum_node')
-    return self._controller.spawn_node(
-        node_config=messages.migration.migration_node_config(
-            node_id=node_id,
-            source_nodes=[(self.transfer_handle(importer.sender, node_id),
-                           messages.migration.source_migrator_config(
-                               exporter_swaps=[(self.id, list(self._exporters.keys()))], will_sync=False))
-                          for importer in self._importers.values()],
-            sink_nodes=[(
-                self.transfer_handle(exporter.receiver, node_id),
-                messages.migration.sink_migrator_config(
-                    will_sync=False, new_flow_sender_ids=list(self._importers.keys()), old_flow_sender_ids=[self.id]))
-                        for exporter in self._exporters.values()],
-            removal_nodes=[(self.new_handle(node_id),
-                            messages.migration.removal_migrator_config(
-                                will_sync=False,
-                                sender_ids=list(self._importers.keys()),
-                                receiver_ids=list(self._exporters.keys()),
-                            ))],
-            insertion_node_configs=[],
-            sync_pairs=[],
-        ))
 
   def _spawn_new_senders_migration(self):
     '''
