@@ -159,6 +159,9 @@ class SystemController(object):
     self._node_id_to_machine_id[node_id] = on_machine
     return node_id
 
+  def kill_node(self, node_id):
+    self.send_api_message(node_id, messages.machine.kill_node())
+
   def _send_to_machine(self, machine_id, message, sock_type='udp'):
     '''
     Send a message to the identified `MachineController` using whatever method is appropriate

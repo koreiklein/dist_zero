@@ -226,13 +226,11 @@ class SumNode(Node):
     if len(self._exporters) >= SUM_NODE_RECEIVER_LOWER_LIMIT or len(self._importers) >= SUM_NODE_SENDER_LOWER_LIMIT:
       self._time_since_had_enough_receivers_ms = 0
 
-    # FIXME(KK): This logic should probably go in the parent instead!
-    #elif self._time_since_had_enough_receivers_ms > TOO_FEW_RECEIVERS_TIME_MS and \
-    #    self._input_importer is None \
-    #    and self._output_exporter is None:
-    #  self._time_since_had_enough_receivers_ms = 0
-    #  import ipdb; ipdb.set_trace()
-    #  self._excise_self()
+    elif self._time_since_had_enough_receivers_ms > TOO_FEW_RECEIVERS_TIME_MS and \
+        self._input_importer is None \
+        and self._output_exporter is None:
+      self._time_since_had_enough_receivers_ms = 0
+      self._excise_self()
 
     self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
@@ -245,6 +243,8 @@ class SumNode(Node):
     '''
     Trigger a migration to remove self.
     '''
+    # FIXME(KK): This logic should probably go in the parent instead.
+    return
     node_id = ids.new_id('MigrationNode_remove_sum_node')
     return self._controller.spawn_node(
         node_config=messages.migration.migration_node_config(

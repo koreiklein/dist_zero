@@ -259,13 +259,6 @@ class NodeManager(MachineController):
     node.initialize()
     return node
 
-  def _get_node_by_id(self, node_id):
-    '''
-    :param str node_id: The id of a node managed by self.
-    :return: The node instance itself.
-    '''
-    return self._node_by_id[node_id]
-
   def handle_api_message(self, message):
     '''
     :param object message: A json message for the API
@@ -307,7 +300,13 @@ class NodeManager(MachineController):
     elif message['type'] == 'machine_deliver_to_node':
       sender_id = message['sending_node_id']
       node_id = message['node_id']
-      node = self._get_node_by_id(node_id)
+      if node_id not in self._node_by_id:
+        # This message could be for a node that was just terminated.
+        logger.warning(
+            "Received a message for a node '{missing_node_id}' not on this machine.",
+            extra={'missing_node_id': node_id})
+        return
+      node = self._node_by_id[node_id]
 
       decoded_message = json.loads(
           node.fernet.decrypt(message['message'].encode(messages.ENCODING)).decode(messages.ENCODING))
@@ -336,7 +335,7 @@ class NodeManager(MachineController):
 
   def _receive_without_error_simulation(self, node_id, message, sender_id):
     '''receive a message to the proper node without any network error simulations'''
-    node = self._get_node_by_id(node_id)
+    node = self._node_by_id[node_id]
     logger.info(
         "Node is receiving message of type {message_type} from {sender_id}",
         extra={

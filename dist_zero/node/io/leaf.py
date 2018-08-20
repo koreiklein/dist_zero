@@ -94,10 +94,9 @@ class LeafNode(Node):
     elif message['type'] == 'input_action':
       self._receive_input_action(message)
     elif message['type'] == 'adopt':
-      new_parent = message['new_parent']
-      self.send(self.parent, messages.io.adopted_by(new_parent['id']))
-      self.send(new_parent, messages.io.adopted())
-      self.parent = new_parent
+      self.send(self.parent, messages.io.goodbye_parent())
+      self.parent = message['new_parent']
+      self.send(self.parent, messages.io.hello_parent(self.new_handle(self.parent['id'])))
     else:
       super(LeafNode, self).receive(message=message, sender_id=sender_id)
 
@@ -164,5 +163,8 @@ class LeafNode(Node):
   def handle_api_message(self, message):
     if message['type'] == 'get_output_state':
       return self._controller.get_output_state(self.id)
+    elif message['type'] == 'kill_node':
+      self.send(self.parent, messages.io.goodbye_parent())
+      self._controller.terminate_node(self.id)
     else:
       return super(LeafNode, self).handle_api_message(message)

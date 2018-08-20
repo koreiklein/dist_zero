@@ -55,6 +55,15 @@ class InternalNode(Node):
     # FIXME(KK): Check that we actually want to track this.
     self._spawner_adjacent = spawner_adjacent
 
+    self._leaving_kids = None
+    '''
+    None if this node is not merging with another node.
+    Otherwise, the set of kids that must leave this node before it has lost all its kids and it's safe to terminate.
+    '''
+
+    self._merging_kid_ids = set()
+    '''Set of kid ids of kids that are in process of merging with another kid.'''
+
     self._graph = NetworkGraph()
 
     self._root_proxy_id = None
@@ -63,12 +72,21 @@ class InternalNode(Node):
     proxy.
     '''
 
+    self._root_consuming_proxy_id = None
+    '''
+    While in the process of decreasing its height, the root node sets this to the id of the proxy node that it is
+    consuming.
+    '''
+
     # To limit excessive warnings regarding being at low capacity.
     self._warned_low_capacity = False
 
     super(InternalNode, self).__init__(logger)
 
     self._ticker = ticker.Ticker(interval_ms=self.system_config['KID_SUMMARY_INTERVAL'])
+
+    self._time_since_no_mergable_kids_ms = 0
+    self._time_since_no_consumable_proxy = 0
 
   def is_data(self):
     return True
@@ -150,6 +168,9 @@ class InternalNode(Node):
       raise errors.InternalError("height 0 InternalNode instances can not spawn kids")
     elif self._root_proxy_id is not None:
       raise errors.InternalError("Root nodes may not spawn new kids while their are bumping their height.")
+    elif self._root_consuming_proxy_id is not None:
+      raise errors.InternalError("Root nodes may not spawn new kids while their are decreasing their height "
+                                 "by consuming a proxy.")
     else:
       node_id = ids.new_id("InternalNode_kid")
       self.logger.info("InternalNode is spawning a new kid", extra={'new_kid_id': node_id})
@@ -166,12 +187,79 @@ class InternalNode(Node):
               adoptees=[],
           ))
 
-  def _check_kid_limits(self):
+  def _check_for_kid_limits(self):
     '''In case the kids of self are hitting any limits, address them.'''
     if self._height > 0:
-      self._check_kid_capacity()
+      self._check_for_low_capacity()
 
-  def _check_kid_capacity(self):
+  def _check_for_consumable_proxy(self, ms):
+    TIME_TO_WAIT_BEFORE_CONSUME_PROXY_MS = 4 * 1000
+
+    if self._parent is None:
+      if len(self._kids) == 1 and not self._root_consuming_proxy_id and self._height > 1:
+        self._time_since_no_consumable_proxy += ms
+        if self._time_since_no_consumable_proxy >= TIME_TO_WAIT_BEFORE_CONSUME_PROXY_MS:
+          self._consume_proxy()
+      else:
+        self._time_since_no_consumable_proxy = 0
+
+  def _consume_proxy(self):
+    '''Method for a root node to absorb its unique kid.'''
+    if self._parent is not None or len(self._kids) != 1:
+      raise errors.InternalError("Must have a unique kid and be root to consume a proxy.")
+
+    if self._root_consuming_proxy_id is not None:
+      raise errors.InternalError("Root node is already in the process of consuming a separate proxy node.")
+
+    proxy = next(iter(self._kids.values()))
+    self._root_consuming_proxy_id = proxy['id']
+    self.send(proxy, messages.io.merge_with(self.new_handle(proxy['id'])))
+
+  def _check_for_mergeable_kids(self, ms):
+    '''Check whether any two kids should be merged.'''
+    TIME_TO_WAIT_BEFORE_KID_MERGE_MS = 4 * 1000
+
+    if self._height > 0:
+      best_pair = self._best_mergeable_kids()
+      if best_pair is None or self._merging_kid_ids:
+        self._time_since_no_mergable_kids_ms = 0
+      else:
+        self._time_since_no_mergable_kids_ms += ms
+
+        if self._time_since_no_mergable_kids_ms >= TIME_TO_WAIT_BEFORE_KID_MERGE_MS:
+          self._merge_kids(*best_pair)
+
+  def _merge_kids(self, left_kid_id, right_kid_id):
+    '''
+    Merge the kids identified by left_kid_id and right_kid_id
+
+    :param str left_kid_id: The id of one kid to merge.
+    :param str right_kid_id: The id of another kid to merge.
+    '''
+    self._merging_kid_ids.add(left_kid_id)
+    self.send(self._kids[left_kid_id],
+              messages.io.merge_with(self.transfer_handle(self._kids[right_kid_id], left_kid_id)))
+
+  def _best_mergeable_kids(self):
+    '''
+    Find the best pair of mergeable kids if they exist.
+
+    :return: None if no 2 kids are mergable.  Otherwise, a pair of the ids of two mergeable kids.
+    '''
+    # Current algorithm: 2 kids can be merged if each has n_kids less than 1/3 the max
+    if len(self._kid_summaries) >= 2:
+      MAX_N_KIDS = self.system_config['INTERNAL_NODE_KIDS_LIMIT']
+      MERGEABLE_N_KIDS = MAX_N_KIDS // 3
+      n_kids_kid_id_pairs = [(kid_summary['n_kids'], kid_id) for kid_id, kid_summary in self._kid_summaries.items()]
+      n_kids_kid_id_pairs.sort()
+      (least_n_kids, least_id), (next_least_n_kids, next_least_id) = n_kids_kid_id_pairs[:2]
+
+      if least_n_kids <= MERGEABLE_N_KIDS and next_least_n_kids <= MERGEABLE_N_KIDS:
+        return least_id, next_least_id
+    return None
+
+  def _check_for_low_capacity(self):
+    '''Check whether the total capacity of this node's kids is too low.'''
     total_kid_capacity = sum(
         self._kid_capacity_limit - kid_summary['size'] for kid_summary in self._kid_summaries.values())
 
@@ -233,21 +321,44 @@ class InternalNode(Node):
             self._send_hello_parent()
 
         self._graph.add_node(sender_id)
+
+      self._send_kid_summary()
+    elif message['type'] == 'goodbye_parent':
+      if sender_id in self._merging_kid_ids:
+        self._merging_kid_ids.remove(sender_id)
+      if sender_id in self._kids:
+        self._kids.pop(sender_id)
+      if sender_id in self._kid_summaries:
+        self._kid_summaries.pop(sender_id)
+        self._send_kid_summary()
+
+      if self._leaving_kids is not None and sender_id in self._leaving_kids:
+        self._leaving_kids.remove(sender_id)
+        if not self._leaving_kids:
+          self._controller.terminate_node(self.id)
+
+      if sender_id == self._root_consuming_proxy_id:
+        self._complete_consuming_proxy()
     elif message['type'] == 'kid_summary':
-      self._kid_summaries[sender_id] = message
-      self._check_kid_limits()
+      if sender_id in self._kids:
+        self._kid_summaries[sender_id] = message
+        self._check_for_kid_limits()
+    elif message['type'] == 'merge_with':
+      if self._parent is None:
+        raise errors.InternalError("Root nodes can not merge with other nodes.")
+      new_parent = message['node']
+      for kid in self._kids.values():
+        self.send(kid, messages.io.adopt(self.transfer_handle(new_parent, kid['id'])))
+      self.send(self._parent, messages.io.goodbye_parent())
+      self._leaving_kids = set(self._kids.keys())
     elif message['type'] == 'adopt':
+      if self._parent is None:
+        raise errors.InternalError("Root nodes may not adopt a new parent.")
+      self.send(self._parent, messages.io.goodbye_parent())
       self._parent = message['new_parent']
       self._send_hello_parent()
     elif message['type'] == 'added_leaf':
       self.added_leaf(message['kid'])
-    elif message['type'] == 'adopted_by':
-      if self._current_split is None:
-        self.logger.warning("Received adopted_by without a current active split, discarding.")
-      else:
-        self._current_split.adopted_by(kid_id=sender_id, new_parent_id=message['new_parent_id'])
-    elif message['type'] == 'adopted':
-      self._kids[sender_id] = self._adoptees[sender_id]
     elif message['type'] == 'connect_node':
       if message['direction'] == 'receiver':
         self._set_output(message['node'])
@@ -257,6 +368,14 @@ class InternalNode(Node):
         raise errors.InternalError('Unrecognized direction "{}"'.format(message['direction']))
     else:
       super(InternalNode, self).receive(message=message, sender_id=sender_id)
+
+  def _complete_consuming_proxy(self):
+    if self._parent is not None:
+      raise errors.InternalError("Only root nodes should complete consuming a proxy node.")
+    if self._height < 2:
+      raise errors.InternalError("A root node should have a height >= 2 when it completes consuming its proxy.")
+    self._height -= 1
+    self._root_consuming_proxy_id = None
 
   def _set_input(self, node):
     if self._adjacent is not None:
@@ -284,8 +403,11 @@ class InternalNode(Node):
         initial_state=node_config['initial_state'])
 
   def elapse(self, ms):
-    if self._ticker.elapse(ms) > 0:
+    n_ticks = self._ticker.elapse(ms)
+    if n_ticks > 0:
       self._send_kid_summary()
+      self._check_for_mergeable_kids(self._ticker.interval_ms * n_ticks)
+      self._check_for_consumable_proxy(self._ticker.interval_ms * n_ticks)
 
   def _send_kid_summary(self):
     if self._parent is not None:
@@ -349,6 +471,9 @@ class InternalNode(Node):
     :return: A config for the new child node.
     :rtype: :ref:`message`
     '''
+    if self._height != 0:
+      raise errors.InternalError("Only InternalNode instances of height 0 should create kid configs.")
+
     node_id = dist_zero.ids.new_id('LeafNode_{}'.format(name))
     self.logger.info(
         "Registering a new leaf node config for an internal node. name='{node_name}'",

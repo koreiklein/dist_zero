@@ -88,22 +88,14 @@ def adopt(new_parent):
   return {'type': 'adopt', 'new_parent': new_parent}
 
 
-def adopted_by(new_parent_id):
+def merge_with(node):
   '''
-  Nodes that have switched parents will send this message to the old parent informing them that
-  they are no longer that parent's child.
+  Indicates to the receiver that it should merge with one of its sibling nodes.
 
-  :param str new_parent_id: The id of the parent the child has just switched to.
+  :param node: The :ref:`handle` of the sibling node to merge with.
+  :type node: :ref:`handle`
   '''
-  return {'type': 'adopted_by', 'new_parent_id': new_parent_id}
-
-
-def adopted():
-  '''
-  Nodes that have switched parents will send this message to the new parent informing them that
-  they have switched.
-  '''
-  return {'type': 'adopted'}
+  return {'type': 'merge_with', 'node': node}
 
 
 def adjacent_has_split(new_node, stolen_io_kid_ids):
@@ -195,6 +187,13 @@ def hello_parent(kid):
   :type kid: :ref:`handle`
   '''
   return {'type': 'hello_parent', 'kid': kid}
+
+
+def goodbye_parent():
+  '''
+  Sent by a `LeafNode` to inform its parent `InternalNode` that it has left the system.
+  '''
+  return {'type': 'goodbye_parent'}
 
 
 def kid_summary(size, n_kids):

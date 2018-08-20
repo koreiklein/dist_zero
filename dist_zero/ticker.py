@@ -9,7 +9,7 @@ class Ticker(object):
     :param int interval_ms: The time between ticks.
     '''
     self._current_ms = 0
-    self._interval_ms = interval_ms
+    self.interval_ms = interval_ms
 
   def elapse(self, ms):
     '''
@@ -20,6 +20,6 @@ class Ticker(object):
     :rttype: int
     '''
     self._current_ms += ms
-    result = self._current_ms // self._interval_ms
-    self._current_ms %= self._interval_ms
+    result = self._current_ms // self.interval_ms
+    self._current_ms %= self.interval_ms
     return result

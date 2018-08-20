@@ -20,7 +20,7 @@ def std_system_config():
 
       # Every time this many milliseconds pass on an internal node, it should send a kid_summary message
       # to its parent.
-      'KID_SUMMARY_INTERVAL': 600,
+      'KID_SUMMARY_INTERVAL': 200,
 
       # When all the kids of an internal node have less than this much capacity,
       # it should spawn a new kid
@@ -214,6 +214,11 @@ def create_kid_config(new_node_name, machine_id):
       'new_node_name': new_node_name,
       'machine_id': machine_id,
   }
+
+
+def kill_node():
+  '''API message to a node telling it to die.'''
+  return {'type': 'kill_node'}
 
 
 def spawn_new_senders():
