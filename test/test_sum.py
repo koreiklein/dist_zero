@@ -26,6 +26,60 @@ def test_times_in_order():
     ])
 
 
+def test_scale_unconnected_io_tree(demo):
+  system_config = messages.machine.std_system_config()
+  system_config['INTERNAL_NODE_KIDS_LIMIT'] = 3
+  system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 0
+  machine, = demo.new_machine_controllers(
+      1,
+      base_config={
+          'system_config': system_config,
+          'network_errors_config': messages.machine.std_simulated_network_errors_config(),
+      },
+      random_seed='test_scale_unconnected_io_tree')
+  demo.run_for(ms=200)
+  root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
+  demo.system.spawn_node(
+      on_machine=machine,
+      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, height=1, variant='input'))
+  demo.run_for(ms=2000)
+
+  leaf_ids = []
+
+  create_new_leaf = lambda name: leaf_ids.append(demo.system.create_descendant(
+      internal_node_id=root_input_node_id,
+      new_node_name=name,
+      machine_id=machine))
+
+  assert 1 == demo.system.get_capacity(root_input_node_id)['height']
+
+  n_new_leaves = 9
+  for i in range(n_new_leaves):
+    create_new_leaf(name='test_leaf_{}'.format(i))
+    demo.run_for(ms=1000)
+
+  demo.run_for(ms=4000)
+
+  assert 2 == demo.system.get_capacity(root_input_node_id)['height']
+
+  n_new_leaves = 27 - 9
+  for i in range(n_new_leaves):
+    create_new_leaf(name='test_leaf_{}'.format(i))
+    demo.run_for(ms=1000)
+
+  demo.run_for(ms=4000)
+
+  assert 3 == demo.system.get_capacity(root_input_node_id)['height']
+
+  for i in range(27):
+    demo.system.kill_node(leaf_ids.pop())
+    demo.run_for(ms=400)
+
+  demo.run_for(ms=30 * 1000)
+
+  assert 1 == demo.system.get_capacity(root_input_node_id)['height']
+
+
 @pytest.mark.parametrize('error_regexp,drop_rate,network_error_type,seed', [
     ('.*increment.*', 0.0, 'drop', 'a'),
     ('.*increment.*', 0.02, 'drop', 'a'),
@@ -45,22 +99,16 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   network_errors_config = messages.machine.std_simulated_network_errors_config()
   network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
   network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
+  system_config = messages.machine.std_system_config()
 
   machine_a, machine_b, machine_c = demo.new_machine_controllers(
       3,
-      base_config={'network_errors_config': network_errors_config},
+      base_config={
+          'system_config': system_config,
+          'network_errors_config': network_errors_config,
+      },
       random_seed=seed,
   )
-
-  demo.run_for(ms=200)
-
-  sum_node_id = demo.system.spawn_node(
-      on_machine=machine_a,
-      node_config=messages.sum.sum_node_config(
-          node_id=dist_zero.ids.new_id('SumNode_middle'),
-          senders=[],
-          receivers=[],
-      ))
 
   demo.run_for(ms=200)
 
@@ -68,32 +116,95 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
   demo.system.spawn_node(
       on_machine=machine_a,
-      node_config=messages.io.internal_node_config(
-          root_input_node_id,
-          variant='input',
-          adjacent=demo.system.generate_new_handle(new_node_id=root_input_node_id, existing_node_id=sum_node_id)))
+      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, height=1, variant='input'))
 
   root_output_node_id = dist_zero.ids.new_id('InternalNode_output')
   demo.system.spawn_node(
-      on_machine=machine_a,
+      on_machine=machine_c,
       node_config=messages.io.internal_node_config(
-          root_output_node_id,
-          variant='output',
-          adjacent=demo.system.generate_new_handle(new_node_id=root_output_node_id, existing_node_id=sum_node_id),
-          initial_state=0))
+          root_output_node_id, parent=None, height=1, variant='output', initial_state=0))
+
+  demo.run_for(ms=200)
+
+  # Set up the sum computation with a migration:
+  node_id = dist_zero.ids.new_id('MigrationNode_add_sum_computation')
+  root_computation_node_id = dist_zero.ids.new_id('ComputationNode_root')
+  input_handle_for_migration = demo.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_node_id)
+  output_handle_for_migration = demo.system.generate_new_handle(
+      new_node_id=node_id, existing_node_id=root_output_node_id)
+  demo.system.spawn_node(
+      on_machine=machine_b,
+      node_config=messages.migration.migration_node_config(
+          node_id=node_id,
+          source_nodes=[(input_handle_for_migration, messages.migration.source_migrator_config(will_sync=False, ))],
+          sink_nodes=[(output_handle_for_migration,
+                       messages.migration.sink_migrator_config(
+                           new_flow_senders=[root_computation_node_id],
+                           old_flow_sender_ids=[],
+                           will_sync=False,
+                       ))],
+          removal_nodes=[],
+          sync_pairs=[],
+          insertion_node_configs=[
+              messages.computation.computation_node_config(
+                  node_id=root_computation_node_id,
+                  height=1,
+                  parent=None,
+                  senders=[input_handle_for_migration],
+                  receivers=[output_handle_for_migration],
+                  migrator=messages.migration.insertion_migrator_config(
+                      configure_right_parent_ids=[],
+                      senders=[input_handle_for_migration],
+                      receivers=[output_handle_for_migration],
+                  ),
+              )
+          ]))
 
   demo.run_for(ms=1000)
 
-  user_b_output_id = demo.system.create_kid(
-      parent_node_id=root_output_node_id, new_node_name='output_b', machine_id=machine_b)
-  user_c_output_id = demo.system.create_kid(
-      parent_node_id=root_output_node_id, new_node_name='output_c', machine_id=machine_c)
+  assert root_computation_node_id == demo.system.get_adjacent(root_input_node_id)
+  assert root_computation_node_id == demo.system.get_adjacent(root_output_node_id)
+  input_kids, output_kids, computation_kids = [
+      demo.system.get_kids(nid) for nid in [root_input_node_id, root_output_node_id, root_computation_node_id]
+  ]
+  assert 1 == len(input_kids)
+  assert 1 == len(output_kids)
+  assert 2 == len(computation_kids)
+
+  input_kid, output_kid = input_kids[0], output_kids[0]
+  computation_kid_a, computation_kid_b = computation_kids
+  if input_kid not in demo.system.get_senders(computation_kid_a):
+    computation_kid_a, computation_kid_b = (computation_kid_b, computation_kid_a)
+
+  assert input_kid in demo.system.get_senders(computation_kid_a)
+  assert computation_kid_a in demo.system.get_senders(computation_kid_b)
+  assert computation_kid_b == demo.system.get_adjacent(output_kid)
+  comp_a_kids, comp_b_kids = [demo.system.get_kids(nid) for nid in [computation_kid_a, computation_kid_b]]
+  assert 1 == len(comp_a_kids)
+  assert 1 == len(comp_b_kids)
+  sum_kid_a, sum_kid_b = comp_a_kids[0], comp_b_kids[0]
+
+  a_sends_to, b_sends_to = [demo.system.get_receivers(nid) for nid in [sum_kid_a, sum_kid_b]]
+  assert 1 == len(a_sends_to)
+  assert 0 == len(b_sends_to)
+  assert a_sends_to[0] == sum_kid_b
+
+  a_receives_from, b_receives_from = [demo.system.get_senders(nid) for nid in [sum_kid_a, sum_kid_b]]
+  assert 0 == len(a_receives_from)
+  assert 1 == len(b_receives_from)
+  assert b_receives_from[0] == sum_kid_a
+
+  output_kid = demo.system.get_kids(root_output_node_id)[0]
+  input_kid = demo.system.get_kids(root_input_node_id)[0]
+
+  user_b_output_id = demo.system.create_kid(parent_node_id=output_kid, new_node_name='output_b', machine_id=machine_b)
+  user_c_output_id = demo.system.create_kid(parent_node_id=output_kid, new_node_name='output_c', machine_id=machine_c)
 
   # Wait for the output nodes to start up
   demo.run_for(ms=200)
 
   user_b_input_id = demo.system.create_kid(
-      parent_node_id=root_input_node_id,
+      parent_node_id=input_kid,
       new_node_name='input_b',
       machine_id=machine_b,
       recorded_user=RecordedUser('user b', [
@@ -101,7 +212,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           (2060, messages.io.input_action(1)),
       ]))
   user_c_input_id = demo.system.create_kid(
-      parent_node_id=root_input_node_id,
+      parent_node_id=input_kid,
       new_node_name='input_c',
       machine_id=machine_c,
       recorded_user=RecordedUser('user c', [
@@ -112,8 +223,8 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
 
   demo.run_for(ms=5000)
 
-  # Smoke test that at least one message was acknowledged by the middle sum node.
-  sum_node_stats = demo.system.get_stats(sum_node_id)
+  # Smoke test that at least one message was acknowledged by sum node in the middle.
+  sum_node_stats = demo.system.get_stats(sum_kid_a)
   assert sum_node_stats['acknowledged_messages'] > 0
   if network_error_type == 'duplicate':
     assert sum_node_stats['n_duplicates'] > 0
@@ -121,13 +232,15 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   # Check that the output nodes receive the correct sum
   user_b_state = demo.system.get_output_state(user_b_output_id)
   user_c_state = demo.system.get_output_state(user_c_output_id)
+
   assert 6 == user_b_state
   assert 6 == user_c_state
 
   # At this point, the nodes should be done sending meaningful messages, run for some more time
   # and assert that certain stats have not changed.
+  sum_node_stats = demo.system.get_stats(sum_kid_a)
   demo.run_for(ms=2000)
-  later_sum_node_stats = demo.system.get_stats(sum_node_id)
+  later_sum_node_stats = demo.system.get_stats(sum_kid_a)
   for stat in ['n_retransmissions', 'n_reorders', 'n_duplicates', 'sent_messages', 'acknowledged_messages']:
     assert (sum_node_stats[stat] == later_sum_node_stats[stat]), 'Values were unequal for the stat "{}"'.format(stat)
 

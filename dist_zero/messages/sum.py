@@ -24,6 +24,7 @@ def sum_node_config(
     node_id,
     senders,
     receivers,
+    parent,
     migrator=None,
     output_node=None,
     input_node=None,
@@ -37,6 +38,8 @@ def sum_node_config(
   :param list senders: A list of :ref:`handle` for sending nodes.
   :param list receivers: A list of :ref:`handle` for receiving nodes.
 
+  :param parent: A :ref:`handle` for the parent `ComputationNode`
+
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
 
   '''
@@ -45,6 +48,7 @@ def sum_node_config(
       'id': node_id,
       'senders': senders,
       'receivers': receivers,
+      'parent': parent,
       'output_node': output_node,
       'input_node': input_node,
       'migrator': migrator,

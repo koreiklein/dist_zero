@@ -32,3 +32,21 @@ class SimulationError(DistZeroError):
     exn_lines = traceback.format_exception_only(e_type, e_value)
 
     super(SimulationError, self).__init__(''.join(exn_lines))
+
+
+class NoCapacityError(DistZeroError):
+  '''
+  Raised when attempting to add a data node to a tree that has no capacity for new nodes.
+
+  NOTE: In general, data trees should always be spawning new nodes before they are about to run out of capacity.
+  Ideally, the only case in which this error should be thrown is if either
+
+  - nodes are being added faster than the tree can add capacity to accomodate them
+    (e.g. the cloud provider can't provision new machines fast enough, or we're in a test in which
+    the testing code neglects to let any time pass in between adding new nodes)
+  - someone has erroneously attempted to add to a subtree with no capacity.  Although the entire tree
+    should always be adding new capacity, subtrees are permitted to run out of capacity.
+  '''
+
+  def __init__(self):
+    super(NoCapacityError, self).__init__()

@@ -16,6 +16,36 @@ from dist_zero.system_controller import SystemController
 
 
 class TestLongRunningSum(object):
+  def test_split_root(self, demo):
+    self._rand = random.Random('test_split_root')
+    self._total_simulated_amount = 0
+    self.demo = demo
+    self.n_machines = 3
+
+    system_config = messages.machine.std_system_config()
+    system_config['INTERNAL_NODE_KIDS_LIMIT'] = 2
+
+    self._base_config = {
+        'system_config': system_config,
+        'network_errors_config': messages.machine.std_simulated_network_errors_config(),
+    }
+
+    self._spawn_initial_nodes()
+    self.demo.run_for(ms=500)
+
+    if self.demo.mode == spawners.MODE_SIMULATED:
+      # 7 original nodes
+      assert self.total_nodes() == 7
+
+    self.input_node_ids = []
+    self._spawn_inputs_loop(n_inputs=3, total_time_ms=2 * 1000)
+    self.demo.run_for(ms=1000)
+
+    if self.demo.mode == spawners.MODE_SIMULATED:
+      # 7 original nodes, plus each new input node plus its adjacent sum node, plus the two kids that should have
+      # been spawned by the root node and their adjacent sum nodes.
+      assert self.total_nodes() == 7 + len(self.input_node_ids) * 2 + 2 * 2
+
   @pytest.mark.parametrize('error_regexp,drop_rate,network_error_type', [
       ('.*increment.*', 0.2, 'drop'),
   ])
@@ -23,27 +53,26 @@ class TestLongRunningSum(object):
     self.demo = demo
     self.n_machines = 6
 
+    n_new_nodes = 1
+
     network_errors_config = messages.machine.std_simulated_network_errors_config()
     network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
     network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
-
-    n_new_nodes = 1
+    system_config = messages.machine.std_system_config()
+    system_config['SUM_NODE_SENDER_LIMIT'] = 15
+    system_config['SUM_NODE_SENDER_LOWER_LIMIT'] = 4
+    system_config['SUM_NODE_SPLIT_N_NEW_NODES'] = n_new_nodes
+    system_config['SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS'] = 3 * 1000
+    system_config['SUM_NODE_RECEIVER_LOWER_LIMIT'] = 3
 
     self._base_config = {
-        'system_config': {
-            'SUM_NODE_SENDER_LIMIT': 15,
-            'SUM_NODE_SENDER_LOWER_LIMIT': 4,
-            'SUM_NODE_SPLIT_N_NEW_NODES': n_new_nodes,
-            'SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS': 3 * 1000,
-            'SUM_NODE_RECEIVER_LOWER_LIMIT': 3,
-        },
+        'system_config': system_config,
         'network_errors_config': network_errors_config,
     }
 
     self._rand = random.Random('test_node_splitting')
     self._total_simulated_amount = 0
 
-    self.simulated = True
     self.system = demo.system
     self._spawn_initial_nodes()
     self.demo.run_for(ms=500)
@@ -90,8 +119,8 @@ class TestLongRunningSum(object):
       assert stats['sent_messages'] == stats['acknowledged_messages']
 
   def total_nodes(self):
-    return sum(
-        self.system.get_simulated_spawner().get_machine_by_id(machine_id).n_nodes for machine_id in self.machine_ids)
+    return sum(self.demo.system.get_simulated_spawner().get_machine_by_id(machine_id).n_nodes
+               for machine_id in self.machine_ids)
 
   @pytest.mark.parametrize('error_regexp,drop_rate,network_error_type', [
       ('.*increment.*', 0.37, 'drop'),
@@ -110,22 +139,21 @@ class TestLongRunningSum(object):
     network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
 
     n_inputs_at_split = 15
+    system_config = messages.machine.std_system_config()
+    system_config['SUM_NODE_SENDER_LIMIT'] = n_inputs_at_split
+    system_config['SUM_NODE_SENDER_LOWER_LIMIT'] = 4
+    system_config['SUM_NODE_SPLIT_N_NEW_NODES'] = 2
+    system_config['SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS'] = 3 * 1000
+    system_config['SUM_NODE_RECEIVER_LOWER_LIMIT'] = 3
 
     self._base_config = {
-        'system_config': {
-            'SUM_NODE_SENDER_LIMIT': n_inputs_at_split,
-            'SUM_NODE_SENDER_LOWER_LIMIT': 3,
-            'SUM_NODE_SPLIT_N_NEW_NODES': 2,
-            'SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS': 3 * 1000,
-            'SUM_NODE_RECEIVER_LOWER_LIMIT': 3,
-        },
+        'system_config': system_config,
         'network_errors_config': network_errors_config,
     }
 
     self._rand = random.Random('test_node_splitting')
     self._total_simulated_amount = 0
 
-    self.simulated = True
     self.system = demo.system
     self._spawn_initial_nodes()
     self.demo.run_for(ms=500)
@@ -138,7 +166,7 @@ class TestLongRunningSum(object):
     self._spawn_inputs_loop(n_inputs=n_inputs_at_split, total_time_ms=20 * 1000)
     self.demo.run_for(ms=4000)
 
-    # Uncomment the below line to do more in depth debugging regarding why totals might not add up properly.
+    # Uncomment the below line to do more in height debugging regarding why totals might not add up properly.
     #self._debug_node_spltting()
 
     assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
@@ -204,7 +232,6 @@ class TestLongRunningSum(object):
     self._rand = random.Random('test_single_node_hits_sender_limit')
     self._total_simulated_amount = 0
 
-    self.simulated = False
     self.system = self.demo.system
 
     self._spawn_initial_nodes()
@@ -218,7 +245,7 @@ class TestLongRunningSum(object):
 
     machine_a = self.machine_ids[0]
 
-    self.sum_node_id = self.system.spawn_node(
+    self.sum_node_id = self.demo.system.spawn_node(
         on_machine=machine_a,
         node_config=messages.sum.sum_node_config(
             node_id=dist_zero.ids.new_id('SumNode_internal'),
@@ -227,20 +254,24 @@ class TestLongRunningSum(object):
         ))
 
     self.root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
-    self.system.spawn_node(
+    self.demo.system.spawn_node(
         on_machine=machine_a,
         node_config=messages.io.internal_node_config(
             self.root_input_node_id,
-            adjacent=self.system.generate_new_handle(
+            parent=None,
+            height=1,
+            adjacent=self.demo.system.generate_new_handle(
                 new_node_id=self.root_input_node_id, existing_node_id=self.sum_node_id),
             variant='input'))
     self.root_output_node_id = dist_zero.ids.new_id('InternalNode_output')
-    self.system.spawn_node(
+    self.demo.system.spawn_node(
         on_machine=machine_a,
         node_config=messages.io.internal_node_config(
             self.root_output_node_id,
             variant='output',
-            adjacent=self.system.generate_new_handle(
+            parent=None,
+            height=1,
+            adjacent=self.demo.system.generate_new_handle(
                 new_node_id=self.root_output_node_id, existing_node_id=self.sum_node_id),
             initial_state=0))
 
@@ -271,7 +302,7 @@ class TestLongRunningSum(object):
       remaining_time_ms = (end_time_ms - cur_time_ms) - 30 # Send messages in almost the whole remaining time window.
 
       self.input_node_ids.append(
-          self.system.create_kid(
+          self.demo.system.create_kid(
               parent_node_id=self.root_input_node_id,
               new_node_name='input_{}'.format(i),
               # Place the new nodes on machines in a round-robin manner.

@@ -10,6 +10,7 @@ from dist_zero import errors, messages
 
 from .node import io
 from .node.sum import SumNode
+from .node.computation import ComputationNode
 from .migration.migration_node import MigrationNode
 
 logger = logging.getLogger(__name__)
@@ -246,19 +247,14 @@ class NodeManager(MachineController):
       node = SumNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'MigrationNode':
       node = MigrationNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'ComputationNode':
+      node = ComputationNode.from_config(node_config, controller=self)
     else:
       raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 
     self._node_by_id[node.id] = node
     node.initialize()
     return node
-
-  def _get_node_by_id(self, node_id):
-    '''
-    :param str node_id: The id of a node managed by self.
-    :return: The node instance itself.
-    '''
-    return self._node_by_id[node_id]
 
   def handle_api_message(self, message):
     '''
@@ -301,7 +297,13 @@ class NodeManager(MachineController):
     elif message['type'] == 'machine_deliver_to_node':
       sender_id = message['sending_node_id']
       node_id = message['node_id']
-      node = self._get_node_by_id(node_id)
+      if node_id not in self._node_by_id:
+        # This message could be for a node that was just terminated.
+        logger.warning(
+            "Received a message for a node '{missing_node_id}' not on this machine.",
+            extra={'missing_node_id': node_id})
+        return
+      node = self._node_by_id[node_id]
 
       decoded_message = json.loads(
           node.fernet.decrypt(message['message'].encode(messages.ENCODING)).decode(messages.ENCODING))
@@ -330,7 +332,7 @@ class NodeManager(MachineController):
 
   def _receive_without_error_simulation(self, node_id, message, sender_id):
     '''receive a message to the proper node without any network error simulations'''
-    node = self._get_node_by_id(node_id)
+    node = self._node_by_id[node_id]
     logger.info(
         "Node is receiving message of type {message_type} from {sender_id}",
         extra={

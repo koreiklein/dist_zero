@@ -52,16 +52,22 @@ class Deltas(object):
     '''
     return all(self.first_unseen_rsn(sender_id) >= sequence_number for sender_id, sequence_number in before.items())
 
-  def pop_deltas(self, before=None):
+  def pop_deltas(self, state, before=None):
     '''
     Remove deltas from self, combine them, and return the result.
+
+    :param object state: The state just before any of deltas stored in self.
 
     :param dict before: None or a dict that maps each sender_id to a sequence_number from that sender.
       When this parameter is provided, pop_deltas will not remove only deltas for a sender_id and sequence_number
       where before[sender_id] < sequence_number.
 
+    :return: A triple (new_state, increment, updated) where increment is a transition: state --> new_state
+      and updated is True iff the transition is not the identity transition
+    :rtype: tuple
     '''
-    total = 0
+    increment = 0
+    updated = False
     for sender_id, pairs in list(self._sender_id_to_rsn_message_pairs.items()):
       new_pairs = []
       cap_number = before and before.get(sender_id, None)
@@ -69,9 +75,11 @@ class Deltas(object):
       for rsn, delta_message in pairs:
         if cap_number is None or rsn < cap_number:
           if delta_message['type'] == 'increment':
-            total += delta_message['amount']
+            updated = True
+            increment += delta_message['amount']
           elif delta_message['type'] == 'input_action':
-            total += delta_message['number']
+            updated = True
+            increment += delta_message['number']
           else:
             raise errors.InternalError('Unrecognized message type "{}"'.format(delta_message['type']))
           self._first_unpopped[sender_id] = max(self._first_unpopped[sender_id], rsn + 1)
@@ -80,4 +88,7 @@ class Deltas(object):
 
       self._sender_id_to_rsn_message_pairs[sender_id] = new_pairs
 
-    return total
+    if updated:
+      return state + increment, increment, updated
+    else:
+      return state, increment, updated

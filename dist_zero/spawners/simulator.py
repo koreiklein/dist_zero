@@ -162,6 +162,12 @@ class SimulatedSpawner(spawner.Spawner):
     '''
     return self._controller_by_id[machine_id]
 
+  def node_by_id(self):
+    return {
+        node_id: node
+        for machine in self._controller_by_id.values() for node_id, node in machine._node_by_id.items()
+    }
+
   def create_machines(self, machine_configs):
     return [self.create_machine(machine_config) for machine_config in machine_configs]
 

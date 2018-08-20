@@ -21,6 +21,8 @@ class RemovalMigrator(migrator.Migrator):
 
     self._importers = {sender_id: self._node._importers[sender_id] for sender_id in sender_ids}
     self._exporters = {receiver_id: self._node._exporters[receiver_id] for receiver_id in receiver_ids}
+    self._kid_has_migrator = {}
+    self._kid_migrator_is_terminated = {}
 
     self._sender_id_to_first_flow_sequence_number = {sender_id: None for sender_id in self._importers}
     self._sender_id_to_first_live_sequence_number = {sender_id: None for sender_id in self._importers}
@@ -56,11 +58,21 @@ class RemovalMigrator(migrator.Migrator):
       self._sender_id_to_first_live_sequence_number[sender_id] = message['first_live_sequence_number']
       self._maybe_send_swapped()
     elif message['type'] == 'terminate_migrator':
-      self._node.remove_migrator(self.migration_id)
-      self._node.send(self._migration, messages.migration.migrator_terminated())
-      self._node._controller.terminate_node(self._node.id)
+      for kid in self._node._kids.values():
+        self._kid_migrator_is_terminated[kid['id']] = False
+        self._node.send(kid, messages.migration.terminate_migrator(self.migration_id))
+      self._maybe_kids_are_terminated()
+    elif message['type'] == 'migrator_terminated':
+      self._kid_migrator_is_terminated[sender_id] = True
+      self._maybe_kids_are_terminated()
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
+
+  def _maybe_kids_are_terminated(self):
+    if all(self._kid_migrator_is_terminated.values()):
+      self._node.remove_migrator(self.migration_id)
+      self._node.send(self.parent, messages.migration.migrator_terminated())
+      self._node._controller.terminate_node(self._node.id)
 
   def _maybe_send_swapped(self):
     if not self._swapped and \
@@ -95,6 +107,24 @@ class RemovalMigrator(migrator.Migrator):
     self._maybe_send_replacing_flow()
     self._maybe_send_swapped()
 
+  @property
+  def parent(self):
+    if self._node._parent is not None:
+      return self._node._parent
+    else:
+      return self._migration
+
+  def _maybe_send_attached_migrator(self):
+    if all(self._kid_has_migrator.values()):
+      self._node.send(self.parent, messages.migration.attached_migrator(self.migration_id))
+
   def initialize(self):
     self._node.deltas_only.add(self.migration_id)
-    self._node.send(self._migration, messages.migration.attached_migrator())
+    for kid_id, kid in self._node._kids.items():
+      self._kid_has_migrator[kid_id] = False
+      self._node.send(
+          kid,
+          messages.migration.attach_migrator(
+              messages.migration.removal_migrator_config(
+                  migration=self._node.transfer_handle(self._migration, kid_id))))
+    self._maybe_send_attached_migrator()

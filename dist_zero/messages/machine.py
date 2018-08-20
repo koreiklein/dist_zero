@@ -13,11 +13,53 @@ def ip_transport(host):
 def std_system_config():
   '''
   Miscellaneous configuration for the overall system.
+
+  **INTERNAL_NODE_KIDS_LIMIT**
+
+  When an `InternalNode` has this many kids, it will trigger a split.
+
+  **KID_SUMMARY_INTERVAL**
+
+  Every time this many milliseconds pass on an internal node, it should send a kid_summary message
+  to its parent.
+
+  **TOTAL_KID_CAPACITY_TRIGGER**
+
+  When all the kids of an internal node have less than this much capacity,
+  it should spawn a new kid
+
+  **SUM_NODE_SENDER_LIMIT, SUM_NODE_RECEIVER_LIMIT**
+
+  If a sum node has more than this many senders/receivers, it will trigger a
+  "sum node split migration" to create a middle layer of senders/receivers.
+
+  **SUM_NODE_SPLIT_N_NEW_NODES**
+
+  A sum node split will create this many new nodes
+
+  **SUM_NODE_RECEIVER_LOWER_LIMIT, SUM_NODE_SENDER_LOWER_LIMIT, SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS**
+
+  If a sum node has fewer than ``SUM_NODE_RECEIVER_LOWER_LIMIT`` receivers and ``SUM_NODE_SENDER_LOWER_LIMIT`` senders
+  for more than ``SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS`` milliseconds,
+  it will trigger a migration to excise the sum node.
   '''
   return {
-      # If a sum node has more than this many senders, it will trigger a
-      # "sum node split migration" to create a middle layer of senders.
+      # When an `InternalNode` has this many kids, it will trigger a split.
+      'INTERNAL_NODE_KIDS_LIMIT': 200,
+
+      # Every time this many milliseconds pass on an internal node, it should send a kid_summary message
+      # to its parent.
+      'KID_SUMMARY_INTERVAL': 200,
+
+      # When all the kids of an internal node have less than this much capacity,
+      # it should spawn a new kid
+      'TOTAL_KID_CAPACITY_TRIGGER': 5,
+
+      # If a sum node has more than this many senders/receivers, it will trigger a
+      # "sum node split migration" to create a middle layer of senders/receivers.
       'SUM_NODE_SENDER_LIMIT': 15,
+      'SUM_NODE_RECEIVER_LIMIT': 15,
+
       # A sum node split will create this many new nodes
       'SUM_NODE_SPLIT_N_NEW_NODES': 2,
 
@@ -36,20 +78,21 @@ def std_simulated_network_errors_config():
 
   This configuration produces no simulated errors at all.
 
-  ```
-  {
-    'outgoing': {
-      'drop': { 'rate': 0.0, 'regexp': '.*' },
-      'reorder': { 'rate': 0.0, 'regexp': '.*' },
-      'duplicate': { 'rate': 0.0, 'regexp': '.*' },
-    },
-    'incomming': {
-      'drop': { 'rate': 0.0, 'regexp': '.*' },
-      'reorder': { 'rate': 0.0, 'regexp': '.*' },
-      'duplicate': { 'rate': 0.0, 'regexp': '.*' },
-    },
-  }
-  ```
+  .. code-block:: python
+
+    {
+      'outgoing': {
+        'drop': { 'rate': 0.0, 'regexp': '.*' },
+        'reorder': { 'rate': 0.0, 'regexp': '.*' },
+        'duplicate': { 'rate': 0.0, 'regexp': '.*' },
+      },
+      'incomming': {
+        'drop': { 'rate': 0.0, 'regexp': '.*' },
+        'reorder': { 'rate': 0.0, 'regexp': '.*' },
+        'duplicate': { 'rate': 0.0, 'regexp': '.*' },
+      },
+    }
+
   '''
   return {
       direction: {error_type: {
@@ -161,6 +204,31 @@ def get_stats():
   return {'type': 'get_stats'}
 
 
+def get_kids():
+  '''API message to a node to get its dictionary of kids.'''
+  return {'type': 'get_kids'}
+
+
+def get_senders():
+  '''API message to a node to get its dictionary of senders.'''
+  return {'type': 'get_senders'}
+
+
+def get_receivers():
+  '''API message to a node to get its dictionary of receivers.'''
+  return {'type': 'get_receivers'}
+
+
+def get_capacity():
+  '''API message to a node to get its dictionary of capacity data.'''
+  return {'type': 'get_capacity'}
+
+
+def get_adjacent_handle():
+  '''API message to a node to get the handle of its adjacent (for internal and leaf nodes).'''
+  return {'type': 'get_adjacent_handle'}
+
+
 def create_kid_config(new_node_name, machine_id):
   '''
   Create a node_config for a new kid node of an internal io node.
@@ -176,6 +244,11 @@ def create_kid_config(new_node_name, machine_id):
       'new_node_name': new_node_name,
       'machine_id': machine_id,
   }
+
+
+def kill_node():
+  '''API message to a node telling it to die.'''
+  return {'type': 'kill_node'}
 
 
 def spawn_new_senders():

@@ -93,10 +93,12 @@ class LeafNode(Node):
 
     elif message['type'] == 'input_action':
       self._receive_input_action(message)
-    elif message['type'] == 'sequence_message':
-      self.linker.receive_sequence_message(message['value'], sender_id)
+    elif message['type'] == 'adopt':
+      self.send(self.parent, messages.io.goodbye_parent())
+      self.parent = message['new_parent']
+      self._send_hello_parent()
     else:
-      raise RuntimeError("Unrecognized message type {}".format(message['type']))
+      super(LeafNode, self).receive(message=message, sender_id=sender_id)
 
   def _receive_input_action(self, message):
     if self._variant != 'input':
@@ -145,8 +147,11 @@ class LeafNode(Node):
         recorded_user=LeafNode._init_recorded_user_from_config(node_config['recorded_user_json']))
 
   def initialize(self):
-    self.logger.info("leaf node sending 'added_leaf' message to parent")
-    self.send(self.parent, messages.io.added_leaf(self.new_handle(self.parent['id'])))
+    self._send_hello_parent()
+
+  def _send_hello_parent(self):
+    self.logger.info("leaf node sending new 'hello_parent' message to parent")
+    self.send(self.parent, messages.io.hello_parent(self.new_handle(self.parent['id'])))
 
   def elapse(self, ms):
     self._now_ms += ms
@@ -161,5 +166,8 @@ class LeafNode(Node):
   def handle_api_message(self, message):
     if message['type'] == 'get_output_state':
       return self._controller.get_output_state(self.id)
+    elif message['type'] == 'kill_node':
+      self.send(self.parent, messages.io.goodbye_parent())
+      self._controller.terminate_node(self.id)
     else:
       return super(LeafNode, self).handle_api_message(message)

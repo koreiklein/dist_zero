@@ -31,6 +31,7 @@ Welcome to DistZero's documentation!
    doc/recorded
 
    doc/migrations
+   doc/ticker
 
    doc/demo
 
