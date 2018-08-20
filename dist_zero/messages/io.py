@@ -157,7 +157,7 @@ def leaf_config(node_id, name, parent, variant, initial_state, recorded_user_jso
 
 def added_leaf(kid):
   '''
-  Indicates that a pending LeafNode has successfull been added to the network, and is
+  Indicates that a pending LeafNode has successfully been added to the network, and is
   now ready to receive messages.
 
   :param kid: The :ref:`handle` of the leaf node that was just added.
@@ -168,8 +168,8 @@ def added_leaf(kid):
 
 def added_adjacent_leaf(kid, variant):
   '''
-  Indicates to an adjacent edge node in a computation that a pending LeafNode has successfull been added to the network, and is
-  now ready to receive messages.
+  Indicates to an adjacent edge node in a computation that a pending LeafNode has successfully been added to the network,
+  and is now ready to receive messages.
 
   :param kid: The :ref:`handle` of the leaf node that was just added.
   :type kid: :ref:`handle`

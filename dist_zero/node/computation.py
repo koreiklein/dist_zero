@@ -123,4 +123,4 @@ class ComputationNode(Node):
     elif message['type'] == 'get_senders':
       return self._senders
     else:
-      return super(InternalNode, self).handle_api_message(message)
+      return super(ComputationNode, self).handle_api_message(message)

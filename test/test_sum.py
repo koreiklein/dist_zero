@@ -223,15 +223,11 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
 
   demo.run_for(ms=5000)
 
-  # Smoke test that at least one message was acknowledged by the middle sum node.
-  #import ipdb; ipdb.set_trace()
-  # FIXME(KK): Figure out whether we can still have code like this in a test,
-  #   even though it investigates details in a node whose id we know, but which was spawned
-  #   by a node internal to the system, and not by the system_controller.
-  #sum_node_stats = demo.system.get_stats(root_computation_node_id)
-  #assert sum_node_stats['acknowledged_messages'] > 0
-  #if network_error_type == 'duplicate':
-  #  assert sum_node_stats['n_duplicates'] > 0
+  # Smoke test that at least one message was acknowledged by sum node in the middle.
+  sum_node_stats = demo.system.get_stats(sum_kid_a)
+  assert sum_node_stats['acknowledged_messages'] > 0
+  if network_error_type == 'duplicate':
+    assert sum_node_stats['n_duplicates'] > 0
 
   # Check that the output nodes receive the correct sum
   user_b_state = demo.system.get_output_state(user_b_output_id)
