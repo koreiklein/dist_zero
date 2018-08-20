@@ -20,7 +20,7 @@ class InternalNode(Node):
   minimal assignment such that n.height+1 == n.parent.height for every node n that has a parent.
   '''
 
-  def __init__(self, node_id, parent, variant, height, adjacent, adoptees, spawner_adjacent, initial_state, controller):
+  def __init__(self, node_id, parent, variant, height, adjacent, adoptees, initial_state, controller):
     '''
     :param str node_id: The id to use for this node
     :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
@@ -31,9 +31,6 @@ class InternalNode(Node):
     :type adjacent: :ref:`handle` or `None`
     :param adoptees: Nodes to adopt upon initialization.
     :type adoptees: list[:ref:`handle`]
-    :param spawner_adjacent: The node adjacent to the node that spawned self.  When provided, adjacent should be None,
-      and the spawner_adjacent node will be responsible for setting up an adjacent node for self.
-    :type spawner_adjacent: `None` or :ref:`handle`
     :param `MachineController` controller: The controller for this node.
     :param object initial_state: A json serializeable starting state for all leaves spawned from this node.
       This state is important for output leaves that update that state over time.
@@ -50,10 +47,6 @@ class InternalNode(Node):
     self._adjacent = adjacent
 
     self._current_state = None
-
-    # When being spawned as part of a split:
-    # FIXME(KK): Check that we actually want to track this.
-    self._spawner_adjacent = spawner_adjacent
 
     self._leaving_kids = None
     '''
@@ -137,12 +130,6 @@ class InternalNode(Node):
       for kid in self._kids.values():
         self.send(kid, messages.io.adopt(self.new_handle(kid['id'])))
 
-      if self._spawner_adjacent:
-        # FIXME(KK): Check that this message makes any sense.
-        self.send(self._spawner_adjacent,
-                  messages.io.adjacent_has_split(
-                      self.new_handle(self._spawner_adjacent['id']), stolen_io_kid_ids=list(self._adoptees.keys())))
-
     if self._adjacent is not None:
       if self._variant == 'input':
         self.logger.info("internal node sending 'set_input' message to adjacent node")
@@ -181,8 +168,6 @@ class InternalNode(Node):
               variant=self._variant,
               height=self._height - 1,
               adjacent=None,
-              spawner_adjacent=None
-              if self._adjacent is None else self.transfer_handle(self._adjacent, for_node_id=node_id),
               initial_state=self._initial_state,
               adoptees=[],
           ))
@@ -298,8 +283,6 @@ class InternalNode(Node):
             variant=self._variant,
             height=self._height - 1,
             adjacent=None,
-            spawner_adjacent=None
-            if self._adjacent is None else self.transfer_handle(self._adjacent, for_node_id=node_id),
             initial_state=self._initial_state,
             adoptees=[self.transfer_handle(kid, self._root_proxy_id) for kid in self._kids.values()],
         ))
@@ -319,6 +302,9 @@ class InternalNode(Node):
           if all(self._pending_adoptees.values()):
             self._pending_adoptees = None
             self._send_hello_parent()
+
+        if self._height == 0:
+          self._added_leaf(message['kid'])
 
         self._graph.add_node(sender_id)
 
@@ -357,8 +343,6 @@ class InternalNode(Node):
       self.send(self._parent, messages.io.goodbye_parent())
       self._parent = message['new_parent']
       self._send_hello_parent()
-    elif message['type'] == 'added_leaf':
-      self.added_leaf(message['kid'])
     elif message['type'] == 'connect_node':
       if message['direction'] == 'receiver':
         self._set_output(message['node'])
@@ -397,7 +381,6 @@ class InternalNode(Node):
         controller=controller,
         adjacent=node_config['adjacent'],
         adoptees=node_config['adoptees'],
-        spawner_adjacent=node_config['spawner_adjacent'],
         variant=node_config['variant'],
         height=node_config['height'],
         initial_state=node_config['initial_state'])
@@ -492,7 +475,7 @@ class InternalNode(Node):
         initial_state=self._initial_state,
     )
 
-  def added_leaf(self, kid):
+  def _added_leaf(self, kid):
     '''
     :param kid: The :ref:`handle` of the leaf node that was just added.
     :type kid: :ref:`handle`
@@ -505,9 +488,8 @@ class InternalNode(Node):
       self._kids[kid['id']] = kid
 
       if self._adjacent is None:
-        self.logger.warning(
-            "added_leaf: No adjacent was set when a kid was added.  Unable to forward an added_leaf message to the adjacent."
-        )
+        self.logger.warning("added_leaf: No adjacent was set when a kid was added."
+                            "  Unable to forward an added_leaf message to the adjacent.")
       else:
         self.send(self._adjacent,
                   messages.io.added_adjacent_leaf(

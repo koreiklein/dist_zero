@@ -96,7 +96,7 @@ class LeafNode(Node):
     elif message['type'] == 'adopt':
       self.send(self.parent, messages.io.goodbye_parent())
       self.parent = message['new_parent']
-      self.send(self.parent, messages.io.hello_parent(self.new_handle(self.parent['id'])))
+      self._send_hello_parent()
     else:
       super(LeafNode, self).receive(message=message, sender_id=sender_id)
 
@@ -147,8 +147,11 @@ class LeafNode(Node):
         recorded_user=LeafNode._init_recorded_user_from_config(node_config['recorded_user_json']))
 
   def initialize(self):
-    self.logger.info("leaf node sending 'added_leaf' message to parent")
-    self.send(self.parent, messages.io.added_leaf(self.new_handle(self.parent['id'])))
+    self._send_hello_parent()
+
+  def _send_hello_parent(self):
+    self.logger.info("leaf node sending new 'hello_parent' message to parent")
+    self.send(self.parent, messages.io.hello_parent(self.new_handle(self.parent['id'])))
 
   def elapse(self, ms):
     self._now_ms += ms

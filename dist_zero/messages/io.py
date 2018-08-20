@@ -35,14 +35,7 @@ def set_adjacent(node):
   return {'type': 'set_adjacent', 'node': node}
 
 
-def internal_node_config(node_id,
-                         parent,
-                         variant,
-                         height,
-                         adjacent=None,
-                         spawner_adjacent=None,
-                         adoptees=None,
-                         initial_state=None):
+def internal_node_config(node_id, parent, variant, height, adjacent=None, adoptees=None, initial_state=None):
   '''
   A node config for creating an internal node to manage a new list of io nodes.
 
@@ -53,9 +46,6 @@ def internal_node_config(node_id,
   :param int height: The height of the node in the tree.  See `InternalNode`
   :param adjacent: The :ref:`handle` adjacent node to either receiver from or forward to or `None`
   :type adjacent: :ref:`handle` or `None`
-  :param spawner_adjacent: The node adjacent to the node that spawned self.  When provided, adjacent should be None,
-    and the spawner_adjacent node will be responsible for setting up an adjacent node for self.
-  :type spawner_adjacent: `None` or :ref:`handle`
   :param adoptees: The list of `Node` instances that this node should adopt as its kids upon initialization,
     or `None` if the node should not initially adopt any kids.
   :type adoptees: list[:ref:`handle`] or `None`
@@ -71,7 +61,6 @@ def internal_node_config(node_id,
       'variant': variant,
       'height': height,
       'adjacent': adjacent,
-      'spawner_adjacent': spawner_adjacent,
       'adoptees': [] if adoptees is None else adoptees,
       'initial_state': initial_state
   }
@@ -153,17 +142,6 @@ def leaf_config(node_id, name, parent, variant, initial_state, recorded_user_jso
       'initial_state': initial_state,
       'recorded_user_json': recorded_user_json,
   }
-
-
-def added_leaf(kid):
-  '''
-  Indicates that a pending LeafNode has successfully been added to the network, and is
-  now ready to receive messages.
-
-  :param kid: The :ref:`handle` of the leaf node that was just added.
-  :type kid: :ref:`handle`
-  '''
-  return {'type': 'added_leaf', 'kid': kid}
 
 
 def added_adjacent_leaf(kid, variant):
