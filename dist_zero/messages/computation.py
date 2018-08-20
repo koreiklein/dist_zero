@@ -6,8 +6,8 @@ def computation_node_config(node_id, height, parent, senders, receivers, migrato
   :param parent: The :ref:`handle` of this node's parent.
   :type parent: :ref:`handle`
   :param int height: The height of the new computation node in its tree.
-  :param list senders: A list of :ref:`handle`s of sending nodes.
-  :param list receivers: A list of :ref:`handle`s of receiving nodes.
+  :param list senders: A list of :ref:`handle` s of sending nodes.
+  :param list receivers: A list of :ref:`handle` s of receiving nodes.
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
   '''
   return {

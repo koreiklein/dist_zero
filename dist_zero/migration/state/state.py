@@ -62,10 +62,11 @@ class State(object):
   Source nodes need only a right configuration.
 
   Once a node is fully configured, it
-    - spawns any kids it will need
-    - has its kids send right_configurations to their left
+
+  - spawns any kids it will need
+  - has its kids send right_configurations to their left
     (and once the kids send back their handles)
-    - sends a left_configuration to its right
+  - sends a left_configuration to its right
 
   These rules lead to every node producing a full tree of kids, and every node in that tree becoming fully configured.
   By using this scheme for spawning new nodes, we ensure that each parent has enough configuration information from

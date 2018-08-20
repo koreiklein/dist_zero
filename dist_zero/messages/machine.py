@@ -13,6 +13,35 @@ def ip_transport(host):
 def std_system_config():
   '''
   Miscellaneous configuration for the overall system.
+
+  **INTERNAL_NODE_KIDS_LIMIT**
+
+  When an `InternalNode` has this many kids, it will trigger a split.
+
+  **KID_SUMMARY_INTERVAL**
+
+  Every time this many milliseconds pass on an internal node, it should send a kid_summary message
+  to its parent.
+
+  **TOTAL_KID_CAPACITY_TRIGGER**
+
+  When all the kids of an internal node have less than this much capacity,
+  it should spawn a new kid
+
+  **SUM_NODE_SENDER_LIMIT, SUM_NODE_RECEIVER_LIMIT**
+
+  If a sum node has more than this many senders/receivers, it will trigger a
+  "sum node split migration" to create a middle layer of senders/receivers.
+
+  **SUM_NODE_SPLIT_N_NEW_NODES**
+
+  A sum node split will create this many new nodes
+
+  **SUM_NODE_RECEIVER_LOWER_LIMIT, SUM_NODE_SENDER_LOWER_LIMIT, SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS**
+
+  If a sum node has fewer than ``SUM_NODE_RECEIVER_LOWER_LIMIT`` receivers and ``SUM_NODE_SENDER_LOWER_LIMIT`` senders
+  for more than ``SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS`` milliseconds,
+  it will trigger a migration to excise the sum node.
   '''
   return {
       # When an `InternalNode` has this many kids, it will trigger a split.
@@ -49,20 +78,21 @@ def std_simulated_network_errors_config():
 
   This configuration produces no simulated errors at all.
 
-  ```
-  {
-    'outgoing': {
-      'drop': { 'rate': 0.0, 'regexp': '.*' },
-      'reorder': { 'rate': 0.0, 'regexp': '.*' },
-      'duplicate': { 'rate': 0.0, 'regexp': '.*' },
-    },
-    'incomming': {
-      'drop': { 'rate': 0.0, 'regexp': '.*' },
-      'reorder': { 'rate': 0.0, 'regexp': '.*' },
-      'duplicate': { 'rate': 0.0, 'regexp': '.*' },
-    },
-  }
-  ```
+  .. code-block:: python
+
+    {
+      'outgoing': {
+        'drop': { 'rate': 0.0, 'regexp': '.*' },
+        'reorder': { 'rate': 0.0, 'regexp': '.*' },
+        'duplicate': { 'rate': 0.0, 'regexp': '.*' },
+      },
+      'incomming': {
+        'drop': { 'rate': 0.0, 'regexp': '.*' },
+        'reorder': { 'rate': 0.0, 'regexp': '.*' },
+        'duplicate': { 'rate': 0.0, 'regexp': '.*' },
+      },
+    }
+
   '''
   return {
       direction: {error_type: {
