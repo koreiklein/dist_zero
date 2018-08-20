@@ -6,19 +6,15 @@ from .state import State
 class StartingNewFlowState(State):
   STATE = State.STARTING_NEW_FLOW
 
-  def __init__(self, migration, controller, migration_config, insertion_nodes, sink_nodes):
+  def __init__(self, migration, controller, migration_config, sink_nodes):
     self._migration = migration
     self._controller = controller
 
-    self._insertion_nodes = insertion_nodes
     self._sink_nodes = sink_nodes
 
     self._sink_id_to_new_flow_state = {}
 
   def initialize(self):
-    for insertion in self._insertion_nodes.values():
-      self._migration.send(insertion, messages.migration.start_flow(self._migration.id))
-
     for sink_id, sink in self._sink_nodes.items():
       self._migration.send(sink, messages.migration.start_flow(self._migration.id))
       self._sink_id_to_new_flow_state[sink_id] = 'pending'

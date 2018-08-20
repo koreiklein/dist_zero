@@ -194,9 +194,8 @@ class SumNode(Node):
     self._deltas.add_sender(node['id'])
 
   def export_to_node(self, receiver):
-    if receiver['id'] in self._exporters:
-      raise errors.InternalError("Already exporting to this node.", extra={'existing_node_id': receiver['id']})
-    self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
+    if receiver['id'] not in self._exporters:
+      self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
 
   def elapse(self, ms):
     self._unsent_time_ms += ms

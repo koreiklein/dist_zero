@@ -121,13 +121,14 @@ class InsertionMigrator(migrator.Migrator):
     elif message['type'] == 'migrator_terminated':
       self._kid_migrator_is_terminated[sender_id] = True
       self._maybe_kids_are_terminated()
-    elif message['type'] == 'start_flow':
-      self._send_configure_right_to_left()
     elif message['type'] == 'configure_new_flow_right':
       self._node.logger.info("Received 'configure_new_flow_right'", extra={'sender_id': sender_id})
+      self._node.export_to_node(message['parent_handle'])
       self._right_config_receiver.got_configuration(sender_id, message)
       self._receivers[message['parent_handle']['id']] = message['parent_handle']
-      self._node.export_to_node(message['parent_handle'])
+      if self._node.parent is None and self._right_config_receiver.ready:
+        self._height = max(self._height, self._max_right_height())
+        self._send_configure_right_to_left()
       self._maybe_has_left_and_right_configurations()
     elif message['type'] == 'configure_new_flow_left':
       self._node.logger.info("Received 'configure_new_flow_left'", extra={'sender_id': sender_id})

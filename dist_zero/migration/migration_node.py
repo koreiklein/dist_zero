@@ -98,11 +98,7 @@ class MigrationNode(node.Node):
     self.removal_nodes = removal_nodes
 
     self._state_controller = StartingNewFlowState(
-        self,
-        self._controller,
-        self._migration_config,
-        insertion_nodes=self.insertion_nodes,
-        sink_nodes=self.sink_nodes)
+        self, self._controller, self._migration_config, sink_nodes=self.sink_nodes)
     self._state_controller.initialize()
 
   def finish_state_starting_new_flow(self):
