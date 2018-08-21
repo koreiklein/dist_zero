@@ -119,5 +119,7 @@ class ComputationNode(Node):
       return self.kids
     elif message['type'] == 'get_senders':
       return self._senders
+    elif message['type'] == 'get_receivers':
+      return {sender_id: exporter.receiver for sender_id, exporter in self._exporters.items()}
     else:
       return super(ComputationNode, self).handle_api_message(message)

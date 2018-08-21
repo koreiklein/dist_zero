@@ -446,6 +446,26 @@ class InternalNode(Node):
       return self._get_capacity()
     elif message['type'] == 'get_kids':
       return self._kids
+    elif message['type'] == 'get_senders':
+      if self._adjacent is not None:
+        if self._variant == 'input':
+          return {}
+        elif self._variant == 'output':
+          return {self._adjacent['id']: self._adjacent}
+        else:
+          raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
+      else:
+        return {}
+    elif message['type'] == 'get_receivers':
+      if self._adjacent is not None:
+        if self._variant == 'input':
+          return {self._adjacent['id']: self._adjacent}
+        elif self._variant == 'output':
+          return {}
+        else:
+          raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
+      else:
+        return {}
     elif message['type'] == 'get_adjacent_handle':
       return self._adjacent
     else:

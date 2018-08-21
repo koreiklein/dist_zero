@@ -350,6 +350,8 @@ class SumNode(Node):
   def handle_api_message(self, message):
     if message['type'] == 'spawn_new_senders':
       return self._spawn_new_senders_migration()
+    elif message['type'] == 'get_kids':
+      return {}
     elif message['type'] == 'get_senders':
       return {sender_id: importer.sender for sender_id, importer in self._importers.items()}
     elif message['type'] == 'get_receivers':

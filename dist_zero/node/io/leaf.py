@@ -203,11 +203,43 @@ class LeafNode(Node):
   def is_data(self):
     return True
 
+  def stats(self):
+    return {
+        'height': -1,
+        'n_retransmissions': self.linker.n_retransmissions,
+        'n_reorders': self.linker.n_reorders,
+        'n_duplicates': self.linker.n_duplicates,
+        'sent_messages': self.linker.least_unused_sequence_number,
+        'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
+    }
+
   def handle_api_message(self, message):
     if message['type'] == 'get_output_state':
       return self._controller.get_output_state(self.id)
     elif message['type'] == 'kill_node':
       self.send(self._parent, messages.io.goodbye_parent())
       self._controller.terminate_node(self.id)
+    elif message['type'] == 'get_senders':
+      if self._importer:
+        if self._variant == 'input':
+          return {}
+        elif self._variant == 'output':
+          return {self._importer.sender_id: self._importer.sender}
+        else:
+          raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
+      else:
+        return {}
+    elif message['type'] == 'get_kids':
+      return self._kids
+    elif message['type'] == 'get_receivers':
+      if self._exporter:
+        if self._variant == 'output':
+          return {}
+        elif self._variant == 'input':
+          return {self._exporter.receiver_id: self._exporter.receiver}
+        else:
+          raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
+      else:
+        return {}
     else:
       return super(LeafNode, self).handle_api_message(message)

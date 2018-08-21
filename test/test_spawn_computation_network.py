@@ -46,7 +46,7 @@ class TestSpawnComputationNetwork(object):
     for i in range(n_users):
       self.demo.system.create_descendant(
           internal_node_id=root_input,
-          new_node_name='LeafNode_{}'.format(i),
+          new_node_name='user_{}'.format(i),
           machine_id=self.machine_ids[i % len(self.machine_ids)],
           recorded_user=None if not add_user else self.demo.new_recorded_user(
               name='user_{}'.format(i),
@@ -81,6 +81,9 @@ class TestSpawnComputationNetwork(object):
 
     output_leaves = self.demo.all_io_kids(root_output)
     assert len(output_leaves) == n_output_leaves
+    self.demo.render_network(root_output)
+    import ipdb
+    ipdb.set_trace()
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 

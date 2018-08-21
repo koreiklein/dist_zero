@@ -3,6 +3,8 @@ import random
 import pytest
 import time
 
+from collections import defaultdict
+
 import dist_zero.ids
 
 from dist_zero import spawners, messages
@@ -223,3 +225,53 @@ class Demo(object):
       time_message_pairs.append((t, messages.io.input_action(amount_to_send)))
 
     return RecordedUser(name, time_message_pairs)
+
+  def render_network(self, top_right_id, filename='network', view=False):
+    from graphviz import Digraph
+    dot = Digraph(comment='Network Graph of system "{}"'.format(self.system.id), graph_attr={'rankdir': 'LR'})
+
+    by_height = defaultdict(list)
+    right_subgraph = Digraph()
+    right_subgraph_visited = set()
+
+    def _go_down(node_id):
+      if node_id not in right_subgraph_visited:
+        right_subgraph_visited.add(node_id)
+        height = self.system.get_stats(node_id)['height']
+        by_height[height].append(node_id)
+        right_subgraph.node(node_id)
+        for kid in self.system.get_kids(node_id):
+          right_subgraph.edge(node_id, kid, label='kid')
+          _go_down(kid)
+
+    _go_down(top_right_id)
+    dot.subgraph(right_subgraph)
+
+    heights = list(reversed(sorted(by_height.keys())))
+
+    visited = set()
+    for height in heights:
+      subgraph = Digraph('cluster_{}'.format(height), graph_attr={'label': 'height {}'.format(height)})
+      subgraph_visited = set()
+
+      def _go_left(node_id):
+        if node_id not in subgraph_visited:
+          visited.add(node_id)
+          subgraph_visited.add(node_id)
+          subgraph.node(node_id)
+          for sender in self.system.get_senders(node_id):
+            subgraph.edge(sender, node_id, label='sends')
+            _go_left(sender)
+
+      for node_id in by_height[height]:
+        _go_left(node_id)
+
+      dot.subgraph(subgraph)
+
+    # Add kid edges
+    for node_id in visited:
+      if node_id not in right_subgraph_visited:
+        for kid in self.system.get_kids(node_id):
+          dot.edge(node_id, kid, label='kid')
+
+    dot.render(filename, view=view, cleanup=True)
