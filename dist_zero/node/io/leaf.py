@@ -33,14 +33,13 @@ class LeafNode(Node):
   so leaves are designed never to have to manage complex sets of senders or receivers.
   '''
 
-  def __init__(self, node_id, parent, controller, variant, update_state, recorded_user=None):
+  def __init__(self, node_id, parent, controller, variant, initial_state, recorded_user=None):
     '''
     :param `MachineController` controller: the controller for this node's machine.
     :param parent: The :ref:`handle` of the parent `InternalNode` of this node.
     :type parent: :ref:`handle`
     :param str variant: 'input' or 'output'
-    :param func update_state: A function.
-      Call it with a function that takes the current state and returns a new state.
+    :param object initial_state: The initial state of the value mantained by this leaf node.
     :param `RecordedUser` recorded_user: In tests, this parameter may be not null to indicate that this
       node should playback the actions of an attached `RecordedUser` instance.
     '''
@@ -59,12 +58,40 @@ class LeafNode(Node):
 
     self._parent = parent
 
+    self._current_state = initial_state
+
     # Messages received before becoming active.
     self._pre_active_messages = []
 
-    self._update_state = update_state
-
     super(LeafNode, self).__init__(logger)
+
+  def checkpoint(self, before=None):
+    pass
+
+  def switch_flows(self, migration_id, old_exporters, new_exporters, new_receivers):
+    if self._variant == 'input':
+      if len(new_receivers) != 1:
+        raise errors.InternalError("switch_flows should be called on a leaf node only when there is a unique receiver.")
+      self._set_output(new_receivers[0])
+      self.send(new_receivers[0], messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
+    elif self._variant == 'output':
+      raise errors.InternalError("An input LeafNode should never function as a source node in a migration.")
+    else:
+      raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
+
+  @property
+  def current_state(self):
+    return self._current_state
+
+  def sink_swap(self, deltas, old_sender_ids, new_senders, new_importers, linker):
+    if self._variant == 'output':
+      if len(new_senders) != 1:
+        raise errors.InternalError("sink_swap should be called on a leaf node only when there is a unique new sender.")
+      self._set_input(new_senders[0])
+    elif self._variant == 'input':
+      raise errors.InternalError("An input LeafNode should never function as a sink node in a migration.")
+    else:
+      raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
   @property
   def height(self):
@@ -79,13 +106,16 @@ class LeafNode(Node):
 
   def _set_output(self, node):
     if self._exporter is not None:
-      raise errors.InternalError("LeafNodes have only a single output node."
-                                 "  Can not add a new one once an output already exists")
-
-    self._exporter = self.linker.new_exporter(node)
+      if node['id'] != self._exporter.receiver_id:
+        raise errors.InternalError("LeafNodes have only a single output node."
+                                   "  Can not add a new one once an output already exists")
+    else:
+      self._exporter = self.linker.new_exporter(node)
 
   def receive(self, message, sender_id):
     if message['type'] == 'connect_node':
+      # FIXME(KK): I'm pretty sure we should be removing connect_node entirely.
+      return
       if message['direction'] == 'receiver':
         self._set_output(message['node'])
       elif message['direction'] == 'sender':
@@ -122,9 +152,9 @@ class LeafNode(Node):
     if self._variant != 'output':
       raise errors.InternalError("Only 'output' variant nodes may receive output actions")
 
-    increment = message['number']
+    increment = message['amount']
     self.logger.debug("Output incrementing state by {increment}", extra={'increment': increment})
-    self._update_state(lambda amount: amount + increment)
+    self._current_state += increment
 
     self.linker.advance_sequence_number()
 
@@ -144,13 +174,13 @@ class LeafNode(Node):
       return None
 
   @staticmethod
-  def from_config(node_config, controller, update_state):
+  def from_config(node_config, controller):
     return LeafNode(
         controller=controller,
         node_id=node_config['id'],
         parent=node_config['parent'],
-        update_state=update_state,
         variant=node_config['variant'],
+        initial_state=node_config['initial_state'],
         recorded_user=LeafNode._init_recorded_user_from_config(node_config['recorded_user_json']))
 
   def initialize(self):

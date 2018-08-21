@@ -135,8 +135,6 @@ class NodeManager(MachineController):
     # depending on whether send_or_receive is 'send' or 'receive'
     self._pending_events = []
 
-    self._output_node_state_by_id = {} # dict from output node id to it's current state
-
     self._send_to_machine = send_to_machine
 
   def _parse_network_errors_config(self, network_errors_config):
@@ -223,10 +221,6 @@ class NodeManager(MachineController):
   def n_nodes(self):
     return len(self._node_by_id)
 
-  def _update_output_node_state(self, node_id, f):
-    new_state = f(self._output_node_state_by_id[node_id])
-    self._output_node_state_by_id[node_id] = new_state
-
   def start_node(self, node_config):
     logger.info(
         "Starting new '{node_type}' node {node_id} on machine '{machine_name}'",
@@ -236,11 +230,7 @@ class NodeManager(MachineController):
             'machine_name': self.name,
         })
     if node_config['type'] == 'LeafNode':
-      self._output_node_state_by_id[node_config['id']] = node_config['initial_state']
-      node = io.LeafNode.from_config(
-          node_config=node_config,
-          controller=self,
-          update_state=lambda f: self._update_output_node_state(node_config['id'], f))
+      node = io.LeafNode.from_config(node_config=node_config, controller=self)
     elif node_config['type'] == 'InternalNode':
       node = io.InternalNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'SumNode':
@@ -277,7 +267,7 @@ class NodeManager(MachineController):
       }
 
   def get_output_state(self, node_id):
-    return self._output_node_state_by_id[node_id]
+    return self._node_by_id[node_id].current_state
 
   def _format_node_id_for_logs(self, node_id):
     if node_id is None:

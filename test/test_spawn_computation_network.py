@@ -33,7 +33,16 @@ class TestSpawnComputationNetwork(object):
     self.demo.run_for(ms=200)
     return node_id
 
-  def spawn_users(self, root_input, n_users, ave_inter_message_time_ms=0, send_messages_for_ms=0, add_user=False):
+  def spawn_users(self,
+                  root_input,
+                  n_users,
+                  ave_inter_message_time_ms=0,
+                  send_messages_for_ms=0,
+                  send_after=0,
+                  add_user=False):
+    wait_per_loop = 800
+    total_wait = n_users * wait_per_loop
+    waited_so_far = 0
     for i in range(n_users):
       self.demo.system.create_descendant(
           internal_node_id=root_input,
@@ -41,10 +50,12 @@ class TestSpawnComputationNetwork(object):
           machine_id=self.machine_ids[i % len(self.machine_ids)],
           recorded_user=None if not add_user else self.demo.new_recorded_user(
               name='user_{}'.format(i),
+              send_after=send_after + total_wait - waited_so_far,
               ave_inter_message_time_ms=ave_inter_message_time_ms,
               send_messages_for_ms=send_messages_for_ms,
           ))
-      self.demo.run_for(ms=800)
+      self.demo.run_for(ms=wait_per_loop)
+      waited_so_far += wait_per_loop
 
   def _connect_and_test_io_trees(self, n_input_leaves, n_output_leaves):
     root_input = self.root_io_tree(machine=self.machine_ids[0], variant='input')
@@ -54,10 +65,16 @@ class TestSpawnComputationNetwork(object):
     self.spawn_users(root_output, n_users=n_output_leaves)
     self.demo.run_for(ms=6000)
     self.spawn_users(
-        root_input, n_users=n_input_leaves, add_user=True, ave_inter_message_time_ms=500, send_messages_for_ms=3000)
+        root_input,
+        n_users=n_input_leaves,
+        add_user=True,
+        send_after=9000,
+        ave_inter_message_time_ms=500,
+        send_messages_for_ms=3000)
     self.demo.run_for(ms=6000)
 
     root_computation = self.demo.connect_trees_with_sum_network(root_input, root_output, machine=self.machine_ids[0])
+    # Ensure we haven't simulated any sends yet
     self.demo.run_for(ms=6000)
 
     assert self.demo.total_simulated_amount > 10 # Smoke test that sends were in fact simulated

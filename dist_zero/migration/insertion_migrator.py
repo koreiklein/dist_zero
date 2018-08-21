@@ -306,7 +306,7 @@ class InsertionMigrator(migrator.Migrator):
           kids=[{
               'handle': self._node.transfer_handle(self._kids[kid_id], receiver['id']),
               'connection_limit': self._node.system_config['SUM_NODE_RECEIVER_LIMIT']
-          } for kid_id in receiver_to_kids[receiver['id']]])
+          } for kid_id in receiver_to_kids.get(receiver['id'], [])])
 
       self._node.send(receiver, message)
 

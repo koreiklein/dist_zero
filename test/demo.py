@@ -212,10 +212,10 @@ class Demo(object):
           descendant for kid_id in self.system.get_kids(internal_node_id) for descendant in self.all_io_kids(kid_id)
       ]
 
-  def new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms):
+  def new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms, send_after=0):
     time_message_pairs = []
-    times_to_send = sorted(
-        self._rand.random() * send_messages_for_ms for x in range(send_messages_for_ms // ave_inter_message_time_ms))
+    times_to_send = sorted(send_after + self._rand.random() * send_messages_for_ms
+                           for x in range(send_messages_for_ms // ave_inter_message_time_ms))
 
     for t in times_to_send:
       amount_to_send = int(self._rand.random() * 20)

@@ -52,6 +52,16 @@ class TopologyPicker(object):
         right_layer.append(node_id)
         right_map[node_id] = [right_config['parent_handle']['id']]
 
+    if len(right_layer) == 0:
+      # There must be at least one node in this last layer.
+      node_id = self._new_node()
+      right_layer.append(node_id)
+      if len(right_configurations) != 1:
+        import ipdb
+        ipdb.set_trace()
+        raise RuntimeError("Not Yet Implemented")
+      right_map[node_id] = [right_config['parent_handle']['id'] for right_config in right_configurations]
+
     for left in self._layers[-1]:
       for right in right_layer:
         self._graph.add_edge(left, right)
@@ -80,6 +90,7 @@ class TopologyPicker(object):
           for node in self._layers[-1]
       }
 
+  # FIXME(KK): Remove this
   def fill_graph_old(self, left_is_data, right_is_data, right_configurations):
     if left_is_data and right_is_data:
       left_layer = []
