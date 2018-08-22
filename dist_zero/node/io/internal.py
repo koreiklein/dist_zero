@@ -112,7 +112,6 @@ class InternalNode(Node):
       if self._adjacent is not None and self._adjacent['id'] != new_receivers[0]['id']:
         raise errors.InternalError("Not sure how to set an input node's receives when it already has an adjacent.")
       self._adjacent = new_receivers[0]
-      self.send(self._adjacent, messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
     elif self._variant == 'output':
       raise errors.InternalError("Output InternalNode should never function as a source migrator in a migration.")
     else:
@@ -516,8 +515,8 @@ class InternalNode(Node):
       self._kids[kid['id']] = kid
 
       if self._adjacent is None:
-        self.logger.warning("added_leaf: No adjacent was set when a kid was added."
-                            "  Unable to forward an added_leaf message to the adjacent.")
+        self.logger.info("added_leaf: No adjacent was set when a kid was added."
+                         "  Unable to forward an added_leaf message to the adjacent.")
       else:
         self.send(self._adjacent,
                   messages.io.added_adjacent_leaf(

@@ -24,6 +24,8 @@ class RightConfigurationReceiver(object):
 
   def set_parents(self, parent_ids):
     if self._desired_parents is not None:
+      import ipdb
+      ipdb.set_trace()
       raise errors.InternalError("Parents for RightConfigurationReceiver have already been set.")
 
     desired_parents = set(parent_ids)
@@ -38,5 +40,5 @@ class RightConfigurationReceiver(object):
 
     self._received_parents.add(sender_id)
     for kid_id in kid_ids:
-      if kid_id not in self.configs.keys():
+      if kid_id not in self.configs:
         self.configs[kid_id] = None

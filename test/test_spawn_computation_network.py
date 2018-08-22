@@ -97,6 +97,20 @@ class TestSpawnComputationNetwork(object):
   def test_spawn_small_large(self, demo):
     self.demo = demo
     self.machine_ids = demo.new_machine_controllers(
-        1, base_config=self.base_config(), random_seed='test_spawn_small_small')
+        1, base_config=self.base_config(), random_seed='test_spawn_small_large')
 
     self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=10)
+
+  def test_spawn_large_small(self, demo):
+    self.demo = demo
+    self.machine_ids = demo.new_machine_controllers(
+        1, base_config=self.base_config(), random_seed='test_spawn_large_small')
+
+    self._connect_and_test_io_trees(n_input_leaves=10, n_output_leaves=1)
+
+  def test_spawn_large_large(self, demo):
+    self.demo = demo
+    self.machine_ids = demo.new_machine_controllers(
+        1, base_config=self.base_config(), random_seed='test_spawn_large_large')
+
+    self._connect_and_test_io_trees(n_input_leaves=10, n_output_leaves=10)

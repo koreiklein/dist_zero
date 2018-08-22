@@ -18,6 +18,8 @@ class SourceMigrator(migrator.Migrator):
     self._node = node
     self._will_sync = will_sync
 
+    self._sent_right_configurations = False
+
     self._right_config_receiver = RightConfigurationReceiver(has_parents=self._node._parent is not None)
 
     def _deliver(message, sequence_number, sender_id):
@@ -87,10 +89,11 @@ class SourceMigrator(migrator.Migrator):
           config['parent_handle']['id']: config['parent_handle']
           for config in self._right_config_receiver.configs.values()
       }
+      self._set_kids_right_parents()
       self._send_configure_new_flow_left_to_right()
+      self._sent_right_configurations = True
 
-  def _send_configure_new_flow_left_to_right(self):
-    self._node.logger.info("Sending configure_new_flow_left")
+  def _set_kids_right_parents(self):
     if len(self._new_receivers) == 1:
       new_receiver_id = list(self._new_receivers.keys())[0]
       for kid in self._node._kids.values():
@@ -98,8 +101,13 @@ class SourceMigrator(migrator.Migrator):
                         messages.migration.set_source_right_parents(
                             migration_id=self.migration_id, configure_right_parent_ids=[new_receiver_id]))
     else:
+      import ipdb
+      ipdb.set_trace()
       # FIXME(KK): Figure out what to do about this
       raise RuntimeError("Not Yet Implemented")
+
+  def _send_configure_new_flow_left_to_right(self):
+    self._node.logger.info("Sending configure_new_flow_left")
 
     for new_receiver in self._new_receivers.values():
       kids = [{'handle': kid, 'connection_limit': 1} for kid in self._node._kids.values() if kid is not None]

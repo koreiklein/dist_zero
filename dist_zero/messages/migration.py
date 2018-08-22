@@ -79,11 +79,14 @@ def removal_migrator_config(sender_ids, receiver_ids, will_sync):
   return {'type': 'removal_migrator', 'sender_ids': sender_ids, 'receiver_ids': receiver_ids, 'will_sync': will_sync}
 
 
-def insertion_migrator_config(configure_right_parent_ids, senders, receivers, migration=None):
+def insertion_migrator_config(configure_right_parent_ids, senders, receivers, left_configurations=None, migration=None):
   '''
   :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
     insertion node.
   :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
+  :param dict[str, object] left_configurations: In same cases, an insertion node can be preconfigured with left_configurations
+    given from the parent node that spawned it.   In that case, ``left_configurations`` is a dictionary mapping sender id
+    to prexisting left_configuration.  Otherwise, ``left_configurations`` is `None`
   :param list receivers: A list of :ref:`handle` of the `Node` s that will receive from self by the end of the migration.
   :param migration: If the insertion node will communicate directly with the migration node, this is a handle for it.
     Otherwise, it is `None`
@@ -93,6 +96,7 @@ def insertion_migrator_config(configure_right_parent_ids, senders, receivers, mi
       'type': 'insertion_migrator',
       'configure_right_parent_ids': configure_right_parent_ids,
       'senders': senders,
+      'left_configurations': left_configurations,
       'receivers': receivers,
       'migration': migration
   }

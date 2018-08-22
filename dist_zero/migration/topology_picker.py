@@ -69,7 +69,7 @@ class TopologyPicker(object):
 
     return right_map
 
-  def fill_graph(self, left_is_data, right_is_data, right_configurations):
+  def fill_graph(self, left_is_data, left_height, right_is_data, right_height, right_configurations):
     if left_is_data:
       self._add_left_adjacents_layer()
 
@@ -79,10 +79,22 @@ class TopologyPicker(object):
       self._add_partition_layer()
 
     if right_is_data:
+      if left_is_data and len(self._layers) == 2 and left_height != right_height:
+        node_id = self._new_node()
+        for left in self._layers[-1]:
+          self._graph.add_edge(left, node_id)
+        self._layers.append([node_id])
+
       return self._add_right_adjacents_layer(right_configurations)
     else:
       if len(self._layers[-1]) == 0:
         singleton = self._new_node()
+        self._layers.append([singleton])
+
+      if len(self._layers) < 2:
+        singleton = self._new_node()
+        for left in self._layers[-1]:
+          self._graph.add_edge(left, singleton)
         self._layers.append([singleton])
 
       return {
