@@ -18,6 +18,8 @@ class TestSpawnComputationNetwork(object):
     system_config = messages.machine.std_system_config()
     system_config['INTERNAL_NODE_KIDS_LIMIT'] = 3
     system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 0
+    system_config['SUM_NODE_SENDER_LIMIT'] = 6
+    system_config['SUM_NODE_RECEIVER_LIMIT'] = 6
     return {
         'system_config': system_config,
         'network_errors_config': messages.machine.std_simulated_network_errors_config(),
@@ -82,8 +84,6 @@ class TestSpawnComputationNetwork(object):
     output_leaves = self.demo.all_io_kids(root_output)
     assert len(output_leaves) == n_output_leaves
     self.demo.render_network(root_output)
-    import ipdb
-    ipdb.set_trace()
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 

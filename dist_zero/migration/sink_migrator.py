@@ -252,7 +252,8 @@ class SinkMigrator(migrator.Migrator):
           for left_kid in left_config['kids']:
             # This kid of a the left node will not be right configured by any of self's kids.
             self._node.send(left_kid['handle'],
-                            messages.migration.configure_right_parent(migration_id=self.migration_id, kid_ids=[]))
+                            messages.migration.configure_right_parent(
+                                migration_id=self.migration_id, parent_ids=[], kid_ids=[]))
       else:
         for left_config in self._left_configurations.values():
           left_kids = left_config['kids']
@@ -265,7 +266,7 @@ class SinkMigrator(migrator.Migrator):
 
             self._node.send(adjacent_to_kid,
                             messages.migration.configure_right_parent(
-                                migration_id=self.migration_id, kid_ids=[kid['id']]))
+                                migration_id=self.migration_id, parent_ids=[], kid_ids=[kid['id']]))
 
             self._node.send(kid,
                             messages.migration.set_new_flow_adjacent(self.migration_id,

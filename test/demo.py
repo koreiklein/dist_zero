@@ -234,12 +234,19 @@ class Demo(object):
     right_subgraph = Digraph()
     right_subgraph_visited = set()
 
+    def _add_node(graph, node_id):
+      if node_id.startswith('InternalNode') or node_id.startswith('LeafNode'):
+        kwargs = {'shape': 'ellipse', 'color': 'black', 'fillcolor': '#c7faff', 'style': 'filled'}
+      else:
+        kwargs = {'shape': 'diamond', 'color': 'black'}
+      graph.node(node_id, **kwargs)
+
     def _go_down(node_id):
       if node_id not in right_subgraph_visited:
         right_subgraph_visited.add(node_id)
         height = self.system.get_stats(node_id)['height']
         by_height[height].append(node_id)
-        right_subgraph.node(node_id)
+        _add_node(right_subgraph, node_id)
         for kid in self.system.get_kids(node_id):
           right_subgraph.edge(node_id, kid, label='kid')
           _go_down(kid)
@@ -258,7 +265,7 @@ class Demo(object):
         if node_id not in subgraph_visited:
           visited.add(node_id)
           subgraph_visited.add(node_id)
-          subgraph.node(node_id)
+          _add_node(subgraph, node_id)
           for sender in self.system.get_senders(node_id):
             subgraph.edge(sender, node_id, label='sends')
             _go_left(sender)

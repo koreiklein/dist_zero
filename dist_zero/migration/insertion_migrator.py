@@ -39,7 +39,7 @@ class InsertionMigrator(migrator.Migrator):
     # currently spawning
     self._current_spawning_layer = None
 
-    self._right_config_receiver = RightConfigurationReceiver(has_parents=True)
+    self._right_config_receiver = RightConfigurationReceiver(wait_for_parents=True)
     self._right_config_receiver.set_parents(configure_right_parent_ids) # configure_right_parent_ids may be empty
 
     self._left_configurations = {sender_id: None for sender_id in self._senders.keys()}
@@ -144,7 +144,8 @@ class InsertionMigrator(migrator.Migrator):
       self._left_configurations[sender_id] = message
       self._maybe_has_left_and_right_configurations()
     elif message['type'] == 'configure_right_parent':
-      self._right_config_receiver.got_parent_configuration(sender_id, kid_ids=message['kid_ids'])
+      self._right_config_receiver.got_parent_configuration(
+          sender_id, parent_ids=message['parent_ids'], kid_ids=message['kid_ids'])
       self._maybe_has_left_and_right_configurations()
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
@@ -243,9 +244,6 @@ class InsertionMigrator(migrator.Migrator):
       raise errors.InternalError('Node id "{}" was not found in the kids on left-kids.'.format(node_id))
 
   def _spawn_layer(self, layer_index):
-    if layer_index >= self._picker.n_layers:
-      import ipdb
-      ipdb.set_trace()
     self._node.logger.info(
         "Insertion migrator is spawning layer {layer_index} of {n_nodes_to_spawn} nodes",
         extra={
@@ -254,17 +252,30 @@ class InsertionMigrator(migrator.Migrator):
         })
     self._current_spawning_layer = layer_index
 
+    # FIXME(KK): Do something more general.  This is obviously a hack.
+    squished = self._node.id == 'ComputationNode_root_1M1ZOzrv75nA' and layer_index == 1
+
     for left_node_id in self._picker.get_layer(layer_index - 1):
-      kid_ids = self._graph.node_receivers(left_node_id)
+      if squished:
+        parent_ids = self._picker.get_layer(layer_index)
+        kid_ids = []
+      else:
+        parent_ids = []
+        kid_ids = self._graph.node_receivers(left_node_id)
+
       self._node.send(
           self._id_to_handle(left_node_id),
-          messages.migration.configure_right_parent(migration_id=self.migration_id, kid_ids=kid_ids))
+          messages.migration.configure_right_parent(
+              migration_id=self.migration_id, parent_ids=parent_ids, kid_ids=kid_ids))
 
     for node_id in self._picker.get_layer(layer_index):
       self._kids[node_id] = None
 
       senders = [self._id_to_handle(sender_id) for sender_id in self._graph.node_senders(node_id)]
       kid_left_configs = None
+      if squished:
+        senders = []
+        kid_left_configs = self._left_configurations
 
       migrator = messages.migration.insertion_migrator_config(
           senders=senders,
