@@ -79,7 +79,10 @@ class TestSpawnComputationNetwork(object):
     # Ensure we haven't simulated any sends yet
     self.demo.run_for(ms=6000)
 
-    assert self.demo.total_simulated_amount > 10 # Smoke test that sends were in fact simulated
+    if n_input_leaves > 0:
+      assert self.demo.total_simulated_amount > 10 # Smoke test that sends were in fact simulated
+    else:
+      assert self.demo.total_simulated_amount == 0
 
     output_leaves = self.demo.all_io_kids(root_output)
     assert len(output_leaves) == n_output_leaves
@@ -114,3 +117,10 @@ class TestSpawnComputationNetwork(object):
         1, base_config=self.base_config(), random_seed='test_spawn_large_large')
 
     self._connect_and_test_io_trees(n_input_leaves=10, n_output_leaves=10)
+
+  def test_spawn_empty_small(self, demo):
+    self.demo = demo
+    self.machine_ids = demo.new_machine_controllers(
+        1, base_config=self.base_config(), random_seed='test_spawn_large_large')
+
+    self._connect_and_test_io_trees(n_input_leaves=0, n_output_leaves=3)
