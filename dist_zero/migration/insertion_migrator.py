@@ -252,8 +252,7 @@ class InsertionMigrator(migrator.Migrator):
         })
     self._current_spawning_layer = layer_index
 
-    # FIXME(KK): Do something more general.  This is obviously a hack.
-    squished = self._node.id == 'ComputationNode_root_1M1ZOzrv75nA' and layer_index == 1
+    squished = self._max_left_height() < self._max_right_height() and layer_index == 1
 
     for left_node_id in self._picker.get_layer(layer_index - 1):
       if squished:

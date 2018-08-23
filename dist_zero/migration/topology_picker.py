@@ -37,8 +37,14 @@ class TopologyPicker(object):
     self._layers.append(left_layer)
 
   def _add_partition_layer(self):
-    import ipdb
-    ipdb.set_trace()
+    partition_layer = []
+    for i in range(0, len(self._layers[-1]), self._new_node_max_inputs):
+      node_id = self._new_node()
+      partition_layer.append(node_id)
+      for sender in self._layers[-1][i:i + self._new_node_max_inputs]:
+        self._graph.add_edge(sender, node_id)
+
+    self._layers.append(partition_layer)
 
   def _add_right_adjacents_layer(self, right_configurations):
     right_map = {}

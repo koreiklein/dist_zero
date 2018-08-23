@@ -231,7 +231,7 @@ class SumNode(Node):
       self._time_since_had_enough_receivers_ms = 0
     self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
-    if len(self._importers) >= SENDER_LIMIT:
+    if len(self._importers) > SENDER_LIMIT:
       if not self.migrators:
         self.logger.info("Hitting sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
         self._spawn_new_senders_migration()

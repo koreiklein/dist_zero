@@ -42,7 +42,7 @@ class TestSpawnComputationNetwork(object):
                   send_messages_for_ms=0,
                   send_after=0,
                   add_user=False):
-    wait_per_loop = 800
+    wait_per_loop = 1500
     total_wait = n_users * wait_per_loop
     waited_so_far = 0
     for i in range(n_users):
