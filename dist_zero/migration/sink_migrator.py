@@ -266,7 +266,7 @@ class SinkMigrator(migrator.Migrator):
 
             self._node.send(adjacent_to_kid,
                             messages.migration.configure_right_parent(
-                                migration_id=self.migration_id, parent_ids=[], kid_ids=[kid['id']]))
+                                migration_id=self.migration_id, kid_ids=[kid['id']]))
 
             self._node.send(kid,
                             messages.migration.set_new_flow_adjacent(self.migration_id,

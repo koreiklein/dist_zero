@@ -335,7 +335,24 @@ def migrator_terminated(migration_id):
   return {'type': 'migration', 'migration_id': migration_id, 'message': {'type': 'migrator_terminated'}}
 
 
-def configure_right_parent(migration_id, parent_ids, kid_ids):
+def substitute_right_parent(migration_id, new_parent_id):
+  '''
+  Informs a node that the right configs it was expecting from one parent should actually come from another parent.
+
+  :param str migration_id: The id of the relevant migration.
+  :param str new_parent_id: The id of the parent to listen for instead.
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'substitute_right_parent',
+          'new_parent_id': new_parent_id
+      }
+  }
+
+
+def configure_right_parent(migration_id, kid_ids):
   '''
   A node will receive this message from the parents of its eventual receivers to indicate
   which nodes will eventually receive from it.
@@ -343,7 +360,6 @@ def configure_right_parent(migration_id, parent_ids, kid_ids):
   Those same nodes that will eventually receive from it should each be expected to send it a right_configuration.
 
   :param str migration_id: The id of the relevant migration.
-  :param list[str] parent_ids: Ids of new parent nodes that the receiver should also wait for.
   :param list[str] kid_ids: The ids of the `Node` instances that will receive from the node getting this message.
   '''
   return {
@@ -351,7 +367,6 @@ def configure_right_parent(migration_id, parent_ids, kid_ids):
       'migration_id': migration_id,
       'message': {
           'type': 'configure_right_parent',
-          'parent_ids': parent_ids,
           'kid_ids': kid_ids
       }
   }

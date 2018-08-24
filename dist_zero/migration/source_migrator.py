@@ -20,7 +20,9 @@ class SourceMigrator(migrator.Migrator):
 
     self._sent_right_configurations = False
 
-    self._right_config_receiver = RightConfigurationReceiver(wait_for_parents=self._node._parent is not None)
+    self._right_config_receiver = RightConfigurationReceiver()
+    if self._node._parent is None:
+      self._right_config_receiver.set_parents([])
 
     def _deliver(message, sequence_number, sender_id):
       # Impossible! Source migrators do not add any importers to their linkers, and thus the linker
@@ -128,8 +130,10 @@ class SourceMigrator(migrator.Migrator):
       self._right_config_receiver.set_parents(parent_ids=message['configure_right_parent_ids'])
       self._maybe_has_right_configurations()
     elif message['type'] == 'configure_right_parent':
-      self._right_config_receiver.got_parent_configuration(
-          sender_id, parent_ids=message['parent_ids'], kid_ids=message['kid_ids'])
+      self._right_config_receiver.got_parent_configuration(sender_id, kid_ids=message['kid_ids'])
+      self._maybe_has_right_configurations()
+    elif message['type'] == 'substitute_right_parent':
+      self._right_config_receiver.substitute_right_parent(sender_id, new_parent_id=message['new_parent_id'])
       self._maybe_has_right_configurations()
     elif message['type'] == 'configure_new_flow_right':
       self._node.logger.info("Received configure_new_flow_right")
