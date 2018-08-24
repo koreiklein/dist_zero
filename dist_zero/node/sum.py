@@ -156,18 +156,6 @@ class SumNode(Node):
       if self._output_exporter is not None:
         raise errors.InternalError("Can not set a new output node when one already exists.")
       self._output_exporter = self.linker.new_exporter(message['output_node'])
-    elif message['type'] == 'connect_node':
-      node = message['node']
-      direction = message['direction']
-
-      if direction == 'sender':
-        if node['id'] not in self._importers:
-          self.import_from_node(node)
-      elif direction == 'receiver':
-        if node['id'] not in self._exporters:
-          self.export_to_node(node)
-      else:
-        raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
     elif message['type'] == 'adjacent_has_split':
       # Spawn a new adjacent for the newly spawned io node and remove any kids stolen from self.
       node_id = ids.new_id('SumNode_adjacent_for_split')

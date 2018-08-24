@@ -111,19 +111,6 @@ def insertion_migrator_config(configure_right_parent_ids,
   }
 
 
-def connect_node(node, direction):
-  '''
-  Inform a node that it is now linked to a new node either
-  as a sender or a receiver.
-
-  :param node: The handle of the new node
-  :type node: :ref:`handle`
-  :param str direction: 'sender' or 'receiver' depending respectively on whether the newly added node will
-    send to or receive from the node getting this message.
-  '''
-  return {'type': 'connect_node', 'node': node, 'direction': direction}
-
-
 def attach_migrator(migrator_config):
   '''
   Message to inform an existing `Node` instance that it should attach a new `Migrator` instance

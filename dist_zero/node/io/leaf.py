@@ -112,22 +112,7 @@ class LeafNode(Node):
       self._exporter = self.linker.new_exporter(node)
 
   def receive(self, message, sender_id):
-    if message['type'] == 'connect_node':
-      # FIXME(KK): I'm pretty sure we should be removing connect_node entirely.
-      return
-      if message['direction'] == 'receiver':
-        self._set_output(message['node'])
-      elif message['direction'] == 'sender':
-        self._set_input(message['node'])
-      else:
-        raise errors.InternalError('Unrecognized direction "{}"'.format(message['direction']))
-
-      # Handle the postponed messages now.
-      self.logger.info("Activating Leaf Node {node_id}", extra={'node_id': self.id})
-      for m in self._pre_active_messages:
-        self._receive_input_action(m)
-
-    elif message['type'] == 'input_action':
+    if message['type'] == 'input_action':
       self._receive_input_action(message)
     elif message['type'] == 'adopt':
       self.send(self._parent, messages.io.goodbye_parent())

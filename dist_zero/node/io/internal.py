@@ -341,13 +341,6 @@ class InternalNode(Node):
       self.send(self._parent, messages.io.goodbye_parent())
       self._parent = message['new_parent']
       self._send_hello_parent()
-    elif message['type'] == 'connect_node':
-      if message['direction'] == 'receiver':
-        self._set_output(message['node'])
-      elif message['direction'] == 'sender':
-        self._set_input(message['node'])
-      else:
-        raise errors.InternalError('Unrecognized direction "{}"'.format(message['direction']))
     else:
       super(InternalNode, self).receive(message=message, sender_id=sender_id)
 
