@@ -103,8 +103,6 @@ class SourceMigrator(migrator.Migrator):
                         messages.migration.set_source_right_parents(
                             migration_id=self.migration_id, configure_right_parent_ids=[new_receiver_id]))
     else:
-      import ipdb
-      ipdb.set_trace()
       # FIXME(KK): Figure out what to do about this
       raise RuntimeError("Not Yet Implemented")
 

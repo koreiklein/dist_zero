@@ -63,8 +63,6 @@ class TopologyPicker(object):
       node_id = self._new_node()
       right_layer.append(node_id)
       if len(right_configurations) != 1:
-        import ipdb
-        ipdb.set_trace()
         raise RuntimeError("Not Yet Implemented")
       right_map[node_id] = [right_config['parent_handle']['id'] for right_config in right_configurations]
 
@@ -170,8 +168,6 @@ class TopologyPicker(object):
           right_map[node_id] = [right_config['parent_handle']['id']]
           right_layer.append(node_id)
       if len(right_layer) > 0:
-        import ipdb
-        ipdb.set_trace()
         # FIXME(KK): In this case, we should probably try a complete connection
         raise RuntimeError("Not Yet Implemented")
       else:

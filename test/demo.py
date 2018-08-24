@@ -226,12 +226,12 @@ class Demo(object):
 
     return RecordedUser(name, time_message_pairs)
 
-  def render_network(self, top_right_id, filename='network', view=False):
+  def render_network(self, start_node_id, filename='network', view=False):
     from graphviz import Digraph
     dot = Digraph(comment='Network Graph of system "{}"'.format(self.system.id), graph_attr={'rankdir': 'LR'})
 
     by_height = defaultdict(list)
-    right_subgraph = Digraph()
+    main_subgraph = Digraph()
     right_subgraph_visited = set()
 
     def _add_node(graph, node_id):
@@ -241,18 +241,26 @@ class Demo(object):
         kwargs = {'shape': 'diamond', 'color': 'black'}
       graph.node(node_id, **kwargs)
 
+    edges = set()
+
+    def _add_edge(graph, left, right, *args, **kwargs):
+      pair = (left, right)
+      if pair not in edges:
+        edges.add(pair)
+        graph.edge(left, right, *args, **kwargs)
+
     def _go_down(node_id):
       if node_id not in right_subgraph_visited:
         right_subgraph_visited.add(node_id)
         height = self.system.get_stats(node_id)['height']
         by_height[height].append(node_id)
-        _add_node(right_subgraph, node_id)
+        _add_node(main_subgraph, node_id)
         for kid in self.system.get_kids(node_id):
-          right_subgraph.edge(node_id, kid, label='kid')
+          _add_edge(main_subgraph, node_id, kid, label='kid')
           _go_down(kid)
 
-    _go_down(top_right_id)
-    dot.subgraph(right_subgraph)
+    _go_down(start_node_id)
+    dot.subgraph(main_subgraph)
 
     heights = list(reversed(sorted(by_height.keys())))
 
@@ -267,11 +275,24 @@ class Demo(object):
           subgraph_visited.add(node_id)
           _add_node(subgraph, node_id)
           for sender in self.system.get_senders(node_id):
-            subgraph.edge(sender, node_id, label='sends')
+            _add_edge(subgraph, sender, node_id, label='sends')
             _go_left(sender)
+
+      def _go_right(node_id):
+        if node_id not in subgraph_visited:
+          visited.add(node_id)
+          subgraph_visited.add(node_id)
+          _add_node(subgraph, node_id)
+          for receiver in self.system.get_receivers(node_id):
+            _add_edge(subgraph, node_id, receiver, label='sends')
+            _go_right(receiver)
 
       for node_id in by_height[height]:
         _go_left(node_id)
+
+      subgraph_visited = set()
+      for node_id in by_height[height]:
+        _go_right(node_id)
 
       dot.subgraph(subgraph)
 
@@ -279,6 +300,6 @@ class Demo(object):
     for node_id in visited:
       if node_id not in right_subgraph_visited:
         for kid in self.system.get_kids(node_id):
-          dot.edge(node_id, kid, label='kid')
+          _add_edge(dot, node_id, kid, label='kid')
 
     dot.render(filename, view=view, cleanup=True)

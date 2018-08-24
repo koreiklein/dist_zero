@@ -2,18 +2,28 @@ from dist_zero import errors
 
 
 class RightConfigurationReceiver(object):
-  def __init__(self):
-    # Whether we're waiting for a node to set the parents.
-    self._waiting_for_parents = True
+  def __init__(self, configs=None):
+    '''
+    :param dict[str, object] configs: An optional preset dictionary of right_configurations.
+      When passed in, this receiver will jump immediately into a ready state with those configurations.
+    '''
+    if configs is None:
+      # Whether we're waiting for a node to set the parents.
+      self._waiting_for_parents = True
 
-    # Parents which must send parent configs before this receiver is ready
-    self._expected_parents = set()
-    # The parents which have sent configs already
-    self._received_parents = set()
-    # The children configs.  Maps each id to
-    #  if we have received a config from that kid, then the config.
-    #  otherwise, None.
-    self.configs = {}
+      # Parents which must send parent configs before this receiver is ready
+      self._expected_parents = set()
+      # The parents which have sent configs already
+      self._received_parents = set()
+      # The children configs.  Maps each id to
+      #  if we have received a config from that kid, then the config.
+      #  otherwise, None.
+      self.configs = {}
+    else:
+      self._waiting_for_parents = False
+      self._expected_parents = set()
+      self._received_parents = set()
+      self.configs = configs
 
   @property
   def ready(self):

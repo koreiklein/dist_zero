@@ -159,6 +159,17 @@ class SinkMigrator(migrator.Migrator):
       self._node.logger.info("Received 'started_flow'")
       self._kid_started_flows[sender_id] = True
       self._maybe_flow_is_started()
+    elif message['type'] == 'substitute_left_configuration':
+      if sender_id not in self._left_configurations:
+        raise errors.InternalError("'substitute_left_configuration' should only be received from a node "
+                                   "for which we do not expect a left_configuration")
+
+      left_config = self._left_configurations.pop(sender_id)
+      if left_config is not None:
+        raise errors.InternalError("'substitute_left_configuration' should only be received from a node "
+                                   "that has not sent (and will never send) a left configuration")
+
+      self._left_configurations[message['new_node_id']] = None
     elif message['type'] == 'configure_new_flow_left':
       self._node.logger.info("Received 'configure_new_flow_left'")
       if sender_id not in self._new_flow_senders:
@@ -252,8 +263,7 @@ class SinkMigrator(migrator.Migrator):
           for left_kid in left_config['kids']:
             # This kid of a the left node will not be right configured by any of self's kids.
             self._node.send(left_kid['handle'],
-                            messages.migration.configure_right_parent(
-                                migration_id=self.migration_id, parent_ids=[], kid_ids=[]))
+                            messages.migration.configure_right_parent(migration_id=self.migration_id, kid_ids=[]))
       else:
         for left_config in self._left_configurations.values():
           left_kids = left_config['kids']
@@ -312,7 +322,7 @@ class SinkMigrator(migrator.Migrator):
         self._node.sink_swap(
             deltas=self._deltas,
             old_sender_ids=set(self._old_sender_id_to_first_flow_sequence_number.keys()),
-            new_senders=list(self._new_flow_senders.values()),
+            new_senders=[left_config['node'] for left_config in self._left_configurations.values()],
             new_importers=self._new_importers,
             linker=self._linker,
         )

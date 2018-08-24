@@ -52,9 +52,6 @@ class SystemController(object):
 
   def get_kids(self, node_id):
     result = self.send_api_message(node_id, messages.machine.get_kids())
-    if result is None:
-      import ipdb
-      ipdb.set_trace()
     for handle in result.values():
       self._add_node_machine_mapping(handle)
 
@@ -62,9 +59,6 @@ class SystemController(object):
 
   def get_senders(self, node_id):
     result = self.send_api_message(node_id, messages.machine.get_senders())
-    if result is None:
-      import ipdb
-      ipdb.set_trace()
     for handle in result.values():
       self._add_node_machine_mapping(handle)
 
@@ -72,9 +66,6 @@ class SystemController(object):
 
   def get_receivers(self, node_id):
     result = self.send_api_message(node_id, messages.machine.get_receivers())
-    if result is None:
-      import ipdb
-      ipdb.set_trace()
     for handle in result.values():
       self._add_node_machine_mapping(handle)
 

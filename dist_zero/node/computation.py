@@ -1,6 +1,6 @@
 import logging
 
-from dist_zero import messages, ids
+from dist_zero import messages, ids, errors
 
 from .node import Node
 
@@ -113,6 +113,16 @@ class ComputationNode(Node):
         raise errors.InternalError("Unrecognized variant {}".format(message['variant']))
     else:
       super(ComputationNode, self).receive(message=message, sender_id=sender_id)
+
+  def stats(self):
+    return {
+        'height': self.height,
+        'n_retransmissions': self.linker.n_retransmissions,
+        'n_reorders': self.linker.n_reorders,
+        'n_duplicates': self.linker.n_duplicates,
+        'sent_messages': self.linker.least_unused_sequence_number,
+        'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
+    }
 
   def handle_api_message(self, message):
     if message['type'] == 'get_kids':
