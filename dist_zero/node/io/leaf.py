@@ -73,7 +73,6 @@ class LeafNode(Node):
       if len(new_receivers) != 1:
         raise errors.InternalError("switch_flows should be called on a leaf node only when there is a unique receiver.")
       self._set_output(new_receivers[0])
-      self.send(new_receivers[0], messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
     elif self._variant == 'output':
       raise errors.InternalError("An input LeafNode should never function as a source node in a migration.")
     else:

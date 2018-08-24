@@ -60,6 +60,10 @@ class SourceMigrator(migrator.Migrator):
     # Clear out any messages that can still be sent on the old flow.
     self._node.checkpoint()
 
+    for receiver in self._new_receivers.values():
+      self._node.send(receiver, messages.migration.swapped_to_duplicate(
+          self.migration_id, first_live_sequence_number=0))
+
     self._node.switch_flows(
         self.migration_id, old_exporters=[], new_exporters=[], new_receivers=list(self._new_receivers.values()))
 
