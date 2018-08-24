@@ -266,7 +266,7 @@ class InsertionMigrator(migrator.Migrator):
               receivers=[],
               migrator=migrator))
 
-  def _spawn_layer_without_left_configs(self, layer_index):
+  def _spawn_layer_without_gap(self, layer_index):
     for left_node_id in self._picker.get_layer(layer_index - 1):
       self._node.send(
           self._id_to_handle(left_node_id),
@@ -339,7 +339,7 @@ class InsertionMigrator(migrator.Migrator):
     if self._max_left_height() < self._max_right_height() and layer_index == 1:
       self._spawn_layer_with_left_gap(layer_index)
     else:
-      self._spawn_layer_without_left_configs(layer_index)
+      self._spawn_layer_without_gap(layer_index)
 
     self._maybe_spawned_kids()
 
