@@ -42,7 +42,7 @@ class TestSpawnComputationNetwork(object):
                   send_messages_for_ms=0,
                   send_after=0,
                   add_user=False):
-    wait_per_loop = 1500
+    wait_per_loop = 1700
     total_wait = n_users * wait_per_loop
     waited_so_far = 0
     for i in range(n_users):
@@ -133,3 +133,10 @@ class TestSpawnComputationNetwork(object):
         1, base_config=self.base_config(), random_seed='test_spawn_large_large')
 
     self._connect_and_test_io_trees(n_input_leaves=3, n_output_leaves=0)
+
+  def test_spawn_small_very_large(self, demo):
+    self.demo = demo
+    self.machine_ids = demo.new_machine_controllers(
+        1, base_config=self.base_config(), random_seed='test_spawn_small_very_large')
+
+    self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=20)

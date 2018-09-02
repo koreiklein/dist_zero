@@ -1,3 +1,6 @@
+import itertools
+from collections import defaultdict
+
 from dist_zero import errors, ids
 
 
@@ -12,6 +15,9 @@ class TopologyPicker(object):
     self._left_layer = [node for node in graph.nodes()]
     self._layers = [self._left_layer]
 
+    self._cur_left_tree_index = 0
+    self._cur_right_tree_index = 0
+
     self._max_outputs = max_outputs
     self._max_inputs = max_inputs
 
@@ -20,6 +26,12 @@ class TopologyPicker(object):
 
     self._new_node_name_prefix = new_node_name_prefix
 
+    self._node_by_tree_coords = {}
+    self._tree_coords_by_node = {}
+
+    self._right_edge = None
+    self._left_edge = None
+
   @property
   def n_layers(self):
     return len(self._layers)
@@ -27,261 +39,130 @@ class TopologyPicker(object):
   def get_layer(self, i):
     return self._layers[i]
 
-  def _add_left_adjacents_layer(self):
-    left_layer = []
-    for left in self._graph.nodes():
-      node_id = self._new_node()
-      self._graph.add_edge(left, node_id)
-      left_layer.append(node_id)
+  def _new_left_tree_index(self):
+    result = self._cur_left_tree_index
+    self._cur_left_tree_index += 1
+    return result
 
-    self._layers.append(left_layer)
+  def _new_right_tree_index(self):
+    result = self._cur_right_tree_index
+    self._cur_right_tree_index += 1
+    return result
 
-  def _add_partition_layer(self):
-    partition_layer = []
-    for i in range(0, len(self._layers[-1]), self._new_node_max_inputs):
-      node_id = self._new_node()
-      partition_layer.append(node_id)
-      for sender in self._layers[-1][i:i + self._new_node_max_inputs]:
-        self._graph.add_edge(sender, node_id)
+  def _form_right_tree_from_right_configurations(self, right_config_by_id, right_is_data, n_left_layers):
+    self._right_edge = defaultdict(list)
+    current_tree_layer = list(right_config_by_id.keys())
 
-    self._layers.append(partition_layer)
+    layers = [current_tree_layer]
 
-  def _add_right_adjacents_layer(self, right_configurations):
-    right_map = {}
+    adjacent_layer = []
+    for node in current_tree_layer:
+      if right_is_data:
+        n_kids = right_config_by_id[node]['n_kids']
+      else:
+        n_kids = 1 if n_left_layers <= 2 else right_config_by_id[node]['connection_limit']
 
-    right_layer = []
-    for right_config in right_configurations:
-      if right_config['n_kids'] is None:
-        raise errors.InternalError("right_config must have n_kids when right_is_data == True")
-      for i in range(right_config['n_kids']):
-        node_id = self._new_node()
-        right_layer.append(node_id)
-        right_map[node_id] = [right_config['parent_handle']['id']]
+      if n_kids is None:
+        raise errors.InternalError("n_kids should not be None")
 
-    if len(right_layer) == 0:
-      # There must be at least one node in this last layer.
-      node_id = self._new_node()
-      right_layer.append(node_id)
-      if len(right_configurations) != 1:
-        raise RuntimeError("Not Yet Implemented")
-      right_map[node_id] = [right_config['parent_handle']['id'] for right_config in right_configurations]
+      for i in range(n_kids):
+        next_layer_index = self._new_right_tree_index()
+        adjacent_layer.append(next_layer_index)
+        self._right_edge[next_layer_index].append(node)
+    current_tree_layer = adjacent_layer
+    layers.append(current_tree_layer)
 
-    for left in self._layers[-1]:
-      for right in right_layer:
-        self._graph.add_edge(left, right)
-    self._layers.append(right_layer)
+    while len(current_tree_layer) > 1:
+      next_layer = []
+      for i in range(0, len(current_tree_layer), self._new_node_max_inputs):
+        next_layer_index = self._new_right_tree_index()
+        next_layer.append(next_layer_index)
+        for node in current_tree_layer[i:i + self._new_node_max_inputs]:
+          self._right_edge[next_layer_index].append(node)
 
-    return right_map
+      current_tree_layer = next_layer
+      layers.append(current_tree_layer)
+
+    return list(reversed(layers))
+
+  def _form_left_tree_from_nodes(self, nodes):
+    self._left_edge = {}
+    current_tree_layer = nodes
+
+    layers = [current_tree_layer]
+
+    while len(current_tree_layer) > 1:
+      next_layer = []
+      for i in range(0, len(current_tree_layer), self._new_node_max_outputs):
+        next_layer_index = self._new_left_tree_index()
+        next_layer.append(next_layer_index)
+        for node in current_tree_layer[i:i + self._new_node_max_outputs]:
+          self._left_edge[node] = next_layer_index
+      current_tree_layer = next_layer
+      layers.append(current_tree_layer)
+
+    return layers
+
+  def _set_node_coords(self, node, coords):
+    self._node_by_tree_coords[coords] = node
+    self._tree_coords_by_node[node] = coords
+
+  def _outgoing_nodes(self, node):
+    left_index, right_index = self._tree_coords_by_node[node]
+    outgoing_left_index = self._left_edge[left_index]
+    return (self._node_by_tree_coords[(outgoing_left_index, outgoing_right_index)]
+            for outgoing_right_index in self._right_edge[right_index])
 
   def fill_graph(self, left_is_data, left_height, right_is_data, right_height, right_configurations):
     if left_is_data:
       self._add_left_adjacents_layer()
 
-    max_in_last_layer = max(right_config['connection_limit'] for right_config in right_configurations)
+    right_config_by_id = {right_config['parent_handle']['id']: right_config for right_config in right_configurations}
 
-    while len(self._layers[-1]) > max_in_last_layer:
-      self._add_partition_layer()
+    # Create a tree of left coordinates and of right coordinates
+    left_layers = self._form_left_tree_from_nodes(self._layers[-1])
+    right_layers = self._form_right_tree_from_right_configurations(right_config_by_id, right_is_data, len(left_layers))
 
-    if right_is_data:
-      if left_is_data and len(self._layers) == 2 and left_height != right_height:
-        node_id = self._new_node()
-        for left in self._layers[-1]:
-          self._graph.add_edge(left, node_id)
-        self._layers.append([node_id])
+    # Adjust the trees so that the have the same height.
+    # Also, in order that this picker spawn at least one new node, that common height must be at least 3.
+    while len(left_layers) < len(right_layers) or len(left_layers) < 3:
+      new_node = self._new_left_tree_index()
+      if left_layers[-1]:
+        self._left_edge[left_layers[-1][0]] = new_node
+      left_layers.append([new_node])
+    while len(left_layers) > len(right_layers):
+      new_node = self._new_right_tree_index()
+      if right_layers[0]:
+        self._right_edge[new_node].append(right_layers[0][0])
+      right_layers.insert(0, [new_node])
 
-      return self._add_right_adjacents_layer(right_configurations)
-    else:
-      if len(self._layers[-1]) == 0:
-        singleton = self._new_node()
-        self._layers.append([singleton])
+    right_root_index, = right_layers[0]
+    left_root_index, = left_layers[-1]
 
-      if len(self._layers) < 2:
-        singleton = self._new_node()
-        for left in self._layers[-1]:
-          self._graph.add_edge(left, singleton)
-        self._layers.append([singleton])
+    # Set the coordinates of nodes at the left and right edges of the network.
+    for left_node in self._layers[-1]:
+      self._set_node_coords(left_node, (left_node, right_root_index))
+    for right_id in right_config_by_id.keys():
+      self._set_node_coords(right_id, (left_root_index, right_id))
 
-      return {
-          node: [right_config['parent_handle']['id'] for right_config in right_configurations]
-          for node in self._layers[-1]
-      }
+    for left_layer, right_layer in zip(left_layers[1:-1], right_layers[1:-1]):
+      # Create all the nodes in the new layer.
+      new_layer = []
+      for left_index, right_index in itertools.product(left_layer, right_layer):
+        node = self._new_node()
+        new_layer.append(node)
+        self._set_node_coords(node, (left_index, right_index))
 
-  # FIXME(KK): Remove this
-  def fill_graph_old(self, left_is_data, right_is_data, right_configurations):
-    if left_is_data and right_is_data:
-      left_layer = []
-      for left in self._graph.nodes():
-        node_id = self._new_node()
-        self._graph.add_edge(left, node_id)
-        left_layer.append(node_id)
+      # Add all outgoing edges for nodes in the preceeding layer.
+      for node in self._layers[-1]:
+        for outgoing_node in self._outgoing_nodes(node):
+          self._graph.add_edge(node, outgoing_node)
 
-      right_layer = []
-      right_map = {}
-      for right_config in right_configurations:
-        for i in range(right_config['n_kids']):
-          node_id = self._new_node()
-          right_map[node_id] = [right_config['parent_handle']['id']]
-          right_layer.append(node_id)
+      self._layers.append(new_layer)
 
-      if len(right_layer) <= self._new_node_max_outputs and len(left_layer) <= self._new_node_max_inputs:
-        self._layers.append(left_layer)
-        self._layers.append(right_layer)
-        for right in right_layer:
-          for left in left_layer:
-            self._graph.add_edge(left, right)
-        return right_map
-      else:
-        # FIXME(KK): Test and implement more cases.
-        raise RuntimeError("Not Yet Implemented")
-    elif left_is_data and not right_is_data:
-      if len(self._graph.nodes()) == 0 and len(right_configurations) > 0:
-        layer = [self._new_node()]
-        self._layers.append(layer)
-        return {layer[0]: [right_config['parent_handle']['id'] for right_config in right_configurations]}
-      else:
-        left_layer = []
-        for left in self._graph.nodes():
-          node_id = self._new_node()
-          self._graph.add_edge(left, node_id)
-          left_layer.append(node_id)
-        if len(right_configurations) <= self._new_node_max_outputs:
-          if all(config['connection_limit'] >= len(left_layer) for config in right_configurations):
-            self._layers.append(left_layer)
-            right_map = {
-                left: [right_config['parent_handle']['id'] for right_config in right_configurations]
-                for left in left_layer
-            }
-            return right_map
-          else:
-            # FIXME(KK): In this case, we should probably be spawning more layers.
-            raise RuntimeError("Not Yet Implemented")
-        else:
-          # FIXME(KK): In this case, we should probably be spawning more layers.
-          raise RuntimeError("Not Yet Implemented")
-    elif not left_is_data and right_is_data:
-      left_nodes = self._graph.nodes()
-      right_layer = []
-      right_map = {}
-      for right_config in right_configurations:
-        for i in range(right_config['n_kids']):
-          node_id = self._new_node()
-          right_map[node_id] = [right_config['parent_handle']['id']]
-          right_layer.append(node_id)
-      if len(right_layer) > 0:
-        # FIXME(KK): In this case, we should probably try a complete connection
-        raise RuntimeError("Not Yet Implemented")
-      else:
-        if len(left_nodes) <= self._new_node_max_inputs:
-          right_layer = [self._new_node()]
-          self._layers.append(right_layer)
-          for left in left_nodes:
-            self._graph.add_edge(left, right_layer[0])
-          return {right_layer[0]: [right_config['parent_handle']['id'] for right_config in right_configurations]}
-        else:
-          # FIXME(KK): In this case, we should probably try a complete connection
-          raise RuntimeError("Not Yet Implemented")
-    else:
-      # FIXME(KK): We are currently implementing only one very specific special case.
-      #   Test and implement the other more general cases.
-      raise RuntimeError("Not Yet Implemented")
+    return {node: list(self._outgoing_nodes(node)) for node in self._layers[-1]}
 
   def _new_node(self):
     node_id = ids.new_id(self._new_node_name_prefix)
     self._graph.add_node(node_id)
     return node_id
-
-  def fill_graph_to_right_siblings(self, right_configurations):
-    first_layer = list(self._graph.nodes())
-    last_layer = []
-    right_to_parent = {}
-    for parent_id, right_config in right_configurations.items():
-      for i in range(right_config['n_kids']):
-        node_id = self._new_node()
-        right_to_parent[node_id] = parent_id
-        last_layer.append(node_id)
-
-    # FIXME(KK): Write up a more general algorithm.  The current is a standin to pass
-    #   the first round of test cases.
-    self._layers.append(first_layer)
-    while True:
-      # Invariants:
-      #   - self._layers[:filled_to] are totally connected from left to right
-      #   - self._layers[filletd_to+1:] are totally connected from left to right
-      if filled_to + 1 == len(self._layers):
-        # We're at the right
-
-        if any(right_config['n_kids'] is not None for right_config in self._right_configurations.values()):
-          if any(right_config['n_kids'] is None for right_config in self._right_configurations.values()):
-            raise errors.InternalError("If one right_configuration has n_kids, then they all should")
-
-      raise RuntimeError("Not Yet Implemented")
-
-    return self._get_left_configurations()
-
-  def new_rightmost_nodes(self):
-    if len(self._layers) <= 1:
-      return []
-    else:
-      return self._layers[len(self._layers) - 1]
-
-  def _add_complete_connection(self, i):
-    self._connections.insert(i, {'type': 'complete'})
-    for left_node in self._layers[i]:
-      for right_node in self._layers[i + 1]:
-        edge = (left_node, right_node)
-        self._outgoing_edges[left_node].append(edge)
-        self._incomming_edges[right_node].append(edge)
-
-  def _get_violation(self):
-    # Outgoing violations:
-    for i in range(len(self._layers) - 1):
-      violation = self._get_outgoing_violation(i)
-      if violation is not None:
-        return violation
-
-    # Incomming violations
-    for i in range(1, len(self._layers)):
-      violation = self._get_incomming_violation(i)
-      if violation is not None:
-        return violation
-
-    return None
-
-  def _get_outgoing_violation(self, i):
-    for node_id in self._layers[i]:
-      if len(self._outgoing_edges[node_id]) > self._outgoing_edge_limit[node_id]:
-        return {'type': 'too_many_outgoing_edges', 'layer': i}
-
-    return None
-
-  def _get_incomming_violation(self, i):
-    for node_id in self._layers[i]:
-      if (len(self._incomming_edges[node_id])
-          if node_id in self._incomming_edges else 0) > self._incomming_edge_limit[node_id]:
-        return {'type': 'too_many_incomming_edges', 'layer': i}
-
-    return None
-
-  def _connect_to_right(self, left, right):
-    '''For connecting a node to a rightmost parent.'''
-    self._rightmost_connections.append((left, right))
-
-  def _add_right_layer(self, right_n_kids):
-    new_layer_of_right_adjacents = []
-    for right, n_kids in right_n_kids.items():
-      for i in range(n_kids):
-        kid = self._new_node()
-        self._connect_to_right(kid, right)
-        new_layer_of_right_adjacents.append(kid)
-
-    self._layers.insert(len(self._layers) - 1, new_layer_of_right_adjacents)
-    self._connections.insert(0, {'type': 'right_adjacency'})
-
-  def _fix_violation(self, violation):
-    # FIXME(KK): Test and implement all of these.
-    if violation['type'] == 'too_many_incomming_edges':
-      raise RuntimeError("Not Yet Implemented")
-    elif violation['type'] == 'too_many_outgoing_edges':
-      raise RuntimeError("Not Yet Implemented")
-    else:
-      raise errors.InternalError('Unrecognized node topology violation type "{}"'.format(violation['type']))
