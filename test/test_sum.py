@@ -194,6 +194,10 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
 
   # Smoke test that at least one message was acknowledged by sum node in the middle.
   sum_node_stats = demo.system.get_stats(sum_kid_a)
+  if not sum_node_stats['acknowledged_messages'] > 0:
+    import ipdb
+    ipdb.set_trace()
+
   assert sum_node_stats['acknowledged_messages'] > 0
   if network_error_type == 'duplicate':
     assert sum_node_stats['n_duplicates'] > 0

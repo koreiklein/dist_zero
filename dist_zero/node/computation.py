@@ -36,12 +36,8 @@ class ComputationNode(Node):
   def checkpoint(self, before=None):
     pass
 
-  def activate_swap(self, migration_id, new_receiver_ids, kids):
+  def activate_swap(self, migration_id, new_receiver_ids, kids, use_output=False, use_input=False):
     self.kids.update(kids)
-
-    for receiver_id in new_receiver_ids:
-      receiver = self._exporters[receiver_id].receiver
-      self.send(receiver, messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
 
   def initialize(self):
     self.logger.info(

@@ -308,6 +308,8 @@ class InsertionMigrator(migrator.Migrator):
   def _get_unique_node_in_layer(self, layer_index):
     node_ids = self._picker.get_layer(layer_index)
     if len(node_ids) != 1:
+      import ipdb
+      ipdb.set_trace()
       raise errors.InternalError("Layer is expected to have exactly one node.")
 
     return node_ids[0]
@@ -439,8 +441,6 @@ class InsertionMigrator(migrator.Migrator):
       self._node.logger.info("Insertion node is swapping flows.")
       self._node.checkpoint(self._new_sender_id_to_first_live_sequence_number)
       self._node.deltas_only.remove(self.migration_id)
-      self._waiting_for_swap = False
-      self._node.activate_swap(self.migration_id, new_receiver_ids=list(self._receivers.keys()), kids=self._kids)
 
       if settings.IS_TESTING_ENV:
         self._node._TESTING_swapped_once = True
@@ -450,6 +450,12 @@ class InsertionMigrator(migrator.Migrator):
         self._node.send(exporter.receiver,
                         messages.migration.swapped_to_duplicate(
                             self.migration_id, first_live_sequence_number=exporter._internal_sequence_number))
+
+      self._waiting_for_swap = False
+      self._node.activate_swap(self.migration_id, new_receiver_ids=list(self._receivers.keys()), kids=self._kids,
+          use_output=len(self._right_config_receiver.configs) == 1 and \
+              next(iter(self._right_config_receiver.configs.values()))['is_data'],
+          use_input=len(self._left_configurations) == 1 and next(iter(self._left_configurations.values()))['is_data'])
 
   @property
   def migration_id(self):

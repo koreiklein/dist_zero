@@ -100,6 +100,8 @@ class LeafNode(Node):
     if self._importer is not None:
       raise errors.InternalError("LeafNodes have only a single input node."
                                  "  Can not add a new one once an input already exists")
+    if self._variant != 'output':
+      raise errors.InternalError("Only output LeafNodes can set their input.")
 
     self._importer = self.linker.new_importer(node)
 
@@ -109,17 +111,30 @@ class LeafNode(Node):
         raise errors.InternalError("LeafNodes have only a single output node."
                                    "  Can not add a new one once an output already exists")
     else:
+      if self._variant != 'input':
+        raise errors.InternalError("Only input LeafNodes can set their output.")
       self._exporter = self.linker.new_exporter(node)
 
   def receive(self, message, sender_id):
     if message['type'] == 'input_action':
       self._receive_input_action(message)
+    elif message['type'] == 'added_sender':
+      self._set_input(message['node'])
+      self._activate()
+    elif message['type'] == 'added_receiver':
+      self._set_output(message['node'])
+      self._activate()
     elif message['type'] == 'adopt':
       self.send(self._parent, messages.io.goodbye_parent())
       self._parent = message['new_parent']
       self._send_hello_parent()
     else:
       super(LeafNode, self).receive(message=message, sender_id=sender_id)
+
+  def _activate(self):
+    for message in self._pre_active_messages:
+      self.receive(message)
+    self._pre_active_messages = None
 
   def _receive_input_action(self, message):
     if self._variant != 'input':
@@ -136,7 +151,7 @@ class LeafNode(Node):
     if self._variant != 'output':
       raise errors.InternalError("Only 'output' variant nodes may receive output actions")
 
-    increment = message['amount']
+    increment = message['number']
     self.logger.debug("Output incrementing state by {increment}", extra={'increment': increment})
     self._current_state += increment
 

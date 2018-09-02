@@ -69,6 +69,12 @@ class TopologyPicker(object):
         next_layer_index = self._new_right_tree_index()
         adjacent_layer.append(next_layer_index)
         self._right_edge[next_layer_index].append(node)
+
+    # Forbid empty layers
+    if len(adjacent_layer) == 0:
+      next_layer_index = self._new_right_tree_index()
+      adjacent_layer.append(next_layer_index)
+
     current_tree_layer = adjacent_layer
     layers.append(current_tree_layer)
 
@@ -113,6 +119,14 @@ class TopologyPicker(object):
     return (self._node_by_tree_coords[(outgoing_left_index, outgoing_right_index)]
             for outgoing_right_index in self._right_edge[right_index])
 
+  def _add_left_adjacents_layer(self):
+    left_layer = []
+    for left in self._graph.nodes():
+      node_id = self._new_node()
+      self._graph.add_edge(left, node_id)
+      left_layer.append(node_id)
+    self._layers.append(left_layer)
+
   def fill_graph(self, left_is_data, left_height, right_is_data, right_height, right_configurations):
     if left_is_data:
       self._add_left_adjacents_layer()
@@ -144,6 +158,10 @@ class TopologyPicker(object):
       self._set_node_coords(left_node, (left_node, right_root_index))
     for right_id in right_config_by_id.keys():
       self._set_node_coords(right_id, (left_root_index, right_id))
+
+    if len(left_layers) == 3 and (not left_layers[1] or not right_layers[1]):
+      import ipdb
+      ipdb.set_trace()
 
     for left_layer, right_layer in zip(left_layers[1:-1], right_layers[1:-1]):
       # Create all the nodes in the new layer.
