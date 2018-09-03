@@ -10,7 +10,7 @@ paramiko = "*"
 python-logstash-async = "*"
 docker = "*"
 python-json-logger = "*"
-cryptography = "==2.2.2"
+cryptography = "==2.3.1"
 
 [dev-packages]
 yapf = "*"
