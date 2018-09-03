@@ -10,13 +10,14 @@ paramiko = "*"
 python-logstash-async = "*"
 docker = "*"
 python-json-logger = "*"
-cryptography = "==2.2.2"
+cryptography = "==2.3.1"
 
 [dev-packages]
 yapf = "*"
 ipdb = "*"
 pytest = "*"
 sphinx = "*"
+graphviz = "==0.9"
 
 [requires]
 python_version = "3.6"

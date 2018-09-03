@@ -127,38 +127,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   demo.run_for(ms=200)
 
   # Set up the sum computation with a migration:
-  node_id = dist_zero.ids.new_id('MigrationNode_add_sum_computation')
-  root_computation_node_id = dist_zero.ids.new_id('ComputationNode_root')
-  input_handle_for_migration = demo.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_node_id)
-  output_handle_for_migration = demo.system.generate_new_handle(
-      new_node_id=node_id, existing_node_id=root_output_node_id)
-  demo.system.spawn_node(
-      on_machine=machine_b,
-      node_config=messages.migration.migration_node_config(
-          node_id=node_id,
-          source_nodes=[(input_handle_for_migration, messages.migration.source_migrator_config(will_sync=False, ))],
-          sink_nodes=[(output_handle_for_migration,
-                       messages.migration.sink_migrator_config(
-                           new_flow_senders=[root_computation_node_id],
-                           old_flow_sender_ids=[],
-                           will_sync=False,
-                       ))],
-          removal_nodes=[],
-          sync_pairs=[],
-          insertion_node_configs=[
-              messages.computation.computation_node_config(
-                  node_id=root_computation_node_id,
-                  height=1,
-                  parent=None,
-                  senders=[input_handle_for_migration],
-                  receivers=[output_handle_for_migration],
-                  migrator=messages.migration.insertion_migrator_config(
-                      configure_right_parent_ids=[],
-                      senders=[input_handle_for_migration],
-                      receivers=[output_handle_for_migration],
-                  ),
-              )
-          ]))
+  root_computation_node_id = demo.connect_trees_with_sum_network(root_input_node_id, root_output_node_id, machine_b)
 
   demo.run_for(ms=1000)
 
@@ -225,6 +194,10 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
 
   # Smoke test that at least one message was acknowledged by sum node in the middle.
   sum_node_stats = demo.system.get_stats(sum_kid_a)
+  if not sum_node_stats['acknowledged_messages'] > 0:
+    import ipdb
+    ipdb.set_trace()
+
   assert sum_node_stats['acknowledged_messages'] > 0
   if network_error_type == 'duplicate':
     assert sum_node_stats['n_duplicates'] > 0

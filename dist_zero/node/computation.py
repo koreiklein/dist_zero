@@ -1,6 +1,6 @@
 import logging
 
-from dist_zero import messages, ids
+from dist_zero import messages, ids, errors
 
 from .node import Node
 
@@ -33,15 +33,14 @@ class ComputationNode(Node):
   def is_data(self):
     return False
 
+  def set_graph(self, graph):
+    self._graph = graph
+
   def checkpoint(self, before=None):
     pass
 
-  def activate_swap(self, migration_id, new_receiver_ids, kids):
+  def activate_swap(self, migration_id, new_receiver_ids, kids, use_output=False, use_input=False):
     self.kids.update(kids)
-
-    for receiver_id in new_receiver_ids:
-      receiver = self._exporters[receiver_id].receiver
-      self.send(receiver, messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
 
   def initialize(self):
     self.logger.info(
@@ -76,48 +75,98 @@ class ComputationNode(Node):
       raise errors.InternalError("Already exporting to this node.", extra={'existing_node_id': receiver['id']})
     self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
 
+  def _pick_new_receiver_for_leaf(self):
+    possible = list(self.kids.values())
+    if len(possible) == 0:
+      raise errors.InternalError("ComputationNode did not have a child to which to connect its new adjacent.")
+
+    leaf_ids = [node for node in self._graph.nodes() if node.startswith('LeafNode')]
+    leaf_adjacents = set(adjacent for leaf_id in leaf_ids for adjacent in self._graph.node_receivers(leaf_id))
+
+    non_adjacent_kids = list(
+        sorted(
+            (receiver for receiver in possible if receiver['id'] not in leaf_adjacents),
+            key=lambda receiver: len(self._graph.node_senders(receiver['id'])),
+        ))
+
+    if not non_adjacent_kids:
+      raise errors.InternalError("There was no appropriate child for which to add the leaf adjacent node.")
+
+    return self._controller.random.choice(non_adjacent_kids)
+
+  def _pick_new_sender_for_leaf(self):
+    possible = list(self.kids.values())
+    if len(possible) == 0:
+      raise errors.InternalError("ComputationNode did not have a child to which to connect its new adjacent.")
+
+    leaf_ids = [node for node in self._graph.nodes() if node.startswith('LeafNode')]
+    leaf_adjacents = set(adjacent for leaf_id in leaf_ids for adjacent in self._graph.node_senders(leaf_id))
+
+    non_adjacent_kids = list(
+        sorted(
+            (sender for sender in possible if sender['id'] not in leaf_adjacents),
+            key=lambda sender: len(self._graph.node_receivers(sender['id'])),
+        ))
+
+    if not non_adjacent_kids:
+      raise errors.InternalError("There was no appropriate child for which to add the leaf adjacent node.")
+
+    return self._controller.random.choice(non_adjacent_kids)
+
   def receive(self, message, sender_id):
     if message['type'] == 'added_adjacent_leaf':
+      new_leaf = message['kid']
       if message['variant'] == 'input':
-        possible_receivers = list(self.kids.values())
-        if len(possible_receivers) == 0:
-          raise errors.InternalError("ComputationNode did not have a child to which to connect its new adjacent.")
-        # FIXME(KK): Instead of the below, always pick the 'best' child (in some reasonable sense).
-        receiver = possible_receivers[0]
+        receiver = self._pick_new_receiver_for_leaf()
         node_id = ids.new_id('SumNode_input_adjacent')
+        self._graph.add_node(node_id)
+        self._graph.add_node(new_leaf['id'])
+        self._graph.add_edge(node_id, receiver['id'])
+        self._graph.add_edge(new_leaf['id'], node_id)
         self._controller.spawn_node(
             messages.sum.sum_node_config(
                 node_id=node_id,
                 senders=[],
                 parent=self.new_handle(node_id),
                 receivers=[self.transfer_handle(receiver, node_id)],
-                input_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
+                input_node=self.transfer_handle(handle=new_leaf, for_node_id=node_id),
             ))
       elif message['variant'] == 'output':
-        possible_senders = list(self.kids.values())
-        if len(possible_senders) == 0:
-          raise errors.InternalError("ComputationNode did not have a child to which to connect its new adjacent.")
-        # FIXME(KK): Instead of the below, always pick the 'best' child (in some reasonable sense).
-        sender = possible_senders[0]
-
+        sender = self._pick_new_sender_for_leaf()
         node_id = ids.new_id('SumNode_output_adjacent')
+        self._graph.add_node(node_id)
+        self._graph.add_node(new_leaf['id'])
+        self._graph.add_edge(sender['id'], node_id)
+        self._graph.add_edge(node_id, new_leaf['id'])
         self._controller.spawn_node(
             messages.sum.sum_node_config(
                 node_id=node_id,
                 parent=self.new_handle(node_id),
                 senders=[self.transfer_handle(sender, node_id)],
                 receivers=[],
-                output_node=self.transfer_handle(handle=message['kid'], for_node_id=node_id),
+                output_node=self.transfer_handle(handle=new_leaf, for_node_id=node_id),
             ))
       else:
         raise errors.InternalError("Unrecognized variant {}".format(message['variant']))
     else:
       super(ComputationNode, self).receive(message=message, sender_id=sender_id)
 
+  def stats(self):
+    return {
+        'height': self.height,
+        'n_retransmissions': self.linker.n_retransmissions,
+        'n_reorders': self.linker.n_reorders,
+        'n_duplicates': self.linker.n_duplicates,
+        'sent_messages': self.linker.least_unused_sequence_number,
+        'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
+    }
+
   def handle_api_message(self, message):
     if message['type'] == 'get_kids':
       return self.kids
     elif message['type'] == 'get_senders':
       return self._senders
+    elif message['type'] == 'get_receivers':
+      return {sender_id: exporter.receiver for sender_id, exporter in self._exporters.items()}
     else:
       return super(ComputationNode, self).handle_api_message(message)

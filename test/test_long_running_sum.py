@@ -11,14 +11,12 @@ import dist_zero.ids
 from dist_zero import messages, errors, spawners
 from dist_zero.spawners.docker import DockerSpawner
 from dist_zero.spawners.simulator import SimulatedSpawner
-from dist_zero.recorded import RecordedUser
 from dist_zero.system_controller import SystemController
 
 
 class TestLongRunningSum(object):
   def test_split_root(self, demo):
     self._rand = random.Random('test_split_root')
-    self._total_simulated_amount = 0
     self.demo = demo
     self.n_machines = 3
 
@@ -71,7 +69,6 @@ class TestLongRunningSum(object):
     }
 
     self._rand = random.Random('test_node_splitting')
-    self._total_simulated_amount = 0
 
     self.system = demo.system
     self._spawn_initial_nodes()
@@ -85,7 +82,7 @@ class TestLongRunningSum(object):
               new_node_name='input_{}'.format(i),
               # Place the new nodes on machines in a round-robin manner.
               machine_id=self.machine_ids[i % len(self.machine_ids)],
-              recorded_user=self._new_recorded_user(
+              recorded_user=self.demo.new_recorded_user(
                   name='user {}'.format(i), ave_inter_message_time_ms=1200, send_messages_for_ms=8 * 1000)))
 
     # Let things settle down
@@ -111,8 +108,8 @@ class TestLongRunningSum(object):
       assert self.total_nodes() == 7 + len(self.input_node_ids) * 2
 
     # Make sure the totals are correct
-    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
-    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
+    assert self.demo.total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
+    assert self.demo.total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
 
     for input_node_id in self.input_node_ids:
       stats = self.demo.system.get_stats(input_node_id)
@@ -152,7 +149,6 @@ class TestLongRunningSum(object):
     }
 
     self._rand = random.Random('test_node_splitting')
-    self._total_simulated_amount = 0
 
     self.system = demo.system
     self._spawn_initial_nodes()
@@ -169,8 +165,8 @@ class TestLongRunningSum(object):
     # Uncomment the below line to do more in height debugging regarding why totals might not add up properly.
     #self._debug_node_spltting()
 
-    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
-    assert self._total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
+    assert self.demo.total_simulated_amount == self.demo.system.get_output_state(self.user_a_output_id)
+    assert self.demo.total_simulated_amount == self.demo.system.get_output_state(self.user_b_output_id)
 
     # Assert that each input node has received acknowledgments for all its sent messages.
     for input_node_id in self.input_node_ids:
@@ -214,7 +210,7 @@ class TestLongRunningSum(object):
     print('im1_early {}'.format(im_early(im1)))
     print('total_after {}'.format(total_after))
     print('fin_total_after {}'.format(fin_total_after))
-    if self._total_simulated_amount != self.demo.system.get_output_state(self.user_a_output_id):
+    if self.demo.total_simulated_amount != self.demo.system.get_output_state(self.user_a_output_id):
       # Here is a good place to add a breakpoint.
       pass
 
@@ -230,7 +226,6 @@ class TestLongRunningSum(object):
     self._base_config = None
 
     self._rand = random.Random('test_single_node_hits_sender_limit')
-    self._total_simulated_amount = 0
 
     self.system = self.demo.system
 
@@ -307,22 +302,10 @@ class TestLongRunningSum(object):
               new_node_name='input_{}'.format(i),
               # Place the new nodes on machines in a round-robin manner.
               machine_id=self.machine_ids[i % len(self.machine_ids)],
-              recorded_user=self._new_recorded_user(
+              recorded_user=self.demo.new_recorded_user(
                   name='user {}'.format(i),
                   ave_inter_message_time_ms=1200,
                   send_messages_for_ms=remaining_time_ms + 2 * 1000)))
 
     # Let things settle down
     self.demo.run_for(ms=4000)
-
-  def _new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms):
-    time_message_pairs = []
-    times_to_send = sorted(
-        self._rand.random() * send_messages_for_ms for x in range(send_messages_for_ms // ave_inter_message_time_ms))
-
-    for t in times_to_send:
-      amount_to_send = int(self._rand.random() * 20)
-      self._total_simulated_amount += amount_to_send
-      time_message_pairs.append((t, messages.io.input_action(amount_to_send)))
-
-    return RecordedUser(name, time_message_pairs)

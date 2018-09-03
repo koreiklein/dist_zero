@@ -3,9 +3,12 @@ import random
 import pytest
 import time
 
+from collections import defaultdict
+
 import dist_zero.ids
 
 from dist_zero import spawners, messages
+from dist_zero.recorded import RecordedUser
 from dist_zero.system_controller import SystemController
 from dist_zero.spawners.simulator import SimulatedSpawner
 from dist_zero.spawners.docker import DockerSpawner
@@ -66,6 +69,9 @@ class Demo(object):
     self.cloud_spawner = None
 
     self.random_seed = 'TestSimulatedSpawner' if random_seed is None else random_seed
+    self._rand = random.Random(self.random_seed + '_for__demo')
+
+    self.total_simulated_amount = 0
 
   def start(self):
     '''Start the demo.'''
@@ -155,3 +161,145 @@ class Demo(object):
   def new_machine_controller(self):
     '''Like `Demo.new_machine_controllers` but only creates and returns one.'''
     return self.new_machine_controllers(1)[0]
+
+  def connect_trees_with_sum_network(self, root_input_id, root_output_id, machine):
+    '''
+    Create a sum network between input and output trees.
+
+    :param str root_input_id: The id of the root of a data tree.
+    :param str root_output_id: The id of the root of a data tree.
+
+    :return: The id of the root computation node for the newly spawned network.
+    :rtype: str
+    '''
+    node_id = dist_zero.ids.new_id('MigrationNode_add_sum_computation')
+    root_computation_node_id = dist_zero.ids.new_id('ComputationNode_root')
+    input_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_id)
+    output_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_output_id)
+
+    self.system.spawn_node(
+        on_machine=machine,
+        node_config=messages.migration.migration_node_config(
+            node_id=node_id,
+            source_nodes=[(input_handle_for_migration, messages.migration.source_migrator_config(will_sync=False, ))],
+            sink_nodes=[(output_handle_for_migration,
+                         messages.migration.sink_migrator_config(
+                             new_flow_senders=[root_computation_node_id],
+                             old_flow_sender_ids=[],
+                             will_sync=False,
+                         ))],
+            removal_nodes=[],
+            sync_pairs=[],
+            insertion_node_configs=[
+                messages.computation.computation_node_config(
+                    node_id=root_computation_node_id,
+                    height=1,
+                    parent=None,
+                    senders=[input_handle_for_migration],
+                    receivers=[output_handle_for_migration],
+                    migrator=messages.migration.insertion_migrator_config(
+                        configure_right_parent_ids=[],
+                        senders=[input_handle_for_migration],
+                        receivers=[output_handle_for_migration],
+                    ),
+                )
+            ]))
+    return root_computation_node_id
+
+  def all_io_kids(self, internal_node_id):
+    if self.system.get_stats(internal_node_id)['height'] == 0:
+      return self.system.get_kids(internal_node_id)
+    else:
+      return [
+          descendant for kid_id in self.system.get_kids(internal_node_id) for descendant in self.all_io_kids(kid_id)
+      ]
+
+  def new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms, send_after=0):
+    time_message_pairs = []
+    times_to_send = sorted(send_after + self._rand.random() * send_messages_for_ms
+                           for x in range(send_messages_for_ms // ave_inter_message_time_ms))
+
+    for t in times_to_send:
+      amount_to_send = int(self._rand.random() * 20)
+      self.total_simulated_amount += amount_to_send
+      time_message_pairs.append((t, messages.io.input_action(amount_to_send)))
+
+    return RecordedUser(name, time_message_pairs)
+
+  def render_network(self, start_node_id, filename='network', view=False):
+    from graphviz import Digraph
+    dot = Digraph(comment='Network Graph of system "{}"'.format(self.system.id), graph_attr={'rankdir': 'LR'})
+
+    by_height = defaultdict(list)
+    main_subgraph = Digraph()
+    right_subgraph_visited = set()
+
+    def _add_node(graph, node_id):
+      if node_id.startswith('InternalNode') or node_id.startswith('LeafNode'):
+        kwargs = {'shape': 'ellipse', 'color': 'black', 'fillcolor': '#c7faff', 'style': 'filled'}
+      else:
+        kwargs = {'shape': 'diamond', 'color': 'black'}
+      graph.node(node_id, **kwargs)
+
+    edges = set()
+
+    def _add_edge(graph, left, right, *args, **kwargs):
+      pair = (left, right)
+      if pair not in edges:
+        edges.add(pair)
+        graph.edge(left, right, *args, **kwargs)
+
+    def _go_down(node_id):
+      if node_id not in right_subgraph_visited:
+        right_subgraph_visited.add(node_id)
+        height = self.system.get_stats(node_id)['height']
+        by_height[height].append(node_id)
+        _add_node(main_subgraph, node_id)
+        for kid in self.system.get_kids(node_id):
+          _add_edge(main_subgraph, node_id, kid, label='kid')
+          _go_down(kid)
+
+    _go_down(start_node_id)
+    dot.subgraph(main_subgraph)
+
+    heights = list(reversed(sorted(by_height.keys())))
+
+    visited = set()
+    for height in heights:
+      subgraph = Digraph('cluster_{}'.format(height), graph_attr={'label': 'height {}'.format(height)})
+      subgraph_visited = set()
+
+      def _go_left(node_id):
+        if node_id not in subgraph_visited:
+          visited.add(node_id)
+          subgraph_visited.add(node_id)
+          _add_node(subgraph, node_id)
+          for sender in self.system.get_senders(node_id):
+            _add_edge(subgraph, sender, node_id, label='sends')
+            _go_left(sender)
+
+      def _go_right(node_id):
+        if node_id not in subgraph_visited:
+          visited.add(node_id)
+          subgraph_visited.add(node_id)
+          _add_node(subgraph, node_id)
+          for receiver in self.system.get_receivers(node_id):
+            _add_edge(subgraph, node_id, receiver, label='sends')
+            _go_right(receiver)
+
+      for node_id in by_height[height]:
+        _go_left(node_id)
+
+      subgraph_visited = set()
+      for node_id in by_height[height]:
+        _go_right(node_id)
+
+      dot.subgraph(subgraph)
+
+    # Add kid edges
+    for node_id in visited:
+      if node_id not in right_subgraph_visited:
+        for kid in self.system.get_kids(node_id):
+          _add_edge(dot, node_id, kid, label='kid')
+
+    dot.render(filename, view=view, cleanup=True)

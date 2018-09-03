@@ -18,7 +18,11 @@ class SourceMigrator(migrator.Migrator):
     self._node = node
     self._will_sync = will_sync
 
-    self._right_config_receiver = RightConfigurationReceiver(has_parents=self._node._parent is not None)
+    self._sent_right_configurations = False
+
+    self._right_config_receiver = RightConfigurationReceiver()
+    if self._node._parent is None:
+      self._right_config_receiver.set_parents([])
 
     def _deliver(message, sequence_number, sender_id):
       # Impossible! Source migrators do not add any importers to their linkers, and thus the linker
@@ -56,6 +60,10 @@ class SourceMigrator(migrator.Migrator):
     # Clear out any messages that can still be sent on the old flow.
     self._node.checkpoint()
 
+    for receiver in self._new_receivers.values():
+      self._node.send(receiver, messages.migration.swapped_to_duplicate(
+          self.migration_id, first_live_sequence_number=0))
+
     self._node.switch_flows(
         self.migration_id, old_exporters=[], new_exporters=[], new_receivers=list(self._new_receivers.values()))
 
@@ -87,10 +95,11 @@ class SourceMigrator(migrator.Migrator):
           config['parent_handle']['id']: config['parent_handle']
           for config in self._right_config_receiver.configs.values()
       }
+      self._set_kids_right_parents()
       self._send_configure_new_flow_left_to_right()
+      self._sent_right_configurations = True
 
-  def _send_configure_new_flow_left_to_right(self):
-    self._node.logger.info("Sending configure_new_flow_left")
+  def _set_kids_right_parents(self):
     if len(self._new_receivers) == 1:
       new_receiver_id = list(self._new_receivers.keys())[0]
       for kid in self._node._kids.values():
@@ -98,16 +107,14 @@ class SourceMigrator(migrator.Migrator):
                         messages.migration.set_source_right_parents(
                             migration_id=self.migration_id, configure_right_parent_ids=[new_receiver_id]))
     else:
-      # FIXME(KK): Figure out what to do about this
-      raise RuntimeError("Not Yet Implemented")
+      raise errors.InternalError(
+          "right parents of a node's kids should only be set when the node has a unique receiver")
+
+  def _send_configure_new_flow_left_to_right(self):
+    self._node.logger.info("Sending configure_new_flow_left")
 
     for new_receiver in self._new_receivers.values():
-      from dist_zero.node.io.internal import InternalNode
-      if self._node.__class__ == InternalNode:
-        kids = [{'handle': kid, 'connection_limit': 1} for kid in self._node._kids.values() if kid is not None]
-      else:
-        # FIXME(KK): Test and implement!
-        raise RuntimeError("Not Yet Implemented")
+      kids = [{'handle': kid, 'connection_limit': 1} for kid in self._node._kids.values() if kid is not None]
 
       self._node.send(new_receiver,
                       messages.migration.configure_new_flow_left(
@@ -126,6 +133,9 @@ class SourceMigrator(migrator.Migrator):
       self._maybe_has_right_configurations()
     elif message['type'] == 'configure_right_parent':
       self._right_config_receiver.got_parent_configuration(sender_id, kid_ids=message['kid_ids'])
+      self._maybe_has_right_configurations()
+    elif message['type'] == 'substitute_right_parent':
+      self._right_config_receiver.substitute_right_parent(sender_id, new_parent_id=message['new_parent_id'])
       self._maybe_has_right_configurations()
     elif message['type'] == 'configure_new_flow_right':
       self._node.logger.info("Received configure_new_flow_right")

@@ -6,13 +6,20 @@ from .right_configuration import RightConfigurationReceiver
 
 
 class InsertionMigrator(migrator.Migrator):
-  def __init__(self, migration, configure_right_parent_ids, senders, receivers, node):
+  def __init__(self, migration, configure_right_parent_ids, senders, left_configurations, right_configurations,
+               receivers, node):
     '''
     :param migration: The :ref:`handle` of the `MigrationNode` running the migration.
     :type migration: :ref:`handle`
     :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
       insertion node.
     :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
+    :param dict[str, object] left_configurations: In same cases, an insertion node can be preconfigured with left_configurations
+      given from the parent node that spawned it.   In that case, ``left_configurations`` is a dictionary mapping sender id
+      to the prexisting left_configuration.  Otherwise, ``left_configurations`` is `None`
+    :param dict[str, object] right_configurations: In same cases, an insertion node can be preconfigured with right_configurations
+      given from the parent node that spawned it.   In that case, ``right_configurations`` is a dictionary mapping right node ids
+      to the prexisting right_configuration.  Otherwise, ``right_configurations`` is `None`
     :param list receivers: A list of :ref:`handle` of the `Node` s that will receive from self by the end of the migration.
     :param node: The `Node` on which this migrator runs.
     :type node: `Node`
@@ -27,6 +34,8 @@ class InsertionMigrator(migrator.Migrator):
     # When true, the swap has been prepared, and the migrator should be checking whether it's time to swap.
     self._waiting_for_swap = False
 
+    self._graph = None
+
     self._senders = {sender['id']: sender for sender in senders}
     self._receivers = {receiver['id']: receiver for receiver in receivers}
 
@@ -36,10 +45,25 @@ class InsertionMigrator(migrator.Migrator):
     # currently spawning
     self._current_spawning_layer = None
 
-    self._right_config_receiver = RightConfigurationReceiver(has_parents=True)
-    self._right_config_receiver.set_parents(configure_right_parent_ids) # configure_right_parent_ids may be empty
+    self._configure_right_parent_ids = configure_right_parent_ids
+    if right_configurations is None:
+      self._preconfigured_right_config_receiver = False
+      self._right_config_receiver = RightConfigurationReceiver()
+      self._right_config_receiver.set_parents(configure_right_parent_ids) # configure_right_parent_ids may be empty
+    else:
+      for right_config in right_configurations.values():
+        self._node.export_to_node(right_config['parent_handle'])
+      self._preconfigured_right_config_receiver = True
+      self._right_config_receiver = RightConfigurationReceiver(configs=right_configurations)
 
     self._left_configurations = {sender_id: None for sender_id in self._senders.keys()}
+    if left_configurations is not None:
+      self._left_configurations.update(left_configurations.items())
+      self._right_configurations_are_sent = True
+    else:
+      self._right_configurations_are_sent = False
+
+    self._left_configurations_are_sent = False
 
     self._new_sender_id_to_first_live_sequence_number = {}
     self._flow_is_started = False
@@ -70,6 +94,8 @@ class InsertionMigrator(migrator.Migrator):
         migration=migrator_config['migration'],
         configure_right_parent_ids=migrator_config['configure_right_parent_ids'],
         senders=migrator_config['senders'],
+        left_configurations=migrator_config['left_configurations'],
+        right_configurations=migrator_config['right_configurations'],
         receivers=migrator_config['receivers'],
         node=node)
 
@@ -137,25 +163,31 @@ class InsertionMigrator(migrator.Migrator):
     elif message['type'] == 'configure_right_parent':
       self._right_config_receiver.got_parent_configuration(sender_id, kid_ids=message['kid_ids'])
       self._maybe_has_left_and_right_configurations()
+    elif message['type'] == 'substitute_right_parent':
+      self._right_config_receiver.substitute_right_parent(sender_id, new_parent_id=message['new_parent_id'])
+      self._maybe_has_left_and_right_configurations()
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
 
   def _maybe_kids_are_terminated(self):
     if all(self._kid_migrator_is_terminated.values()):
+      self._node.activate_swap(self.migration_id, new_receiver_ids=list(self._receivers.keys()), kids=self._kids)
       self._node.remove_migrator(self.migration_id)
       self._node.send(self.parent, messages.migration.migrator_terminated(self.migration_id))
 
   def _send_configure_right_to_left(self):
-    self._node.logger.info("Sending configure_new_flow_right", extra={'receiver_ids': list(self._senders.keys())})
-    for sender in self._senders.values():
-      self._node.send(sender,
-                      messages.migration.configure_new_flow_right(
-                          self.migration_id,
-                          n_kids=None,
-                          parent_handle=self._node.new_handle(sender['id']),
-                          height=self._height,
-                          is_data=self._node.is_data(),
-                          connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
+    if not self._right_configurations_are_sent:
+      self._node.logger.info("Sending configure_new_flow_right", extra={'receiver_ids': list(self._senders.keys())})
+      for sender in self._senders.values():
+        self._node.send(sender,
+                        messages.migration.configure_new_flow_right(
+                            self.migration_id,
+                            n_kids=None,
+                            parent_handle=self._node.new_handle(sender['id']),
+                            height=self._height,
+                            is_data=self._node.is_data(),
+                            connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
+      self._right_configurations_are_sent = True
 
   def _new_topology_picker(self):
     return topology_picker.TopologyPicker(
@@ -182,22 +214,29 @@ class InsertionMigrator(migrator.Migrator):
       self._node.logger.info("Insertion migrator has received all Left and Right configurations. Ready to spawn.")
       if self._node.__class__ != ComputationNode:
         self._height = 0
-        self._send_configure_left_to_right()
+        self._all_kids_are_spawned()
       else:
         self._left_layer = {
             kid['handle']['id']: kid['handle']
             for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
         }
         self._graph = NetworkGraph()
+
         for left_id in self._left_layer.keys():
           self._graph.add_node(left_id)
 
+        self._left_is_data = any(config['is_data'] for config in self._left_configurations.values())
+        self._right_is_data = any(config['is_data'] for config in self._right_config_receiver.configs.values())
+
         # Decide on a network topology and spawn new kids
-        self._height = max(self._max_left_height(), self._max_right_height())
+        max_left_height, max_right_height = self._max_left_height(), self._max_right_height()
+        self._height = max(max_left_height, max_right_height)
         self._picker = self._new_topology_picker()
         self._right_map = self._picker.fill_graph(
-            left_is_data=any(config['is_data'] for config in self._left_configurations.values()),
-            right_is_data=any(config['is_data'] for config in self._right_config_receiver.configs.values()),
+            left_is_data=self._left_is_data,
+            left_height=max_left_height,
+            right_is_data=self._right_is_data,
+            right_height=max_right_height,
             right_configurations=self._right_config_receiver.configs.values())
 
         self._spawn_layer(1)
@@ -223,6 +262,121 @@ class InsertionMigrator(migrator.Migrator):
     else:
       raise errors.InternalError('Node id "{}" was not found in the kids on left-kids.'.format(node_id))
 
+  def _spawn_kid(self, node_id, senders, migrator):
+    self._kids[node_id] = None
+    if self._height == 0:
+      self._node._controller.spawn_node(
+          messages.sum.sum_node_config(
+              node_id=node_id,
+              senders=senders,
+              receivers=[],
+              parent=self._node.new_handle(node_id),
+              migrator=migrator,
+          ))
+    else:
+      self._node._controller.spawn_node(
+          messages.computation.computation_node_config(
+              node_id=node_id,
+              parent=self._node.new_handle(node_id),
+              height=self._height - 1,
+              senders=senders,
+              receivers=[],
+              migrator=migrator))
+
+  def _send_configure_right_parent(self, layer_index):
+    '''Send configure_riht_parent to all nodes in layer_index.'''
+    for left_node_id in self._picker.get_layer(layer_index):
+      self._node.send(
+          self._id_to_handle(left_node_id),
+          messages.migration.configure_right_parent(
+              migration_id=self.migration_id, kid_ids=self._graph.node_receivers(left_node_id)))
+
+  def _spawn_layer_without_gap(self, layer_index):
+    self._send_configure_right_parent(layer_index - 1)
+
+    for node_id in self._picker.get_layer(layer_index):
+      senders = [self._id_to_handle(sender_id) for sender_id in self._graph.node_senders(node_id)]
+      self._spawn_kid(
+          node_id=node_id,
+          senders=senders,
+          migrator=messages.migration.insertion_migrator_config(
+              senders=senders,
+              left_configurations=None,
+              configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
+              receivers=[],
+              migration=self._node.transfer_handle(self._migration, node_id),
+          ))
+
+  def _get_unique_node_in_layer(self, layer_index):
+    node_ids = self._picker.get_layer(layer_index)
+    if len(node_ids) != 1:
+      import ipdb
+      ipdb.set_trace()
+      raise errors.InternalError("Layer is expected to have exactly one node.")
+
+    return node_ids[0]
+
+  def _spawn_layer_with_right_gap(self, layer_index):
+    '''Spawn the rightmost layer of nodes, when it contains a single node, and should be spawned
+    to re-use the right-configuration of self.'''
+    self._left_configurations_are_sent = True # No need to send any more left configurations
+    self._send_configure_right_parent(layer_index - 1)
+    node_id = self._get_unique_node_in_layer(layer_index)
+    for right_config in self._right_config_receiver.configs.values():
+      # Let right parents know to listen for a left_config from the new node instead of from self.
+      self._node.send(right_config['parent_handle'],
+                      messages.migration.substitute_left_configuration(self.migration_id, new_node_id=node_id))
+
+    senders = [self._id_to_handle(sender_id) for sender_id in self._graph.node_senders(node_id)]
+    self._spawn_kid(
+        node_id=node_id,
+        senders=senders,
+        migrator=messages.migration.insertion_migrator_config(
+            senders=senders,
+            left_configurations=None,
+            right_configurations=self._right_config_receiver.configs,
+            configure_right_parent_ids=self._configure_right_parent_ids,
+            receivers=[right_config['parent_handle'] for right_config in self._right_config_receiver.configs.values()],
+            migration=self._node.transfer_handle(self._migration, node_id),
+        ))
+
+  def _spawn_layer_with_left_gap(self, layer_index):
+    '''
+    We want to keep the left height the same in the next layer.
+    Spawn a layer with the same left configurations as self, and inform the nodes
+    to the left to listen to new parents for their right_configurations.
+
+    :param int layer_index: The layer of nodes to spawn.
+    '''
+    node_id = self._get_unique_node_in_layer(layer_index)
+
+    for left_node_id in self._picker.get_layer(layer_index - 1):
+      # Let nodes to the left know that they must listen for configure_right_parent from ``node_id``
+      # instead of from self.
+      self._node.send(
+          self._id_to_handle(left_node_id),
+          messages.migration.substitute_right_parent(
+              migration_id=self.migration_id,
+              new_parent_id=node_id,
+          ))
+
+    self._spawn_kid(
+        node_id=node_id,
+        senders=[],
+        migrator=messages.migration.insertion_migrator_config(
+            senders=[],
+            left_configurations=self._left_configurations,
+            configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
+            receivers=[],
+            migration=self._node.transfer_handle(self._migration, node_id),
+        ))
+
+  def _get_right_parent_ids_for_kid(self, node_id, layer_index):
+    if layer_index + 1 < self._picker.n_layers:
+      return [self._node.id]
+    else:
+      return self._right_map[node_id]
+
   def _spawn_layer(self, layer_index):
     self._node.logger.info(
         "Insertion migrator is spawning layer {layer_index} of {n_nodes_to_spawn} nodes",
@@ -232,41 +386,12 @@ class InsertionMigrator(migrator.Migrator):
         })
     self._current_spawning_layer = layer_index
 
-    for left_node_id in self._picker.get_layer(layer_index - 1):
-      self._node.send(
-          self._id_to_handle(left_node_id),
-          messages.migration.configure_right_parent(
-              migration_id=self.migration_id, kid_ids=self._graph.node_receivers(left_node_id)))
-
-    for node_id in self._picker.get_layer(layer_index):
-      self._kids[node_id] = None
-      senders = [self._id_to_handle(sender_id) for sender_id in self._graph.node_senders(node_id)]
-
-      migrator = messages.migration.insertion_migrator_config(
-          senders=senders,
-          configure_right_parent_ids=[self._node.id]
-          if layer_index + 1 < self._picker.n_layers else self._right_map[node_id],
-          receivers=[],
-          migration=self._node.transfer_handle(self._migration, node_id),
-      )
-      if self._height == 0:
-        self._node._controller.spawn_node(
-            messages.sum.sum_node_config(
-                node_id=node_id,
-                senders=senders,
-                receivers=[],
-                parent=self._node.new_handle(node_id),
-                migrator=migrator,
-            ))
-      else:
-        self._node._controller.spawn_node(
-            messages.computation.computation_node_config(
-                node_id=node_id,
-                parent=self._node.new_handle(node_id),
-                height=self._height - 1,
-                senders=senders,
-                receivers=[],
-                migrator=migrator))
+    if self._max_left_height() < self._max_right_height() and layer_index == 1:
+      self._spawn_layer_with_left_gap(layer_index)
+    elif self._max_left_height() > self._max_right_height() and layer_index == self._picker.n_layers - 1:
+      self._spawn_layer_with_right_gap(layer_index)
+    else:
+      self._spawn_layer_without_gap(layer_index)
 
     self._maybe_spawned_kids()
 
@@ -276,7 +401,12 @@ class InsertionMigrator(migrator.Migrator):
       if self._current_spawning_layer + 1 < self._picker.n_layers:
         self._spawn_layer(self._current_spawning_layer + 1)
       else:
-        self._send_configure_left_to_right()
+        self._all_kids_are_spawned()
+
+  def _all_kids_are_spawned(self):
+    if not self._left_configurations_are_sent:
+      self._node.set_graph(self._graph)
+      self._send_configure_left_to_right()
 
   def _receiver_to_kids(self):
     if self._right_map is not None:
@@ -292,6 +422,7 @@ class InsertionMigrator(migrator.Migrator):
       return {receiver_id: [] for receiver_id in self._receivers.keys()}
 
   def _send_configure_left_to_right(self):
+    self._left_configurations_are_sent = True
     self._node.logger.info("Sending configure_new_flow_left", extra={'receiver_ids': list(self._receivers.keys())})
 
     receiver_to_kids = self._receiver_to_kids()
@@ -305,7 +436,7 @@ class InsertionMigrator(migrator.Migrator):
           kids=[{
               'handle': self._node.transfer_handle(self._kids[kid_id], receiver['id']),
               'connection_limit': self._node.system_config['SUM_NODE_RECEIVER_LIMIT']
-          } for kid_id in receiver_to_kids[receiver['id']]])
+          } for kid_id in receiver_to_kids.get(receiver['id'], [])])
 
       self._node.send(receiver, message)
 
@@ -313,11 +444,10 @@ class InsertionMigrator(migrator.Migrator):
     if self._waiting_for_swap and \
         len(self._new_sender_id_to_first_live_sequence_number) == len(self._senders) and \
         self._node._deltas.covers(self._new_sender_id_to_first_live_sequence_number):
+
       self._node.logger.info("Insertion node is swapping flows.")
       self._node.checkpoint(self._new_sender_id_to_first_live_sequence_number)
       self._node.deltas_only.remove(self.migration_id)
-      self._waiting_for_swap = False
-      self._node.activate_swap(self.migration_id, new_receiver_ids=list(self._receivers.keys()), kids=self._kids)
 
       if settings.IS_TESTING_ENV:
         self._node._TESTING_swapped_once = True
@@ -327,6 +457,12 @@ class InsertionMigrator(migrator.Migrator):
         self._node.send(exporter.receiver,
                         messages.migration.swapped_to_duplicate(
                             self.migration_id, first_live_sequence_number=exporter._internal_sequence_number))
+
+      self._waiting_for_swap = False
+      self._node.activate_swap(self.migration_id, new_receiver_ids=list(self._receivers.keys()), kids=self._kids,
+          use_output=len(self._right_config_receiver.configs) == 1 and \
+              next(iter(self._right_config_receiver.configs.values()))['is_data'],
+          use_input=len(self._left_configurations) == 1 and next(iter(self._left_configurations.values()))['is_data'])
 
   @property
   def migration_id(self):

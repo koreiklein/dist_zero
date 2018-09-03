@@ -128,17 +128,12 @@ class SinkMigrator(migrator.Migrator):
       sequence_number = self._node.send_forward_messages()
       self._node.send(self._migration, messages.migration.completed_flow(sequence_number=sequence_number))
 
-  def _send_configure_right_to_left(self):
+  def _got_start_flow(self):
     self._node.logger.info(
         "Sending configure_new_flow_right", extra={'receiver_ids': list(self._new_flow_senders.keys())})
     for sender in self._new_flow_senders.values():
-      from dist_zero.node.io.internal import InternalNode
-      if self._node.__class__ == InternalNode:
-        n_kids = len(self._node._kids)
-        connection_limit = n_kids
-      else:
-        # FIXME(KK): Test and implement this
-        raise RuntimeError("Not Yet Implemented")
+      n_kids = len(self._node._kids)
+      connection_limit = n_kids
       self._node.send(sender,
                       messages.migration.configure_new_flow_right(
                           self.migration_id,
@@ -151,7 +146,7 @@ class SinkMigrator(migrator.Migrator):
 
   def receive(self, sender_id, message):
     if message['type'] == 'start_flow':
-      self._send_configure_right_to_left()
+      self._got_start_flow()
     elif message['type'] == 'attached_migrator':
       self._kid_has_migrator[sender_id] = True
       self._maybe_send_attached_migrator()
@@ -159,6 +154,17 @@ class SinkMigrator(migrator.Migrator):
       self._node.logger.info("Received 'started_flow'")
       self._kid_started_flows[sender_id] = True
       self._maybe_flow_is_started()
+    elif message['type'] == 'substitute_left_configuration':
+      if sender_id not in self._left_configurations:
+        raise errors.InternalError("'substitute_left_configuration' should only be received from a node "
+                                   "for which we do not expect a left_configuration")
+
+      left_config = self._left_configurations.pop(sender_id)
+      if left_config is not None:
+        raise errors.InternalError("'substitute_left_configuration' should only be received from a node "
+                                   "that has not sent (and will never send) a left configuration")
+
+      self._left_configurations[message['new_node_id']] = None
     elif message['type'] == 'configure_new_flow_left':
       self._node.logger.info("Received 'configure_new_flow_left'")
       if sender_id not in self._new_flow_senders:
@@ -224,7 +230,7 @@ class SinkMigrator(migrator.Migrator):
                       messages.migration.configure_new_flow_right(
                           self.migration_id,
                           parent_handle=self._node.new_handle(adjacent['id']),
-                          height=self._node._height,
+                          height=self._node.height,
                           is_data=self._node.is_data(),
                           n_kids=len(self._node._kids),
                           connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
@@ -281,41 +287,45 @@ class SinkMigrator(migrator.Migrator):
       self._node.send(self.parent, messages.migration.started_flow(self.migration_id))
 
   def _maybe_swap(self):
-    if self._waiting_for_swap and not self._swapped \
-        and all(sn is not None for sn in self._old_sender_id_to_first_swapped_sequence_number.values()) \
-        and all(sn is not None for sn in self._new_sender_id_to_first_swapped_sequence_number.values()) \
-        and self._node._deltas.covers(self._old_sender_id_to_first_swapped_sequence_number) \
-        and self._deltas.covers(self._new_sender_id_to_first_swapped_sequence_number) \
-        and all(self._kids_switched.values()):
-      self._node.logger.info("SinkMigrator swapping flows.", extra={'migration_id': self.migration_id})
-      if settings.IS_TESTING_ENV:
-        self._node._TESTING_swapped_once = True
-      # NOTE: Since the source nodes should have stopped sending along the old flow since their
-      #   first_swapped_sequence_number, the ``before`` argument below shouldn't be necessary.
-      #   Here, we pass it in anyways.  It shouldn't make a difference either way.
-      self._swapped = True
-      self._waiting_for_swap = False
+    if self._waiting_for_swap and not self._swapped:
+      if self._kids_switched:
+        ready = all(self._kids_switched.values())
+      else:
+        ready = all(sn is not None for sn in self._old_sender_id_to_first_swapped_sequence_number.values()) \
+            and all(sn is not None for sn in self._new_sender_id_to_first_swapped_sequence_number.values()) \
+            and self._node._deltas.covers(self._old_sender_id_to_first_swapped_sequence_number) \
+            and self._deltas.covers(self._new_sender_id_to_first_swapped_sequence_number)
 
-      # Now, update the current node to listen only to the new flow.
+      if ready:
+        self._node.logger.info("SinkMigrator swapping flows.", extra={'migration_id': self.migration_id})
+        if settings.IS_TESTING_ENV:
+          self._node._TESTING_swapped_once = True
+        # NOTE: Since the source nodes should have stopped sending along the old flow since their
+        #   first_swapped_sequence_number, the ``before`` argument below shouldn't be necessary.
+        #   Here, we pass it in anyways.  It shouldn't make a difference either way.
+        self._swapped = True
+        self._waiting_for_swap = False
 
-      # Discard deltas before _new_sender_id_to_first_swapped_sequence_number, as they were exactly
-      # what was represented from the old flow as of the above call to send_forward_messages.
-      self._deltas.pop_deltas(
-          state=self._node._current_state, before=self._new_sender_id_to_first_swapped_sequence_number)
-      self._node.checkpoint(before=self._old_sender_id_to_first_swapped_sequence_number)
+        # Now, update the current node to listen only to the new flow.
 
-      self._node.sink_swap(
-          deltas=self._deltas,
-          old_sender_ids=set(self._old_sender_id_to_first_flow_sequence_number.keys()),
-          new_senders=list(self._new_flow_senders.values()),
-          new_importers=self._new_importers,
-          linker=self._linker,
-      )
+        # Discard deltas before _new_sender_id_to_first_swapped_sequence_number, as they were exactly
+        # what was represented from the old flow as of the above call to send_forward_messages.
+        self._deltas.pop_deltas(
+            state=self._node._current_state, before=self._new_sender_id_to_first_swapped_sequence_number)
+        self._node.checkpoint(before=self._old_sender_id_to_first_swapped_sequence_number)
 
-      self._node.send(self.parent, messages.migration.switched_flows(self.migration_id))
+        self._node.sink_swap(
+            deltas=self._deltas,
+            old_sender_ids=set(self._old_sender_id_to_first_flow_sequence_number.keys()),
+            new_senders=[left_config['node'] for left_config in self._left_configurations.values()],
+            new_importers=self._new_importers,
+            linker=self._linker,
+        )
 
-      # self._linker should no longer be used.  Null it out.
-      self._linker = None
+        self._node.send(self.parent, messages.migration.switched_flows(self.migration_id))
+
+        # self._linker should no longer be used.  Null it out.
+        self._linker = None
 
   def _maybe_start_syncing(self):
     if self._start_syncing_message is not None and \

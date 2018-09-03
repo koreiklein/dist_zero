@@ -10,6 +10,26 @@ def increment(amount):
   return {'type': 'increment', 'amount': amount}
 
 
+def added_sender(node):
+  '''
+  Sent by a node to indicate that it will now send to the recipient.
+
+  :param node: The :ref:`handle` of the sender.
+  :type node: :ref:`handle`
+  '''
+  return {'type': 'added_sender', 'node': node}
+
+
+def added_receiver(node):
+  '''
+  Sent by a node to indicate that it will now receive from the recipient.
+
+  :param node: The :ref:`handle` of the receiver.
+  :type node: :ref:`handle`
+  '''
+  return {'type': 'added_receiver', 'node': node}
+
+
 def sum_node_started(sum_node_handle):
   '''
   For when a new sum node informs its parent that it has just started, and will now be sending messages.

@@ -94,6 +94,9 @@ class SumNode(Node):
   def is_data(self):
     return False
 
+  def set_graph(self, graph):
+    self._graph = graph
+
   def initialize(self):
     self.logger.info(
         'Starting sum node {sum_node_id}. input={input_node_id}, output={output_node_id}',
@@ -104,6 +107,19 @@ class SumNode(Node):
         })
     if self._initial_migrator_config:
       self._initial_migrator = self.attach_migrator(self._initial_migrator_config)
+
+    if self._initial_migrator is None:
+      for importer in self._importers.values():
+        self.send(importer.sender, messages.sum.added_receiver(self.new_handle(importer.sender_id)))
+      if self._input_importer is not None:
+        self.send(self._input_importer.sender,
+                  messages.sum.added_receiver(self.new_handle(self._input_importer.sender_id)))
+
+      for exporter in self._exporters.values():
+        self.send(exporter.receiver, messages.sum.added_sender(self.new_handle(exporter.receiver_id)))
+      if self._output_exporter is not None:
+        self.send(self._output_exporter.receiver,
+                  messages.sum.added_sender(self.new_handle(self._output_exporter.receiver_id)))
 
     self.linker.initialize()
 
@@ -156,18 +172,10 @@ class SumNode(Node):
       if self._output_exporter is not None:
         raise errors.InternalError("Can not set a new output node when one already exists.")
       self._output_exporter = self.linker.new_exporter(message['output_node'])
-    elif message['type'] == 'connect_node':
-      node = message['node']
-      direction = message['direction']
-
-      if direction == 'sender':
-        if node['id'] not in self._importers:
-          self.import_from_node(node)
-      elif direction == 'receiver':
-        if node['id'] not in self._exporters:
-          self.export_to_node(node)
-      else:
-        raise errors.InternalError("Unrecognized direction parameter '{}'".format(direction))
+    elif message['type'] == 'added_sender':
+      self.import_from_node(message['node'])
+    elif message['type'] == 'added_receiver':
+      self.export_to_node(message['node'])
     elif message['type'] == 'adjacent_has_split':
       # Spawn a new adjacent for the newly spawned io node and remove any kids stolen from self.
       node_id = ids.new_id('SumNode_adjacent_for_split')
@@ -231,7 +239,7 @@ class SumNode(Node):
       self._time_since_had_enough_receivers_ms = 0
     self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
-    if len(self._importers) >= SENDER_LIMIT:
+    if len(self._importers) > SENDER_LIMIT:
       if not self.migrators:
         self.logger.info("Hitting sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
         self._spawn_new_senders_migration()
@@ -297,10 +305,11 @@ class SumNode(Node):
         self._TESTING_total_before_first_swap += increment
 
     for exporter in self._exporters.values():
-      exporter.export_message(
-          message=messages.sum.increment(amount=increment),
-          sequence_number=sequence_number,
-      )
+      if self._output_exporter is None or exporter.receiver_id != self._output_exporter.receiver_id:
+        exporter.export_message(
+            message=messages.sum.increment(amount=increment),
+            sequence_number=sequence_number,
+        )
 
     if self._output_exporter and self._output_exporter.receiver_id.startswith('LeafNode'):
       message = messages.io.output_action(increment)
@@ -322,22 +331,35 @@ class SumNode(Node):
 
     self._exporters.update(new_exporters)
 
-  def activate_swap(self, migration_id, new_receiver_ids, kids):
+  def activate_swap(self, migration_id, new_receiver_ids, kids, use_output=False, use_input=False):
     if len(kids) != 0:
       raise errors.InternalError("Sum nodes should never be passed kids by a migrator.")
 
-    for receiver_id in new_receiver_ids:
-      exporter = self._exporters[receiver_id]
-      self.send(exporter.receiver,
-                messages.migration.swapped_to_duplicate(
-                    migration_id, first_live_sequence_number=exporter._internal_sequence_number))
+    if use_input:
+      if self._input_importer is not None:
+        raise errors.InternalError("Can't convert to use input, as there is already an input importer.")
+      elif len(self._importers) != 1:
+        raise errors.InternalError("Can't convert to use input, as there is not a unique importer.")
+      self._input_importer = next(iter(self._importers.values()))
+      self._importers = {}
+
+    if use_output:
+      if self._output_exporter is not None:
+        raise errors.InternalError("Can't convert to use output, as there is already an output exporter.")
+      elif len(self._exporters) != 1:
+        raise errors.InternalError("Can't convert to use output, as there is not a unique exporter.")
+      self._output_exporter = next(iter(self._exporters.values()))
+      self._exporters = {}
 
   def checkpoint(self, before=None):
     self.send_forward_messages(before=before)
 
   def remove_migrator(self, migration_id):
     for nid in self.migrators[migration_id]._receivers:
-      self._exporters[nid]._migration_id = None
+      if self._output_exporter is not None and nid == self._output_exporter.receiver_id:
+        self._output_exporter._migration_id = None
+      else:
+        self._exporters[nid]._migration_id = None
 
     super(SumNode, self).remove_migrator(migration_id)
 
@@ -347,12 +369,32 @@ class SumNode(Node):
     self.linker.absorb_linker(linker)
     self._importers = new_importers
 
+  def stats(self):
+    return {
+        'height': -1,
+        'n_retransmissions': self.linker.n_retransmissions,
+        'n_reorders': self.linker.n_reorders,
+        'n_duplicates': self.linker.n_duplicates,
+        'sent_messages': self.linker.least_unused_sequence_number,
+        'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
+    }
+
   def handle_api_message(self, message):
     if message['type'] == 'spawn_new_senders':
       return self._spawn_new_senders_migration()
+    elif message['type'] == 'get_kids':
+      return {}
     elif message['type'] == 'get_senders':
-      return {sender_id: importer.sender for sender_id, importer in self._importers.items()}
+      result = {}
+      if self._input_importer:
+        result[self._input_importer.sender_id] = self._input_importer.sender
+      result.update((sender_id, importer.sender) for sender_id, importer in self._importers.items())
+      return result
     elif message['type'] == 'get_receivers':
-      return {receiver_id: exporter.receiver for receiver_id, exporter in self._exporters.items()}
+      result = {}
+      if self._output_exporter:
+        result[self._output_exporter.receiver_id] = self._output_exporter.receiver
+      result.update((receiver_id, exporter.receiver) for receiver_id, exporter in self._exporters.items())
+      return result
     else:
       return super(SumNode, self).handle_api_message(message)

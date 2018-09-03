@@ -112,7 +112,6 @@ class InternalNode(Node):
       if self._adjacent is not None and self._adjacent['id'] != new_receivers[0]['id']:
         raise errors.InternalError("Not sure how to set an input node's receives when it already has an adjacent.")
       self._adjacent = new_receivers[0]
-      self.send(self._adjacent, messages.migration.swapped_to_duplicate(migration_id, first_live_sequence_number=0))
     elif self._variant == 'output':
       raise errors.InternalError("Output InternalNode should never function as a source migrator in a migration.")
     else:
@@ -290,9 +289,11 @@ class InternalNode(Node):
         self._kid_summaries = {}
         self._kids = {sender_id: message['kid']}
         self._graph = NetworkGraph()
+        self._graph.add_node(sender_id)
         self._root_proxy_id = None
       else:
         self._kids[sender_id] = message['kid']
+        self._graph.add_node(sender_id)
         if self._pending_adoptees is not None:
           if sender_id in self._pending_adoptees:
             self._pending_adoptees[sender_id] = True
@@ -340,13 +341,6 @@ class InternalNode(Node):
       self.send(self._parent, messages.io.goodbye_parent())
       self._parent = message['new_parent']
       self._send_hello_parent()
-    elif message['type'] == 'connect_node':
-      if message['direction'] == 'receiver':
-        self._set_output(message['node'])
-      elif message['direction'] == 'sender':
-        self._set_input(message['node'])
-      else:
-        raise errors.InternalError('Unrecognized direction "{}"'.format(message['direction']))
     else:
       super(InternalNode, self).receive(message=message, sender_id=sender_id)
 
@@ -427,6 +421,16 @@ class InternalNode(Node):
         'highest_capacity_kid': highest_capacity_kid,
     }
 
+  def stats(self):
+    return {
+        'height': self._height,
+        'n_retransmissions': self.linker.n_retransmissions,
+        'n_reorders': self.linker.n_reorders,
+        'n_duplicates': self.linker.n_duplicates,
+        'sent_messages': self.linker.least_unused_sequence_number,
+        'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
+    }
+
   def handle_api_message(self, message):
     if message['type'] == 'create_kid_config':
       return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
@@ -434,6 +438,26 @@ class InternalNode(Node):
       return self._get_capacity()
     elif message['type'] == 'get_kids':
       return self._kids
+    elif message['type'] == 'get_senders':
+      if self._adjacent is not None:
+        if self._variant == 'input':
+          return {}
+        elif self._variant == 'output':
+          return {self._adjacent['id']: self._adjacent}
+        else:
+          raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
+      else:
+        return {}
+    elif message['type'] == 'get_receivers':
+      if self._adjacent is not None:
+        if self._variant == 'input':
+          return {self._adjacent['id']: self._adjacent}
+        elif self._variant == 'output':
+          return {}
+        else:
+          raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
+      else:
+        return {}
     elif message['type'] == 'get_adjacent_handle':
       return self._adjacent
     else:
@@ -480,11 +504,12 @@ class InternalNode(Node):
           "added_leaf: Could not find node matching id {missing_child_node_id}",
           extra={'missing_child_node_id': kid['id']})
     else:
+      self._graph.add_node(kid['id'])
       self._kids[kid['id']] = kid
 
       if self._adjacent is None:
-        self.logger.warning("added_leaf: No adjacent was set when a kid was added."
-                            "  Unable to forward an added_leaf message to the adjacent.")
+        self.logger.info("added_leaf: No adjacent was set when a kid was added."
+                         "  Unable to forward an added_leaf message to the adjacent.")
       else:
         self.send(self._adjacent,
                   messages.io.added_adjacent_leaf(

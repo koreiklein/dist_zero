@@ -79,11 +79,22 @@ def removal_migrator_config(sender_ids, receiver_ids, will_sync):
   return {'type': 'removal_migrator', 'sender_ids': sender_ids, 'receiver_ids': receiver_ids, 'will_sync': will_sync}
 
 
-def insertion_migrator_config(configure_right_parent_ids, senders, receivers, migration=None):
+def insertion_migrator_config(configure_right_parent_ids,
+                              senders,
+                              receivers,
+                              left_configurations=None,
+                              right_configurations=None,
+                              migration=None):
   '''
   :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
     insertion node.
   :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
+  :param dict[str, object] left_configurations: In same cases, an insertion node can be preconfigured with left_configurations
+    given from the parent node that spawned it.   In that case, ``left_configurations`` is a dictionary mapping sender id
+    to prexisting left_configuration.  Otherwise, ``left_configurations`` is `None`
+  :param dict[str, object] right_configurations: In same cases, an insertion node can be preconfigured with right_configurations
+    given from the parent node that spawned it.   In that case, ``right_configurations`` is a dictionary mapping right node ids
+    to the prexisting right_configuration.  Otherwise, ``right_configurations`` is `None`
   :param list receivers: A list of :ref:`handle` of the `Node` s that will receive from self by the end of the migration.
   :param migration: If the insertion node will communicate directly with the migration node, this is a handle for it.
     Otherwise, it is `None`
@@ -93,22 +104,11 @@ def insertion_migrator_config(configure_right_parent_ids, senders, receivers, mi
       'type': 'insertion_migrator',
       'configure_right_parent_ids': configure_right_parent_ids,
       'senders': senders,
+      'left_configurations': left_configurations,
+      'right_configurations': right_configurations,
       'receivers': receivers,
       'migration': migration
   }
-
-
-def connect_node(node, direction):
-  '''
-  Inform a node that it is now linked to a new node either
-  as a sender or a receiver.
-
-  :param node: The handle of the new node
-  :type node: :ref:`handle`
-  :param str direction: 'sender' or 'receiver' depending respectively on whether the newly added node will
-    send to or receive from the node getting this message.
-  '''
-  return {'type': 'connect_node', 'node': node, 'direction': direction}
 
 
 def attach_migrator(migrator_config):
@@ -329,6 +329,44 @@ def migrator_terminated(migration_id):
   :param str migration_id: The id of the relevant migration.
   '''
   return {'type': 'migration', 'migration_id': migration_id, 'message': {'type': 'migrator_terminated'}}
+
+
+def substitute_left_configuration(migration_id, new_node_id):
+  '''
+  Informs a node that the left config is was expecting should actually come from a different node.
+
+  Useful when spawning kids that have a gap on the left side.
+
+  :param str migration_id: The id of the relevant migration.
+  :param str new_node_id: The id of the node that will send a left_configuration instead.
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'substitute_left_configuration',
+          'new_node_id': new_node_id
+      }
+  }
+
+
+def substitute_right_parent(migration_id, new_parent_id):
+  '''
+  Informs a node that the right configs it was expecting from one parent should actually come from another parent.
+
+  Useful when spawning kids that have a gap on the left side.
+
+  :param str migration_id: The id of the relevant migration.
+  :param str new_parent_id: The id of the parent to listen for instead.
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'substitute_right_parent',
+          'new_parent_id': new_parent_id
+      }
+  }
 
 
 def configure_right_parent(migration_id, kid_ids):
