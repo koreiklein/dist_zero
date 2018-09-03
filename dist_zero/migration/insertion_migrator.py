@@ -212,7 +212,7 @@ class InsertionMigrator(migrator.Migrator):
       self._node.logger.info("Insertion migrator has received all Left and Right configurations. Ready to spawn.")
       if self._node.__class__ != ComputationNode:
         self._height = 0
-        self._send_configure_left_to_right()
+        self._all_kids_are_spawned()
       else:
         self._left_layer = {
             kid['handle']['id']: kid['handle']
@@ -315,7 +315,8 @@ class InsertionMigrator(migrator.Migrator):
     return node_ids[0]
 
   def _spawn_layer_with_right_gap(self, layer_index):
-    # FIXME(KK): Add docstring
+    '''Spawn the rightmost layer of nodes, when it contains a single node, and should be spawned
+    to re-use the right-configuration of self.'''
     self._left_configurations_are_sent = True # No need to send any more left configurations
     self._send_configure_right_parent(layer_index - 1)
     node_id = self._get_unique_node_in_layer(layer_index)
@@ -398,7 +399,13 @@ class InsertionMigrator(migrator.Migrator):
       if self._current_spawning_layer + 1 < self._picker.n_layers:
         self._spawn_layer(self._current_spawning_layer + 1)
       else:
-        self._send_configure_left_to_right()
+        self._all_kids_are_spawned()
+
+  def _all_kids_are_spawned(self):
+    if not self._left_configurations_are_sent:
+      self._send_configure_left_to_right()
+
+    # TODO(KK): Set the graph
 
   def _receiver_to_kids(self):
     if self._right_map is not None:
@@ -414,24 +421,23 @@ class InsertionMigrator(migrator.Migrator):
       return {receiver_id: [] for receiver_id in self._receivers.keys()}
 
   def _send_configure_left_to_right(self):
-    if not self._left_configurations_are_sent:
-      self._left_configurations_are_sent = True
-      self._node.logger.info("Sending configure_new_flow_left", extra={'receiver_ids': list(self._receivers.keys())})
+    self._left_configurations_are_sent = True
+    self._node.logger.info("Sending configure_new_flow_left", extra={'receiver_ids': list(self._receivers.keys())})
 
-      receiver_to_kids = self._receiver_to_kids()
+    receiver_to_kids = self._receiver_to_kids()
 
-      for receiver in self._receivers.values():
-        message = messages.migration.configure_new_flow_left(
-            self.migration_id,
-            node=self._node.new_handle(receiver['id']),
-            height=self._height,
-            is_data=self._node.is_data(),
-            kids=[{
-                'handle': self._node.transfer_handle(self._kids[kid_id], receiver['id']),
-                'connection_limit': self._node.system_config['SUM_NODE_RECEIVER_LIMIT']
-            } for kid_id in receiver_to_kids.get(receiver['id'], [])])
+    for receiver in self._receivers.values():
+      message = messages.migration.configure_new_flow_left(
+          self.migration_id,
+          node=self._node.new_handle(receiver['id']),
+          height=self._height,
+          is_data=self._node.is_data(),
+          kids=[{
+              'handle': self._node.transfer_handle(self._kids[kid_id], receiver['id']),
+              'connection_limit': self._node.system_config['SUM_NODE_RECEIVER_LIMIT']
+          } for kid_id in receiver_to_kids.get(receiver['id'], [])])
 
-        self._node.send(receiver, message)
+      self._node.send(receiver, message)
 
   def _maybe_swap(self):
     if self._waiting_for_swap and \

@@ -107,8 +107,8 @@ class SourceMigrator(migrator.Migrator):
                         messages.migration.set_source_right_parents(
                             migration_id=self.migration_id, configure_right_parent_ids=[new_receiver_id]))
     else:
-      # FIXME(KK): Figure out what to do about this
-      raise RuntimeError("Not Yet Implemented")
+      raise errors.InternalError(
+          "right parents of a node's kids should only be set when the node has a unique receiver")
 
   def _send_configure_new_flow_left_to_right(self):
     self._node.logger.info("Sending configure_new_flow_left")

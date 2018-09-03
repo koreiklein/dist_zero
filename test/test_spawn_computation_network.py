@@ -61,7 +61,9 @@ class TestSpawnComputationNetwork(object):
 
   def _connect_and_test_io_trees(self, n_input_leaves, n_output_leaves):
     root_input = self.root_io_tree(machine=self.machine_ids[0], variant='input')
+    self.root_input = root_input
     root_output = self.root_io_tree(machine=self.machine_ids[0], variant='output')
+    self.root_output = root_output
 
     self.demo.run_for(ms=200)
     self.spawn_users(root_output, n_users=n_output_leaves)
@@ -85,6 +87,7 @@ class TestSpawnComputationNetwork(object):
       assert self.demo.total_simulated_amount == 0
 
     output_leaves = self.demo.all_io_kids(root_output)
+    self.output_leaves = output_leaves
     assert len(output_leaves) == n_output_leaves
     self.demo.system.get_senders(root_output)
     self.demo.system.get_receivers(root_input)
@@ -140,3 +143,26 @@ class TestSpawnComputationNetwork(object):
         1, base_config=self.base_config(), random_seed='test_spawn_small_very_large')
 
     self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=20)
+
+  def test_add_leaves_after_spawn(self, demo):
+    self.demo = demo
+    self.machine_ids = demo.new_machine_controllers(
+        1, base_config=self.base_config(), random_seed='test_add_leaves_after_spawn')
+
+    self._connect_and_test_io_trees(n_input_leaves=5, n_output_leaves=5)
+    demo.run_for(ms=7000)
+    import ipdb
+    ipdb.set_trace()
+    self.spawn_users(
+        self.root_input,
+        n_users=5,
+        add_user=True,
+        send_after=0,
+        ave_inter_message_time_ms=500,
+        send_messages_for_ms=3000)
+
+    demo.run_for(ms=5000)
+    import ipdb
+    ipdb.set_trace()
+    for leaf in self.output_leaves:
+      assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)

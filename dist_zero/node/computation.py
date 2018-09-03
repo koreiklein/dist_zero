@@ -78,7 +78,9 @@ class ComputationNode(Node):
         possible_receivers = list(self.kids.values())
         if len(possible_receivers) == 0:
           raise errors.InternalError("ComputationNode did not have a child to which to connect its new adjacent.")
-        # FIXME(KK): Instead of the below, always pick the 'best' child (in some reasonable sense).
+        # TODO(KK): Instead of the below, always pick the 'best' child (in some reasonable sense).
+        import ipdb
+        ipdb.set_trace()
         receiver = possible_receivers[0]
         node_id = ids.new_id('SumNode_input_adjacent')
         self._controller.spawn_node(
@@ -93,7 +95,7 @@ class ComputationNode(Node):
         possible_senders = list(self.kids.values())
         if len(possible_senders) == 0:
           raise errors.InternalError("ComputationNode did not have a child to which to connect its new adjacent.")
-        # FIXME(KK): Instead of the below, always pick the 'best' child (in some reasonable sense).
+        # TODO(KK): Instead of the below, always pick the 'best' child (in some reasonable sense).
         sender = possible_senders[0]
 
         node_id = ids.new_id('SumNode_output_adjacent')

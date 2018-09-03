@@ -128,17 +128,12 @@ class SinkMigrator(migrator.Migrator):
       sequence_number = self._node.send_forward_messages()
       self._node.send(self._migration, messages.migration.completed_flow(sequence_number=sequence_number))
 
-  def _send_configure_right_to_left(self):
+  def _got_start_flow(self):
     self._node.logger.info(
         "Sending configure_new_flow_right", extra={'receiver_ids': list(self._new_flow_senders.keys())})
     for sender in self._new_flow_senders.values():
-      from dist_zero.node.io.internal import InternalNode
-      if self._node.__class__ == InternalNode:
-        n_kids = len(self._node._kids)
-        connection_limit = n_kids
-      else:
-        # FIXME(KK): Test and implement this
-        raise RuntimeError("Not Yet Implemented")
+      n_kids = len(self._node._kids)
+      connection_limit = n_kids
       self._node.send(sender,
                       messages.migration.configure_new_flow_right(
                           self.migration_id,
@@ -151,7 +146,7 @@ class SinkMigrator(migrator.Migrator):
 
   def receive(self, sender_id, message):
     if message['type'] == 'start_flow':
-      self._send_configure_right_to_left()
+      self._got_start_flow()
     elif message['type'] == 'attached_migrator':
       self._kid_has_migrator[sender_id] = True
       self._maybe_send_attached_migrator()
