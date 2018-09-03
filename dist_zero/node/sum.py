@@ -94,6 +94,9 @@ class SumNode(Node):
   def is_data(self):
     return False
 
+  def set_graph(self, graph):
+    self._graph = graph
+
   def initialize(self):
     self.logger.info(
         'Starting sum node {sum_node_id}. input={input_node_id}, output={output_node_id}',

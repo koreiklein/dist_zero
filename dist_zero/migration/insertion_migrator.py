@@ -34,6 +34,8 @@ class InsertionMigrator(migrator.Migrator):
     # When true, the swap has been prepared, and the migrator should be checking whether it's time to swap.
     self._waiting_for_swap = False
 
+    self._graph = None
+
     self._senders = {sender['id']: sender for sender in senders}
     self._receivers = {receiver['id']: receiver for receiver in receivers}
 
@@ -403,9 +405,8 @@ class InsertionMigrator(migrator.Migrator):
 
   def _all_kids_are_spawned(self):
     if not self._left_configurations_are_sent:
+      self._node.set_graph(self._graph)
       self._send_configure_left_to_right()
-
-    # TODO(KK): Set the graph
 
   def _receiver_to_kids(self):
     if self._right_map is not None:

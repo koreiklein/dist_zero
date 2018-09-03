@@ -33,6 +33,11 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
+  @property
+  def random(self):
+    '''A `Random` instance.'''
+    raise RuntimeError("Abstract Superclass")
+
   def spawn_node(self, node_config):
     '''
     Asynchronously trigger the creation of a new node on a linked machine.
@@ -136,6 +141,10 @@ class NodeManager(MachineController):
     self._pending_events = []
 
     self._send_to_machine = send_to_machine
+
+  @property
+  def random(self):
+    return self._random
 
   def _parse_network_errors_config(self, network_errors_config):
     return {

@@ -151,8 +151,6 @@ class TestSpawnComputationNetwork(object):
 
     self._connect_and_test_io_trees(n_input_leaves=5, n_output_leaves=5)
     demo.run_for(ms=7000)
-    import ipdb
-    ipdb.set_trace()
     self.spawn_users(
         self.root_input,
         n_users=5,
@@ -162,7 +160,5 @@ class TestSpawnComputationNetwork(object):
         send_messages_for_ms=3000)
 
     demo.run_for(ms=5000)
-    import ipdb
-    ipdb.set_trace()
     for leaf in self.output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
