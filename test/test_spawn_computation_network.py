@@ -91,7 +91,7 @@ class TestSpawnComputationNetwork(object):
     assert len(output_leaves) == n_output_leaves
     self.demo.system.get_senders(root_output)
     self.demo.system.get_receivers(root_input)
-    self.demo.render_network(root_computation)
+    self.demo.render_network(root_input)
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 

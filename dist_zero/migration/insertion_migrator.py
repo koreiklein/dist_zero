@@ -336,7 +336,7 @@ class InsertionMigrator(migrator.Migrator):
             left_configurations=None,
             right_configurations=self._right_config_receiver.configs,
             configure_right_parent_ids=self._configure_right_parent_ids,
-            receivers=[right_config['parent_handle'] for right_config in self._right_config_receiver.configs.values()],
+            receivers=[],
             migration=self._node.transfer_handle(self._migration, node_id),
         ))
 
@@ -427,7 +427,8 @@ class InsertionMigrator(migrator.Migrator):
 
     receiver_to_kids = self._receiver_to_kids()
 
-    for receiver in self._receivers.values():
+    for right_config in self._right_config_receiver.configs.values():
+      receiver = right_config['parent_handle']
       message = messages.migration.configure_new_flow_left(
           self.migration_id,
           node=self._node.new_handle(receiver['id']),
