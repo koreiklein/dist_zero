@@ -310,8 +310,6 @@ class InsertionMigrator(migrator.Migrator):
   def _get_unique_node_in_layer(self, layer_index):
     node_ids = self._picker.get_layer(layer_index)
     if len(node_ids) != 1:
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError("Layer is expected to have exactly one node.")
 
     return node_ids[0]

@@ -159,10 +159,6 @@ class TopologyPicker(object):
     for right_id in right_config_by_id.keys():
       self._set_node_coords(right_id, (left_root_index, right_id))
 
-    if len(left_layers) == 3 and (not left_layers[1] or not right_layers[1]):
-      import ipdb
-      ipdb.set_trace()
-
     for left_layer, right_layer in zip(left_layers[1:-1], right_layers[1:-1]):
       # Create all the nodes in the new layer.
       new_layer = []

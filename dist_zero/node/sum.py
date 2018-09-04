@@ -107,6 +107,9 @@ class SumNode(Node):
         })
     if self._initial_migrator_config:
       self._initial_migrator = self.attach_migrator(self._initial_migrator_config)
+    else:
+      if self.parent is not None:
+        self.send(self.parent, messages.io.hello_parent(self.new_handle(self.parent['id'])))
 
     if self._initial_migrator is None:
       for importer in self._importers.values():
@@ -163,7 +166,11 @@ class SumNode(Node):
     self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
 
   def receive(self, sender_id, message):
-    if message['type'] == 'set_input':
+    if message['type'] == 'adopt':
+      # FIXME(KK): Test and implement this
+      import ipdb
+      ipdb.set_trace()
+    elif message['type'] == 'set_input':
       if self._input_importer is not None:
         raise errors.InternalError("Can not set a new input node when one already exists.")
       self._input_importer = self.linker.new_importer(message['input_node'])

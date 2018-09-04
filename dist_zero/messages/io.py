@@ -144,17 +144,19 @@ def leaf_config(node_id, name, parent, variant, initial_state, recorded_user_jso
   }
 
 
-def added_adjacent_leaf(kid, variant):
+def added_adjacent_kid(kid, height, variant):
   '''
-  Indicates to an adjacent edge node in a computation that a pending LeafNode has successfully been added to the network,
+  Indicates to an adjacent edge node in a computation that a pending kid has successfully been added to the network,
   and is now ready to receive messages.
 
   :param kid: The :ref:`handle` of the leaf node that was just added.
   :type kid: :ref:`handle`
+  :param int height: The height of the parent.
+    If 0, the newly added kid will be a `LeafNode` otherwise, it will be an `InternalNode`
 
   :param str variant: 'input' or 'output'
   '''
-  return {'type': 'added_adjacent_leaf', 'kid': kid, 'variant': variant}
+  return {'type': 'added_adjacent_kid', 'kid': kid, 'variant': variant, 'height': height}
 
 
 def hello_parent(kid):
@@ -185,3 +187,16 @@ def kid_summary(size, n_kids):
   :param n_kids: The number of immediate kids of the sender.
   '''
   return {'type': 'kid_summary', 'size': size, 'n_kids': n_kids}
+
+
+def bumped_height(proxy, kid_ids, variant):
+  '''
+  Sent by an `InternalNode` to its adjacent node to inform it that the internal node has bumped its height
+  and now has a single child as its proxy.
+
+  :param str variant: 'input' or 'output' according to the variant of the adjacent `InternalNode`.
+  :param list[str] kid_ids: The ids of the `InternalNode`'s kids which are being adopted by the proxy node.
+  :param proxy: The :ref:`handle` of the new proxy node.
+  :type proxy: :ref:`handle`
+  '''
+  return {'type': 'bumped_height', 'proxy': proxy, 'variant': variant, 'kid_ids': kid_ids}
