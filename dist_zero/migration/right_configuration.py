@@ -31,7 +31,8 @@ class RightConfigurationReceiver(object):
         self._expected_parents == self._received_parents and \
         all(val is not None for val in self.configs.values())
 
-  def got_configuration(self, sender_id, right_config):
+  def got_configuration(self, right_config):
+    sender_id = right_config['parent_handle']['id']
     self.configs[sender_id] = right_config
 
   def set_parents(self, parent_ids):

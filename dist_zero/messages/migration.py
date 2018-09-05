@@ -389,13 +389,27 @@ def configure_right_parent(migration_id, kid_ids):
   }
 
 
-def configure_new_flow_right(migration_id, parent_handle, is_data, height, n_kids, connection_limit):
+def configure_new_flow_right(migration_id, right_configurations):
   '''
-  The 'right' configuration, sent while starting a new flow.
+  Transmit 'right' configurations, sent while starting a new flow.
 
   Either `InsertionMigrator` or `SourceMigrator` can receive this message.
-
   :param str migration_id: The id of the relevant migration.
+  :param list[object] right_configurations: The `right_configuration` messages.
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'configure_new_flow_right',
+          'right_configurations': right_configurations,
+      }
+  }
+
+
+def right_configuration(parent_handle, is_data, height, n_kids, connection_limit):
+  '''
+
   :param parent_handle: The :ref:`handle` of the sender. A sibling node to the right of the node receiving the message.
   :param int height: The height of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
   :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
@@ -406,16 +420,11 @@ def configure_new_flow_right(migration_id, parent_handle, is_data, height, n_kid
     right parent.
   '''
   return {
-      'type': 'migration',
-      'migration_id': migration_id,
-      'message': {
-          'type': 'configure_new_flow_right',
-          'parent_handle': parent_handle,
-          'is_data': is_data,
-          'height': height,
-          'n_kids': n_kids,
-          'connection_limit': connection_limit
-      }
+      'parent_handle': parent_handle,
+      'is_data': is_data,
+      'height': height,
+      'n_kids': n_kids,
+      'connection_limit': connection_limit
   }
 
 
@@ -437,13 +446,27 @@ def set_source_right_parents(migration_id, configure_right_parent_ids):
   }
 
 
-def configure_new_flow_left(migration_id, height, is_data, node, kids):
+def configure_new_flow_left(migration_id, left_configurations):
   '''
   The 'left' configuration, sent while starting a new flow.
 
   Either `InsertionMigrator` or `SinkMigrator` can receive this message.
 
   :param str migration_id: The id of the relevant migration.
+  :param list[object] left_configurations: The list of `left_configuration` messages.
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'configure_new_flow_left',
+          'left_configurations': left_configurations,
+      }
+  }
+
+
+def left_configuration(height, is_data, node, kids):
+  '''
   :param int height: The height of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
   :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
   :param node: The :ref:`handle` of the sending node.
@@ -453,15 +476,10 @@ def configure_new_flow_left(migration_id, height, is_data, node, kids):
      'connection_limit': The maximum number of outgoing nodes the next node is allowed to add to that kid
   '''
   return {
-      'type': 'migration',
-      'migration_id': migration_id,
-      'message': {
-          'type': 'configure_new_flow_left',
-          'height': height,
-          'is_data': is_data,
-          'node': node,
-          'kids': kids
-      }
+      'height': height,
+      'is_data': is_data,
+      'node': node,
+      'kids': kids,
   }
 
 

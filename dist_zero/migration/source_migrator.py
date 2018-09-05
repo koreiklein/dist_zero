@@ -117,12 +117,14 @@ class SourceMigrator(migrator.Migrator):
       kids = [{'handle': kid, 'connection_limit': 1} for kid in self._node._kids.values() if kid is not None]
 
       self._node.send(new_receiver,
-                      messages.migration.configure_new_flow_left(
-                          self.migration_id,
-                          kids=kids,
-                          node=self._node.new_handle(new_receiver['id']),
-                          is_data=self._node.is_data(),
-                          height=self._node.height))
+                      messages.migration.configure_new_flow_left(self.migration_id, [
+                          messages.migration.left_configuration(
+                              kids=kids,
+                              node=self._node.new_handle(new_receiver['id']),
+                              is_data=self._node.is_data(),
+                              height=self._node.height,
+                          )
+                      ]))
 
   def receive(self, sender_id, message):
     if message['type'] == 'attached_migrator':
@@ -139,7 +141,8 @@ class SourceMigrator(migrator.Migrator):
       self._maybe_has_right_configurations()
     elif message['type'] == 'configure_new_flow_right':
       self._node.logger.info("Received configure_new_flow_right")
-      self._right_config_receiver.got_configuration(sender_id, message)
+      for right_configuration in message['right_configurations']:
+        self._right_config_receiver.got_configuration(right_configuration)
       self._maybe_has_right_configurations()
     elif message['type'] == 'switch_flows':
       self._receive_switch_flows(sender_id, message)

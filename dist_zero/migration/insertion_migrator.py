@@ -150,16 +150,20 @@ class InsertionMigrator(migrator.Migrator):
       self._maybe_kids_are_terminated()
     elif message['type'] == 'configure_new_flow_right':
       self._node.logger.info("Received 'configure_new_flow_right'", extra={'sender_id': sender_id})
-      self._node.export_to_node(message['parent_handle'])
-      self._right_config_receiver.got_configuration(sender_id, message)
-      self._receivers[message['parent_handle']['id']] = message['parent_handle']
+      for right_configuration in message['right_configurations']:
+        parent = right_configuration['parent_handle']
+        self._node.export_to_node(parent)
+        self._right_config_receiver.got_configuration(right_configuration)
+        self._receivers[parent['id']] = parent
+
       if self._node.parent is None and self._right_config_receiver.ready:
         self._height = max(self._height, self._max_right_height())
         self._send_configure_right_to_left()
       self._maybe_has_left_and_right_configurations()
     elif message['type'] == 'configure_new_flow_left':
       self._node.logger.info("Received 'configure_new_flow_left'", extra={'sender_id': sender_id})
-      self._left_configurations[sender_id] = message
+      for left_configuration in message['left_configurations']:
+        self._left_configurations[left_configuration['node']['id']] = left_configuration
       self._maybe_has_left_and_right_configurations()
     elif message['type'] == 'configure_right_parent':
       self._right_config_receiver.got_parent_configuration(sender_id, kid_ids=message['kid_ids'])
@@ -181,13 +185,15 @@ class InsertionMigrator(migrator.Migrator):
       self._node.logger.info("Sending configure_new_flow_right", extra={'receiver_ids': list(self._senders.keys())})
       for sender in self._senders.values():
         self._node.send(sender,
-                        messages.migration.configure_new_flow_right(
-                            self.migration_id,
-                            n_kids=None,
-                            parent_handle=self._node.new_handle(sender['id']),
-                            height=self._height,
-                            is_data=self._node.is_data(),
-                            connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
+                        messages.migration.configure_new_flow_right(self.migration_id, [
+                            messages.migration.right_configuration(
+                                n_kids=None,
+                                parent_handle=self._node.new_handle(sender['id']),
+                                height=self._height,
+                                is_data=self._node.is_data(),
+                                connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
+                            )
+                        ]))
       self._right_configurations_are_sent = True
 
   def _new_topology_picker(self):
@@ -434,15 +440,17 @@ class InsertionMigrator(migrator.Migrator):
 
     for right_config in self._right_config_receiver.configs.values():
       receiver = right_config['parent_handle']
-      message = messages.migration.configure_new_flow_left(
-          self.migration_id,
-          node=self._node.new_handle(receiver['id']),
-          height=self._height,
-          is_data=self._node.is_data(),
-          kids=[{
-              'handle': self._node.transfer_handle(self._kids[kid_id], receiver['id']),
-              'connection_limit': self._node.system_config['SUM_NODE_RECEIVER_LIMIT']
-          } for kid_id in receiver_to_kids.get(receiver['id'], [])])
+      message = messages.migration.configure_new_flow_left(self.migration_id, [
+          messages.migration.left_configuration(
+              node=self._node.new_handle(receiver['id']),
+              height=self._height,
+              is_data=self._node.is_data(),
+              kids=[{
+                  'handle': self._node.transfer_handle(self._kids[kid_id], receiver['id']),
+                  'connection_limit': self._node.system_config['SUM_NODE_RECEIVER_LIMIT']
+              } for kid_id in receiver_to_kids.get(receiver['id'], [])],
+          )
+      ])
 
       self._node.send(receiver, message)
 

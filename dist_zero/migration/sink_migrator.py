@@ -135,14 +135,15 @@ class SinkMigrator(migrator.Migrator):
       n_kids = len(self._node._kids)
       connection_limit = n_kids
       self._node.send(sender,
-                      messages.migration.configure_new_flow_right(
-                          self.migration_id,
-                          n_kids=n_kids,
-                          parent_handle=self._node.new_handle(sender['id']),
-                          height=self._node.height,
-                          connection_limit=connection_limit,
-                          is_data=self._node.is_data(),
-                      ))
+                      messages.migration.configure_new_flow_right(self.migration_id, [
+                          messages.migration.right_configuration(
+                              n_kids=n_kids,
+                              parent_handle=self._node.new_handle(sender['id']),
+                              height=self._node.height,
+                              connection_limit=connection_limit,
+                              is_data=self._node.is_data(),
+                          )
+                      ]))
 
   def receive(self, sender_id, message):
     if message['type'] == 'start_flow':
@@ -167,9 +168,11 @@ class SinkMigrator(migrator.Migrator):
       self._left_configurations[message['new_node_id']] = None
     elif message['type'] == 'configure_new_flow_left':
       self._node.logger.info("Received 'configure_new_flow_left'")
-      if sender_id not in self._new_flow_senders:
-        self._add_sender(message['node'])
-      self._left_configurations[sender_id] = message
+      for left_configuration in message['left_configurations']:
+        left_parent_id = left_configuration['node']['id']
+        if left_parent_id not in self._new_flow_senders:
+          self._add_sender(left_configuration['node'])
+        self._left_configurations[left_parent_id] = left_configuration
       self._maybe_has_left_configurations()
       self._maybe_flow_is_started()
     elif message['type'] == 'replacing_flow':
@@ -227,13 +230,15 @@ class SinkMigrator(migrator.Migrator):
     elif message['type'] == 'set_new_flow_adjacent':
       adjacent = message['adjacent']
       self._node.send(adjacent,
-                      messages.migration.configure_new_flow_right(
-                          self.migration_id,
-                          parent_handle=self._node.new_handle(adjacent['id']),
-                          height=self._node.height,
-                          is_data=self._node.is_data(),
-                          n_kids=len(self._node._kids),
-                          connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT']))
+                      messages.migration.configure_new_flow_right(self.migration_id, [
+                          messages.migration.right_configuration(
+                              parent_handle=self._node.new_handle(adjacent['id']),
+                              height=self._node.height,
+                              is_data=self._node.is_data(),
+                              n_kids=len(self._node._kids),
+                              connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
+                          )
+                      ]))
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
 
