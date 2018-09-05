@@ -6,17 +6,13 @@ from .right_configuration import RightConfigurationReceiver
 
 
 class InsertionMigrator(migrator.Migrator):
-  def __init__(self, migration, configure_right_parent_ids, senders, left_configurations, right_configurations,
-               receivers, node):
+  def __init__(self, migration, configure_right_parent_ids, senders, right_configurations, receivers, node):
     '''
     :param migration: The :ref:`handle` of the `MigrationNode` running the migration.
     :type migration: :ref:`handle`
     :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
       insertion node.
     :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
-    :param dict[str, object] left_configurations: In same cases, an insertion node can be preconfigured with left_configurations
-      given from the parent node that spawned it.   In that case, ``left_configurations`` is a dictionary mapping sender id
-      to the prexisting left_configuration.  Otherwise, ``left_configurations`` is `None`
     :param dict[str, object] right_configurations: In same cases, an insertion node can be preconfigured with right_configurations
       given from the parent node that spawned it.   In that case, ``right_configurations`` is a dictionary mapping right node ids
       to the prexisting right_configuration.  Otherwise, ``right_configurations`` is `None`
@@ -30,6 +26,9 @@ class InsertionMigrator(migrator.Migrator):
     self._height = self._node.height
 
     self._right_map = None
+
+    # When the subgraph has a gap on the left, this will be the id of the unique leftmost node of the subgraph
+    self._left_gap_child_id = None
 
     # When true, the swap has been prepared, and the migrator should be checking whether it's time to swap.
     self._waiting_for_swap = False
@@ -58,11 +57,7 @@ class InsertionMigrator(migrator.Migrator):
       self._right_config_receiver = RightConfigurationReceiver(configs=right_configurations)
 
     self._left_configurations = {sender_id: None for sender_id in self._senders.keys()}
-    if left_configurations is not None:
-      self._left_configurations.update(left_configurations.items())
-      self._right_configurations_are_sent = True
-    else:
-      self._right_configurations_are_sent = False
+    self._right_configurations_are_sent = False
 
     self._left_configurations_are_sent = False
 
@@ -95,7 +90,6 @@ class InsertionMigrator(migrator.Migrator):
         migration=migrator_config['migration'],
         configure_right_parent_ids=migrator_config['configure_right_parent_ids'],
         senders=migrator_config['senders'],
-        left_configurations=migrator_config['left_configurations'],
         right_configurations=migrator_config['right_configurations'],
         receivers=migrator_config['receivers'],
         node=node)
@@ -111,7 +105,21 @@ class InsertionMigrator(migrator.Migrator):
       self._node.linker.receive_sequence_message(message['value'], sender_id=sender_id)
       self._maybe_swap()
     elif message['type'] == 'attached_migrator':
-      self._kids[sender_id] = message['insertion_node_handle']
+      node = message['insertion_node_handle']
+      self._kids[node['id']] = node
+      if node['id'] == self._left_gap_child_id:
+        self._node.send(node,
+                        messages.migration.configure_new_flow_left(self.migration_id, [
+                            messages.migration.left_configuration(
+                                height=left_config['height'],
+                                is_data=left_config['is_data'],
+                                node=self._node.transfer_handle(left_config['node'], node['id']),
+                                kids=[{
+                                    'handle': self._node.transfer_handle(kid['handle'], node['id']),
+                                    'connection_limit': kid['connection_limit']
+                                } for kid in left_config['kids']],
+                            ) for left_config in self._left_configurations.values()
+                        ]))
       self._maybe_spawned_kids()
     elif message['type'] == 'set_sum_total':
       if not self._flow_is_started:
@@ -312,7 +320,6 @@ class InsertionMigrator(migrator.Migrator):
           senders=senders,
           migrator=messages.migration.insertion_migrator_config(
               senders=senders,
-              left_configurations=None,
               configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
               receivers=[],
               migration=self._node.transfer_handle(self._migration, node_id),
@@ -343,7 +350,6 @@ class InsertionMigrator(migrator.Migrator):
         senders=senders,
         migrator=messages.migration.insertion_migrator_config(
             senders=senders,
-            left_configurations=None,
             right_configurations=self._right_config_receiver.configs,
             configure_right_parent_ids=self._configure_right_parent_ids,
             receivers=[],
@@ -370,13 +376,13 @@ class InsertionMigrator(migrator.Migrator):
               new_parent_id=node_id,
           ))
 
+    self._left_gap_child_id = node_id
     self._spawn_kid(
         layer_index=layer_index,
         node_id=node_id,
         senders=[],
         migrator=messages.migration.insertion_migrator_config(
             senders=[],
-            left_configurations=self._left_configurations,
             configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
             receivers=[],
             migration=self._node.transfer_handle(self._migration, node_id),
