@@ -143,17 +143,27 @@ class TestSpawnComputationNetwork(object):
 
     self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=20)
 
-  def test_grow_input(self, demo):
+  @pytest.mark.parametrize(
+      'name,start_inputs,start_outputs,new_inputs,new_outputs,ending_input_height,ending_output_height',
+      [
+          ('grow_input', 2, 2, 5, 0, 1, 1), # Just add inputs
+          ('grow_output', 2, 2, 0, 5, 1, 1), # Just add outputs
+          ('bump_input', 2, 2, 10, 0, 2, 1), # Add enough inputs that the tree bumps its height
+      ])
+  def test_grow_trees(self, demo, name, start_inputs, start_outputs, new_inputs, new_outputs, ending_input_height,
+                      ending_output_height):
     self.demo = demo
     self.machine_ids = demo.new_machine_controllers(
         1, base_config=self.base_config(), random_seed='test_add_leaves_after_spawn')
 
-    self._connect_and_test_io_trees(n_input_leaves=2, n_output_leaves=2)
+    self._connect_and_test_io_trees(n_input_leaves=start_inputs, n_output_leaves=start_outputs)
     demo.run_for(ms=7000)
     demo.render_network(self.root_output)
+    self.spawn_users(self.root_output, n_users=new_outputs)
+
     self.spawn_users(
         self.root_input,
-        n_users=5,
+        n_users=new_inputs,
         add_user=True,
         send_after=0,
         ave_inter_message_time_ms=500,
@@ -163,3 +173,6 @@ class TestSpawnComputationNetwork(object):
     demo.render_network(self.root_output)
     for leaf in self.output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
+
+    assert ending_input_height == demo.system.get_stats(self.root_input)['height']
+    assert ending_output_height == demo.system.get_stats(self.root_output)['height']
