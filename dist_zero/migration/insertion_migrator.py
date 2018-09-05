@@ -35,6 +35,7 @@ class InsertionMigrator(migrator.Migrator):
     self._waiting_for_swap = False
 
     self._graph = None
+    self._picker = None
 
     self._senders = {sender['id']: sender for sender in senders}
     self._receivers = {receiver['id']: receiver for receiver in receivers}
@@ -171,7 +172,7 @@ class InsertionMigrator(migrator.Migrator):
 
   def _maybe_kids_are_terminated(self):
     if all(self._kid_migrator_is_terminated.values()):
-      self._node.activate_swap(self.migration_id, new_receiver_ids=list(self._receivers.keys()), kids=self._kids)
+      self._node.activate_swap(self.migration_id, new_receivers=self._receivers, kids=self._kids)
       self._node.remove_migrator(self.migration_id)
       self._node.send(self.parent, messages.migration.migrator_terminated(self.migration_id))
 
@@ -192,12 +193,6 @@ class InsertionMigrator(migrator.Migrator):
   def _new_topology_picker(self):
     return topology_picker.TopologyPicker(
         graph=self._graph,
-        max_outputs={
-            kid['handle']['id']: kid['connection_limit']
-            for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
-        },
-        max_inputs={kid_id: self._node.system_config['SUM_NODE_SENDER_LIMIT']
-                    for kid_id in self._left_layer.keys()},
         # TODO(KK): There is probably a better way to configure these standard limits than the below.
         # Look into it, write up some notes, and fix it.
         new_node_max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
@@ -212,26 +207,27 @@ class InsertionMigrator(migrator.Migrator):
 
       from dist_zero.node.computation import ComputationNode
       self._node.logger.info("Insertion migrator has received all Left and Right configurations. Ready to spawn.")
+      self._left_layer = {
+          kid['handle']['id']: kid['handle']
+          for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
+      }
+      self._graph = NetworkGraph()
+
+      for left_id in self._left_layer.keys():
+        self._graph.add_node(left_id)
+
+      self._left_is_data = any(config['is_data'] for config in self._left_configurations.values())
+      self._right_is_data = any(config['is_data'] for config in self._right_config_receiver.configs.values())
+      self._picker = self._new_topology_picker()
+
       if self._node.__class__ != ComputationNode:
         self._height = 0
         self._all_kids_are_spawned()
       else:
-        self._left_layer = {
-            kid['handle']['id']: kid['handle']
-            for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
-        }
-        self._graph = NetworkGraph()
-
-        for left_id in self._left_layer.keys():
-          self._graph.add_node(left_id)
-
-        self._left_is_data = any(config['is_data'] for config in self._left_configurations.values())
-        self._right_is_data = any(config['is_data'] for config in self._right_config_receiver.configs.values())
-
-        # Decide on a network topology and spawn new kids
         max_left_height, max_right_height = self._max_left_height(), self._max_right_height()
         self._height = max(max_left_height, max_right_height)
-        self._picker = self._new_topology_picker()
+
+        # Decide on a network topology and spawn new kids
         self._right_map = self._picker.fill_graph(
             left_is_data=self._left_is_data,
             left_height=max_left_height,
@@ -262,12 +258,16 @@ class InsertionMigrator(migrator.Migrator):
     else:
       raise errors.InternalError('Node id "{}" was not found in the kids on left-kids.'.format(node_id))
 
-  def _spawn_kid(self, node_id, senders, migrator):
+  def _spawn_kid(self, layer_index, node_id, senders, migrator):
     self._kids[node_id] = None
     if self._height == 0:
       self._node._controller.spawn_node(
           messages.sum.sum_node_config(
               node_id=node_id,
+              left_is_data=self._node.left_is_data and layer_index == 1,
+              # TODO(KK): This business about right_map here is very ugly.  Think hard and try to come up with a way to avoid it.
+              right_is_data=self._node.right_is_data and layer_index + 1 == self._picker.n_layers
+              and bool(self._right_map[node_id]),
               senders=senders,
               receivers=[],
               parent=self._node.new_handle(node_id),
@@ -279,6 +279,10 @@ class InsertionMigrator(migrator.Migrator):
               node_id=node_id,
               parent=self._node.new_handle(node_id),
               height=self._height - 1,
+              left_is_data=self._node.left_is_data and layer_index == 1,
+              # TODO(KK): This business about right_map here is very ugly.  Think hard and try to come up with a way to avoid it.
+              right_is_data=self._node.right_is_data and layer_index + 1 == self._picker.n_layers
+              and bool(self._right_map[node_id]),
               senders=senders,
               receivers=[],
               migrator=migrator))
@@ -297,6 +301,7 @@ class InsertionMigrator(migrator.Migrator):
     for node_id in self._picker.get_layer(layer_index):
       senders = [self._id_to_handle(sender_id) for sender_id in self._graph.node_senders(node_id)]
       self._spawn_kid(
+          layer_index=layer_index,
           node_id=node_id,
           senders=senders,
           migrator=messages.migration.insertion_migrator_config(
@@ -327,6 +332,7 @@ class InsertionMigrator(migrator.Migrator):
 
     senders = [self._id_to_handle(sender_id) for sender_id in self._graph.node_senders(node_id)]
     self._spawn_kid(
+        layer_index=layer_index,
         node_id=node_id,
         senders=senders,
         migrator=messages.migration.insertion_migrator_config(
@@ -359,6 +365,7 @@ class InsertionMigrator(migrator.Migrator):
           ))
 
     self._spawn_kid(
+        layer_index=layer_index,
         node_id=node_id,
         senders=[],
         migrator=messages.migration.insertion_migrator_config(
@@ -403,7 +410,7 @@ class InsertionMigrator(migrator.Migrator):
 
   def _all_kids_are_spawned(self):
     if not self._left_configurations_are_sent:
-      self._node.set_graph(self._graph)
+      self._node.set_picker(self._picker)
       self._send_configure_left_to_right()
 
   def _receiver_to_kids(self):
@@ -458,7 +465,7 @@ class InsertionMigrator(migrator.Migrator):
                             self.migration_id, first_live_sequence_number=exporter._internal_sequence_number))
 
       self._waiting_for_swap = False
-      self._node.activate_swap(self.migration_id, new_receiver_ids=list(self._receivers.keys()), kids=self._kids,
+      self._node.activate_swap(self.migration_id, new_receivers=self._receivers, kids=self._kids,
           use_output=len(self._right_config_receiver.configs) == 1 and \
               next(iter(self._right_config_receiver.configs.values()))['is_data'],
           use_input=len(self._left_configurations) == 1 and next(iter(self._left_configurations.values()))['is_data'])

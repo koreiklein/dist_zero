@@ -144,19 +144,17 @@ def leaf_config(node_id, name, parent, variant, initial_state, recorded_user_jso
   }
 
 
-def added_adjacent_kid(kid, height, variant):
+def added_sibling_kid(kid, height, variant):
   '''
-  Indicates to an adjacent edge node in a computation that a pending kid has successfully been added to the network,
+  Indicates to a sibling node in a computation that a pending kid has successfully been added to the network,
   and is now ready to receive messages.
 
-  :param kid: The :ref:`handle` of the leaf node that was just added.
+  :param kid: The :ref:`handle` of the node that was just added.
   :type kid: :ref:`handle`
   :param int height: The height of the parent.
-    If 0, the newly added kid will be a `LeafNode` otherwise, it will be an `InternalNode`
-
   :param str variant: 'input' or 'output'
   '''
-  return {'type': 'added_adjacent_kid', 'kid': kid, 'variant': variant, 'height': height}
+  return {'type': 'added_sibling_kid', 'kid': kid, 'variant': variant, 'height': height}
 
 
 def hello_parent(kid):

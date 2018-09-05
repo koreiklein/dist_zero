@@ -10,16 +10,13 @@ class TopologyPicker(object):
   and determine a new set of nodes and their connections in such a way that it meets the constraints.
   '''
 
-  def __init__(self, graph, max_outputs, max_inputs, new_node_max_outputs, new_node_max_inputs, new_node_name_prefix):
+  def __init__(self, graph, new_node_max_outputs, new_node_max_inputs, new_node_name_prefix):
     self._graph = graph
     self._left_layer = [node for node in graph.nodes()]
     self._layers = [self._left_layer]
 
     self._cur_left_tree_index = 0
     self._cur_right_tree_index = 0
-
-    self._max_outputs = max_outputs
-    self._max_inputs = max_inputs
 
     self._new_node_max_outputs = new_node_max_outputs
     self._new_node_max_inputs = new_node_max_inputs
@@ -31,6 +28,10 @@ class TopologyPicker(object):
 
     self._right_edge = None
     self._left_edge = None
+
+  @property
+  def graph(self):
+    return self._graph
 
   @property
   def n_layers(self):

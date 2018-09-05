@@ -195,6 +195,8 @@ class Demo(object):
                     node_id=root_computation_node_id,
                     height=1,
                     parent=None,
+                    left_is_data=True,
+                    right_is_data=True,
                     senders=[input_handle_for_migration],
                     receivers=[output_handle_for_migration],
                     migrator=messages.migration.insertion_migrator_config(

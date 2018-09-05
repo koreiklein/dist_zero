@@ -153,15 +153,13 @@ class TestSpawnComputationNetwork(object):
     demo.render_network(self.root_output)
     self.spawn_users(
         self.root_input,
-        n_users=2, # FIXME(KK): Should be more like 5
+        n_users=5,
         add_user=True,
         send_after=0,
         ave_inter_message_time_ms=500,
         send_messages_for_ms=3000)
 
     demo.run_for(ms=5000)
-    import ipdb
-    ipdb.set_trace()
     demo.render_network(self.root_output)
     for leaf in self.output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)

@@ -1,8 +1,18 @@
-def computation_node_config(node_id, height, parent, senders, receivers, migrator, adoptees=None):
+def computation_node_config(node_id,
+                            left_is_data,
+                            right_is_data,
+                            height,
+                            parent,
+                            senders,
+                            receivers,
+                            migrator,
+                            adoptees=None):
   '''
   A node config for creating an internal `ComputationNode` in a network of computation nodes.
 
   :param str node_id: The id to use for the new node.
+  :param bool left_is_data: True iff the node just to the left is a data node.
+  :param bool right_is_data: True iff the node just to the right is a data node.
   :param parent: The :ref:`handle` of this node's parent.
   :type parent: :ref:`handle`
   :param int height: The height of the new computation node in its tree.
@@ -17,6 +27,8 @@ def computation_node_config(node_id, height, parent, senders, receivers, migrato
       'parent': parent,
       'height': height,
       'senders': senders,
+      'left_is_data': left_is_data,
+      'right_is_data': right_is_data,
       'receivers': receivers,
       'migrator': migrator,
       'adoptees': adoptees,

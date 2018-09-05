@@ -1,6 +1,7 @@
 import logging
 
 from dist_zero import messages, ids, errors, network_graph
+from dist_zero.migration import topology_picker
 
 from .node import Node
 
@@ -8,15 +9,17 @@ logger = logging.getLogger(__name__)
 
 
 class ComputationNode(Node):
-  def __init__(self, node_id, parent, height, senders, receivers, migrator_config, adoptees, controller):
+  def __init__(self, node_id, left_is_data, right_is_data, parent, height, senders, receivers, migrator_config,
+               adoptees, controller):
     self.id = node_id
     self._controller = controller
+
+    self.left_is_data = left_is_data
+    self.right_is_data = right_is_data
 
     self.parent = parent
     self.height = height
     self.kids = {}
-
-    self._graph = network_graph.NetworkGraph()
 
     self._adoptees = adoptees
     self._pending_adoptees = None
@@ -46,21 +49,38 @@ class ComputationNode(Node):
 
     self._receivers = {receiver['id']: receiver for receiver in receivers}
 
+    # Sometimes, kids will be spawned without appropriate senders/receivers.
+    # When that happens they will be temporarily added to these sets.
+    # Once the kid says hello, it will be removed from this set once it is arranged that the kid
+    # get the required senders/receivers.
+    self._kids_missing_receivers = set()
+    self._kids_missing_senders = set()
+
     super(ComputationNode, self).__init__(logger)
 
     for sender_id in self._senders.keys():
       self._deltas.add_sender(sender_id)
 
+    self._picker = topology_picker.TopologyPicker(
+        graph=network_graph.NetworkGraph(),
+        # TODO(KK): There is probably a better way to configure these standard limits than the below.
+        # Look into it, write up some notes, and fix it.
+        new_node_max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
+        new_node_max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],
+        new_node_name_prefix='SumNode' if self.height == 0 else 'ComputationNode',
+    )
+
   def is_data(self):
     return False
 
-  def set_graph(self, graph):
-    self._graph = graph
+  def set_picker(self, picker):
+    self._picker = picker
 
   def checkpoint(self, before=None):
     pass
 
-  def activate_swap(self, migration_id, new_receiver_ids, kids, use_output=False, use_input=False):
+  def activate_swap(self, migration_id, new_receivers, kids, use_output=False, use_input=False):
+    self._receivers.update(new_receivers.items())
     self.kids.update(kids)
 
   def initialize(self):
@@ -94,6 +114,8 @@ class ComputationNode(Node):
   def from_config(node_config, controller):
     return ComputationNode(
         node_id=node_config['id'],
+        left_is_data=node_config['left_is_data'],
+        right_is_data=node_config['right_is_data'],
         parent=node_config['parent'],
         height=node_config['height'],
         senders=node_config['senders'],
@@ -116,51 +138,45 @@ class ComputationNode(Node):
       raise errors.InternalError("Already exporting to this node.", extra={'existing_node_id': receiver['id']})
     self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
 
-  def _pick_new_receiver_for_kid(self):
+  def _pick_new_receiver_parent_for_kid(self):
+    '''When we can't find a any receiver for a kid, find a parent of a receiver from the nodes to the right.'''
+    return next(iter(self._receivers.values()))
+
+  def _pick_new_sender_parent_for_kid(self):
+    '''When we can't find a any sender for a kid, find a parent of a sender from the nodes to the left.'''
+    return next(iter(self._senders.values()))
+
+  def _pick_new_receivers_for_kid(self):
     '''
-    Return a node in self._graph that could function as a receiver for a newly added kid.
-    or None if no node is appropriate.
+    Return a list of nodes in self._graph that should function as receivers for a newly added kid.
+    or None if no list is appropriate.
     '''
-    possible = list(self.kids.values())
-    if len(possible) == 0:
-      return None
-
-    io_ids = [node for node in self._graph.nodes() if node.startswith('LeafNode') or node.startswith('InternalNode')]
-    io_adjacents = set(adjacent for leaf_id in io_ids for adjacent in self._graph.node_receivers(leaf_id))
-
-    non_adjacent_kids = list(
-        sorted(
-            (receiver for receiver in possible if receiver['id'] not in io_adjacents),
-            key=lambda receiver: len(self._graph.node_senders(receiver['id'])),
-        ))
-
-    if not non_adjacent_kids:
-      return None
-
-    return self._controller.random.choice(non_adjacent_kids)
+    if self.left_is_data:
+      if self._picker.n_layers >= 3:
+        return [self.kids[node_id] for node_id in self._picker.get_layer(2)]
+      else:
+        return None
+    else:
+      if self._picker.n_layers >= 2:
+        return [self.kids[node_id] for node_id in self._picker.get_layer(1)]
+      else:
+        return None
 
   def _pick_new_sender_for_kid(self):
     '''
-    Return a node in self._graph that could function as a sender for a newly added kid.
-    or None if no node is appropriate.
+    Return a list of nodes in self._graph that should function as senders for a newly added kid.
+    or None if no list is appropriate.
     '''
-    possible = list(self.kids.values())
-    if len(possible) == 0:
-      return None
-
-    io_ids = [node for node in self._graph.nodes() if node.startswith('LeafNode') or node.startswith('InternalNode')]
-    io_adjacents = set(adjacent for leaf_id in io_ids for adjacent in self._graph.node_senders(leaf_id))
-
-    non_adjacent_kids = list(
-        sorted(
-            (sender for sender in possible if sender['id'] not in io_adjacents),
-            key=lambda sender: len(self._graph.node_receivers(sender['id'])),
-        ))
-
-    if not non_adjacent_kids:
-      return None
-
-    return self._controller.random.choice(non_adjacent_kids)
+    if self.right_is_data:
+      if self._picker.n_layers >= 2:
+        return [self.kids[node_id] for node_id in self._picker.get_layer(self._picker.n_layers - 1)]
+      else:
+        return None
+    else:
+      if self._picker.n_layers >= 1:
+        return [self.kids[node_id] for node_id in self._picker.get_layer(self._picker.n_layers - 1)]
+      else:
+        return None
 
   def _adjacent_node_bumped_height(self, proxy, kid_ids, variant):
     '''Called in response to an adjacent node informing self that it has bumped its height.'''
@@ -170,13 +186,13 @@ class ComputationNode(Node):
       senders = [self.transfer_handle(proxy, node_id)]
       receivers = [] # The receiver will be added later
       adoptee_ids = [
-          computation_kid_id for io_kid in kid_ids for computation_kid_id in self._graph.node_receivers(io_kid)
+          computation_kid_id for io_kid in kid_ids for computation_kid_id in self._picker.graph.node_receivers(io_kid)
       ]
     elif variant == 'output':
       senders = [] # The sender will be added later
       receivers = [self.transfer_handle(proxy, node_id)]
       adoptee_ids = [
-          computation_kid_id for io_kid in kid_ids for computation_kid_id in self._graph.node_senders(io_kid)
+          computation_kid_id for io_kid in kid_ids for computation_kid_id in self._picker.graph.node_senders(io_kid)
       ]
     else:
       raise errors.InternalError("Unrecognized variant {}".format(variant))
@@ -185,6 +201,8 @@ class ComputationNode(Node):
         messages.computation.computation_node_config(
             node_id=node_id,
             parent=self.new_handle(node_id),
+            left_is_data=variant == 'input',
+            right_is_data=variant == 'output',
             height=self.height,
             adoptees=[self.transfer_handle(self.kids[adoptee_id], node_id) for adoptee_id in adoptee_ids],
             senders=senders,
@@ -214,6 +232,8 @@ class ComputationNode(Node):
             node_id=node_id,
             parent=self.new_handle(node_id),
             height=self.height,
+            left_is_data=False,
+            right_is_data=False,
             adoptees=[self.transfer_handle(kid, node_id) for kid in self.kids.values()],
             senders=senders,
             receivers=receivers,
@@ -221,8 +241,34 @@ class ComputationNode(Node):
 
     self.kids[proxy_adjacent_handle['id']] = proxy_adjacent_handle
 
-  def _adjacent_node_added_kid(self, message):
+  def _spawn_extreme_node(self, is_leaf, left, node_id, senders, receivers):
+    '''spawn a node all the way at the left or right'''
+    if is_leaf:
+      self._controller.spawn_node(
+          messages.sum.sum_node_config(
+              node_id=node_id,
+              left_is_data=self.left_is_data and left,
+              right_is_data=self.right_is_data and not left,
+              senders=senders,
+              parent=self.new_handle(node_id),
+              receivers=receivers,
+          ))
+    else:
+      self._controller.spawn_node(
+          messages.computation.computation_node_config(
+              node_id=node_id,
+              left_is_data=self.left_is_data and left,
+              right_is_data=self.right_is_data and not left,
+              parent=self.new_handle(node_id),
+              height=self.height - 1,
+              senders=senders,
+              receivers=receivers,
+              migrator=None,
+          ))
+
+  def _sibling_node_added_kid(self, message):
     kid = message['kid']
+
     is_leaf = message['height'] == 0
     node_id = ids.new_id('{}_{}_adjacent'.format(
         'SumNode' if is_leaf else 'ComputationNode',
@@ -230,71 +276,44 @@ class ComputationNode(Node):
     ))
 
     if message['variant'] == 'input':
-      self._graph.add_node(node_id)
-      self._graph.add_node(kid['id'])
-      self._graph.add_edge(kid['id'], node_id)
-      receiver = self._pick_new_receiver_for_kid()
-      sender = self.transfer_handle(handle=kid, for_node_id=node_id)
-      if receiver is None:
+      self._picker.graph.add_node(node_id)
+      self._picker.graph.add_node(kid['id'])
+      self._picker.graph.add_edge(kid['id'], node_id)
+      receivers = self._pick_new_receivers_for_kid()
+      if receivers is None:
         receivers = []
-        # FIXME(KK): Ensure receivers is set later.
-        import ipdb
-        ipdb.set_trace()
+        # Tell a parent receiver to find an actual receiver for this kid
+        self._kids_missing_receivers.add(node_id)
       else:
-        receivers = [self.transfer_handle(receiver, node_id)]
-        self._graph.add_edge(node_id, receiver['id'])
-      if is_leaf:
-        self._controller.spawn_node(
-            messages.sum.sum_node_config(
-                node_id=node_id,
-                senders=[],
-                parent=self.new_handle(node_id),
-                receivers=receivers,
-                input_node=sender,
-            ))
-      else:
-        self._controller.spawn_node(
-            messages.computation.computation_node_config(
-                node_id=node_id,
-                parent=self.new_handle(node_id),
-                height=self.height - 1,
-                senders=[sender],
-                receivers=receivers,
-                migrator=None,
-            ))
+        receivers = [self.transfer_handle(receiver, node_id) for receiver in receivers]
+        for receiver in receivers:
+          self._picker.graph.add_edge(node_id, receiver['id'])
+      self._spawn_extreme_node(
+          is_leaf=is_leaf,
+          left=True,
+          node_id=node_id,
+          senders=[self.transfer_handle(handle=kid, for_node_id=node_id)],
+          receivers=receivers)
     elif message['variant'] == 'output':
-      self._graph.add_node(node_id)
-      self._graph.add_node(kid['id'])
-      self._graph.add_edge(node_id, kid['id'])
-      sender = self._pick_new_sender_for_kid()
-      receiver = self.transfer_handle(handle=kid, for_node_id=node_id)
-      if sender is None:
+      self._picker.graph.add_node(node_id)
+      self._picker.graph.add_node(kid['id'])
+      self._picker.graph.add_edge(node_id, kid['id'])
+      senders = self._pick_new_sender_for_kid()
+
+      if senders is None:
         senders = []
-        # FIXME(KK): Ensure senders is set later.
-        import ipdb
-        ipdb.set_trace()
+        # Tell a parent receiver to find an actual sender for this kid
+        self._kids_missing_senders.add(node_id)
       else:
-        senders = [self.transfer_handle(sender, node_id)]
-        self._graph.add_edge(sender['id'], node_id)
-      if is_leaf:
-        self._controller.spawn_node(
-            messages.sum.sum_node_config(
-                node_id=node_id,
-                parent=self.new_handle(node_id),
-                senders=senders,
-                receivers=[],
-                output_node=receiver,
-            ))
-      else:
-        self._controller.spawn_node(
-            messages.computation.computation_node_config(
-                node_id=node_id,
-                parent=self.new_handle(node_id),
-                height=self.height - 1,
-                senders=senders,
-                receivers=[receiver],
-                migrator=None,
-            ))
+        senders = [self.transfer_handle(sender, node_id) for sender in senders]
+        for sender in senders:
+          self._picker.graph.add_edge(sender['id'], node_id)
+      self._spawn_extreme_node(
+          is_leaf=is_leaf,
+          left=False,
+          node_id=node_id,
+          senders=senders,
+          receivers=[self.transfer_handle(handle=kid, for_node_id=node_id)])
     else:
       raise errors.InternalError("Unrecognized variant {}".format(message['variant']))
 
@@ -303,13 +322,15 @@ class ComputationNode(Node):
     if len(self.kids) != 2:
       raise errors.InternalError("A computation node should have exactly 2 kids after it finishes bumping.")
 
+    import ipdb
+    ipdb.set_trace()
     self._graph = network_graph.NetworkGraph()
-    self._graph.add_node(self._proxy_adjacent_id)
-    self._graph.add_node(self._proxy_id)
+    self._picker.graph.add_node(self._proxy_adjacent_id)
+    self._picker.graph.add_node(self._proxy_id)
     if self._proxy_adjacent_variant == 'input':
-      self._graph.add_edge(self._proxy_adjacent_id, self._proxy_id)
+      self._picker.graph.add_edge(self._proxy_adjacent_id, self._proxy_id)
     elif self._proxy_adjacent_variant == 'outpu':
-      self._graph.add_edge(self._proxy_id, self._proxy_adjacent_id)
+      self._picker.graph.add_edge(self._proxy_id, self._proxy_adjacent_id)
     else:
       raise errors.InternalError("Unrecognized variant {}".format(self._proxy_adjacent_variant))
 
@@ -338,6 +359,14 @@ class ComputationNode(Node):
         if not self._pending_adoptees:
           self._pending_adoptees = None
           self._send_hello_parent()
+      elif sender_id in self._kids_missing_receivers:
+        self._kids_missing_receivers.remove(sender_id)
+        self.send(self._pick_new_receiver_parent_for_kid(),
+                  messages.io.added_sibling_kid(height=self.height, variant='input', kid=message['kid']))
+      elif sender_id in self._kids_missing_senders:
+        self._kids_missing_senders.remove(sender_id)
+        self.send(self._pick_new_sender_parent_for_kid(),
+                  messages.io.added_sibling_kid(height=self.height, variant='output', kid=message['kid']))
       self.kids[sender_id] = message['kid']
     elif message['type'] == 'goodbye_parent':
       if sender_id not in self.kids:
@@ -346,8 +375,8 @@ class ComputationNode(Node):
       self.kids.pop(sender_id)
     elif message['type'] == 'bumped_height':
       self._adjacent_node_bumped_height(proxy=message['proxy'], kid_ids=message['kid_ids'], variant=message['variant'])
-    elif message['type'] == 'added_adjacent_kid':
-      self._adjacent_node_added_kid(message)
+    elif message['type'] == 'added_sibling_kid':
+      self._sibling_node_added_kid(message)
     else:
       super(ComputationNode, self).receive(message=message, sender_id=sender_id)
 

@@ -45,15 +45,17 @@ def sum_node_config(
     senders,
     receivers,
     parent,
+    left_is_data,
+    right_is_data,
     migrator=None,
-    output_node=None,
-    input_node=None,
 ):
   '''
   A node config for creating a node to accept increments from a set of senders, sum them
   together and pass all increments to every receiver.
 
   :param str node_id: The id of the new node.
+  :param bool left_is_data: True iff the node just to the left is a data node.
+  :param bool right_is_data: True iff the node just to the right is a data node.
 
   :param list senders: A list of :ref:`handle` for sending nodes.
   :param list receivers: A list of :ref:`handle` for receiving nodes.
@@ -69,7 +71,7 @@ def sum_node_config(
       'senders': senders,
       'receivers': receivers,
       'parent': parent,
-      'output_node': output_node,
-      'input_node': input_node,
+      'left_is_data': left_is_data,
+      'right_is_data': right_is_data,
       'migrator': migrator,
   }

@@ -323,7 +323,7 @@ class InternalNode(Node):
 
     if self._adjacent is not None:
       self.send(self._adjacent,
-                messages.io.added_adjacent_kid(
+                messages.io.added_sibling_kid(
                     height=self._height,
                     kid=self.transfer_handle(handle=kid, for_node_id=self._adjacent['id']),
                     variant=self._variant))
