@@ -10,10 +10,14 @@ class TopologyPicker(object):
   and determine a new set of nodes and their connections in such a way that it meets the constraints.
   '''
 
-  def __init__(self, graph, new_node_max_outputs, new_node_max_inputs, new_node_name_prefix):
+  def __init__(self, graph, left_is_data, right_is_data, new_node_max_outputs, new_node_max_inputs,
+               new_node_name_prefix):
     self._graph = graph
     self._left_layer = [node for node in graph.nodes()]
     self._layers = [self._left_layer]
+
+    self.left_is_data = left_is_data
+    self.right_is_data = right_is_data
 
     self._cur_left_tree_index = 0
     self._cur_right_tree_index = 0
@@ -50,7 +54,7 @@ class TopologyPicker(object):
     self._cur_right_tree_index += 1
     return result
 
-  def _form_right_tree_from_right_configurations(self, right_config_by_id, right_is_data, n_left_layers):
+  def _form_right_tree_from_right_configurations(self, right_config_by_id, n_left_layers):
     self._right_edge = defaultdict(list)
     current_tree_layer = list(right_config_by_id.keys())
 
@@ -58,7 +62,7 @@ class TopologyPicker(object):
 
     adjacent_layer = []
     for node in current_tree_layer:
-      if right_is_data:
+      if self.right_is_data:
         n_kids = right_config_by_id[node]['n_kids']
       else:
         n_kids = 1 if n_left_layers <= 2 else right_config_by_id[node]['connection_limit']
@@ -128,15 +132,15 @@ class TopologyPicker(object):
       left_layer.append(node_id)
     self._layers.append(left_layer)
 
-  def fill_graph(self, left_is_data, left_height, right_is_data, right_height, right_configurations):
-    if left_is_data:
+  def fill_graph(self, right_configurations):
+    if self.left_is_data:
       self._add_left_adjacents_layer()
 
     right_config_by_id = {right_config['parent_handle']['id']: right_config for right_config in right_configurations}
 
     # Create a tree of left coordinates and of right coordinates
     left_layers = self._form_left_tree_from_nodes(self._layers[-1])
-    right_layers = self._form_right_tree_from_right_configurations(right_config_by_id, right_is_data, len(left_layers))
+    right_layers = self._form_right_tree_from_right_configurations(right_config_by_id, len(left_layers))
 
     # Adjust the trees so that the have the same height.
     # Also, in order that this picker spawn at least one new node, that common height must be at least 3.

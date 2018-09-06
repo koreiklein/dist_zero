@@ -63,6 +63,8 @@ class ComputationNode(Node):
 
     self._picker = topology_picker.TopologyPicker(
         graph=network_graph.NetworkGraph(),
+        left_is_data=self.left_is_data,
+        right_is_data=self.right_is_data,
         # TODO(KK): There is probably a better way to configure these standard limits than the below.
         # Look into it, write up some notes, and fix it.
         new_node_max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
@@ -329,7 +331,7 @@ class ComputationNode(Node):
     self._picker.graph.add_node(self._proxy_id)
     if self._proxy_adjacent_variant == 'input':
       self._picker.graph.add_edge(self._proxy_adjacent_id, self._proxy_id)
-    elif self._proxy_adjacent_variant == 'outpu':
+    elif self._proxy_adjacent_variant == 'output':
       self._picker.graph.add_edge(self._proxy_id, self._proxy_adjacent_id)
     else:
       raise errors.InternalError("Unrecognized variant {}".format(self._proxy_adjacent_variant))

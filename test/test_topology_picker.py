@@ -34,8 +34,7 @@ def test_many_right_configs():
       'connection_limit': 20,
   } for i in range(10)]
 
-  right_map = picker.fill_graph(
-      left_is_data=False, right_is_data=False, left_height=1, right_height=1, right_configurations=right_configurations)
+  right_map = picker.fill_graph(left_is_data=False, right_is_data=False, right_configurations=right_configurations)
 
   for right_most, right_configs in right_map.items():
     assert len(right_configs) <= 5
@@ -70,8 +69,7 @@ def test_picker():
           'connection_limit': 20,
       },
   ]
-  right_map = picker.fill_graph(
-      left_is_data=False, right_is_data=False, left_height=1, right_height=1, right_configurations=right_configurations)
+  right_map = picker.fill_graph(left_is_data=False, right_is_data=False, right_configurations=right_configurations)
   assert 2 == picker.n_layers
   assert len(left_nodes) == len(picker.get_layer(0))
   new_layer = picker.get_layer(1)
