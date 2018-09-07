@@ -1,7 +1,7 @@
 import logging
 
 from dist_zero import messages, ids, errors, network_graph
-from dist_zero.migration import topology_picker
+from dist_zero import topology_picker
 
 from .node import Node
 
@@ -61,7 +61,7 @@ class ComputationNode(Node):
     for sender_id in self._senders.keys():
       self._deltas.add_sender(sender_id)
 
-    self._picker = topology_picker.TopologyPicker(
+    self._picker = topology_picker.OldTopologyPicker(
         graph=network_graph.NetworkGraph(),
         left_is_data=self.left_is_data,
         right_is_data=self.right_is_data,
@@ -140,14 +140,6 @@ class ComputationNode(Node):
       raise errors.InternalError("Already exporting to this node.", extra={'existing_node_id': receiver['id']})
     self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
 
-  def _pick_new_receiver_parent_for_kid(self):
-    '''When we can't find a any receiver for a kid, find a parent of a receiver from the nodes to the right.'''
-    return next(iter(self._receivers.values()))
-
-  def _pick_new_sender_parent_for_kid(self):
-    '''When we can't find a any sender for a kid, find a parent of a sender from the nodes to the left.'''
-    return next(iter(self._senders.values()))
-
   def _pick_new_receivers_for_kid(self):
     '''
     Return a list of nodes in self._graph that should function as receivers for a newly added kid.
@@ -213,7 +205,7 @@ class ComputationNode(Node):
 
   def _spawn_proxy(self, proxy_adjacent_handle):
     '''
-    After an adjacent node bumps it's height,
+    After an adjacent node bumps its height,
     a proxy for the adjacent will be spawned (its id will be stored in ``self._proxy_adjacent_id``)
     Once that proxy has reported that it is up and running, this node will call ``_spawn_proxy`` to
     spawn the second node to adopt the remaining kids of self as part of the process of bumping height.
@@ -374,12 +366,12 @@ class ComputationNode(Node):
           self._send_hello_parent()
       elif sender_id in self._kids_missing_receivers:
         self._kids_missing_receivers.remove(sender_id)
-        self.send(self._pick_new_receiver_parent_for_kid(),
-                  messages.io.added_sibling_kid(height=self.height, variant='input', kid=message['kid']))
+        for receiver in self._receivers.values():
+          self.send(receiver, messages.io.added_sibling_kid(height=self.height, variant='input', kid=message['kid']))
       elif sender_id in self._kids_missing_senders:
         self._kids_missing_senders.remove(sender_id)
-        self.send(self._pick_new_sender_parent_for_kid(),
-                  messages.io.added_sibling_kid(height=self.height, variant='output', kid=message['kid']))
+        for sender in self._senders.values():
+          self.send(sender, messages.io.added_sibling_kid(height=self.height, variant='output', kid=message['kid']))
       self.kids[sender_id] = message['kid']
     elif message['type'] == 'goodbye_parent':
       if sender_id not in self.kids:

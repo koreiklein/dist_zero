@@ -4,138 +4,6 @@ from collections import defaultdict
 from dist_zero import errors, ids
 
 
-class NodeTree(object):
-  def __init__(self, nodes, max_kids):
-    self.layers = []
-
-    self._base_nodes = nodes
-    self._max_kids = max_kids
-    self.parent = {}
-    self.kids = defaultdict(list)
-
-    self.index = {} # A map from node to its index in self.layers
-
-    self._fill_in_tree()
-
-  @property
-  def height(self):
-    return len(self.layers)
-
-  @property
-  def root(self):
-    result, = self.layers[-1]
-    return result
-
-  @property
-  def is_full(self):
-    '''
-    True iff there is no more room in the tree to fit new nodes.
-    '''
-    return len(self._base_nodes) >= self._max_kids**(self.height - 1)
-
-  def _new_node(self):
-    result = str(len(self.parent))
-    self.parent[result] = None
-    return result
-
-  def _set_parent(self, node, parent):
-    self.parent[node] = parent
-    self.kids[parent].append(node)
-
-  def bump_height(self):
-    new_root = self._new_node()
-    self.layers.append([new_root])
-    for node in self.layers[-2]:
-      self._set_parent(node, new_root)
-
-  def append_base(self, node):
-    '''
-    Add a new node, to the base nodes of this tree,
-    returning the necessary modifications to the tree to make the addition successfull.
-    :return: A list of pairs (node_id, parent) defining a new node that should be added
-        along with its parent.
-
-    IMPORTANT: This method is allowed to break the invariant that there be empty space to add nodes
-      to the tree.  When calling it, be sure to check `NodeTree.is_full` and repair the broken invariant
-      if necessary.
-    '''
-    if len(self.layers) == 0:
-      raise errors.InternalError("There must be at least one layer before appending new nodes.")
-    results = []
-    layer_index = 0
-    best = None
-    while True:
-      # Invariants:
-      #   ``node`` has not yet been put in the tree, but may have kids in layer_index - 1
-      #   ``self.parent.get(node, None) is None``.
-      #   ``node`` has not been added to a layer, but will be added later on.
-      #   All nodes in layers < layer_index have proper parents/kids and meet the constraints.
-      self._add_node_to_layer(layer_index, node)
-
-      layer_index += 1
-      self.layers[layer_index].sort(key=lambda parent: len(self.kids[parent]))
-      best = self.layers[layer_index][0]
-      if len(self.kids[best]) < self._max_kids:
-        self._set_parent(node, best)
-        results.append(node)
-        break
-      else:
-        # All nodes in layer_index have the maximum number of kids
-        if layer_index + 1 == len(self.layers):
-          raise errors.InternalError("Impossible! The root node should never have the maximum number of kids.")
-        new_parent = self._new_node()
-        self._set_parent(node, new_parent)
-        results.append(node)
-        node = new_parent
-        continue
-
-    # The node was fit into the tree, given the parent ``best`` at ``layer_index``
-    return results
-
-  def insert_duplicate_layer_before_layer(self, layer_index):
-    '''
-    Insert a duplicate layer before the layer at ``layer_index``
-    '''
-    new_layer = []
-    for node in self.layers[layer_index]:
-      new_node = self._new_node()
-      for kid in self.kids[node]:
-        self._set_parent(kid, new_node)
-      self.kids[node] = []
-      self._set_parent(new_node, node)
-      new_layer.append(new_node)
-
-    self.layers.insert(layer_index, new_layer)
-    # Update the values in self.index, as many of them are now out of date.
-    for i in range(layer_index, len(self.layers)):
-      for node in self.layers[i]:
-        self.index[node] = i
-
-    return new_layer
-
-  def _add_node_to_layer(self, layer_index, node):
-    while layer_index < 0:
-      layer_index += len(self.layers)
-    self.layers[layer_index].append(node)
-    self.index[node] = layer_index
-
-  def _fill_in_tree(self):
-    self.layers.append([])
-    for node in self._base_nodes:
-      self._add_node_to_layer(0, node)
-      self.parent[node] = None
-    while len(self.layers[-1]) > 1:
-      self.layers.append([])
-      for i in range(0, len(self.layers[-2]), self._max_kids):
-        next_node = self._new_node()
-        self._add_node_to_layer(-1, next_node)
-        for node in self.layers[-2][i:i + self._max_kids]:
-          self._set_parent(node, next_node)
-
-    if self.height == 0 or len(self.kids[self.root]) == self._max_kids:
-      self.bump_height()
-
-
 class TopologyPicker(object):
   def __init__(self, graph, lefts, rights, max_outputs, max_inputs, name_prefix):
     self._graph = graph
@@ -304,6 +172,149 @@ class TopologyPicker(object):
       for src in layer:
         for tgt in self._outgoing_nodes(src):
           self._graph.add_edge(src, tgt)
+
+
+class NodeTree(object):
+  def __init__(self, nodes, max_kids):
+    self.layers = []
+
+    self._base_nodes = nodes
+    if max_kids <= 1:
+      raise errors.InternalError("Nodes must be allowed at least 2 kids.")
+    self._max_kids = max_kids
+    self.parent = {}
+    self.kids = defaultdict(list)
+
+    self.index = {} # A map from node to its index in self.layers
+
+    self._fill_in_tree()
+
+  @property
+  def height(self):
+    return len(self.layers)
+
+  @property
+  def root(self):
+    result, = self.layers[-1]
+    return result
+
+  @property
+  def is_full(self):
+    '''
+    True iff there is no more room in the tree to fit new nodes.
+    '''
+    return len(self._base_nodes) >= self._max_kids**(self.height - 1)
+
+  def _new_node(self):
+    result = str(len(self.parent))
+    self.parent[result] = None
+    return result
+
+  def _set_parent(self, node, parent):
+    self.parent[node] = parent
+    self.kids[parent].append(node)
+
+  def bump_height(self):
+    new_root = self._new_node()
+    self.layers.append([new_root])
+    for node in self.layers[-2]:
+      self._set_parent(node, new_root)
+
+  def append_base(self, node):
+    '''
+    Add a new node, to the base nodes of this tree,
+    returning the necessary modifications to the tree to make the addition successfull.
+    :return: A list of pairs (node_id, parent) defining a new node that should be added
+        along with its parent.
+
+    IMPORTANT: This method is allowed to break the invariant that there be empty space to add nodes
+      to the tree.  When calling it, be sure to check `NodeTree.is_full` and repair the broken invariant
+      if necessary.
+    '''
+    if len(self.layers) == 0:
+      raise errors.InternalError("There must be at least one layer before appending new nodes.")
+    results = []
+    layer_index = 0
+    best = None
+    while True:
+      # Invariants:
+      #   ``node`` has not yet been put in the tree, but may have kids in layer_index - 1
+      #   ``self.parent.get(node, None) is None``.
+      #   ``node`` has not been added to a layer, but will be added later on.
+      #   All nodes in layers < layer_index have proper parents/kids and meet the constraints.
+      self._add_node_to_layer(layer_index, node)
+
+      layer_index += 1
+      self.layers[layer_index].sort(key=lambda parent: len(self.kids[parent]))
+      best = self.layers[layer_index][0]
+      if len(self.kids[best]) < self._max_kids:
+        self._set_parent(node, best)
+        results.append(node)
+        break
+      else:
+        # All nodes in layer_index have the maximum number of kids
+        if layer_index + 1 == len(self.layers):
+          raise errors.InternalError("Impossible! The root node should never have the maximum number of kids.")
+        new_parent = self._new_node()
+        self._set_parent(node, new_parent)
+        results.append(node)
+        node = new_parent
+        continue
+
+    # The node was fit into the tree, given the parent ``best`` at ``layer_index``
+    return results
+
+  def insert_duplicate_layer_before_layer(self, layer_index):
+    '''
+    Insert a duplicate layer before the layer at ``layer_index``
+    '''
+    new_layer = []
+    for node in self.layers[layer_index]:
+      new_node = self._new_node()
+      for kid in self.kids[node]:
+        self._set_parent(kid, new_node)
+      self.kids[node] = []
+      self._set_parent(new_node, node)
+      new_layer.append(new_node)
+
+    self.layers.insert(layer_index, new_layer)
+    # Update the values in self.index, as many of them are now out of date.
+    for i in range(layer_index, len(self.layers)):
+      for node in self.layers[i]:
+        self.index[node] = i
+
+    return new_layer
+
+  def _add_node_to_layer(self, layer_index, node):
+    while layer_index < 0:
+      layer_index += len(self.layers)
+    self.layers[layer_index].append(node)
+    if isinstance(node, dict):
+      import ipdb
+      ipdb.set_trace()
+    self.index[node] = layer_index
+
+  def _fill_in_tree(self):
+    self.layers.append([])
+    for node in self._base_nodes:
+      self._add_node_to_layer(0, node)
+      self.parent[node] = None
+
+    if not self.layers[-1]:
+      self.layers.append([])
+      next_node = self._new_node()
+      self._add_node_to_layer(-1, next_node)
+
+    while len(self.layers[-1]) > 1:
+      self.layers.append([])
+      for i in range(0, len(self.layers[-2]), self._max_kids):
+        next_node = self._new_node()
+        self._add_node_to_layer(-1, next_node)
+        for node in self.layers[-2][i:i + self._max_kids]:
+          self._set_parent(node, next_node)
+
+    if self.height == 0 or len(self.kids[self.root]) == self._max_kids:
+      self.bump_height()
 
 
 # FIXME(KK): Remove this class.

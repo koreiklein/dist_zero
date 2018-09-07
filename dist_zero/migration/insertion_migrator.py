@@ -3,7 +3,8 @@ import itertools
 from dist_zero import errors, deltas, messages, linker, settings
 from dist_zero.network_graph import NetworkGraph
 
-from . import migrator, topology_picker
+from . import migrator
+from .. import topology_picker, connector
 from .right_configuration import RightConfigurationReceiver
 
 
@@ -210,7 +211,17 @@ class InsertionMigrator(migrator.Migrator):
       self._right_configurations_are_sent = True
 
   def _new_topology_picker(self):
-    return topology_picker.TopologyPicker(
+    # FIXME(KK): Use the connector instead of the TopologyPicker entirely.
+    connector.Connector(
+        height=self._height,
+        left_is_data=self._left_is_data,
+        right_is_data=self._right_is_data,
+        left_configurations=self._left_configurations,
+        right_configurations=self._right_config_receiver.configs,
+        max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
+        max_inputs=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
+    )
+    return topology_picker.OldTopologyPicker(
         graph=self._graph,
         # TODO(KK): There is probably a better way to configure these standard limits than the below.
         # Look into it, write up some notes, and fix it.

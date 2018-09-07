@@ -6,7 +6,17 @@ import pytest
 
 from dist_zero import ids, messages
 from dist_zero.network_graph import NetworkGraph
-from dist_zero.migration.topology_picker import TopologyPicker, NodeTree, OldTopologyPicker
+from dist_zero.topology_picker import TopologyPicker, NodeTree, OldTopologyPicker
+
+
+def test_tree_on_empty_base():
+  tree = NodeTree(
+      nodes=[],
+      max_kids=3,
+  )
+  assert 2 == tree.height
+  assert 0 == len(tree.layers[0])
+  assert 1 == len(tree.layers[1])
 
 
 def test_append_base_to_tree():
@@ -39,6 +49,21 @@ def test_append_base_to_tree():
 
   for leaf in tree.layers[0]:
     assert tree.root == _to_root(leaf)
+
+
+@pytest.mark.parametrize('n_lefts,n_rights', [
+    (0, 17),
+    (17, 0),
+    (0, 0),
+])
+def test_no_picker_errors_on_empty_left_and_right_lists(n_lefts, n_rights):
+  picker = TopologyPicker(
+      graph=NetworkGraph(),
+      lefts=[ids.new_id("TestNode_{}".format(i)) for i in range(n_lefts)],
+      rights=[ids.new_id("TestNode_{}".format(i)) for i in range(n_rights)],
+      max_outputs=3,
+      max_inputs=3,
+      name_prefix="TestInternalNode")
 
 
 def test_append_left():
