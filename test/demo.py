@@ -236,16 +236,22 @@ class Demo(object):
     main_subgraph = Digraph()
     right_subgraph_visited = set()
 
+    nodes = set()
+
     def _add_node(graph, node_id):
-      if node_id.startswith('InternalNode') or node_id.startswith('LeafNode'):
-        kwargs = {'shape': 'ellipse', 'color': 'black', 'fillcolor': '#c7faff', 'style': 'filled'}
-      else:
-        kwargs = {'shape': 'diamond', 'color': 'black'}
-      graph.node(node_id, **kwargs)
+      if node_id not in nodes:
+        nodes.add(node_id)
+        if node_id.startswith('InternalNode') or node_id.startswith('LeafNode'):
+          kwargs = {'shape': 'ellipse', 'color': 'black', 'fillcolor': '#c7faff', 'style': 'filled'}
+        else:
+          kwargs = {'shape': 'diamond', 'color': 'black'}
+        graph.node(node_id, **kwargs)
 
     edges = set()
 
     def _add_edge(graph, left, right, *args, **kwargs):
+      _add_node(graph, left)
+      _add_node(graph, right)
       pair = (left, right)
       if pair not in edges:
         edges.add(pair)

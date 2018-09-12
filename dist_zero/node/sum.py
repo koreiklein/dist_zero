@@ -109,8 +109,9 @@ class SumNode(Node):
     else:
       return None
 
-  def set_picker(self, picker):
-    self._picker = picker
+  def set_connector(self, connector):
+    # Sum nodes do not need to use their connector.
+    pass
 
   def initialize(self):
     self.logger.info(

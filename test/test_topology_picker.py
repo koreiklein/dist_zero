@@ -66,28 +66,32 @@ def test_no_picker_errors_on_empty_left_and_right_lists(n_lefts, n_rights):
       name_prefix="TestInternalNode")
 
 
-def test_append_left():
+@pytest.mark.parametrize('side', ['left', 'right'])
+def test_append_left_right(side):
   picker = TopologyPicker(
       graph=NetworkGraph(),
       lefts=[ids.new_id("TestNode_{}".format(i)) for i in range(10)],
       rights=[ids.new_id("TestNode_{}".format(i)) for i in range(10)],
-      max_outputs=4,
-      max_inputs=3,
+      max_outputs=4 if side == 'left' else 3,
+      max_inputs=3 if side == 'left' else 4,
       name_prefix="TestInternalNode")
+
+  append = picker.append_left if side == 'left' else picker.append_right
+  edge = lambda: picker.lefts if side == 'left' else picker.rights
 
   # These nodes can all be added without bumping the size of the left tree.
   # They fit because the 10 existing nodes + another 16 nodes is 26 nodes,
   # That's less than 27 == 3 ** 3, the capacity of the left tree.
   for i in range(16):
-    picker.append_left(ids.new_id("Inserted_TestNode_{}".format(i)))
+    append(ids.new_id("Inserted_TestNode_{}".format(i)))
     _assert_unique_paths(picker)
 
-    assert 10 + i + 1 == len(picker.lefts)
+    assert 10 + i + 1 == len(edge())
     assert 4 == len(picker.layers)
 
-  picker.append_left(ids.new_id("Inserted_TestNode_{}".format(i)))
+  append(ids.new_id("Inserted_TestNode_{}".format(i)))
   _assert_unique_paths(picker)
-  assert 27 == len(picker.lefts)
+  assert 27 == len(edge())
   assert 5 == len(picker.layers)
 
 

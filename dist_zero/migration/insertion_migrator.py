@@ -1,6 +1,6 @@
 import itertools
 
-from dist_zero import errors, deltas, messages, linker, settings
+from dist_zero import errors, deltas, messages, linker, settings, connector
 from dist_zero.network_graph import NetworkGraph
 
 from . import migrator
@@ -25,8 +25,6 @@ class InsertionMigrator(migrator.Migrator):
 
     self._height = self._node.height
 
-    self._right_map = None
-
     # When the subgraph has a gap on the left, this will be the id of the unique leftmost node of the subgraph
     self._left_gap_child_id = None
     # When the subgraph has a gap on the right, this will be the id of the unique right node of the subgraph
@@ -35,8 +33,7 @@ class InsertionMigrator(migrator.Migrator):
     # When true, the swap has been prepared, and the migrator should be checking whether it's time to swap.
     self._waiting_for_swap = False
 
-    self._graph = None
-    self._picker = None
+    self._connector = None
 
     self._senders = {sender['id']: sender for sender in senders}
     self._receivers = {receiver['id']: receiver for receiver in receivers}
@@ -214,8 +211,8 @@ class InsertionMigrator(migrator.Migrator):
     # FIXME(KK): Use the connector instead of the TopologyPicker entirely.
     connector.Connector(
         height=self._height,
-        left_is_data=self._left_is_data,
-        right_is_data=self._right_is_data,
+        left_is_data=self._node.left_is_data,
+        right_is_data=self._node.right_is_data,
         left_configurations=self._left_configurations,
         right_configurations=self._right_config_receiver.configs,
         max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
@@ -227,8 +224,8 @@ class InsertionMigrator(migrator.Migrator):
         # Look into it, write up some notes, and fix it.
         new_node_max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
         new_node_max_inputs=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
-        left_is_data=self._left_is_data,
-        right_is_data=self._right_is_data,
+        left_is_data=self._node.left_is_data,
+        right_is_data=self._node.right_is_data,
         new_node_name_prefix='SumNode' if self._height == 0 else 'ComputationNode',
     )
 
@@ -237,31 +234,30 @@ class InsertionMigrator(migrator.Migrator):
         self._right_config_receiver.ready and \
         all(val is not None for val in self._left_configurations.values()):
 
-      from dist_zero.node.computation import ComputationNode
       self._node.logger.info("Insertion migrator has received all Left and Right configurations. Ready to spawn.")
-      self._left_layer = {
-          kid['handle']['id']: kid['handle']
-          for left_configuration in self._left_configurations.values() for kid in left_configuration['kids']
-      }
-      self._graph = NetworkGraph()
 
-      for left_id in self._left_layer.keys():
-        self._graph.add_node(left_id)
-
-      self._left_is_data = any(config['is_data'] for config in self._left_configurations.values())
-      self._right_is_data = any(config['is_data'] for config in self._right_config_receiver.configs.values())
-      self._picker = self._new_topology_picker()
-
+      from dist_zero.node.computation import ComputationNode
       if self._node.__class__ != ComputationNode:
         self._height = 0
         self._all_kids_are_spawned()
       else:
         self._height = self._max_height()
 
-        # Decide on a network topology and spawn new kids
-        self._right_map = self._picker.fill_graph(right_configurations=self._right_config_receiver.configs.values())
+        self._left_layer = {
+            kid['handle']['id']: kid['handle']
+            for left in self._left_configurations.values() for kid in left['kids']
+        }
+
+        self._connector = connector.Connector(
+            height=self._height,
+            left_configurations=list(self._left_configurations.values()),
+            right_configurations=list(self._right_config_receiver.configs.values()),
+            max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
+            max_inputs=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
+        )
 
         self._spawn_layer(1)
+      self._node.height = self._height
 
   def _max_height(self):
     return max(
@@ -287,6 +283,8 @@ class InsertionMigrator(migrator.Migrator):
     elif node_id in self._kids:
       return self._kids[node_id]
     else:
+      import ipdb
+      ipdb.set_trace()
       raise errors.InternalError('Node id "{}" was not found in the kids on left-kids.'.format(node_id))
 
   def _spawn_kid(self, layer_index, node_id, senders, migrator):
@@ -296,9 +294,10 @@ class InsertionMigrator(migrator.Migrator):
           messages.sum.sum_node_config(
               node_id=node_id,
               left_is_data=self._node.left_is_data and layer_index == 1,
-              # TODO(KK): This business about right_map here is very ugly.  Think hard and try to come up with a way to avoid it.
-              right_is_data=self._node.right_is_data and layer_index + 1 == self._picker.n_layers
-              and bool(self._right_map[node_id]),
+              # TODO(KK): This business about right_map here is very ugly.
+              # Think hard and try to come up with a way to avoid it.
+              right_is_data=self._node.right_is_data and layer_index + 1 == len(self._connector.layers)
+              and bool(self._connector.right_to_parent_ids[node_id]),
               senders=senders,
               receivers=[],
               parent=self._node.new_handle(node_id),
@@ -311,25 +310,30 @@ class InsertionMigrator(migrator.Migrator):
               parent=self._node.new_handle(node_id),
               height=self._height - 1,
               left_is_data=self._node.left_is_data and layer_index == 1,
-              # TODO(KK): This business about right_map here is very ugly.  Think hard and try to come up with a way to avoid it.
-              right_is_data=self._node.right_is_data and layer_index + 1 == self._picker.n_layers
-              and bool(self._right_map[node_id]),
+              # TODO(KK): This business about right_map here is very ugly.
+              #   Think hard and try to come up with a way to avoid it.
+              right_is_data=self._node.right_is_data and layer_index + 1 == len(self._connector.layers)
+              and bool(self._connector.right_to_parent_ids[node_id]),
               senders=senders,
               receivers=[],
               migrator=migrator))
 
   def _send_configure_right_parent(self, layer_index):
-    '''Send configure_riht_parent to all nodes in layer_index.'''
-    for left_node_id in self._picker.get_layer(layer_index):
+    '''Send configure_right_parent to all nodes in layer_index.'''
+    for left_node_id in self._connector.layers[layer_index]:
       self._node.send(
           self._id_to_handle(left_node_id),
           messages.migration.configure_right_parent(
               migration_id=self.migration_id, kid_ids=self._graph.node_receivers(left_node_id)))
 
+  @property
+  def _graph(self):
+    return self._connector.graph
+
   def _spawn_layer_without_gap(self, layer_index):
     self._send_configure_right_parent(layer_index - 1)
 
-    for node_id in self._picker.get_layer(layer_index):
+    for node_id in self._connector.layers[layer_index]:
       senders = [self._id_to_handle(sender_id) for sender_id in self._graph.node_senders(node_id)]
       self._spawn_kid(
           layer_index=layer_index,
@@ -343,7 +347,7 @@ class InsertionMigrator(migrator.Migrator):
           ))
 
   def _get_unique_node_in_layer(self, layer_index):
-    node_ids = self._picker.get_layer(layer_index)
+    node_ids = self._connector.layers[layer_index]
     if len(node_ids) != 1:
       raise errors.InternalError("Layer is expected to have exactly one node.")
 
@@ -383,7 +387,7 @@ class InsertionMigrator(migrator.Migrator):
     '''
     node_id = self._get_unique_node_in_layer(layer_index)
 
-    for left_node_id in self._picker.get_layer(layer_index - 1):
+    for left_node_id in self._connector.layers[layer_index - 1]:
       # Let nodes to the left know that they must listen for configure_right_parent from ``node_id``
       # instead of from self.
       self._node.send(
@@ -406,24 +410,24 @@ class InsertionMigrator(migrator.Migrator):
         ))
 
   def _get_right_parent_ids_for_kid(self, node_id, layer_index):
-    if layer_index + 1 < self._picker.n_layers:
+    if layer_index + 1 < len(self._connector.layers):
       return [self._node.id]
     else:
-      return self._right_map[node_id]
+      return self._connector.right_to_parent_ids[node_id]
 
   def _spawn_layer(self, layer_index):
     self._node.logger.info(
         "Insertion migrator is spawning layer {layer_index} of {n_nodes_to_spawn} nodes",
         extra={
             'layer_index': layer_index,
-            'n_nodes_to_spawn': len(self._picker.get_layer(layer_index))
+            'n_nodes_to_spawn': len(self._connector.layers[layer_index])
         })
     self._current_spawning_layer = layer_index
 
     if self._left_configurations and self._right_config_receiver.configs:
       if self._max_left_height() < self._max_right_height() and layer_index == 1:
         self._spawn_layer_with_left_gap(layer_index)
-      elif self._max_left_height() > self._max_right_height() and layer_index == self._picker.n_layers - 1:
+      elif self._max_left_height() > self._max_right_height() and layer_index == len(self._connector.layers) - 1:
         self._spawn_layer_with_right_gap(layer_index)
       else:
         self._spawn_layer_without_gap(layer_index)
@@ -435,20 +439,20 @@ class InsertionMigrator(migrator.Migrator):
   def _maybe_spawned_kids(self):
     if not self._flow_is_started and \
         all(val is not None for val in self._kids.values()):
-      if self._current_spawning_layer + 1 < self._picker.n_layers:
+      if self._current_spawning_layer + 1 < len(self._connector.layers):
         self._spawn_layer(self._current_spawning_layer + 1)
       else:
         self._all_kids_are_spawned()
 
   def _all_kids_are_spawned(self):
     if not self._left_configurations_are_sent:
-      self._node.set_picker(self._picker)
+      self._node.set_connector(self._connector)
       self._send_configure_left_to_right()
 
   def _receiver_to_kids(self):
-    if self._right_map is not None:
+    if self._connector is not None:
       result = {}
-      for right_node_id, receiver_ids in self._right_map.items():
+      for right_node_id, receiver_ids in self._connector.right_to_parent_ids.items():
         for receiver_id in receiver_ids:
           if receiver_id not in result:
             result[receiver_id] = [right_node_id]

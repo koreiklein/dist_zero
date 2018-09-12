@@ -93,6 +93,7 @@ class TestSpawnComputationNetwork(object):
     self.demo.system.get_receivers(root_input)
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
+    self.demo.render_network(root_computation)
 
   def test_spawn_small_small(self, demo):
     self.demo = demo

@@ -70,6 +70,37 @@ class TopologyPicker(object):
       for src in self._incomming_nodes(node):
         self._graph.add_edge(src, node)
 
+  def append_right(self, node):
+    '''
+    Add a new right node, returning the necessary modifications to the graph to make the addition successfull.
+    :return: A tuple of (nodes, hourglasses) with the following specifications:
+      nodes -- A list of triplets (node_id, senders, receivers) defining a new node that should be added
+        along with the senders and receivers it should have
+      hourglasses -- A list of hourglass operations.  Each hourglass operation consists of
+        (node_id, senders, receivers) where senders and receivers are currently connected via a complete
+          graph which should be removed in favor of an hourglass graph centered on node_id
+    '''
+    new_nodes = []
+    self._rights.append(node)
+    self._graph.add_node(node)
+    for layer_coindex, (left_layer, right_index) in enumerate(
+        zip(reversed(self._left_tree.layers), self._right_tree.append_base(node))):
+      layer_index = len(self._layers) - 1 - layer_coindex
+      for left_index in left_layer:
+        coords = (left_index, right_index)
+        if layer_index == len(self._layers) - 1:
+          self._set_node_coords(node, coords)
+          node_id = node
+        else:
+          node_id = self._new_node(coords)
+        new_nodes.append(node_id)
+
+        self._layers[layer_index].append(node_id)
+
+    self._update_graph_edges(new_nodes)
+    result = [(node_id, self._incomming_nodes(node_id), self._outgoing_nodes(node_id)) for node_id in new_nodes]
+    return result, (self._insert_hourglass_layer_left() if self._right_tree.is_full else [])
+
   def append_left(self, node):
     '''
     Add a new left node, returning the necessary modifications to the graph to make the addition successfull.
@@ -102,6 +133,30 @@ class TopologyPicker(object):
     result = [(node_id, self._incomming_nodes(node_id), self._outgoing_nodes(node_id)) for node_id in new_nodes]
 
     return result, (self._insert_hourglass_layer_right() if self._left_tree.is_full else [])
+
+  def _insert_hourglass_layer_left(self):
+    # Remove the complete graphs that are being replaced by hourglasses.
+    for right_index in self._right_tree.layers[-2]:
+      for left_index in self._left_tree.layers[1]:
+        coords = (left_index, right_index)
+        node = self._node_by_tree_coords[coords]
+        for src in self._incomming_nodes(node):
+          self._graph.remove_edge(src, node)
+
+    # Insert duplicate layers at opposite ends of the left and right trees.
+    right_index, = self._right_tree.insert_duplicate_layer_before_layer(self._right_tree.height - 1)
+    left_indices = self._left_tree.insert_duplicate_layer_before_layer(1)
+
+    # Create the replacement hourglass sub-graphs.
+    hourglass_layer = []
+    for left_index in left_indices:
+      coords = (left_index, right_index)
+      new_node = self._new_node(coords)
+      hourglass_layer.append(new_node)
+
+    self._layers.insert(1, hourglass_layer)
+    self._update_graph_edges(hourglass_layer)
+    return [(node_id, self._incomming_nodes(node_id), self._outgoing_nodes(node_id)) for node_id in hourglass_layer]
 
   def _insert_hourglass_layer_right(self):
     # Remove the complete graphs that are being replaced by hourglasses.
@@ -152,7 +207,7 @@ class TopologyPicker(object):
     return [self._node_by_tree_coords[(src_left, src_right)] for src_left in self._left_tree.kids[tgt_left]]
 
   def _fill_in(self):
-    while self._left_tree.height < self._right_tree.height or self._left_tree.height < 3:
+    while self._left_tree.height < self._right_tree.height or self._left_tree.height < 2:
       self._left_tree.bump_height()
     while self._right_tree.height < self._left_tree.height:
       self._right_tree.bump_height()
@@ -224,8 +279,8 @@ class NodeTree(object):
     '''
     Add a new node, to the base nodes of this tree,
     returning the necessary modifications to the tree to make the addition successfull.
-    :return: A list of pairs (node_id, parent) defining a new node that should be added
-        along with its parent.
+    :return: A list of nodes that should be added.
+      Edges of the form ``result[i]`` -> ``result[i+1]`` should also be added for each possible ``i``
 
     IMPORTANT: This method is allowed to break the invariant that there be empty space to add nodes
       to the tree.  When calling it, be sure to check `NodeTree.is_full` and repair the broken invariant

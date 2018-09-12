@@ -3,7 +3,7 @@ from dist_zero import errors
 
 class NetworkGraph(object):
   def __init__(self):
-    self._nodes = []
+    self._nodes = set()
     self._outgoing_edges = {}
     self._incomming_edges = {}
 
@@ -45,9 +45,10 @@ class NetworkGraph(object):
     return list(self._nodes)
 
   def add_node(self, node_id):
-    self._nodes.append(node_id)
-    self._outgoing_edges[node_id] = []
-    self._incomming_edges[node_id] = []
+    if node_id not in self._nodes:
+      self._nodes.add(node_id)
+      self._outgoing_edges[node_id] = []
+      self._incomming_edges[node_id] = []
 
   def remove_edge(self, src, tgt):
     edge = (src, tgt)

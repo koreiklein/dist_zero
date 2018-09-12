@@ -61,22 +61,26 @@ class ComputationNode(Node):
     for sender_id in self._senders.keys():
       self._deltas.add_sender(sender_id)
 
-    self._picker = topology_picker.OldTopologyPicker(
-        graph=network_graph.NetworkGraph(),
-        left_is_data=self.left_is_data,
-        right_is_data=self.right_is_data,
-        # TODO(KK): There is probably a better way to configure these standard limits than the below.
-        # Look into it, write up some notes, and fix it.
-        new_node_max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
-        new_node_max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],
-        new_node_name_prefix='SumNode' if self.height == 0 else 'ComputationNode',
-    )
+    # FIXME(KK): Initialize this properly
+    self._connector = None
+
+    # FIXME(KK): Remove
+    # topology_picker.OldTopologyPicker(
+    #    graph=network_graph.NetworkGraph(),
+    #    left_is_data=self.left_is_data,
+    #    right_is_data=self.right_is_data,
+    #    # TODO(KK): There is probably a better way to configure these standard limits than the below.
+    #    # Look into it, write up some notes, and fix it.
+    #    new_node_max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
+    #    new_node_max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],
+    #    new_node_name_prefix='SumNode' if self.height == 0 else 'ComputationNode',
+    #)
 
   def is_data(self):
     return False
 
-  def set_picker(self, picker):
-    self._picker = picker
+  def set_connector(self, connector):
+    self._connector = connector
 
   def checkpoint(self, before=None):
     pass
@@ -146,12 +150,12 @@ class ComputationNode(Node):
     or None if no list is appropriate.
     '''
     if self.left_is_data:
-      if self._picker.n_layers >= 3:
+      if len(self._connector.layers) >= 3:
         return [self.kids[node_id] for node_id in self._picker.get_layer(2)]
       else:
         return None
     else:
-      if self._picker.n_layers >= 2:
+      if len(self._connector.layers) >= 2:
         return [self.kids[node_id] for node_id in self._picker.get_layer(1)]
       else:
         return None
@@ -162,13 +166,13 @@ class ComputationNode(Node):
     or None if no list is appropriate.
     '''
     if self.right_is_data:
-      if self._picker.n_layers >= 2:
-        return [self.kids[node_id] for node_id in self._picker.get_layer(self._picker.n_layers - 1)]
+      if len(self._connector.layers) >= 2:
+        return [self.kids[node_id] for node_id in self._connector.layers[len(self._connector.layers) - 1]]
       else:
         return None
     else:
-      if self._picker.n_layers >= 1:
-        return [self.kids[node_id] for node_id in self._picker.get_layer(self._picker.n_layers - 1)]
+      if len(self._connector.layers) >= 1:
+        return [self.kids[node_id] for node_id in self._picker.layers[len(self._connector.layers) - 1]]
       else:
         return None
 
@@ -268,6 +272,9 @@ class ComputationNode(Node):
     if message['variant'] == 'input':
       if self.left_is_data:
         node_id = ids.new_id('{}_input_adjacent'.format('SumNode' if is_leaf else 'ComputationNode', ))
+        # FIXME(KK): Test and rewrite this to use the connector.
+        import ipdb
+        ipdb.set_trace()
         receiver_ids = self._picker.complete_receivers_when_left_is_data(
             left_node_id=kid['id'], node_id=node_id, random=self._controller.random)
         if receiver_ids is None:
@@ -293,8 +300,11 @@ class ComputationNode(Node):
           import ipdb
           ipdb.set_trace()
     elif message['variant'] == 'output':
+      # FIXME(KK): Test and rewrite this to use the connector.
+      import ipdb
+      ipdb.set_trace()
       self._picker.graph.add_node(kid['id'])
-      self._picker.get_layer(0).append(kid['id'])
+      self._picker.layers[0].append(kid['id'])
 
       if self.right_is_data:
         node_id = ids.new_id('{}_output_adjacent'.format('SumNode' if is_leaf else 'ComputationNode', ))

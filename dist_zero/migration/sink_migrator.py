@@ -283,6 +283,8 @@ class SinkMigrator(migrator.Migrator):
                                                                      self._node.transfer_handle(
                                                                          adjacent_to_kid, kid['id'])))
         if len(my_unmatched_kids) != 0:
+          import ipdb
+          ipdb.set_trace()
           raise errors.InternalError("sink migrator has additional unmatched kids")
 
   def _maybe_flow_is_started(self):
