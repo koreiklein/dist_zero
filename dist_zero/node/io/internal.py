@@ -322,11 +322,18 @@ class InternalNode(Node):
         self._send_hello_parent()
 
     if self._adjacent is not None:
-      self.send(self._adjacent,
-                messages.io.added_sibling_kid(
-                    height=self._height,
-                    kid=self.transfer_handle(handle=kid, for_node_id=self._adjacent['id']),
-                    variant=self._variant))
+      if self._variant == 'input':
+        self.send(self._adjacent,
+                  messages.migration.update_left_configuration(
+                      parent_id=self.id,
+                      new_kids=[self.transfer_handle(handle=kid, for_node_id=self._adjacent['id'])],
+                      new_height=self._height))
+      elif self._variant == 'output':
+        # FIXME(KK): Test and finish this
+        import ipdb
+        ipdb.set_trace()
+      else:
+        raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
     self._graph.add_node(kid_id)
 

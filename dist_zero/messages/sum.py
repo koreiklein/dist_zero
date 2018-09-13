@@ -44,6 +44,7 @@ def sum_node_config(
     node_id,
     senders,
     receivers,
+    configure_right_parent_ids,
     parent,
     left_is_data,
     right_is_data,
@@ -68,6 +69,7 @@ def sum_node_config(
   return {
       'type': 'SumNode',
       'id': node_id,
+      'configure_right_parent_ids': configure_right_parent_ids,
       'senders': senders,
       'receivers': receivers,
       'parent': parent,

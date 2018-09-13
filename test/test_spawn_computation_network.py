@@ -77,7 +77,8 @@ class TestSpawnComputationNetwork(object):
         send_messages_for_ms=3000)
     self.demo.run_for(ms=6000)
 
-    root_computation = self.demo.connect_trees_with_sum_network(root_input, root_output, machine=self.machine_ids[0])
+    self.root_computation = self.demo.connect_trees_with_sum_network(
+        root_input, root_output, machine=self.machine_ids[0])
     # Ensure we haven't simulated any sends yet
     self.demo.run_for(ms=6000)
 
@@ -91,9 +92,9 @@ class TestSpawnComputationNetwork(object):
     assert len(output_leaves) == n_output_leaves
     self.demo.system.get_senders(root_output)
     self.demo.system.get_receivers(root_input)
+    self.demo.render_network(self.root_input)
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
-    self.demo.render_network(root_computation)
 
   def test_spawn_small_small(self, demo):
     self.demo = demo
@@ -171,7 +172,7 @@ class TestSpawnComputationNetwork(object):
         send_messages_for_ms=3000)
 
     demo.run_for(ms=5000)
-    demo.render_network(self.root_output)
+    self.demo.render_network(self.root_input)
     for leaf in self.output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 

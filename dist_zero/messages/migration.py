@@ -79,23 +79,15 @@ def removal_migrator_config(sender_ids, receiver_ids, will_sync):
   return {'type': 'removal_migrator', 'sender_ids': sender_ids, 'receiver_ids': receiver_ids, 'will_sync': will_sync}
 
 
-def insertion_migrator_config(configure_right_parent_ids, senders, receivers, migration=None):
+def insertion_migrator_config(senders, receivers, migration=None):
   '''
-  :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
-    insertion node.
   :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
   :param list receivers: A list of :ref:`handle` of the `Node` s that will receive from self by the end of the migration.
   :param migration: If the insertion node will communicate directly with the migration node, this is a handle for it.
     Otherwise, it is `None`
   :type migration: :ref:`handle` or `None`
   '''
-  return {
-      'type': 'insertion_migrator',
-      'configure_right_parent_ids': configure_right_parent_ids,
-      'senders': senders,
-      'receivers': receivers,
-      'migration': migration
-  }
+  return {'type': 'insertion_migrator', 'senders': senders, 'receivers': receivers, 'migration': migration}
 
 
 def attach_migrator(migrator_config):
@@ -449,6 +441,20 @@ def configure_new_flow_left(migration_id, left_configurations):
           'type': 'configure_new_flow_left',
           'left_configurations': left_configurations,
       }
+  }
+
+
+def update_left_configuration(parent_id, new_kids, new_height):
+  '''
+  :param str parent_id: The id of the parent whose left configuration has just changed.
+  :param list new_kids: The list of :ref:`handle` of kids that are being added to this parent's left configuration.
+  :param int new_height: The height of the parent at the time this message was sent.
+  '''
+  return {
+      'type': 'update_left_configuration',
+      'parent_id': parent_id,
+      'new_kids': new_kids,
+      'new_height': new_height,
   }
 
 

@@ -94,10 +94,12 @@ class Node(object):
       self.logger.error(
           "There is already a migration running on {cur_node_id} for migration {migration_id}",
           extra={'migration_id': migration_id})
+      return self.migrators[migration_id]
     else:
       migrator = migration.migrator_from_config(migrator_config=migrator_config, node=self)
       self.migrators[migration_id] = migrator
       migrator.initialize()
+      return migrator
 
   def remove_migrator(self, migration_id):
     '''Remove a migrator for self.migrators.'''
@@ -135,6 +137,10 @@ class Node(object):
       self.attach_migrator(message['migrator_config'])
     elif message['type'] == 'migration':
       migration_id, migration_message = message['migration_id'], message['message']
+      if migration_id is None:
+        import ipdb
+        ipdb.set_trace()
+        raise errors.InternalError("Not Yet Implemented")
       if migration_id not in self.migrators:
         # Possible, when a migration was removed at about the same time as some of the last few
         # acknowledgement or retransmission messages came through.
@@ -147,6 +153,8 @@ class Node(object):
       else:
         self.migrators[migration_id].receive(sender_id=sender_id, message=migration_message)
     else:
+      import ipdb
+      ipdb.set_trace()
       raise errors.InternalError("Unrecognized message type {}".format(message['type']))
 
   def checkpoint(self, before=None):

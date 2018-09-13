@@ -1,6 +1,7 @@
 def computation_node_config(node_id,
                             left_is_data,
                             right_is_data,
+                            configure_right_parent_ids,
                             height,
                             parent,
                             senders,
@@ -13,6 +14,8 @@ def computation_node_config(node_id,
   :param str node_id: The id to use for the new node.
   :param bool left_is_data: True iff the node just to the left is a data node.
   :param bool right_is_data: True iff the node just to the right is a data node.
+  :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
+    insertion node.
   :param parent: The :ref:`handle` of this node's parent.
   :type parent: :ref:`handle`
   :param int height: The height of the new computation node in its tree.
@@ -29,6 +32,7 @@ def computation_node_config(node_id,
       'senders': senders,
       'left_is_data': left_is_data,
       'right_is_data': right_is_data,
+      'configure_right_parent_ids': configure_right_parent_ids,
       'receivers': receivers,
       'migrator': migrator,
       'adoptees': adoptees,

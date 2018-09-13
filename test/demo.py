@@ -197,10 +197,10 @@ class Demo(object):
                     parent=None,
                     left_is_data=True,
                     right_is_data=True,
+                    configure_right_parent_ids=[node_id],
                     senders=[input_handle_for_migration],
                     receivers=[output_handle_for_migration],
                     migrator=messages.migration.insertion_migrator_config(
-                        configure_right_parent_ids=[],
                         senders=[input_handle_for_migration],
                         receivers=[output_handle_for_migration],
                     ),

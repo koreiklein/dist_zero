@@ -1,6 +1,56 @@
 from dist_zero import errors
 
 
+class ConfigurationReceiver(object):
+  def __init__(self, node, configure_right_parent_ids, left_ids):
+    self._node = node
+    self._right_config_receiver = RightConfigurationReceiver()
+    self._right_config_receiver.set_parents(configure_right_parent_ids)
+    self._left_configurations = {nid: None for nid in left_ids}
+
+    self._fully_configured = False
+
+  def initialize(self):
+    self._maybe_has_left_and_right_configurations()
+
+  def _maybe_has_left_and_right_configurations(self):
+    if not self._fully_configured and \
+        self._right_config_receiver.ready and \
+        all(val is not None for val in self._left_configurations.values()):
+      self._fully_configured = True
+      self._node.has_left_and_right_configurations(
+          left_configurations=self._left_configurations,
+          right_configurations=self._right_config_receiver.configs,
+      )
+
+  @property
+  def logger(self):
+    return self._node.logger
+
+  def receive(self, message, sender_id):
+    if message['type'] == 'configure_right_parent':
+      self._right_config_receiver.got_parent_configuration(sender_id, kid_ids=message['kid_ids'])
+      self._maybe_has_left_and_right_configurations()
+    elif message['type'] == 'substitute_right_parent':
+      self._right_config_receiver.substitute_right_parent(sender_id, new_parent_id=message['new_parent_id'])
+      self._maybe_has_left_and_right_configurations()
+    elif message['type'] == 'configure_new_flow_left':
+      self.logger.info("Received 'configure_new_flow_left'", extra={'sender_id': sender_id})
+      for left_configuration in message['left_configurations']:
+        self._left_configurations[left_configuration['node']['id']] = left_configuration
+      self._maybe_has_left_and_right_configurations()
+    elif message['type'] == 'configure_new_flow_right':
+      self.logger.info("Received 'configure_new_flow_right'", extra={'sender_id': sender_id})
+
+      for right_configuration in message['right_configurations']:
+        self._right_config_receiver.got_configuration(right_configuration)
+
+      self._maybe_has_left_and_right_configurations()
+    else:
+      return False
+    return True
+
+
 class RightConfigurationReceiver(object):
   def __init__(self, configs=None):
     '''
@@ -24,6 +74,9 @@ class RightConfigurationReceiver(object):
       self._expected_parents = set()
       self._received_parents = set()
       self.configs = configs
+
+  def max_height(self):
+    return max(config['height'] for config in self.configs.values())
 
   @property
   def ready(self):
