@@ -451,6 +451,8 @@ class ComputationNode(Node):
     self._connector = connector.Connector(
         height=self.height,
         left_configurations=left_configurations,
+        left_is_data=self.left_is_data,
+        right_is_data=self.right_is_data,
         right_configurations=right_configurations,
         max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
         max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],

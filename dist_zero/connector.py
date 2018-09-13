@@ -4,12 +4,13 @@ from dist_zero import errors, topology_picker, network_graph, ids, messages
 
 
 class Connector(object):
-  def __init__(self, height, left_configurations, right_configurations, max_outputs, max_inputs):
+  def __init__(self, height, left_configurations, left_is_data, right_configurations, right_is_data, max_outputs,
+               max_inputs):
     self._height = height
     self._left_configurations = left_configurations
     self._right_configurations = right_configurations
-    self._left_is_data = any(config['is_data'] for config in self._left_configurations.values())
-    self._right_is_data = any(config['is_data'] for config in self._right_configurations.values())
+    self._left_is_data = left_is_data
+    self._right_is_data = right_is_data
 
     self._max_outputs = max_outputs
     self._max_inputs = max_inputs
