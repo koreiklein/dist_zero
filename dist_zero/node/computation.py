@@ -40,7 +40,7 @@ class ComputationNode(Node):
 
     self._exporters = {}
 
-    self._senders = {sender['id']: sender for sender in migrator_config['senders']}
+    self._senders = {sender['id']: sender for sender in senders}
 
     self._initial_migrator_config = migrator_config
     self._initial_migrator = None # It will be initialized later.
@@ -54,8 +54,12 @@ class ComputationNode(Node):
     self._kids_missing_receivers = set()
     self._kids_missing_senders = set()
 
+    if self.id == 'ComputationNode_adjacent_9rwFy0MBeBT7':
+      print("Initing ConfigurationReceiver with left_ids = {}".format(self._senders.keys()))
     self._configuration_receiver = ConfigurationReceiver(
-        node=self, configure_right_parent_ids=configure_right_parent_ids, left_ids=list(self._senders.keys()))
+        node=self,
+        configure_right_parent_ids=configure_right_parent_ids,
+        left_ids=[sender['id'] for sender in migrator_config['senders']])
     self._configure_right_parent_ids = configure_right_parent_ids
     self._right_configurations_are_sent = False
     self._left_configurations_are_sent = False

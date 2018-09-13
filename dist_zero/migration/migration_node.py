@@ -93,6 +93,7 @@ class MigrationNode(node.Node):
         self,
         self._controller,
         self._migration_config,
+        source_nodes=self.source_nodes,
         sink_nodes=self.sink_nodes,
         insertion_nodes=self.insertion_nodes)
     self._state_controller.initialize()

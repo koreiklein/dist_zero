@@ -20,6 +20,10 @@ class SourceMigrator(migrator.Migrator):
 
     self._sent_right_configurations = False
 
+    self._new_receivers = None
+
+    self._kid_started_flows = {}
+
     self._right_config_receiver = RightConfigurationReceiver()
     if self._node._parent is None:
       self._right_config_receiver.set_parents([])
@@ -99,6 +103,12 @@ class SourceMigrator(migrator.Migrator):
       self._send_configure_new_flow_left_to_right()
       self._sent_right_configurations = True
 
+      self._maybe_started_flow()
+
+  def _maybe_started_flow(self):
+    if self._right_config_receiver.ready and all(self._kid_started_flows.values()):
+      self._node.send(self.parent, messages.migration.started_flow(self.migration_id))
+
   def _set_kids_right_parents(self):
     if len(self._new_receivers) == 1:
       new_receiver_id = list(self._new_receivers.keys())[0]
@@ -107,6 +117,8 @@ class SourceMigrator(migrator.Migrator):
                         messages.migration.set_source_right_parents(
                             migration_id=self.migration_id, configure_right_parent_ids=[new_receiver_id]))
     else:
+      import ipdb
+      ipdb.set_trace()
       raise errors.InternalError(
           "right parents of a node's kids should only be set when the node has a unique receiver")
 
@@ -129,7 +141,11 @@ class SourceMigrator(migrator.Migrator):
   def receive(self, sender_id, message):
     if message['type'] == 'attached_migrator':
       self._kid_has_migrator[sender_id] = True
+      self._kid_started_flows[sender_id] = False
       self._maybe_send_attached_migrator()
+    elif message['type'] == 'started_flow':
+      self._kid_started_flows[sender_id] = True
+      self._maybe_started_flow()
     elif message['type'] == 'set_source_right_parents':
       self._right_config_receiver.set_parents(parent_ids=message['configure_right_parent_ids'])
       self._maybe_has_right_configurations()

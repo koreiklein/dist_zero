@@ -201,6 +201,7 @@ class Spawner(object):
         )
       else:
         migrator = None
+
       self._node.spawn_kid(
           layer_index=layer_index,
           configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
@@ -260,13 +261,20 @@ class Spawner(object):
           ))
 
     self._left_gap_child_id = node_id
+    # This way, we ensure the child waits for self to send left configurations.
+    senders = [
+        self._node.transfer_handle(left_config['node'], node_id)
+        for left_config in self._connector._left_configurations.values()
+    ]
+    if node_id == 'ComputationNode_adjacent_9rwFy0MBeBT7':
+      print("9rw is being given senders == {}".format(senders))
     self._node.spawn_kid(
         layer_index=layer_index,
         node_id=node_id,
         senders=[],
         configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
         migrator=messages.migration.insertion_migrator_config(
-            senders=[],
+            senders=senders,
             receivers=[],
             migration=self._node.transfer_handle(self._node._initial_migrator.migration, node_id),
         ))
