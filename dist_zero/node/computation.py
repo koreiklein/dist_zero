@@ -455,9 +455,6 @@ class ComputationNode(Node):
         max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
         max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],
     )
-    #print(self.id)
-    #print(self._connector.layers)
-    #import ipdb; ipdb.set_trace()
     self._connector_spawner = connector.Spawner(node=self, connector=self._connector)
 
     self.height = self._connector.max_height()

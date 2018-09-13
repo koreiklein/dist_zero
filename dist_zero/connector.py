@@ -220,22 +220,22 @@ class Spawner(object):
     self._left_configurations_are_sent = True # No need to send any more left configurations
     self._send_configure_right_parent(layer_index - 1)
     node_id = self._get_unique_node_in_layer(layer_index)
-    for right_config in self._right_config_receiver.configs.values():
+    for right_config in self._connector._right_configurations.values():
       # Let right parents know to listen for a left_config from the new node instead of from self.
       self._node.send(right_config['parent_handle'],
-                      messages.migration.substitute_left_configuration(self.migration_id, new_node_id=node_id))
+                      messages.migration.substitute_left_configuration(self._node.migration_id, new_node_id=node_id))
 
-    senders = [self._id_to_handle(sender_id) for sender_id in self._graph.node_senders(node_id)]
+    senders = [self._id_to_handle(sender_id) for sender_id in self._connector.graph.node_senders(node_id)]
     self._right_gap_child_id = node_id
     self._node.spawn_kid(
         layer_index=layer_index,
         node_id=node_id,
         senders=senders,
+        configure_right_parent_ids=[self._node.id],
         migrator=messages.migration.insertion_migrator_config(
             senders=senders,
-            configure_right_parent_ids=self._configure_right_parent_ids,
             receivers=[],
-            migration=self._node.transfer_handle(self._migration, node_id),
+            migration=self._node.transfer_handle(self._node._initial_migrator.migration, node_id),
         ))
 
   def _spawn_layer_with_left_gap(self, layer_index):
@@ -254,7 +254,7 @@ class Spawner(object):
       self._node.send(
           self._id_to_handle(left_node_id),
           messages.migration.substitute_right_parent(
-              migration_id=self.migration_id,
+              migration_id=self._node.migration_id,
               new_parent_id=node_id,
           ))
 
@@ -263,11 +263,11 @@ class Spawner(object):
         layer_index=layer_index,
         node_id=node_id,
         senders=[],
+        configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
         migrator=messages.migration.insertion_migrator_config(
             senders=[],
-            configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
             receivers=[],
-            migration=self._node.transfer_handle(self._migration, node_id),
+            migration=self._node.transfer_handle(self._node._initial_migrator.migration, node_id),
         ))
 
   def _get_right_parent_ids_for_kid(self, node_id, layer_index):
@@ -308,7 +308,7 @@ class Spawner(object):
   def spawned_a_kid(self, node):
     if node['id'] == self._left_gap_child_id:
       self._node.send(node,
-                      messages.migration.configure_new_flow_left(self.migration_id, [
+                      messages.migration.configure_new_flow_left(self._node.migration_id, [
                           messages.migration.left_configuration(
                               height=left_config['height'],
                               is_data=left_config['is_data'],
@@ -317,18 +317,21 @@ class Spawner(object):
                                   'handle': self._node.transfer_handle(kid['handle'], node['id']),
                                   'connection_limit': kid['connection_limit']
                               } for kid in left_config['kids']],
-                          ) for left_config in self._left_configurations.values()
+                          ) for left_config in self._connector._left_configurations.values()
                       ]))
     elif node['id'] == self._right_gap_child_id:
       self._node.send(node,
-                      messages.migration.configure_new_flow_right(self.migration_id, [
+                      messages.migration.configure_right_parent(
+                          self._node.migration_id, kid_ids=list(self._connector._right_configurations.keys())))
+      self._node.send(node,
+                      messages.migration.configure_new_flow_right(self._node.migration_id, [
                           messages.migration.right_configuration(
                               parent_handle=self._node.transfer_handle(right_config['parent_handle'], node['id']),
                               height=right_config['height'],
                               is_data=right_config['is_data'],
                               n_kids=right_config['n_kids'],
                               connection_limit=right_config['connection_limit'],
-                          ) for right_config in self._right_config_receiver.configs.values()
+                          ) for right_config in self._connector._right_configurations.values()
                       ]))
     self._maybe_spawned_kids()
 

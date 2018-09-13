@@ -18,7 +18,10 @@ class SinkMigrator(migrator.Migrator):
     :param bool will_sync: True iff this migrator will need to sync as part of the migration
     '''
     self._migration = migration
+
     self._node = node
+
+    self._substituted_left_configs = set()
 
     self._waiting_for_swap = False
 
@@ -161,6 +164,7 @@ class SinkMigrator(migrator.Migrator):
                                    "for which we do not expect a left_configuration")
 
       left_config = self._left_configurations.pop(sender_id)
+      self._substituted_left_configs.add(sender_id)
       if left_config is not None:
         raise errors.InternalError("'substitute_left_configuration' should only be received from a node "
                                    "that has not sent (and will never send) a left configuration")
@@ -170,9 +174,10 @@ class SinkMigrator(migrator.Migrator):
       self._node.logger.info("Received 'configure_new_flow_left'")
       for left_configuration in message['left_configurations']:
         left_parent_id = left_configuration['node']['id']
-        if left_parent_id not in self._new_flow_senders:
-          self._add_sender(left_configuration['node'])
-        self._left_configurations[left_parent_id] = left_configuration
+        if left_parent_id not in self._substituted_left_configs:
+          if left_parent_id not in self._new_flow_senders:
+            self._add_sender(left_configuration['node'])
+          self._left_configurations[left_parent_id] = left_configuration
       self._maybe_has_left_configurations()
       self._maybe_flow_is_started()
     elif message['type'] == 'replacing_flow':
@@ -268,6 +273,8 @@ class SinkMigrator(migrator.Migrator):
         for left_config in self._left_configurations.values():
           left_kids = left_config['kids']
           if len(left_kids) > len(my_unmatched_kids):
+            import ipdb
+            ipdb.set_trace()
             raise errors.InternalError("Sink node does not have enough unmatched kids to pair with adjacents.")
           matched_kids, my_unmatched_kids = my_unmatched_kids[:len(left_kids)], my_unmatched_kids[len(left_kids):]
 
