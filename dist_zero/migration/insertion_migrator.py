@@ -9,14 +9,12 @@ from .right_configuration import RightConfigurationReceiver
 
 
 class InsertionMigrator(migrator.Migrator):
-  def __init__(self, migration, senders, receivers, node):
+  def __init__(self, migration, node):
     '''
     :param migration: The :ref:`handle` of the `MigrationNode` running the migration.
     :type migration: :ref:`handle`
     :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
       insertion node.
-    :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
-    :param list receivers: A list of :ref:`handle` of the `Node` s that will receive from self by the end of the migration.
     :param node: The `Node` on which this migrator runs.
     :type node: `Node`
     '''
@@ -27,9 +25,6 @@ class InsertionMigrator(migrator.Migrator):
 
     # When true, the swap has been prepared, and the migrator should be checking whether it's time to swap.
     self._waiting_for_swap = False
-
-    self._senders = {sender['id']: sender for sender in senders}
-    self._receivers = {receiver['id']: receiver for receiver in receivers}
 
     self._kids = {} # node_id to either None (if the node has not yet reported that it is live) or the kid's handle.
 
@@ -58,11 +53,7 @@ class InsertionMigrator(migrator.Migrator):
     :return: The appropriate `InsertionMigrator` instance.
     :rtype: `InsertionMigrator`
     '''
-    return InsertionMigrator(
-        migration=migrator_config['migration'],
-        senders=migrator_config['senders'],
-        receivers=migrator_config['receivers'],
-        node=node)
+    return InsertionMigrator(migration=migrator_config['migration'], node=node)
 
   def _maybe_prepared_for_switch(self):
     if all(self._kids_ready_for_switch.values()):
@@ -84,7 +75,7 @@ class InsertionMigrator(migrator.Migrator):
       self._node._current_state = message['total']
 
       # Exit deltas only, add the exporters and start sending to them.
-      for nid, receiver in self._receivers.items():
+      for nid, receiver in self._node._receivers.items():
         self._node._exporters[nid] = self._node.linker.new_exporter(receiver, migration_id=self.migration_id)
       self._node.deltas_only.remove(self.migration_id)
       self._node.send_forward_messages()
@@ -121,7 +112,7 @@ class InsertionMigrator(migrator.Migrator):
 
   def _maybe_kids_are_terminated(self):
     if all(self._kid_migrator_is_terminated.values()):
-      self._node.activate_swap(self.migration_id, new_receivers=self._receivers, kids=self._kids)
+      self._node.activate_swap(self.migration_id, kids=self._kids)
       self._node.remove_migrator(self.migration_id)
       self._node.send(self.parent, messages.migration.migrator_terminated(self.migration_id))
 
@@ -131,7 +122,7 @@ class InsertionMigrator(migrator.Migrator):
 
   def _maybe_swap(self):
     if self._waiting_for_swap and \
-        len(self._new_sender_id_to_first_live_sequence_number) == len(self._senders) and \
+        len(self._new_sender_id_to_first_live_sequence_number) == len(self._node.left_ids) and \
         self._node._deltas.covers(self._new_sender_id_to_first_live_sequence_number):
 
       self._node.logger.info("Insertion node is swapping flows.")
@@ -147,7 +138,7 @@ class InsertionMigrator(migrator.Migrator):
                             self.migration_id, first_live_sequence_number=exporter._internal_sequence_number))
 
       self._waiting_for_swap = False
-      self._node.activate_swap(self.migration_id, new_receivers=self._receivers, kids=self._kids)
+      self._node.activate_swap(self.migration_id, kids=self._kids)
 
   @property
   def migration_id(self):

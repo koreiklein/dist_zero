@@ -199,11 +199,9 @@ class Demo(object):
                     right_is_data=True,
                     configure_right_parent_ids=[node_id],
                     senders=[input_handle_for_migration],
+                    left_ids=[input_handle_for_migration['id']],
                     receivers=[output_handle_for_migration],
-                    migrator=messages.migration.insertion_migrator_config(
-                        senders=[input_handle_for_migration],
-                        receivers=[output_handle_for_migration],
-                    ),
+                    migrator=messages.migration.insertion_migrator_config(),
                 )
             ]))
     return root_computation_node_id

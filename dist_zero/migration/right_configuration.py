@@ -28,7 +28,26 @@ class ConfigurationReceiver(object):
     return self._node.logger
 
   def receive(self, message, sender_id):
-    if message['type'] == 'configure_right_parent':
+    if self._fully_configured:
+      if message['type'] == 'configure_right_parent':
+        # FIXME(KK): Implement this
+        import ipdb
+        ipdb.set_trace()
+      elif message['type'] == 'substitute_right_parent':
+        # FIXME(KK): Implement this
+        import ipdb
+        ipdb.set_trace()
+      elif message['type'] == 'configure_new_flow_left':
+        for left_config in message['left_configurations']:
+          self._left_configurations[left_config['node']['id']] = left_config
+        self._node.new_left_configurations(message['left_configurations'])
+      elif message['type'] == 'configure_new_flow_right':
+        for right_config in message['right_configurations']:
+          self._right_config_receiver.got_configuration(right_config)
+        self._node.new_right_configurations(message['right_configurations'])
+      else:
+        return False
+    elif message['type'] == 'configure_right_parent':
       self._right_config_receiver.got_parent_configuration(sender_id, kid_ids=message['kid_ids'])
       self._maybe_has_left_and_right_configurations()
     elif message['type'] == 'substitute_right_parent':

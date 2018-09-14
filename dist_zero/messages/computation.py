@@ -1,6 +1,7 @@
 def computation_node_config(node_id,
                             left_is_data,
                             right_is_data,
+                            left_ids,
                             configure_right_parent_ids,
                             height,
                             parent,
@@ -20,6 +21,7 @@ def computation_node_config(node_id,
   :type parent: :ref:`handle`
   :param int height: The height of the new computation node in its tree.
   :param list senders: A list of :ref:`handle` s of sending nodes.
+  :param list[str] left_ids: A list of the ids of nodes for which the computation node should expect a left configuration.
   :param list receivers: A list of :ref:`handle` s of receiving nodes.
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
   :param list adoptees: A list of :ref:`handle` of the nodes to adopt upon spawn.
@@ -28,6 +30,7 @@ def computation_node_config(node_id,
       'type': 'ComputationNode',
       'id': node_id,
       'parent': parent,
+      'left_ids': left_ids,
       'height': height,
       'senders': senders,
       'left_is_data': left_is_data,

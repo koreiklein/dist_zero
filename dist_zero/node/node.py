@@ -138,10 +138,8 @@ class Node(object):
     elif message['type'] == 'migration':
       migration_id, migration_message = message['migration_id'], message['message']
       if migration_id is None:
-        import ipdb
-        ipdb.set_trace()
-        raise errors.InternalError("Not Yet Implemented")
-      if migration_id not in self.migrators:
+        self.receive(message=migration_message, sender_id=sender_id)
+      elif migration_id not in self.migrators:
         # Possible, when a migration was removed at about the same time as some of the last few
         # acknowledgement or retransmission messages came through.
         self.logger.warning(

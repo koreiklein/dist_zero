@@ -79,15 +79,20 @@ def removal_migrator_config(sender_ids, receiver_ids, will_sync):
   return {'type': 'removal_migrator', 'sender_ids': sender_ids, 'receiver_ids': receiver_ids, 'will_sync': will_sync}
 
 
-def insertion_migrator_config(senders, receivers, migration=None):
+def insertion_migrator_config(migration=None):
   '''
-  :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
-  :param list receivers: A list of :ref:`handle` of the `Node` s that will receive from self by the end of the migration.
   :param migration: If the insertion node will communicate directly with the migration node, this is a handle for it.
     Otherwise, it is `None`
   :type migration: :ref:`handle` or `None`
   '''
-  return {'type': 'insertion_migrator', 'senders': senders, 'receivers': receivers, 'migration': migration}
+  return {'type': 'insertion_migrator', 'migration': migration}
+
+
+def added_sender(node):
+  '''
+  Informs an already fully configured receiver when a new sender is being added and needs a right_configuration.
+  '''
+  return {'type': 'added_sender', 'node': node}
 
 
 def attach_migrator(migrator_config):

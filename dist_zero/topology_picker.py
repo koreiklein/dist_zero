@@ -73,18 +73,19 @@ class TopologyPicker(object):
   def append_right(self, node):
     '''
     Add a new right node, returning the necessary modifications to the graph to make the addition successfull.
-    :return: A tuple of (nodes, hourglasses) with the following specifications:
-      nodes -- A list of triplets (node_id, senders, receivers) defining a new node that should be added
-        along with the senders and receivers it should have
+    :return: A tuple of (node_layers, hourglasses) with the following specifications:
+      node_layers -- A list of layers of nodes.  Each layer is a list of triplets (node_id, senders, receivers)
+        defining a new node that should be added along with the senders and receivers it should have
       hourglasses -- A list of hourglass operations.  Each hourglass operation consists of
         (node_id, senders, receivers) where senders and receivers are currently connected via a complete
           graph which should be removed in favor of an hourglass graph centered on node_id
     '''
-    new_nodes = []
+    new_node_layers = []
     self._rights.append(node)
     self._graph.add_node(node)
     for layer_coindex, (left_layer, right_index) in enumerate(
         zip(reversed(self._left_tree.layers), self._right_tree.append_base(node))):
+      new_node_layers.append([])
       layer_index = len(self._layers) - 1 - layer_coindex
       for left_index in left_layer:
         coords = (left_index, right_index)
@@ -93,30 +94,30 @@ class TopologyPicker(object):
           node_id = node
         else:
           node_id = self._new_node(coords)
-        new_nodes.append(node_id)
+        new_node_layers[-1].append(node_id)
 
         self._layers[layer_index].append(node_id)
 
-    self._update_graph_edges(new_nodes)
-    result = [(node_id, self._incomming_nodes(node_id), self._outgoing_nodes(node_id)) for node_id in new_nodes]
-    return result, (self._insert_hourglass_layer_left() if self._right_tree.is_full else [])
+    self._update_graph_edges([node for layer in new_node_layers for node in layer])
+    return new_node_layers, (self._insert_hourglass_layer_left() if self._right_tree.is_full else [])
 
   def append_left(self, node):
     '''
     Add a new left node, returning the necessary modifications to the graph to make the addition successfull.
-    :return: A tuple of (nodes, hourglasses) with the following specifications:
-      nodes -- A list of triplets (node_id, senders, receivers) defining a new node that should be added
-        along with the senders and receivers it should have
+    :return: A tuple of (node_layers, hourglasses) with the following specifications:
+      node_layers -- A list of node layers, each layer consists of triplets (node_id, senders, receivers)
+        defining a new node that should be added along with the senders and receivers it should have
       hourglasses -- A list of hourglass operations.  Each hourglass operation consists of
         (node_id, senders, receivers) where senders and receivers are currently connected via a complete
           graph which should be removed in favor of an hourglass graph centered on node_id
     '''
-    new_nodes = []
+    new_node_layers = []
     self._lefts.append(node)
     self._graph.add_node(node)
     # Modify according the results in new_node_and_parent
     for layer_index, (left_index, right_layer) \
         in enumerate(zip(self._left_tree.append_base(node), reversed(self._right_tree.layers))):
+      new_node_layers.append([])
       for right_index in right_layer:
         coords = (left_index, right_index)
         if layer_index == 0:
@@ -124,15 +125,13 @@ class TopologyPicker(object):
           node_id = node
         else:
           node_id = self._new_node(coords)
-        new_nodes.append(node_id)
+        new_node_layers[-1].append(node_id)
 
         self._layers[layer_index].append(node_id)
 
-    self._update_graph_edges(new_nodes)
+    self._update_graph_edges([node for layer in new_node_layers for node in layer])
 
-    result = [(node_id, self._incomming_nodes(node_id), self._outgoing_nodes(node_id)) for node_id in new_nodes]
-
-    return result, (self._insert_hourglass_layer_right() if self._left_tree.is_full else [])
+    return new_node_layers, (self._insert_hourglass_layer_right() if self._left_tree.is_full else [])
 
   def _insert_hourglass_layer_left(self):
     # Remove the complete graphs that are being replaced by hourglasses.

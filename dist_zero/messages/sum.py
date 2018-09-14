@@ -10,16 +10,6 @@ def increment(amount):
   return {'type': 'increment', 'amount': amount}
 
 
-def added_sender(node):
-  '''
-  Sent by a node to indicate that it will now send to the recipient.
-
-  :param node: The :ref:`handle` of the sender.
-  :type node: :ref:`handle`
-  '''
-  return {'type': 'added_sender', 'node': node}
-
-
 def added_receiver(node):
   '''
   Sent by a node to indicate that it will now receive from the recipient.
@@ -66,6 +56,8 @@ def sum_node_config(
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
 
   '''
+  #if node_id in ['SumNode_adjacent_KJkO1stETMRt', 'SumNode_adjacent_g43zE0CW7gaQ']:
+  #  import ipdb; ipdb.set_trace()
   return {
       'type': 'SumNode',
       'id': node_id,

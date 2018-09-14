@@ -53,6 +53,8 @@ class SumNode(Node):
     '''
     self._controller = controller
 
+    self._FIXME_added_sender = None
+
     self.id = node_id
     self.parent = parent
 
@@ -88,6 +90,8 @@ class SumNode(Node):
     self._initial_migrator_config = migrator_config
     self._initial_migrator = None # It will be initialized later.
 
+    self.left_ids = [sender['id'] for sender in senders]
+
     self._exporters = {}
     self._importers = {}
 
@@ -101,6 +105,14 @@ class SumNode(Node):
         for receiver_id, right_config in right_configurations.items()
     }
     self._send_configure_left_to_right()
+
+  def new_left_configurations(self, left_configurations):
+    # These left_configurations should already have been added.
+    pass
+
+  def new_right_configurations(self, right_configurations):
+    import ipdb
+    ipdb.set_trace()
 
   def _send_configure_left_to_right(self):
     self.logger.info("Sending configure_new_flow_left")
@@ -158,14 +170,6 @@ class SumNode(Node):
     self.send(self.parent, messages.io.hello_parent(self.new_handle(self.parent['id'])))
     self._send_configure_right_to_left()
 
-    # FIXME(KK): This should probably be removed.
-    #if self._initial_migrator is None:
-    #  for importer in self._importers.values():
-    #    self.send(importer.sender, messages.sum.added_receiver(self.new_handle(importer.sender_id)))
-
-    #  for exporter in self._exporters.values():
-    #    self.send(exporter.receiver, messages.sum.added_sender(self.new_handle(exporter.receiver_id)))
-
     self.linker.initialize()
 
   def _send_configure_right_to_left(self):
@@ -200,6 +204,10 @@ class SumNode(Node):
     :rtype: int
     '''
     new_state, increment, updated = self._deltas.pop_deltas(state=self._current_state, before=before)
+    if not self._exporters:
+      import ipdb
+      ipdb.set_trace()
+
     if not updated:
       return self.least_unused_sequence_number
     else:
@@ -231,8 +239,13 @@ class SumNode(Node):
     self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
 
   def receive(self, sender_id, message):
+
     if self._configuration_receiver.receive(message=message, sender_id=sender_id):
       return
+    elif sender_id == self._FIXME_added_sender:
+      import ipdb
+      ipdb.set_trace()
+      print('FIXME')
     elif message['type'] == 'adopt':
       # FIXME(KK): Test and implement this
       import ipdb
@@ -260,7 +273,20 @@ class SumNode(Node):
         else:
           raise errors.InternalError("SumNode already has a distinct output node")
     elif message['type'] == 'added_sender':
-      self.import_from_node(message['node'])
+      node = message['node']
+      self._FIXME_added_sender = node
+      self.import_from_node(node)
+      self.send(node,
+                messages.migration.configure_new_flow_right(
+                    migration_id=None,
+                    right_configurations=[
+                        messages.migration.right_configuration(
+                            parent_handle=self.new_handle(node['id']),
+                            height=-1,
+                            is_data=False,
+                            n_kids=None,
+                            connection_limit=0)
+                    ]))
     elif message['type'] == 'added_receiver':
       self.export_to_node(message['node'])
     elif message['type'] == 'adjacent_has_split':
@@ -326,64 +352,6 @@ class SumNode(Node):
       self._time_since_had_enough_receivers_ms = 0
     self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
-    if len(self._importers) > SENDER_LIMIT:
-      if not self.migrators:
-        self.logger.info("Hitting sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
-        self._spawn_new_senders_migration()
-
-  def _spawn_new_senders_migration(self):
-    '''
-    Trigger a migration to spawn new sender nodes between self and its current senders.
-    '''
-    partition = {
-        ids.new_id('SumNode_middle_for_migration'): importers
-        for importers in misc.partition(
-            items=list(self._importers.values()), n_buckets=self.system_config['SUM_NODE_SPLIT_N_NEW_NODES'])
-    }
-    reverse_partition = {
-        importer.sender_id: middle_node_id
-        for middle_node_id, importers in partition.items() for importer in importers
-    }
-
-    insertion_node_configs = [
-        messages.sum.sum_node_config(
-            node_id=nid,
-            senders=[],
-            receivers=[],
-            migrator=messages.migration.insertion_migrator_config(
-                senders=[self.transfer_handle(importer.sender, for_node_id=nid) for importer in importers],
-                receivers=[self_handle],
-            ),
-        ) for nid, importers in partition.items() for self_handle in [self.new_handle(nid)]
-    ]
-
-    node_id = ids.new_id('MigrationNode_add_layer_before_sum_node')
-
-    return self._controller.spawn_node(
-        node_config=messages.migration.migration_node_config(
-            node_id=node_id,
-            source_nodes=[(self.transfer_handle(importer.sender, node_id),
-                           messages.migration.source_migrator_config(
-                               will_sync=False,
-                               exporter_swaps=[(self.id, [reverse_partition[importer.sender_id]])],
-                           )) for importer in self._importers.values()],
-            sink_nodes=[(self.new_handle(node_id),
-                         messages.migration.sink_migrator_config(
-                             will_sync=True,
-                             new_flow_sender_ids=[
-                                 insertion_node_config['id'] for insertion_node_config in insertion_node_configs
-                             ],
-                             old_flow_sender_ids=list(self._importers.keys()),
-                         ))],
-            removal_nodes=[],
-            insertion_node_configs=insertion_node_configs,
-            sync_pairs=[
-                # A single pair, indicating that self should sync to the insertion nodes.
-                (self.new_handle(node_id),
-                 [insertion_node_config['id'] for insertion_node_config in insertion_node_configs])
-            ],
-        ))
-
   def _send_increment(self, increment, sequence_number):
     if settings.IS_TESTING_ENV:
       if self._TESTING_swapped_once:
@@ -419,20 +387,16 @@ class SumNode(Node):
 
     self._exporters.update(new_exporters)
 
-  def activate_swap(self, migration_id, new_receivers, kids, use_output=False, use_input=False):
+  def activate_swap(self, migration_id, kids, use_output=False, use_input=False):
     if len(kids) != 0:
       raise errors.InternalError("Sum nodes should never be passed kids by a migrator.")
-
-    for receiver_id, receiver in new_receivers.items():
-      if receiver_id not in self._exporters:
-        raise errors.InternalError("These new_receivers should have already been added as exporters.")
 
   def checkpoint(self, before=None):
     self.send_forward_messages(before=before)
 
   def remove_migrator(self, migration_id):
-    for nid in self.migrators[migration_id]._receivers:
-      self._exporters[nid]._migration_id = None
+    for exporter in self._exporters.values():
+      exporter._migration_id = None
 
     super(SumNode, self).remove_migrator(migration_id)
 
@@ -453,9 +417,7 @@ class SumNode(Node):
     }
 
   def handle_api_message(self, message):
-    if message['type'] == 'spawn_new_senders':
-      return self._spawn_new_senders_migration()
-    elif message['type'] == 'get_kids':
+    if message['type'] == 'get_kids':
       return {}
     elif message['type'] == 'get_senders':
       return {sender_id: importer.sender for sender_id, importer in self._importers.items()}

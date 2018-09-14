@@ -37,6 +37,7 @@ class InternalNode(Node):
     '''
     self._controller = controller
     self._parent = parent
+    self._sent_hello = False
     self._variant = variant
     self._height = height
     self.id = node_id
@@ -80,6 +81,10 @@ class InternalNode(Node):
 
     # To limit excessive warnings regarding being at low capacity.
     self._warned_low_capacity = False
+
+    # If this node is spawned at too great a height, it must spawn a kid before it's ready to do anything else.
+    # In case there is such a kid, self._startup_kid gives its id.
+    self._startup_kid = None
 
     super(InternalNode, self).__init__(logger)
 
@@ -145,13 +150,19 @@ class InternalNode(Node):
 
     if self._height > 0 and len(self._kids) == 0:
       # unless we are height 0, we must have a new kid.
-      self._spawn_kid()
-
-    if self._parent is not None and not self._pending_adoptees:
-      self._send_hello_parent()
+      self._startup_kid = self._spawn_kid()
+    else:
+      if self._parent is not None and not self._pending_adoptees:
+        self._send_hello_parent()
 
   def _send_hello_parent(self):
-    self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
+    if not self._sent_hello:
+      self._sent_hello = True
+      self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
+    else:
+      import ipdb
+      ipdb.set_trace()
+      raise errors.InternalError("Already sent hello")
 
   def _spawn_kid(self):
     if self._height == 0:
@@ -176,6 +187,7 @@ class InternalNode(Node):
               initial_state=self._initial_state,
               adoptees=[],
           ))
+      return node_id
 
   def _check_for_kid_limits(self):
     '''In case the kids of self are hitting any limits, address them.'''
@@ -338,11 +350,35 @@ class InternalNode(Node):
     self._graph.add_node(kid_id)
 
   def receive(self, message, sender_id):
-    if message['type'] == 'added_sender':
-      self._set_input(message['node'])
+    if message['type'] == 'configure_new_flow_right':
+      if self._adjacent is not None or len(message['right_configurations']) != 1 or self._variant != 'input':
+        raise errors.InternalError("A new configure_new_flow_right should only ever arrive at an 'input' InternalNode "
+                                   "and only when it's waiting to set its adjacent,"
+                                   " and when the configure_new_flow_right has a single right_configuration.")
+      right_config, = message['right_configurations']
+      node = right_config['parent_handle']
+      self._set_output(node)
+      self.send(node,
+                messages.migration.configure_new_flow_left(
+                    migration_id=None,
+                    left_configurations=[
+                        messages.migration.left_configuration(
+                            height=self.height,
+                            is_data=True,
+                            node=self.new_handle(node['id']),
+                            kids=[self.transfer_handle(kid, node['id']) for kid in self._kids.values()],
+                        )
+                    ]))
+    elif message['type'] == 'configure_new_flow_left':
+      # FIXME(KK): Implement this
+      import ipdb
+      ipdb.set_trace()
     elif message['type'] == 'added_receiver':
       self._set_output(message['node'])
     elif message['type'] == 'hello_parent':
+      if sender_id == self._startup_kid and self._parent is not None:
+        self._send_hello_parent()
+
       if sender_id == self._root_proxy_id:
         self._finish_bumping_height(message['kid'])
       else:
@@ -381,6 +417,7 @@ class InternalNode(Node):
         raise errors.InternalError("Root nodes may not adopt a new parent.")
       self.send(self._parent, messages.io.goodbye_parent())
       self._parent = message['new_parent']
+      self._sent_hello = False
       self._send_hello_parent()
     else:
       super(InternalNode, self).receive(message=message, sender_id=sender_id)
