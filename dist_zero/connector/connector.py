@@ -52,10 +52,14 @@ class Connector(object):
   def max_right_height(self):
     return max((config['height'] for config in self._right_configurations.values()), default=-1)
 
-  def add_kid_to_left_configuration(self, parent_id, kid):
+  def add_kids_to_left_configuration(self, parent_id_kid_pairs):
     '''
     Update the set of connections so that there is a new node in
     the leftmost layer.
+
+    :param list[tuple] parent_id_kid_pairs: A list of pairs (parent_id, kid)
+      where parent_id is the id of the parent sending a left_configuration,
+      and kid is a kid configuration to add to that parent's left_configuration.
 
     :return: A triplet (new_nodes, new_edges, hourglasses)
       where new_nodes are triplets (node_id, senders, receivers) to spawn
@@ -63,47 +67,67 @@ class Connector(object):
       not defined by new_nodes, and hourglasses are triplets
       (node_id, senders, receivers) giving the hourglass substitutions.
     '''
-    left_config = self._left_configurations[parent_id]
-    left_config['kids'].append(kid)
-    self._left_layer[kid['id']] = kid
-    node_id = kid['id']
+    node_ids = []
+    for parent_id, kid in parent_id_kid_pairs:
+      left_config = self._left_configurations[parent_id]
+      left_config['kids'].append(kid)
+      node = kid['handle']
+      self._left_layer[node['id']] = node
+      node_ids.append(node['id'])
 
-    return self._add_left_kid(node_id)
+    return self._add_left_kids(node_ids)
 
-  def add_left_configuration(self, left_configuration):
-    self._left_configurations[left_configuration['node']['id']] = left_configuration
+  def add_left_configurations(self, left_configurations):
+    node_ids = []
+    for left_configuration in left_configurations:
+      self._left_configurations[left_configuration['node']['id']] = left_configuration
+      for kid_config in left_configuration['kids']:
+        kid = kid_config['handle']
+        self._left_layer[kid['id']] = kid
+        node_ids.append(kid['id'])
 
-    if len(left_configuration['kids']) != 1:
-      import ipdb
-      ipdb.set_trace()
-      raise errors.InternalError("Not Yet Implemented")
+    return self._add_left_kids(node_ids)
 
-    for kid_config in left_configuration['kids']:
-      kid = kid_config['handle']
-      self._left_layer[kid['id']] = kid
-      node_id = kid['id']
-      return self._add_left_kid(node_id)
+  def _append_all_left(self, node_ids):
+    new_layers, hourglasses = self._picker.append_left(node_ids[0])
+    for node_id in node_ids[1:]:
+      more_new_layers, more_hourglasses = self._picker.append_left(node_id)
+      hourglasses.extend(more_hourglasses)
+      if len(new_layers) != len(more_new_layers):
+        raise errors.InternalError("Parallel calls to append_left must return layer lists of equal length")
+      for new_layer, more_new_layer in zip(new_layers, more_new_layers):
+        new_layer.extend(more_new_layer)
+    return new_layers, hourglasses
 
-  def _add_left_kid(self, node_id):
+  def _add_left_kids(self, node_ids):
+    if len(node_ids) == 0:
+      return [], [], []
 
-    self._layers[0].append(node_id)
+    self._layers[0].extend(node_ids)
 
     if self._left_is_data:
-      adjacent_id = ids.new_id("{}_adjacent".format(self._name_prefix))
-      self._layers[1].append(adjacent_id)
-      self._graph.add_node(node_id)
-      new_layers, hourglasses = self._picker.append_left(adjacent_id)
-      self._graph.add_edge(node_id, adjacent_id)
+      adjacent_ids = []
+      for node_id in node_ids:
+        adjacent_id = ids.new_id("{}_adjacent".format(self._name_prefix))
+        self._layers[1].append(adjacent_id)
+        self._graph.add_node(node_id)
+        adjacent_ids.append(adjacent_id)
+
+      new_layers, hourglasses = self._append_all_left(adjacent_ids)
+
+      for node_id, adjacent_id in zip(node_ids, adjacent_ids):
+        self._graph.add_edge(node_id, adjacent_id)
+
       return new_layers, [], hourglasses
     else:
-      new_layers, hourglasses = self._picker.append_left(node_id)
+      new_layers, hourglasses = self._append_all_left(node_ids)
       if not new_layers:
         import ipdb
         ipdb.set_trace()
         # FIXME(KK): Implement this properly
       else:
-        return new_layers[1:], [(node_id, receiver_id)
-                                for receiver_id in self._graph.node_receivers(node_id)], hourglasses
+        edges = [(node_id, receiver_id) for node_id in node_ids for receiver_id in self._graph.node_receivers(node_id)]
+        return new_layers[1:], edges, hourglasses
 
   @property
   def layers(self):

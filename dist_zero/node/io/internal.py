@@ -338,7 +338,10 @@ class InternalNode(Node):
         self.send(self._adjacent,
                   messages.migration.update_left_configuration(
                       parent_id=self.id,
-                      new_kids=[self.transfer_handle(handle=kid, for_node_id=self._adjacent['id'])],
+                      new_kids=[{
+                          'connection_limit': self.system_config['SUM_NODE_SENDER_LIMIT'],
+                          'handle': self.transfer_handle(handle=kid, for_node_id=self._adjacent['id'])
+                      }],
                       new_height=self._height))
       elif self._variant == 'output':
         # FIXME(KK): Test and finish this

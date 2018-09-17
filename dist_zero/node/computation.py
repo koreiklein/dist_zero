@@ -333,71 +333,76 @@ class ComputationNode(Node):
               receivers=[],
               migrator=migrator))
 
+  def _get_new_layers_edges_and_hourglasses(self, new_layers, edges, hourglasses):
+    if new_layers:
+      self._incremental_spawner = connector.IncrementalSpawner(
+          new_layers=new_layers, connector=self._connector, node=self)
+      self._incremental_spawner.start_spawning()
+
+    if hourglasses:
+      # FIXME(KK): Implement this
+      import ipdb
+      ipdb.set_trace()
+
+    if edges:
+      left_kid_to_handle = {
+          kid['handle']['id']: kid['handle']
+          for left_config in self._configuration_receiver._left_configurations.values() for kid in left_config['kids']
+      }
+      src_to_tgts = defaultdict(list)
+      for src_id, tgt_id in edges:
+        src_to_tgts[src_id].append(tgt_id)
+        # TODO(KK): possibly refactor this bit, the return types from add_left_configuration and add_kids_to_left_configuration
+        # look highly suspicious.
+        src, tgt = left_kid_to_handle[src_id], self.kids[tgt_id]
+        self.send(tgt, messages.migration.added_sender(self.transfer_handle(src, tgt['id'])))
+
+      for src_id, tgt_ids in src_to_tgts.items():
+        self.send(left_kid_to_handle[src_id],
+                  messages.migration.configure_right_parent(migration_id=None, kid_ids=tgt_ids))
+
   def _update_left_configuration(self, message):
     if self._left_gap:
       # FIXME(KK): Test this, and implement by forwarding the update_left_configuration message to the proper child.
       import ipdb
       ipdb.set_trace()
     else:
-      if len(message['new_kids']) != 1:
-        # FIXME(KK): The current implementation handles only a special case.
-        import ipdb
-        ipdb.set_trace()
-        raise errors.InternalError("Not Yet Implemented")
-      for kid in message['new_kids']:
-        _lookup = lambda nid: kid if kid['id'] == nid else self.kids[nid]
-        if self._connector is None:
-          import ipdb
-          ipdb.set_trace()
+      if self._connector is None:
+        raise errors.InternalError("self._connector must be initialized before an update_left_configuration "
+                                   "can be received")
 
-        #if self.id == 'ComputationNode_adjacent_gL1atm1WWIU6':
-        #  import ipdb; ipdb.set_trace()
+      self._get_new_layers_edges_and_hourglasses(*self._connector.add_kids_to_left_configuration([(
+          message['parent_id'], kid) for kid in message['new_kids']]))
 
-        new_layers, edges, hourglasses = self._connector.add_kid_to_left_configuration(
-            parent_id=message['parent_id'], kid=kid)
+      # FIXME(KK): Move this into probably a _update_right_configuration message.
+      #import ipdb
+      #ipdb.set_trace()
+      #self._picker.graph.add_node(kid['id'])
+      #self._picker.layers[0].append(kid['id'])
 
-        self._incremental_spawner = connector.IncrementalSpawner(
-            new_layers=new_layers, connector=self._connector, node=self)
-        self._incremental_spawner.start_spawning()
+      #if self.right_is_data:
+      #  node_id = ids.new_id('{}_output_adjacent'.format('SumNode' if is_leaf else 'ComputationNode', ))
+      #  self._picker.graph.add_node(node_id)
+      #  self._picker.graph.add_edge(node_id, kid['id'])
+      #  senders = self._pick_new_sender_for_kid()
 
-        if len(edges) >= 2 or (len(edges) == 1 and node_changes):
-          raise errors.InternalError("Received a disallowed combination of results"
-                                     " from Connector.add_kid_to_left_configuration")
+      #  if senders is None:
 
-        for src_id, tgt_id in edges:
-          src, tgt = self.kids[src_id], self.kids[tgt_id]
-          import ipdb
-          ipdb.set_trace()
-
-        # FIXME(KK): Move this into probably a _update_right_configuration message.
-        #import ipdb
-        #ipdb.set_trace()
-        #self._picker.graph.add_node(kid['id'])
-        #self._picker.layers[0].append(kid['id'])
-
-        #if self.right_is_data:
-        #  node_id = ids.new_id('{}_output_adjacent'.format('SumNode' if is_leaf else 'ComputationNode', ))
-        #  self._picker.graph.add_node(node_id)
-        #  self._picker.graph.add_edge(node_id, kid['id'])
-        #  senders = self._pick_new_sender_for_kid()
-
-        #  if senders is None:
-
-        #    # Tell a parent receiver to find an actual sender for this kid
-        #    self._kids_missing_senders.add(node_id)
-        #  else:
-        #    senders = [self.transfer_handle(sender, node_id) for sender in senders]
-        #    for sender in senders:
-        #      self._picker.graph.add_edge(sender['id'], node_id)
-        #  self._spawn_node(
-        #      is_leaf=is_leaf,
-        #      left=False,
-        #      node_id=node_id,
-        #      senders=senders,
-        #      receivers=[self.transfer_handle(handle=kid, for_node_id=node_id)])
-        #else:
-        #  import ipdb
-        #  ipdb.set_trace()
+      #    # Tell a parent receiver to find an actual sender for this kid
+      #    self._kids_missing_senders.add(node_id)
+      #  else:
+      #    senders = [self.transfer_handle(sender, node_id) for sender in senders]
+      #    for sender in senders:
+      #      self._picker.graph.add_edge(sender['id'], node_id)
+      #  self._spawn_node(
+      #      is_leaf=is_leaf,
+      #      left=False,
+      #      node_id=node_id,
+      #      senders=senders,
+      #      receivers=[self.transfer_handle(handle=kid, for_node_id=node_id)])
+      #else:
+      #  import ipdb
+      #  ipdb.set_trace()
 
   def _finished_bumping(self, proxy_handle):
     self.kids[proxy_handle['id']] = proxy_handle
@@ -456,8 +461,8 @@ class ComputationNode(Node):
       self._receivers[parent['id']] = parent
 
     if self._connector is not None:
-      import ipdb
-      ipdb.set_trace()
+      raise errors.InternalError(
+          "self._connector may not be initialized hen has_left_and_right_configurations is called.")
 
     self._connector = connector.Connector(
         height=self.height,
@@ -476,38 +481,11 @@ class ComputationNode(Node):
 
   def new_left_configurations(self, left_configurations):
     '''For when a fully configured node gets new left_configurations'''
-    if len(left_configurations) != 1:
-      import ipdb
-      ipdb.set_trace()
-      raise errors.InternalError("Not Yet Implemented")
-
-    for left_configuration in left_configurations:
-      new_layers, edges, hourglasses = self._connector.add_left_configuration(left_configuration)
-
-      if new_layers:
-        self._incremental_spawner = connector.IncrementalSpawner(
-            new_layers=new_layers, connector=self._connector, node=self)
-        self._incremental_spawner.start_spawning()
-
-      if edges:
-        left_kid_to_handle = {
-            kid['handle']['id']: kid['handle']
-            for left_config in left_configurations for kid in left_config['kids']
-        }
-        src_to_tgts = defaultdict(list)
-        for src_id, tgt_id in edges:
-          src_to_tgts[src_id].append(tgt_id)
-          # TODO(KK): possibly refactor this bit, the return types from add_left_configuration and add_kid_to_left_configuration
-          # look highly suspicious.
-          src, tgt = left_kid_to_handle[src_id], self.kids[tgt_id]
-          self.send(tgt, messages.migration.added_sender(self.transfer_handle(src, tgt['id'])))
-
-        for src_id, tgt_ids in src_to_tgts.items():
-          self.send(left_kid_to_handle[src_id],
-                    messages.migration.configure_right_parent(migration_id=None, kid_ids=tgt_ids))
+    self._get_new_layers_edges_and_hourglasses(*self._connector.add_left_configurations(left_configurations))
 
   def new_right_configurations(self, right_configurations):
     '''For when a fully configured node gets new right_configurations'''
+    #FIXME(KK): Implement this
     import ipdb
     ipdb.set_trace()
 

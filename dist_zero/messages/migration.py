@@ -472,7 +472,7 @@ def update_left_configuration(parent_id, new_kids, new_height):
   Indicate to a node that one of its existing left configurations has received new kids.
 
   :param str parent_id: The id of the parent whose left configuration has just changed.
-  :param list new_kids: The list of :ref:`handle` of kids that are being added to this parent's left configuration.
+  :param list new_kids: The list of {'handle': :ref:`handle`, 'connection_limit': limit} of kids that are being added to this parent's left configuration.
   :param int new_height: The height of the parent at the time this message was sent.
   '''
   return {
