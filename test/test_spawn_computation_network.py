@@ -148,7 +148,6 @@ class TestSpawnComputationNetwork(object):
   @pytest.mark.parametrize(
       'name,start_inputs,start_outputs,new_inputs,new_outputs,ending_input_height,ending_output_height',
       [
-          ('grow_input_small', 2, 2, 2, 0, 1, 1), # Just add inputs
           ('grow_input', 2, 2, 5, 0, 1, 1), # Just add inputs
           ('grow_output', 2, 2, 0, 5, 1, 1), # Just add outputs
           ('bump_input', 2, 2, 10, 0, 2, 1), # Add enough inputs that the tree bumps its height
@@ -174,6 +173,7 @@ class TestSpawnComputationNetwork(object):
 
     demo.run_for(ms=5000)
     self.demo.render_network(self.root_computation)
+    assert start_outputs + new_outputs == len(self.output_leaves)
     for leaf in self.output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 
