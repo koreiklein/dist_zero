@@ -204,9 +204,6 @@ class SumNode(Node):
     :rtype: int
     '''
     new_state, increment, updated = self._deltas.pop_deltas(state=self._current_state, before=before)
-    if not self._exporters:
-      import ipdb
-      ipdb.set_trace()
 
     if not updated:
       return self.least_unused_sequence_number
@@ -237,6 +234,27 @@ class SumNode(Node):
     '''
     # Don't update any internal state just yet, but wait until the next sequence number is generated.
     self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
+
+  def generate_new_left_configuration(self, receiver):
+    return messages.migration.left_configuration(
+        height=-1, is_data=False, node=self.new_handle(receiver['id']), kids=[])
+
+  def add_left_configuration(self, left_configuration):
+    node = left_configuration['node']
+    self.import_from_node(node)
+    import ipdb
+    ipdb.set_trace()
+    self.send(node,
+              messages.migration.configure_new_flow_right(
+                  migration_id=None,
+                  right_configurations=[
+                      messages.migration.right_configuration(
+                          parent_handle=self.new_handle(node['id']),
+                          height=-1,
+                          is_data=False,
+                          n_kids=None,
+                          connection_limit=0)
+                  ]))
 
   def receive(self, sender_id, message):
 
@@ -273,6 +291,7 @@ class SumNode(Node):
         else:
           raise errors.InternalError("SumNode already has a distinct output node")
     elif message['type'] == 'added_sender':
+      # FIXME(KK): Maybe remove this case.
       node = message['node']
       self._FIXME_added_sender = node
       self.import_from_node(node)

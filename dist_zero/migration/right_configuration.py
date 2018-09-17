@@ -1,4 +1,4 @@
-from dist_zero import errors
+from dist_zero import errors, messages
 
 
 class ConfigurationReceiver(object):
@@ -41,6 +41,10 @@ class ConfigurationReceiver(object):
         for left_config in message['left_configurations']:
           self._left_configurations[left_config['node']['id']] = left_config
         self._node.new_left_configurations(message['left_configurations'])
+      elif message['type'] == 'add_left_configuration':
+        left_config = message['left_configuration']
+        self._left_configurations[left_config['node']['id']] = left_config
+        self._node.add_left_configuration(left_config)
       elif message['type'] == 'configure_new_flow_right':
         for right_config in message['right_configurations']:
           self._right_config_receiver.got_configuration(right_config)
@@ -50,6 +54,10 @@ class ConfigurationReceiver(object):
     elif message['type'] == 'configure_right_parent':
       self._right_config_receiver.got_parent_configuration(sender_id, kid_ids=message['kid_ids'])
       self._maybe_has_left_and_right_configurations()
+    elif message['type'] == 'connect_to_receiver':
+      self._node.send(message['receiver'],
+                      messages.migration.add_left_configuration(
+                          self._node.generate_new_left_configuration(message['receiver'])))
     elif message['type'] == 'substitute_right_parent':
       self._right_config_receiver.substitute_right_parent(sender_id, new_parent_id=message['new_parent_id'])
       self._maybe_has_left_and_right_configurations()

@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 
 from dist_zero import messages, ids, errors, network_graph, connector
 from dist_zero import topology_picker
@@ -338,13 +339,19 @@ class ComputationNode(Node):
       import ipdb
       ipdb.set_trace()
     else:
-      is_leaf = message['new_height'] == 0
-
+      if len(message['new_kids']) != 1:
+        # FIXME(KK): The current implementation handles only a special case.
+        import ipdb
+        ipdb.set_trace()
+        raise errors.InternalError("Not Yet Implemented")
       for kid in message['new_kids']:
         _lookup = lambda nid: kid if kid['id'] == nid else self.kids[nid]
         if self._connector is None:
           import ipdb
           ipdb.set_trace()
+
+        #if self.id == 'ComputationNode_adjacent_gL1atm1WWIU6':
+        #  import ipdb; ipdb.set_trace()
 
         new_layers, edges, hourglasses = self._connector.add_kid_to_left_configuration(
             parent_id=message['parent_id'], kid=kid)
@@ -469,11 +476,40 @@ class ComputationNode(Node):
 
   def new_left_configurations(self, left_configurations):
     '''For when a fully configured node gets new left_configurations'''
-    pass
+    if len(left_configurations) != 1:
+      import ipdb
+      ipdb.set_trace()
+      raise errors.InternalError("Not Yet Implemented")
+
+    for left_configuration in left_configurations:
+      new_layers, edges, hourglasses = self._connector.add_left_configuration(left_configuration)
+
+      if new_layers:
+        self._incremental_spawner = connector.IncrementalSpawner(
+            new_layers=new_layers, connector=self._connector, node=self)
+        self._incremental_spawner.start_spawning()
+
+      if edges:
+        left_kid_to_handle = {
+            kid['handle']['id']: kid['handle']
+            for left_config in left_configurations for kid in left_config['kids']
+        }
+        src_to_tgts = defaultdict(list)
+        for src_id, tgt_id in edges:
+          src_to_tgts[src_id].append(tgt_id)
+          # TODO(KK): possibly refactor this bit, the return types from add_left_configuration and add_kid_to_left_configuration
+          # look highly suspicious.
+          src, tgt = left_kid_to_handle[src_id], self.kids[tgt_id]
+          self.send(tgt, messages.migration.added_sender(self.transfer_handle(src, tgt['id'])))
+
+        for src_id, tgt_ids in src_to_tgts.items():
+          self.send(left_kid_to_handle[src_id],
+                    messages.migration.configure_right_parent(migration_id=None, kid_ids=tgt_ids))
 
   def new_right_configurations(self, right_configurations):
     '''For when a fully configured node gets new right_configurations'''
-    pass
+    import ipdb
+    ipdb.set_trace()
 
   def receive(self, message, sender_id):
     if self._configuration_receiver.receive(message=message, sender_id=sender_id):

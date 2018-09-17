@@ -68,6 +68,24 @@ class Connector(object):
     self._left_layer[kid['id']] = kid
     node_id = kid['id']
 
+    return self._add_left_kid(node_id)
+
+  def add_left_configuration(self, left_configuration):
+    self._left_configurations[left_configuration['node']['id']] = left_configuration
+
+    if len(left_configuration['kids']) != 1:
+      import ipdb
+      ipdb.set_trace()
+      raise errors.InternalError("Not Yet Implemented")
+
+    for kid_config in left_configuration['kids']:
+      kid = kid_config['handle']
+      self._left_layer[kid['id']] = kid
+      node_id = kid['id']
+      return self._add_left_kid(node_id)
+
+  def _add_left_kid(self, node_id):
+
     self._layers[0].append(node_id)
 
     if self._left_is_data:
@@ -84,7 +102,8 @@ class Connector(object):
         ipdb.set_trace()
         # FIXME(KK): Implement this properly
       else:
-        return new_layers[1:], edges, hourglasses
+        return new_layers[1:], [(node_id, receiver_id)
+                                for receiver_id in self._graph.node_receivers(node_id)], hourglasses
 
   @property
   def layers(self):
@@ -154,4 +173,4 @@ class Connector(object):
         max_inputs=self._max_inputs,
         name_prefix=self._name_prefix)
 
-    self._layers.extend(self._picker.layers)
+    self._layers.extend([list(x) for x in self._picker.layers])

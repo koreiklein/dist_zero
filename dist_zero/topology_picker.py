@@ -343,9 +343,6 @@ class NodeTree(object):
     while layer_index < 0:
       layer_index += len(self.layers)
     self.layers[layer_index].append(node)
-    if isinstance(node, dict):
-      import ipdb
-      ipdb.set_trace()
     self.index[node] = layer_index
 
   def _fill_in_tree(self):

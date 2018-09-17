@@ -56,8 +56,6 @@ def sum_node_config(
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
 
   '''
-  #if node_id in ['SumNode_adjacent_KJkO1stETMRt', 'SumNode_adjacent_g43zE0CW7gaQ']:
-  #  import ipdb; ipdb.set_trace()
   return {
       'type': 'SumNode',
       'id': node_id,

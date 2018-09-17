@@ -353,6 +353,15 @@ def substitute_right_parent(migration_id, new_parent_id):
   }
 
 
+def connect_to_receiver(receiver):
+  '''
+  Informs a node that it should send an add_left_configuration to a new receiver.
+  :param receiver: The :ref:`handle` of the node that will function as the new receiver.
+  :type receiver: :ref:`handle`
+  '''
+  return {'type': 'connect_to_receiver', 'receiver': receiver}
+
+
 def configure_right_parent(migration_id, kid_ids):
   '''
   A node will receive this message from the parents of its eventual receivers to indicate
@@ -449,8 +458,19 @@ def configure_new_flow_left(migration_id, left_configurations):
   }
 
 
+def add_left_configuration(left_configuration):
+  '''
+  Indicate to a node that it should add a new left_configuration.
+
+  :param object left_configuration: The `left_configuration` config to be added.
+  '''
+  return {'type': 'add_left_configuration', 'left_configuration': left_configuration}
+
+
 def update_left_configuration(parent_id, new_kids, new_height):
   '''
+  Indicate to a node that one of its existing left configurations has received new kids.
+
   :param str parent_id: The id of the parent whose left configuration has just changed.
   :param list new_kids: The list of :ref:`handle` of kids that are being added to this parent's left configuration.
   :param int new_height: The height of the parent at the time this message was sent.

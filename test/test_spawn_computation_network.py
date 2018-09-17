@@ -148,7 +148,7 @@ class TestSpawnComputationNetwork(object):
   @pytest.mark.parametrize(
       'name,start_inputs,start_outputs,new_inputs,new_outputs,ending_input_height,ending_output_height',
       [
-          ('grow_input_small', 2, 2, 1, 0, 1, 1), # Just add inputs
+          ('grow_input_small', 2, 2, 2, 0, 1, 1), # Just add inputs
           ('grow_input', 2, 2, 5, 0, 1, 1), # Just add inputs
           ('grow_output', 2, 2, 0, 5, 1, 1), # Just add outputs
           ('bump_input', 2, 2, 10, 0, 2, 1), # Add enough inputs that the tree bumps its height
