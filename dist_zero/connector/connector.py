@@ -88,7 +88,7 @@ class Connector(object):
 
     return self._add_left_kids(node_ids)
 
-  def _append_all_left(self, node_ids):
+  def _picker_append_all_left(self, node_ids):
     new_layers, hourglasses = self._picker.append_left(node_ids[0])
     for node_id in node_ids[1:]:
       more_new_layers, more_hourglasses = self._picker.append_left(node_id)
@@ -97,7 +97,14 @@ class Connector(object):
         raise errors.InternalError("Parallel calls to append_left must return layer lists of equal length")
       for new_layer, more_new_layer in zip(new_layers, more_new_layers):
         new_layer.extend(more_new_layer)
-    return new_layers, hourglasses
+
+    if len(new_layers) == len(self._picker.layers):
+      # They go all the way through
+      return new_layers, None, hourglasses
+    else:
+      last_edges = [(node_id, receiver_id) for node_id in new_layers[-1]
+                    for receiver_id in self._graph.node_receivers(node_id)]
+      return new_layers, last_edges, hourglasses
 
   def _add_left_kids(self, node_ids):
     if len(node_ids) == 0:
@@ -111,23 +118,16 @@ class Connector(object):
         adjacent_id = ids.new_id("{}_adjacent".format(self._name_prefix))
         self._layers[1].append(adjacent_id)
         self._graph.add_node(node_id)
+        self._graph.add_node(adjacent_id)
+        self._graph.add_edge(node_id, adjacent_id)
         adjacent_ids.append(adjacent_id)
 
-      new_layers, hourglasses = self._append_all_left(adjacent_ids)
+      new_layers, last_edges, hourglasses = self._picker_append_all_left(adjacent_ids)
 
-      for node_id, adjacent_id in zip(node_ids, adjacent_ids):
-        self._graph.add_edge(node_id, adjacent_id)
-
-      return new_layers, [], hourglasses
+      return new_layers, last_edges, hourglasses
     else:
-      new_layers, hourglasses = self._append_all_left(node_ids)
-      if not new_layers:
-        import ipdb
-        ipdb.set_trace()
-        # FIXME(KK): Implement this properly
-      else:
-        edges = [(node_id, receiver_id) for node_id in node_ids for receiver_id in self._graph.node_receivers(node_id)]
-        return new_layers[1:], edges, hourglasses
+      new_layers, last_edges, hourglasses = self._picker_append_all_left(node_ids)
+      return new_layers[1:], last_edges, hourglasses
 
   @property
   def layers(self):

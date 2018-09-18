@@ -219,16 +219,24 @@ class ComputationNode(Node):
             migrator=None))
 
   def all_incremental_kids_are_spawned(self):
-    last_node_ids = self._incremental_spawner.layers[-1]
-    if any(not self._incremental_spawner.graph.node_receivers(node_id) for node_id in last_node_ids):
+    if self._last_edges:
+      left_kid_to_handle = {
+          kid['handle']['id']: kid['handle']
+          for left_config in self._configuration_receiver._left_configurations.values() for kid in left_config['kids']
+      }
+      _lookup = lambda nid: left_kid_to_handle[nid] if nid in left_kid_to_handle else self.kids[nid]
+      src_to_tgts = defaultdict(list)
+      for src_id, tgt_id in self._last_edges:
+        src_to_tgts[src_id].append(tgt_id)
+        self.send(self.kids[tgt_id], messages.migration.added_sender(self.transfer_handle(_lookup(src_id), tgt_id)))
+
+      for src_id, tgt_ids in src_to_tgts.items():
+        self.send(_lookup(src_id), messages.migration.configure_right_parent(migration_id=None, kid_ids=tgt_ids))
+
+    else:
+      # Missing receivers, we should be sending update_left_configuration to our right siblings.
       import ipdb
       ipdb.set_trace()
-      # Missing receivers, we should be sending update_left_configuration to our right siblings.
-    else:
-      for node_id in last_node_ids:
-        for receiver_id in self._incremental_spawner.graph.node_receivers(node_id):
-          self.send(self.kids[receiver_id],
-                    messages.migration.added_sender(self.transfer_handle(self.kids[node_id], receiver_id)))
 
     self._incremental_spawner = None
 
@@ -333,33 +341,17 @@ class ComputationNode(Node):
               receivers=[],
               migrator=migrator))
 
-  def _get_new_layers_edges_and_hourglasses(self, new_layers, edges, hourglasses):
-    if new_layers:
-      self._incremental_spawner = connector.IncrementalSpawner(
-          new_layers=new_layers, connector=self._connector, node=self)
-      self._incremental_spawner.start_spawning()
-
+  def _get_new_layers_edges_and_hourglasses(self, new_layers, last_edges, hourglasses):
     if hourglasses:
       # FIXME(KK): Implement this
       import ipdb
       ipdb.set_trace()
 
-    if edges:
-      left_kid_to_handle = {
-          kid['handle']['id']: kid['handle']
-          for left_config in self._configuration_receiver._left_configurations.values() for kid in left_config['kids']
-      }
-      src_to_tgts = defaultdict(list)
-      for src_id, tgt_id in edges:
-        src_to_tgts[src_id].append(tgt_id)
-        # TODO(KK): possibly refactor this bit, the return types from add_left_configuration and add_kids_to_left_configuration
-        # look highly suspicious.
-        src, tgt = left_kid_to_handle[src_id], self.kids[tgt_id]
-        self.send(tgt, messages.migration.added_sender(self.transfer_handle(src, tgt['id'])))
+    self._last_edges = last_edges
 
-      for src_id, tgt_ids in src_to_tgts.items():
-        self.send(left_kid_to_handle[src_id],
-                  messages.migration.configure_right_parent(migration_id=None, kid_ids=tgt_ids))
+    self._incremental_spawner = connector.IncrementalSpawner(
+        new_layers=new_layers, connector=self._connector, node=self)
+    self._incremental_spawner.start_spawning()
 
   def _update_left_configuration(self, message):
     if self._left_gap:

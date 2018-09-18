@@ -51,33 +51,32 @@ class IncrementalSpawner(object):
   def _maybe_spawned_kids(self):
     if not self.finished and \
         all(val is not None for val in self._node.kids.values()):
-      # Send configure_right_parent messages when necessary.
-      if any(self.graph.node_receivers(node_id) for node_id in self._layers[self._current_spawning_layer]):
-        self._send_configure_right_parent(self._current_spawning_layer)
 
-      if self._current_spawning_layer + 1 < len(self._layers):
-        self._spawn_layer(self._current_spawning_layer + 1)
-      else:
-        self.finished = True
-
-        self._node.all_incremental_kids_are_spawned()
+      self._spawn_layer(self._current_spawning_layer + 1)
 
   def spawned_a_kid(self, node):
     self._maybe_spawned_kids()
 
   def _spawn_layer(self, layer_index):
-    self._current_spawning_layer = layer_index
+    if layer_index >= len(self._layers):
+      self.finished = True
+      self._node.all_incremental_kids_are_spawned()
+    else:
+      if layer_index >= 1:
+        self._send_configure_right_parent(layer_index - 1)
 
-    for node_id in self._layers[layer_index]:
-      left_ids = self.graph.node_senders(node_id)
+      self._current_spawning_layer = layer_index
 
-      self._node.spawn_kid(
-          layer_index=layer_index + 1,
-          configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
-          node_id=node_id,
-          left_ids=left_ids,
-          senders=[self._id_to_handle(sender_id) for sender_id in left_ids],
-          migrator=None)
+      for node_id in self._layers[layer_index]:
+        left_ids = self.graph.node_senders(node_id)
+
+        self._node.spawn_kid(
+            layer_index=layer_index + 1,
+            configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
+            node_id=node_id,
+            left_ids=left_ids,
+            senders=[self._id_to_handle(sender_id) for sender_id in left_ids],
+            migrator=None)
 
   def _send_configure_right_parent(self, layer_index):
     for node_id in self._layers[layer_index]:
