@@ -379,8 +379,8 @@ class InternalNode(Node):
                     ]))
     elif message['type'] == 'configure_new_flow_left':
       # FIXME(KK): Implement this
-      # But, make sure that configure_new_flow_left is not improperly sent from a proxy node when there is a layer gap!
-      #import ipdb; ipdb.set_trace()
+      import ipdb
+      ipdb.set_trace()
       pass
     elif message['type'] == 'hello_parent':
       if sender_id == self._startup_kid and self._parent is not None:

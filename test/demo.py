@@ -200,7 +200,7 @@ class Demo(object):
                     configure_right_parent_ids=[node_id],
                     senders=[input_handle_for_migration],
                     left_ids=[input_handle_for_migration['id']],
-                    receivers=[output_handle_for_migration],
+                    receiver_ids=None,
                     migrator=messages.migration.insertion_migrator_config(),
                 )
             ]))

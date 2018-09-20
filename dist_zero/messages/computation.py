@@ -6,7 +6,7 @@ def computation_node_config(node_id,
                             height,
                             parent,
                             senders,
-                            receivers,
+                            receiver_ids,
                             migrator,
                             connector=None,
                             adoptees=None):
@@ -23,7 +23,8 @@ def computation_node_config(node_id,
   :param int height: The height of the new computation node in its tree.
   :param list senders: A list of :ref:`handle` s of sending nodes.
   :param list[str] left_ids: A list of the ids of nodes for which the computation node should expect a left configuration.
-  :param list receivers: A list of :ref:`handle` s of receiving nodes.
+  :param list[str] receiver_ids: A list of ids of the nodes that should receive from self, or `None` if that list should
+    be determined based on the right_configurations received by the node as it starts up.
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
   :param object connector: Serializable json object representing the `Connector` instance of the newly spawned
     `ComputationNode`.
@@ -42,7 +43,7 @@ def computation_node_config(node_id,
       'left_is_data': left_is_data,
       'right_is_data': right_is_data,
       'configure_right_parent_ids': configure_right_parent_ids,
-      'receivers': receivers,
+      'receiver_ids': receiver_ids,
       'migrator': migrator,
       'adoptees': adoptees,
       'connector': connector,

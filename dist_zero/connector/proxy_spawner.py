@@ -99,7 +99,7 @@ class ProxySpawner(object):
             connector=self._node._connector.non_left_part_json(),
             left_ids=left_ids,
             senders=senders,
-            receivers=receivers,
+            receiver_ids=[], # Make sure not actually send based on the right config for a differently layered parent.
             migrator=None))
 
   def respond_to_bumped_height(self, proxy, kid_ids, variant):
@@ -143,5 +143,5 @@ class ProxySpawner(object):
             ],
             connector=self._node._connector.left_part_json(parent_id=self._node.id),
             senders=senders,
-            receivers=receivers,
+            receiver_ids=None,
             migrator=None))

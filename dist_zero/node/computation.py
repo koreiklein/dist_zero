@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class ComputationNode(Node):
   def __init__(self, node_id, configure_right_parent_ids, left_is_data, right_is_data, parent, height, senders,
-               left_ids, receivers, migrator_config, connector_json, adoptees, controller):
+               left_ids, receiver_ids, migrator_config, connector_json, adoptees, controller):
     self.id = node_id
     self._controller = controller
 
@@ -41,7 +41,7 @@ class ComputationNode(Node):
     self._initial_migrator_config = migrator_config
     self._initial_migrator = None # It will be initialized later.
 
-    self._receivers = {receiver['id']: receiver for receiver in receivers}
+    self._receivers = {receiver_id: None for receiver_id in receiver_ids} if receiver_ids is not None else None
 
     self.left_ids = left_ids
 
@@ -104,7 +104,7 @@ class ComputationNode(Node):
         height=node_config['height'],
         senders=node_config['senders'],
         left_ids=node_config['left_ids'],
-        receivers=node_config['receivers'],
+        receiver_ids=node_config['receiver_ids'],
         adoptees=node_config['adoptees'],
         connector_json=node_config['connector'],
         migrator_config=node_config['migrator'],
@@ -179,7 +179,7 @@ class ComputationNode(Node):
 
     receiver_to_kids = self._receiver_to_kids()
 
-    for receiver in self._connector.right_siblings.values():
+    for receiver in self._receivers.values():
       message = messages.migration.configure_new_flow_left(self.migration_id, [
           messages.migration.left_configuration(
               node=self.new_handle(receiver['id']),
@@ -225,7 +225,7 @@ class ComputationNode(Node):
               right_is_data=self.right_is_data and layer_index + 1 == len(self._connector.layers)
               and bool(self._connector.right_to_parent_ids[node_id]),
               senders=senders,
-              receivers=[],
+              receiver_ids=None,
               migrator=migrator))
 
   def _get_new_layers_edges_and_hourglasses(self, new_layers, last_edges, hourglasses):
@@ -273,13 +273,24 @@ class ComputationNode(Node):
   def fully_configured(self):
     return self._connector is not None
 
+  def _set_receivers_from_right_configurations(self, right_configurations):
+    if self._receivers is None:
+      self._receivers = {}
+      for right_config in right_configurations.values():
+        parent = right_config['parent_handle']
+        self.export_to_node(parent)
+        self._receivers[parent['id']] = parent
+    else:
+      for right_config in right_configurations.values():
+        parent = right_config['parent_handle']
+        if parent['id'] in self._receivers:
+          self.export_to_node(parent)
+          self._receivers[parent['id']] = parent
+
   def has_left_and_right_configurations(self, left_configurations, right_configurations):
     self.logger.info("Insertion migrator has received all Left and Right configurations. Ready to spawn.")
 
-    for right_config in right_configurations.values():
-      parent = right_config['parent_handle']
-      self.export_to_node(parent)
-      self._receivers[parent['id']] = parent
+    self._set_receivers_from_right_configurations(right_configurations)
 
     if self._connector is not None:
       raise errors.InternalError(
