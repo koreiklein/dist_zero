@@ -1,8 +1,8 @@
 import logging
-from collections import defaultdict
 
 from dist_zero import messages, ids, errors, network_graph, connector
 from dist_zero import topology_picker
+from dist_zero.connector import proxy_spawner
 from dist_zero.migration.right_configuration import ConfigurationReceiver
 
 from .node import Node
@@ -12,9 +12,11 @@ logger = logging.getLogger(__name__)
 
 class ComputationNode(Node):
   def __init__(self, node_id, configure_right_parent_ids, left_is_data, right_is_data, parent, height, senders,
-               left_ids, receivers, migrator_config, adoptees, controller):
+               left_ids, receivers, migrator_config, connector_json, adoptees, controller):
     self.id = node_id
     self._controller = controller
+
+    self._initial_connector_json = connector_json
 
     # Later, these will be initialized to booleans
     self._left_gap = None
@@ -30,18 +32,7 @@ class ComputationNode(Node):
     self._adoptees = adoptees
     self._pending_adoptees = None
 
-    self._proxy_adjacent_id = None
-    '''
-    When responding to a proxy spawn by an adjacent `InternalNode`, this
-    will be equal to the id of node that is spawned adjacent to the `InternalNode`'s proxy.
-    '''
-    self._proxy_adjacent_variant = None
-
-    self._proxy_id = None
-    '''
-    When responding to a proxy spawn by an adjacent `InternalNode`, this
-    will be equal to the id of node that is spawned as this node's proxy.
-    '''
+    self._proxy_spawner = None
 
     self._exporters = {}
 
@@ -51,13 +42,6 @@ class ComputationNode(Node):
     self._initial_migrator = None # It will be initialized later.
 
     self._receivers = {receiver['id']: receiver for receiver in receivers}
-
-    # Sometimes, kids will be spawned without appropriate senders/receivers.
-    # When that happens they will be temporarily added to these sets.
-    # Once the kid says hello, it will be removed from this set once it is arranged that the kid
-    # get the required senders/receivers.
-    self._kids_missing_receivers = set()
-    self._kids_missing_senders = set()
 
     self.left_ids = left_ids
 
@@ -75,18 +59,6 @@ class ComputationNode(Node):
     self._connector = None
     self._spawner = None
     self._incremental_spawner = None
-
-    # FIXME(KK): Remove
-    # topology_picker.OldTopologyPicker(
-    #    graph=network_graph.NetworkGraph(),
-    #    left_is_data=self.left_is_data,
-    #    right_is_data=self.right_is_data,
-    #    # TODO(KK): There is probably a better way to configure these standard limits than the below.
-    #    # Look into it, write up some notes, and fix it.
-    #    new_node_max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
-    #    new_node_max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],
-    #    new_node_name_prefix='SumNode' if self.height == 0 else 'ComputationNode',
-    #)
 
   def is_data(self):
     return False
@@ -134,6 +106,7 @@ class ComputationNode(Node):
         left_ids=node_config['left_ids'],
         receivers=node_config['receivers'],
         adoptees=node_config['adoptees'],
+        connector_json=node_config['connector'],
         migrator_config=node_config['migrator'],
         controller=controller)
 
@@ -183,61 +156,7 @@ class ComputationNode(Node):
       else:
         return None
 
-  def _adjacent_node_bumped_height(self, proxy, kid_ids, variant):
-    '''Called in response to an adjacent node informing self that it has bumped its height.'''
-    node_id = ids.new_id('ComputationNode_{}_proxy_adjacent'.format(variant))
-    self._proxy_adjacent_variant = variant
-    if variant == 'input':
-      senders = [self.transfer_handle(proxy, node_id)]
-      receivers = [] # The receiver will be added later
-      import ipdb
-      ipdb.set_trace()
-      # FIXME(KK): Figure out what to do here.
-      return
-      adoptee_ids = [
-          computation_kid_id for io_kid in kid_ids for computation_kid_id in self._picker.graph.node_receivers(io_kid)
-      ]
-    elif variant == 'output':
-      senders = [] # The sender will be added later
-      receivers = [self.transfer_handle(proxy, node_id)]
-      adoptee_ids = [
-          computation_kid_id for io_kid in kid_ids for computation_kid_id in self._picker.graph.node_senders(io_kid)
-      ]
-    else:
-      raise errors.InternalError("Unrecognized variant {}".format(variant))
-    self._proxy_adjacent_id = node_id
-    self._controller.spawn_node(
-        messages.computation.computation_node_config(
-            node_id=node_id,
-            parent=self.new_handle(node_id),
-            left_is_data=variant == 'input',
-            right_is_data=variant == 'output',
-            height=self.height,
-            adoptees=[self.transfer_handle(self.kids[adoptee_id], node_id) for adoptee_id in adoptee_ids],
-            senders=senders,
-            receivers=receivers,
-            migrator=None))
-
   def all_incremental_kids_are_spawned(self):
-    if self._last_edges:
-      left_kid_to_handle = {
-          kid['handle']['id']: kid['handle']
-          for left_config in self._configuration_receiver._left_configurations.values() for kid in left_config['kids']
-      }
-      _lookup = lambda nid: left_kid_to_handle[nid] if nid in left_kid_to_handle else self.kids[nid]
-      src_to_tgts = defaultdict(list)
-      for src_id, tgt_id in self._last_edges:
-        src_to_tgts[src_id].append(tgt_id)
-        self.send(self.kids[tgt_id], messages.migration.added_sender(self.transfer_handle(_lookup(src_id), tgt_id)))
-
-      for src_id, tgt_ids in src_to_tgts.items():
-        self.send(_lookup(src_id), messages.migration.configure_right_parent(migration_id=None, kid_ids=tgt_ids))
-
-    else:
-      # Missing receivers, we should be sending update_left_configuration to our right siblings.
-      import ipdb
-      ipdb.set_trace()
-
     self._incremental_spawner = None
 
   def all_kids_are_spawned(self, left_gap, right_gap):
@@ -275,38 +194,6 @@ class ComputationNode(Node):
 
       self.send(receiver, message)
 
-  def _spawn_proxy(self, proxy_adjacent_handle):
-    '''
-    After an adjacent node bumps its height,
-    a proxy for the adjacent will be spawned (its id will be stored in ``self._proxy_adjacent_id``)
-    Once that proxy has reported that it is up and running, this node will call ``_spawn_proxy`` to
-    spawn the second node to adopt the remaining kids of self as part of the process of bumping height.
-    '''
-    node_id = ids.new_id('ComputationNode_proxy')
-    if self._proxy_adjacent_variant == 'input':
-      senders = [self.transfer_handle(proxy_adjacent_handle, node_id)]
-      receivers = []
-    elif self._proxy_adjacent_variant == 'output':
-      senders = []
-      receivers = [self.transfer_handle(proxy_adjacent_handle, node_id)]
-    else:
-      raise errors.InternalError("Unrecognized variant {}".format(self._proxy_adjacent_variant))
-
-    self._proxy_id = node_id
-    self._controller.spawn_node(
-        messages.computation.computation_node_config(
-            node_id=node_id,
-            parent=self.new_handle(node_id),
-            height=self.height,
-            left_is_data=False,
-            right_is_data=False,
-            adoptees=[self.transfer_handle(kid, node_id) for kid in self.kids.values()],
-            senders=senders,
-            receivers=receivers,
-            migrator=None))
-
-    self.kids[proxy_adjacent_handle['id']] = proxy_adjacent_handle
-
   def spawn_kid(self, layer_index, node_id, senders, configure_right_parent_ids, left_ids, migrator):
     self.kids[node_id] = None
     if self.height == 0:
@@ -342,15 +229,8 @@ class ComputationNode(Node):
               migrator=migrator))
 
   def _get_new_layers_edges_and_hourglasses(self, new_layers, last_edges, hourglasses):
-    if hourglasses:
-      # FIXME(KK): Implement this
-      import ipdb
-      ipdb.set_trace()
-
-    self._last_edges = last_edges
-
     self._incremental_spawner = connector.IncrementalSpawner(
-        new_layers=new_layers, connector=self._connector, node=self)
+        new_layers=new_layers, last_edges=last_edges, hourglasses=hourglasses, connector=self._connector, node=self)
     self._incremental_spawner.start_spawning()
 
   def _update_left_configuration(self, message):
@@ -365,57 +245,6 @@ class ComputationNode(Node):
 
       self._get_new_layers_edges_and_hourglasses(*self._connector.add_kids_to_left_configuration([(
           message['parent_id'], kid) for kid in message['new_kids']]))
-
-      # FIXME(KK): Move this into probably a _update_right_configuration message.
-      #import ipdb
-      #ipdb.set_trace()
-      #self._picker.graph.add_node(kid['id'])
-      #self._picker.layers[0].append(kid['id'])
-
-      #if self.right_is_data:
-      #  node_id = ids.new_id('{}_output_adjacent'.format('SumNode' if is_leaf else 'ComputationNode', ))
-      #  self._picker.graph.add_node(node_id)
-      #  self._picker.graph.add_edge(node_id, kid['id'])
-      #  senders = self._pick_new_sender_for_kid()
-
-      #  if senders is None:
-
-      #    # Tell a parent receiver to find an actual sender for this kid
-      #    self._kids_missing_senders.add(node_id)
-      #  else:
-      #    senders = [self.transfer_handle(sender, node_id) for sender in senders]
-      #    for sender in senders:
-      #      self._picker.graph.add_edge(sender['id'], node_id)
-      #  self._spawn_node(
-      #      is_leaf=is_leaf,
-      #      left=False,
-      #      node_id=node_id,
-      #      senders=senders,
-      #      receivers=[self.transfer_handle(handle=kid, for_node_id=node_id)])
-      #else:
-      #  import ipdb
-      #  ipdb.set_trace()
-
-  def _finished_bumping(self, proxy_handle):
-    self.kids[proxy_handle['id']] = proxy_handle
-    if len(self.kids) != 2:
-      raise errors.InternalError("A computation node should have exactly 2 kids after it finishes bumping.")
-
-    import ipdb
-    ipdb.set_trace()
-    self._graph = network_graph.NetworkGraph()
-    self._picker.graph.add_node(self._proxy_adjacent_id)
-    self._picker.graph.add_node(self._proxy_id)
-    if self._proxy_adjacent_variant == 'input':
-      self._picker.graph.add_edge(self._proxy_adjacent_id, self._proxy_id)
-    elif self._proxy_adjacent_variant == 'output':
-      self._picker.graph.add_edge(self._proxy_id, self._proxy_adjacent_id)
-    else:
-      raise errors.InternalError("Unrecognized variant {}".format(self._proxy_adjacent_variant))
-
-    self._proxy_adjacent_id = None
-    self._proxy_adjacent_variant = None
-    self._proxy_id = None
 
   @property
   def migration_id(self):
@@ -456,20 +285,35 @@ class ComputationNode(Node):
       raise errors.InternalError(
           "self._connector may not be initialized hen has_left_and_right_configurations is called.")
 
-    self._connector = connector.Connector(
-        height=self.height,
-        left_configurations=left_configurations,
-        left_is_data=self.left_is_data,
-        right_is_data=self.right_is_data,
-        right_configurations=right_configurations,
-        max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
-        max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],
-    )
-    self._spawner = connector.Spawner(node=self, connector=self._connector)
-
-    self.height = self._connector.max_height()
-
-    self._spawner.start_spawning()
+    if not self._adoptees:
+      self._connector = connector.Connector(
+          height=self.height,
+          left_configurations=left_configurations,
+          left_is_data=self.left_is_data,
+          right_is_data=self.right_is_data,
+          right_configurations=right_configurations,
+          max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
+          max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],
+      )
+      self.height = self._connector.max_height()
+      self._connector.fill_in()
+      self._spawner = connector.Spawner(node=self, connector=self._connector)
+      self._spawner.start_spawning()
+    else:
+      # Since this node was adopting, all its eventual kids are already up and running and do not need spawning.
+      # We should have received an appropriate Connector instance in the config.
+      self._connector = connector.Connector.from_json(
+          self._initial_connector_json,
+          height=self.height,
+          left_configurations=left_configurations,
+          left_is_data=self.left_is_data,
+          right_is_data=self.right_is_data,
+          right_configurations=right_configurations,
+          max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
+          max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'])
+      self.height = self._connector.max_height()
+      self._spawner = None
+      self._send_configure_left_to_right()
 
   def new_left_configurations(self, left_configurations):
     '''For when a fully configured node gets new left_configurations'''
@@ -484,8 +328,6 @@ class ComputationNode(Node):
   def receive(self, message, sender_id):
     if self._configuration_receiver.receive(message=message, sender_id=sender_id):
       return
-    elif message['type'] == 'added_receiver':
-      self._receivers[message['node']['id']] = message['node']
     elif message['type'] == 'added_sender':
       node = message['node']
       self._senders[node['id']] = node
@@ -506,44 +348,45 @@ class ComputationNode(Node):
       self.parent = message['new_parent']
       self._send_hello_parent()
     elif message['type'] == 'hello_parent':
-      if sender_id == self._proxy_adjacent_id:
-        self._spawn_proxy(message['kid'])
-      elif sender_id == self._proxy_id:
-        self._finished_bumping(message['kid'])
-      elif self._pending_adoptees is not None and sender_id in self._pending_adoptees:
+      if self._pending_adoptees is not None and sender_id in self._pending_adoptees:
         self._pending_adoptees.remove(sender_id)
         if not self._pending_adoptees:
           self._pending_adoptees = None
           self._send_hello_parent()
-      elif sender_id in self._kids_missing_receivers:
-        self._kids_missing_receivers.remove(sender_id)
-        for receiver in self._receivers.values():
-          self.send(receiver,
-                    messages.migration.update_left_configuration(
-                        parent_id=self.id, new_kids=[message['kid']], height=self.height))
-      elif sender_id in self._kids_missing_senders:
-        self._kids_missing_senders.remove(sender_id)
-        for sender in self._senders.values():
-          import ipdb
-          ipdb.set_trace()
-          # FIXME(KK): We should use an update_right_configuration message here instead.
-          self.send(sender, messages.io.added_sibling_kid(height=self.height, variant='output', kid=message['kid']))
       self.kids[sender_id] = message['kid']
       if self._spawner is not None:
         self._spawner.spawned_a_kid(message['kid'])
-      elif self._incremental_spawner is not None:
+      if self._incremental_spawner is not None:
         self._incremental_spawner.spawned_a_kid(message['kid'])
+      if self._proxy_spawner is not None:
+        self._proxy_spawner.spawned_a_kid(message['kid'])
     elif message['type'] == 'goodbye_parent':
       if sender_id not in self.kids:
         raise errors.InternalError(
             "Got a goodbye_parent from a node that is not a kid of self.", extra={'kid_id': sender_id})
       self.kids.pop(sender_id)
     elif message['type'] == 'bumped_height':
-      self._adjacent_node_bumped_height(proxy=message['proxy'], kid_ids=message['kid_ids'], variant=message['variant'])
+      self._proxy_spawner = proxy_spawner.ProxySpawner(node=self)
+      self._proxy_spawner.respond_to_bumped_height(
+          proxy=message['proxy'], kid_ids=message['kid_ids'], variant=message['variant'])
     elif message['type'] == 'update_left_configuration':
       self._update_left_configuration(message)
     else:
       super(ComputationNode, self).receive(message=message, sender_id=sender_id)
+
+  def bumped_to_new_connector(self, left_configurations, left_id, right_id):
+    self._proxy_spawner = None
+    self._connector = connector.Connector(
+        height=self.height,
+        left_configurations=left_configurations,
+        left_is_data=self.left_is_data,
+        right_is_data=self.right_is_data,
+        right_configurations=self._connector._right_configurations,
+        max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
+        max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],
+    )
+    self._connector.fill_in(new_node_ids=[left_id, right_id])
+    self.height = self._connector.max_height()
 
   def _receiver_to_kids(self):
     if self._connector is not None:

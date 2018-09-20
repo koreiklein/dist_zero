@@ -146,17 +146,21 @@ class TestSpawnComputationNetwork(object):
     self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=20)
 
   @pytest.mark.parametrize(
-      'name,start_inputs,start_outputs,new_inputs,new_outputs,ending_input_height,ending_output_height',
+      'name,start_inputs,start_outputs,new_inputs,new_outputs,ending_input_height,ending_output_height,sender_limit',
       [
-          ('grow_input', 2, 2, 5, 0, 1, 1), # Just add inputs
-          ('grow_output', 2, 2, 0, 5, 1, 1), # Just add outputs
-          ('bump_input', 2, 2, 10, 0, 2, 1), # Add enough inputs that the tree bumps its height
+          ('grow_input', 2, 2, 5, 0, 1, 1, 10), # Just add inputs
+          ('grow_output', 2, 2, 0, 5, 1, 1, 6), # Just add outputs
+          ('bump_input', 2, 2, 10, 0, 2, 1, 10), # Add enough inputs that the tree bumps its height
+          ('cause_hourglass', 2, 2, 10, 0, 2, 1, 6), # Restrict sender_limit to cause hourglass operations
       ])
   def test_grow_trees(self, demo, name, start_inputs, start_outputs, new_inputs, new_outputs, ending_input_height,
-                      ending_output_height):
+                      ending_output_height, sender_limit):
     self.demo = demo
-    self.machine_ids = demo.new_machine_controllers(
-        1, base_config=self.base_config(), random_seed='test_add_leaves_after_spawn')
+    config = self.base_config()
+    # Make sure not to cause any hourglasses
+    config['system_config']['SUM_NODE_SENDER_LIMIT'] = sender_limit
+
+    self.machine_ids = demo.new_machine_controllers(1, base_config=config, random_seed='test_add_leaves_after_spawn')
 
     self._connect_and_test_io_trees(n_input_leaves=start_inputs, n_output_leaves=start_outputs)
     demo.run_for(ms=7000)

@@ -9,6 +9,23 @@ class NetworkGraph(object):
 
     self._edges = set()
 
+  def to_json(self):
+    return {
+        'nodes': list(self._nodes),
+        'outgoing_edges': self._outgoing_edges,
+        'incomming_edges': self._incomming_edges,
+        'edges': list(self._edges),
+    }
+
+  @staticmethod
+  def from_json(j):
+    g = NetworkGraph()
+    g._nodes = set(j['nodes'])
+    g._outgoing_edges = j['outgoing_edges']
+    g._incomming_edges = j['incomming_edges']
+    g._edges = set([(src, tgt) for src, tgt in j['edges']]) # Need to cast the pairs to tuples in order to hash.
+    return g
+
   def transitive_incomming_with_duplicates(self, node):
     result = []
 
@@ -49,6 +66,15 @@ class NetworkGraph(object):
       self._nodes.add(node_id)
       self._outgoing_edges[node_id] = []
       self._incomming_edges[node_id] = []
+
+  def remove_node(self, node_id):
+    if node_id not in self._nodes:
+      raise errors.InternalError("Node is not in graph and can't be removed.")
+    if self._outgoing_edges[node_id] or self._incomming_edges[node_id]:
+      raise errors.InternalError("Cannot remove a node when it has edges.")
+    self._outgoing_edges.pop(node_id)
+    self._incomming_edges.pop(node_id)
+    self._nodes.remove(node_id)
 
   def remove_edge(self, src, tgt):
     edge = (src, tgt)

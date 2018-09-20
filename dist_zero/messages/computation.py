@@ -8,6 +8,7 @@ def computation_node_config(node_id,
                             senders,
                             receivers,
                             migrator,
+                            connector=None,
                             adoptees=None):
   '''
   A node config for creating an internal `ComputationNode` in a network of computation nodes.
@@ -24,8 +25,13 @@ def computation_node_config(node_id,
   :param list[str] left_ids: A list of the ids of nodes for which the computation node should expect a left configuration.
   :param list receivers: A list of :ref:`handle` s of receiving nodes.
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
+  :param object connector: Serializable json object representing the `Connector` instance of the newly spawned
+    `ComputationNode`.
   :param list adoptees: A list of :ref:`handle` of the nodes to adopt upon spawn.
   '''
+  if adoptees is not None and not connector:
+    import ipdb
+    ipdb.set_trace()
   return {
       'type': 'ComputationNode',
       'id': node_id,
@@ -39,4 +45,5 @@ def computation_node_config(node_id,
       'receivers': receivers,
       'migrator': migrator,
       'adoptees': adoptees,
+      'connector': connector,
   }

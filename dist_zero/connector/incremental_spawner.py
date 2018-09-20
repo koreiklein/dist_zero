@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from dist_zero import errors, messages
 
 
@@ -6,8 +8,10 @@ class IncrementalSpawner(object):
   For spawning, one at a time, the new layers of nodes that are being added to a preexisting `Connector` instance.
   '''
 
-  def __init__(self, new_layers, connector, node):
+  def __init__(self, new_layers, last_edges, hourglasses, connector, node):
     self._layers = new_layers
+    self._last_edges = last_edges
+    self._hourglasses = hourglasses
     self._connector = connector
     self._node = node
 
@@ -22,6 +26,11 @@ class IncrementalSpawner(object):
     return self._layers
 
   def start_spawning(self):
+    if self._hourglasses:
+      # FIXME(KK): Implement this correctly
+      import ipdb
+      ipdb.set_trace()
+
     self._spawn_layer(0)
 
   def _id_to_handle(self, node_id):
@@ -57,10 +66,33 @@ class IncrementalSpawner(object):
   def spawned_a_kid(self, node):
     self._maybe_spawned_kids()
 
+  def _finished_spawning_layers(self):
+    if self._last_edges:
+      left_kid_to_handle = {
+          kid['handle']['id']: kid['handle']
+          for left_config in self._connector._left_configurations.values() for kid in left_config['kids']
+      }
+      _lookup = lambda nid: left_kid_to_handle[nid] if nid in left_kid_to_handle else self._node.kids[nid]
+      src_to_tgts = defaultdict(list)
+      for src_id, tgt_id in self._last_edges:
+        src_to_tgts[src_id].append(tgt_id)
+        self._node.send(self._node.kids[tgt_id],
+                        messages.migration.added_sender(self._node.transfer_handle(_lookup(src_id), tgt_id)))
+
+      for src_id, tgt_ids in src_to_tgts.items():
+        self._node.send(_lookup(src_id), messages.migration.configure_right_parent(migration_id=None, kid_ids=tgt_ids))
+
+    else:
+      # Missing receivers, we should be sending update_left_configuration to our right siblings.
+      import ipdb
+      ipdb.set_trace()
+
+    self._node.all_incremental_kids_are_spawned()
+
   def _spawn_layer(self, layer_index):
     if layer_index >= len(self._layers):
       self.finished = True
-      self._node.all_incremental_kids_are_spawned()
+      self._finished_spawning_layers()
     else:
       if layer_index >= 1:
         self._send_configure_right_parent(layer_index - 1)

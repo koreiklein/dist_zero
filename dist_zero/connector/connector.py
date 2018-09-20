@@ -26,7 +26,8 @@ class Connector(object):
     # and this variable must be `None`.
     self._left_node_to_picker_left_node = None
 
-    self._lefts = None
+    self._lefts = [kid['handle'] for left_config in self._left_configurations.values() for kid in left_config['kids']]
+
     self._rights = None
     self._picker = None
 
@@ -34,7 +35,66 @@ class Connector(object):
     self._right_to_parent_ids = None
     self._graph = network_graph.NetworkGraph()
 
-    self._fill_in()
+  def non_left_part_json(self):
+    if not self._left_is_data:
+      raise errors.InternalError("Can only take the non-left part of a Connector instance when left_is_data.")
+
+    graph = network_graph.NetworkGraph()
+    for layer in self._layers[1:]:
+      for node_id in layer:
+        graph.add_node(node_id)
+        for receiver_id in graph.node_receivers(node_id):
+          graph.add_node(receiver_id)
+          graph.add_edge(node_id, receiver_id)
+
+    return {
+        'layers': self._layers[1:],
+        'right_to_parent_ids': self._right_to_parent_ids,
+        'left_node_to_picker_left_node': None,
+        'graph': graph.to_json(),
+        'picker': self._picker.to_json(),
+    }
+
+  def left_part_json(self, parent_id):
+    if not self._left_is_data:
+      raise errors.InternalError("Can only take the left part of a Connector instance when left_is_data.")
+
+    graph = network_graph.NetworkGraph()
+    for node_id in self._layers[0]:
+      receiver_id, = self._graph.node_receivers(node_id)
+      graph.add_node(node_id)
+      graph.add_node(receiver_id)
+      graph.add_edge(receiver_id, node_id)
+
+    return {
+        'layers': self._layers[:1],
+        'right_to_parent_ids': {node_id: [parent_id]
+                                for node_id in self._layers[0]},
+        'left_node_to_picker_left_node': self._left_node_to_picker_left_node,
+        'graph': graph.to_json(),
+        'picker': self._picker.to_json(),
+    }
+
+  @staticmethod
+  def from_json(j, height, left_configurations, left_is_data, right_configurations, right_is_data, max_outputs,
+                max_inputs):
+    connector = Connector(
+        height=height,
+        left_configurations=left_configurations,
+        left_is_data=left_is_data,
+        right_configurations=right_configurations,
+        right_is_data=right_is_data,
+        max_outputs=max_outputs,
+        max_inputs=max_inputs)
+    connector._layers = j['layers']
+    connector._right_to_parent_ids = defaultdict(list)
+    for right, parent_ids in j['right_to_parent_ids'].items():
+      connector._right_to_parent_ids[right].extend(parent_ids)
+    connector._left_node_to_picker_left_node = j['left_node_to_picker_left_node']
+    connector._graph = network_graph.NetworkGraph.from_json(j['graph'])
+    connector._picker = topology_picker.TopologyPicker.from_json(j['picker'], graph=connector._graph)
+
+    return connector
 
   @property
   def right_siblings(self):
@@ -183,9 +243,7 @@ class Connector(object):
 
     return list(self._right_to_parent_ids.keys())
 
-  def _fill_in(self):
-    self._lefts = [kid['handle'] for left_config in self._left_configurations.values() for kid in left_config['kids']]
-
+  def fill_in(self, new_node_ids=None):
     picker_lefts = self._initialize_picker_lefts()
     picker_rights = self._initialize_picker_rights()
 
@@ -196,5 +254,6 @@ class Connector(object):
         max_outputs=self._max_outputs,
         max_inputs=self._max_inputs,
         name_prefix=self._name_prefix)
+    self._picker.fill_in(new_node_ids=new_node_ids)
 
     self._layers.extend([list(x) for x in self._picker.layers])

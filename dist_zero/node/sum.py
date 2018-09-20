@@ -306,8 +306,6 @@ class SumNode(Node):
                             n_kids=None,
                             connection_limit=0)
                     ]))
-    elif message['type'] == 'added_receiver':
-      self.export_to_node(message['node'])
     elif message['type'] == 'adjacent_has_split':
       # Spawn a new adjacent for the newly spawned io node and remove any kids stolen from self.
       node_id = ids.new_id('SumNode_adjacent_for_split')

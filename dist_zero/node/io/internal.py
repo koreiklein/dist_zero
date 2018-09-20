@@ -355,6 +355,8 @@ class InternalNode(Node):
   def receive(self, message, sender_id):
     if message['type'] == 'configure_new_flow_right':
       if self._adjacent is not None or len(message['right_configurations']) != 1 or self._variant != 'input':
+        import ipdb
+        ipdb.set_trace()
         raise errors.InternalError("A new configure_new_flow_right should only ever arrive at an 'input' InternalNode "
                                    "and only when it's waiting to set its adjacent,"
                                    " and when the configure_new_flow_right has a single right_configuration.")
@@ -369,15 +371,17 @@ class InternalNode(Node):
                             height=self.height,
                             is_data=True,
                             node=self.new_handle(node['id']),
-                            kids=[self.transfer_handle(kid, node['id']) for kid in self._kids.values()],
+                            kids=[{
+                                'connection_limit': self.system_config['SUM_NODE_SENDER_LIMIT'],
+                                'handle': self.transfer_handle(kid, node['id'])
+                            } for kid in self._kids.values()],
                         )
                     ]))
     elif message['type'] == 'configure_new_flow_left':
       # FIXME(KK): Implement this
-      import ipdb
-      ipdb.set_trace()
-    elif message['type'] == 'added_receiver':
-      self._set_output(message['node'])
+      # But, make sure that configure_new_flow_left is not improperly sent from a proxy node when there is a layer gap!
+      #import ipdb; ipdb.set_trace()
+      pass
     elif message['type'] == 'hello_parent':
       if sender_id == self._startup_kid and self._parent is not None:
         self._send_hello_parent()
@@ -407,6 +411,8 @@ class InternalNode(Node):
       if sender_id in self._kids:
         self._kid_summaries[sender_id] = message
         self._check_for_kid_limits()
+    elif message['type'] == 'configure_right_parent':
+      pass
     elif message['type'] == 'merge_with':
       if self._parent is None:
         raise errors.InternalError("Root nodes can not merge with other nodes.")

@@ -118,9 +118,6 @@ class LeafNode(Node):
   def receive(self, message, sender_id):
     if message['type'] == 'input_action':
       self._receive_input_action(message)
-    elif message['type'] == 'added_receiver':
-      self._set_output(message['node'])
-      self._activate()
     elif message['type'] == 'adopt':
       self.send(self._parent, messages.io.goodbye_parent())
       self._parent = message['new_parent']
