@@ -123,9 +123,21 @@ class LeafNode(Node):
       self._parent = message['new_parent']
       self._send_hello_parent()
     elif message['type'] == 'configure_new_flow_left':
-      # FIXME(KK): Implement this
-      import ipdb
-      ipdb.set_trace()
+      for left_config in message['left_configurations']:
+        node = left_config['node']
+        self._set_input(node)
+    elif message['type'] == 'added_sender':
+      node = message['node']
+      self.send(node,
+                messages.migration.configure_new_flow_right(None, [
+                    messages.migration.right_configuration(
+                        n_kids=None,
+                        parent_handle=self.new_handle(node['id']),
+                        height=-1,
+                        is_data=True,
+                        connection_limit=1,
+                    )
+                ]))
     elif message['type'] == 'configure_new_flow_right':
       if self._variant != 'input':
         raise errors.InternalError("Only 'input' leaves may be given a new right node.")

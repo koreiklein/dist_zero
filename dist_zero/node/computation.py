@@ -233,6 +233,19 @@ class ComputationNode(Node):
         new_layers=new_layers, last_edges=last_edges, hourglasses=hourglasses, connector=self._connector, node=self)
     self._incremental_spawner.start_spawning()
 
+  def _update_right_configuration(self, message):
+    if self._right_gap:
+      # FIXME(KK): Test this, and implement by forwarding the update_right_configuration to the proper child.
+      import ipdb
+      ipdb.set_trace()
+    else:
+      if self._connector is None:
+        raise errors.InternalError("self._connector must be initialized before an update_right_configuration "
+                                   "can be received")
+
+      self._get_new_layers_edges_and_hourglasses(*self._connector.add_kids_to_right_configuration([(
+          message['parent_id'], kid) for kid in message['new_kids']]))
+
   def _update_left_configuration(self, message):
     if self._left_gap:
       # FIXME(KK): Test this, and implement by forwarding the update_left_configuration message to the proper child.
@@ -332,9 +345,12 @@ class ComputationNode(Node):
 
   def new_right_configurations(self, right_configurations):
     '''For when a fully configured node gets new right_configurations'''
-    #FIXME(KK): Implement this
+    # FIXME(KK): Be sure you're getting this right
     import ipdb
     ipdb.set_trace()
+    raise errors.InternalError("Not Yet Implemented")
+    #return
+    #self._get_new_layers_edges_and_hourglasses(*self._connector.add_right_configurations(right_configurations))
 
   def receive(self, message, sender_id):
     if self._configuration_receiver.receive(message=message, sender_id=sender_id):
@@ -382,6 +398,8 @@ class ComputationNode(Node):
           proxy=message['proxy'], kid_ids=message['kid_ids'], variant=message['variant'])
     elif message['type'] == 'update_left_configuration':
       self._update_left_configuration(message)
+    elif message['type'] == 'update_right_configuration':
+      self._update_right_configuration(message)
     else:
       super(ComputationNode, self).receive(message=message, sender_id=sender_id)
 

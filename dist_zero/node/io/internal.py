@@ -344,9 +344,11 @@ class InternalNode(Node):
                       }],
                       new_height=self._height))
       elif self._variant == 'output':
-        # FIXME(KK): Test and finish this
-        import ipdb
-        ipdb.set_trace()
+        self.send(self._adjacent,
+                  messages.migration.update_right_configuration(
+                      parent_id=self.id,
+                      new_kids=[self.transfer_handle(kid, self._adjacent['id'])],
+                      new_height=self._height))
       else:
         raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 

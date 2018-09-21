@@ -467,6 +467,22 @@ def add_left_configuration(left_configuration):
   return {'type': 'add_left_configuration', 'left_configuration': left_configuration}
 
 
+def update_right_configuration(parent_id, new_kids, new_height):
+  '''
+  Indicate to a node that one of its existing right configurations has received new kids.
+
+  :param str parent_id: The id of the parent whose right configuration has just changed.
+  :param list new_kids: The list of :ref:`handle" of kids that are being added to this parent's right configuration.
+  :param int new_height: The height of the parent at the time this message was sent.
+  '''
+  return {
+      'type': 'update_right_configuration',
+      'parent_id': parent_id,
+      'new_kids': new_kids,
+      'new_height': new_height,
+  }
+
+
 def update_left_configuration(parent_id, new_kids, new_height):
   '''
   Indicate to a node that one of its existing left configurations has received new kids.

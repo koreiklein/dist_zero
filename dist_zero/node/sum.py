@@ -111,8 +111,18 @@ class SumNode(Node):
     pass
 
   def new_right_configurations(self, right_configurations):
+    # FIXME(KK): Figure out a way to ensure the current state will be trasmitted to this receiver!
     import ipdb
     ipdb.set_trace()
+    for right_config in right_configurations:
+      node = right_config['parent_handle']
+      exporter = self.linker.new_exporter(node)
+      self._exporters[node['id']] = exporter
+      self.send(exporter.receiver,
+                messages.migration.configure_new_flow_left(None, [
+                    messages.migration.left_configuration(
+                        node=self.new_handle(exporter.receiver['id']), height=-1, is_data=False, kids=[])
+                ]))
 
   def _send_configure_left_to_right(self):
     self.logger.info("Sending configure_new_flow_left")

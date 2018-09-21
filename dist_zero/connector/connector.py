@@ -33,6 +33,10 @@ class Connector(object):
 
     self._layers = []
     self._right_to_parent_ids = None
+    '''
+    Maps the id of each of the rightmost nodes managed by the connector to the list of nodes to the right
+    of the connector responsible for it.
+    '''
     self._graph = network_graph.NetworkGraph()
 
   def non_left_part_json(self):
@@ -112,6 +116,45 @@ class Connector(object):
   def max_right_height(self):
     return max((config['height'] for config in self._right_configurations.values()), default=-1)
 
+  def add_kids_to_right_configuration(self, parent_id_kid_pairs):
+    '''
+    Update the set of connections so that there is a new node in
+    the rightmost layer.
+
+    :param list[tuple] parent_id_kid_pairs: A list of pairs (parent_id, kid)
+      where parent_id is the id of the parent sending a right_configuration,
+      and kid is a :ref:`handle` now managed by that right parent.
+
+    :return: A triplet (new_node_ids, new_edges, hourglasses)
+      where new_node_ids are ids of nodes to spawn,
+      new_edges are pairs (src_node_id, tgt_node_id) defining the rightmost connections
+      not defined by new_nodes, and hourglasses are triplets
+      (node_id, senders, receivers) giving the hourglass substitutions.
+    '''
+    if not self._right_is_data:
+      raise errors.InternalError("Not possible, add_kids_to_right_configuration when the right is not a data node.")
+    new_adjacent_ids = []
+    last_edges = []
+    for parent_id, kid in parent_id_kid_pairs:
+      right_config = self._right_configurations[parent_id]
+      right_config['n_kids'] += 1
+      if 'known_kids' not in right_config:
+        right_config['known_kids'] = [kid]
+      else:
+        right_config['known_kids'].append(kid)
+
+      adjacent_id = ids.new_id("{}_right_adjacent".format(self._name_prefix))
+      last_edges.append((adjacent_id, kid['id']))
+      self._right_to_parent_ids[adjacent_id].append(parent_id)
+      new_adjacent_ids.append(adjacent_id)
+
+    if len(new_adjacent_ids) == 0:
+      raise errors.InternalError("There must be at least one new node being added.")
+
+    self._layers[-1].extend(new_adjacent_ids)
+    new_layers, hourglasses = self._picker_append_all_right(new_adjacent_ids)
+    return new_layers, last_edges, hourglasses
+
   def add_kids_to_left_configuration(self, parent_id_kid_pairs):
     '''
     Update the set of connections so that there is a new node in
@@ -123,7 +166,7 @@ class Connector(object):
 
     :return: A triplet (new_nodes, new_edges, hourglasses)
       where new_nodes are triplets (node_id, senders, receivers) to spawn
-      new_edges are pairs (src_node_id, tgt_node_id) defining connections
+      new_edges are pairs (src_node_id, tgt_node_id) defining the rightmost connections
       not defined by new_nodes, and hourglasses are triplets
       (node_id, senders, receivers) giving the hourglass substitutions.
     '''
@@ -147,6 +190,22 @@ class Connector(object):
         node_ids.append(kid['id'])
 
     return self._add_left_kids(node_ids)
+
+  def add_right_configurations(self, right_configurations):
+    for right_configuration in right_configurations:
+      self._right_configurations[right_configuration['node']['id']] = right_configuration
+
+  def _picker_append_all_right(self, node_ids):
+    new_layers, hourglasses = self._picker.append_right(node_ids[0])
+    for node_id in node_ids[1:]:
+      more_new_layers, more_hourglasses = self._picker.append_right(node_id)
+      hourglasses.extend(more_hourglasses)
+      if len(new_layers) != len(more_new_layers):
+        raise errors.InternalError("Parallel calls to append_right must return layer lists of equal length")
+      for new_layer, more_new_layer in zip(new_layers, more_new_layers):
+        new_layer.extend(more_new_layer)
+
+    return new_layers, hourglasses
 
   def _picker_append_all_left(self, node_ids):
     new_layers, hourglasses = self._picker.append_left(node_ids[0])

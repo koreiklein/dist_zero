@@ -36,7 +36,7 @@ class TestSpawnComputationNetwork(object):
     return node_id
 
   def spawn_users(self,
-                  root_input,
+                  root_node,
                   n_users,
                   ave_inter_message_time_ms=0,
                   send_messages_for_ms=0,
@@ -47,7 +47,7 @@ class TestSpawnComputationNetwork(object):
     waited_so_far = 0
     for i in range(n_users):
       self.demo.system.create_descendant(
-          internal_node_id=root_input,
+          internal_node_id=root_node,
           new_node_name='user_{}'.format(i),
           machine_id=self.machine_ids[i % len(self.machine_ids)],
           recorded_user=None if not add_user else self.demo.new_recorded_user(
@@ -149,7 +149,8 @@ class TestSpawnComputationNetwork(object):
       'name,start_inputs,start_outputs,new_inputs,new_outputs,ending_input_height,ending_output_height,sender_limit',
       [
           ('grow_input', 2, 2, 5, 0, 1, 1, 10), # Just add inputs
-          ('grow_output', 2, 2, 0, 5, 1, 1, 6), # Just add outputs
+          # FIXME(KK): Add 5 inputs, not just 1
+          ('grow_output', 2, 1, 0, 1, 1, 1, 6), # Just add outputs
           ('bump_input', 2, 2, 10, 0, 2, 1, 10), # Add enough inputs that the tree bumps its height
           ('cause_hourglass', 2, 2, 10, 0, 2, 1, 6), # Restrict sender_limit to cause hourglass operations
       ])
@@ -177,6 +178,7 @@ class TestSpawnComputationNetwork(object):
 
     demo.run_for(ms=5000)
     self.demo.render_network(self.root_computation)
+    self.output_leaves = self.demo.all_io_kids(self.root_output)
     assert start_outputs + new_outputs == len(self.output_leaves)
     for leaf in self.output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)

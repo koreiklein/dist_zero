@@ -49,13 +49,7 @@ class IncrementalSpawner(object):
       raise errors.InternalError('Node id "{}" was not found in the kids on left-kids.'.format(node_id))
 
   def _get_right_parent_ids_for_kid(self, node_id, layer_index):
-    if self.graph.node_receivers(node_id):
-      return [self._node.id]
-    else:
-      import ipdb
-      ipdb.set_trace()
-      # FIXME(KK): Figure out the proper behavior here.
-      #return self._connector.right_to_parent_ids[node_id]
+    return [self._node.id]
 
   def _maybe_spawned_kids(self):
     if not self.finished and \
@@ -72,15 +66,23 @@ class IncrementalSpawner(object):
           kid['handle']['id']: kid['handle']
           for left_config in self._connector._left_configurations.values() for kid in left_config['kids']
       }
-      _lookup = lambda nid: left_kid_to_handle[nid] if nid in left_kid_to_handle else self._node.kids[nid]
+      right_kid_to_handle = {
+          kid['id']: kid
+          for right_config in self._connector._right_configurations.values()
+          for kid in right_config.get('known_kids', [])
+      }
+      _lookup_src = lambda nid: left_kid_to_handle[nid] if nid in left_kid_to_handle else self._node.kids[nid]
+      _lookup_tgt = lambda nid: right_kid_to_handle[nid] if nid in right_kid_to_handle else self._node.kids[nid]
       src_to_tgts = defaultdict(list)
       for src_id, tgt_id in self._last_edges:
         src_to_tgts[src_id].append(tgt_id)
-        self._node.send(self._node.kids[tgt_id],
-                        messages.migration.added_sender(self._node.transfer_handle(_lookup(src_id), tgt_id)))
+        self._node.send(
+            _lookup_tgt(tgt_id), messages.migration.added_sender(
+                self._node.transfer_handle(_lookup_src(src_id), tgt_id)))
 
       for src_id, tgt_ids in src_to_tgts.items():
-        self._node.send(_lookup(src_id), messages.migration.configure_right_parent(migration_id=None, kid_ids=tgt_ids))
+        self._node.send(
+            _lookup_src(src_id), messages.migration.configure_right_parent(migration_id=None, kid_ids=tgt_ids))
 
     else:
       # Missing receivers, we should be sending update_left_configuration to our right siblings.
