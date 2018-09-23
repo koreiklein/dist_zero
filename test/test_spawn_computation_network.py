@@ -149,8 +149,7 @@ class TestSpawnComputationNetwork(object):
       'name,start_inputs,start_outputs,new_inputs,new_outputs,ending_input_height,ending_output_height,sender_limit',
       [
           ('grow_input', 2, 2, 5, 0, 1, 1, 10), # Just add inputs
-          # FIXME(KK): Add 5 inputs, not just 1
-          ('grow_output', 2, 1, 0, 1, 1, 1, 6), # Just add outputs
+          ('grow_output', 2, 1, 0, 2, 1, 1, 6), # Just add outputs
           ('bump_input', 2, 2, 10, 0, 2, 1, 10), # Add enough inputs that the tree bumps its height
           ('cause_hourglass', 2, 2, 10, 0, 2, 1, 6), # Restrict sender_limit to cause hourglass operations
       ])

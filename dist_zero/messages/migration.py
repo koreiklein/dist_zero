@@ -499,7 +499,7 @@ def update_left_configuration(parent_id, new_kids, new_height):
   }
 
 
-def left_configuration(height, is_data, node, kids):
+def left_configuration(height, is_data, node, kids, state=None):
   '''
   :param int height: The height of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
   :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
@@ -508,12 +508,14 @@ def left_configuration(height, is_data, node, kids):
   :param list kids: A list of dictionaries each with the following keys:
      'handle': A :ref:`handle` for a kid
      'connection_limit': The maximum number of outgoing nodes the next node is allowed to add to that kid
+  :param object state: If provided, gives the starting state sent to the receiving node.
   '''
   return {
       'height': height,
       'is_data': is_data,
       'node': node,
       'kids': kids,
+      'state': state,
   }
 
 

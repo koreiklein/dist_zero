@@ -125,6 +125,8 @@ class LeafNode(Node):
     elif message['type'] == 'configure_new_flow_left':
       for left_config in message['left_configurations']:
         node = left_config['node']
+        if left_config['state']:
+          self._current_state = left_config['state']
         self._set_input(node)
     elif message['type'] == 'added_sender':
       node = message['node']

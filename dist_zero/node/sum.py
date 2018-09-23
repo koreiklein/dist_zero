@@ -104,6 +104,11 @@ class SumNode(Node):
         receiver_id: self.linker.new_exporter(right_config['parent_handle'])
         for receiver_id, right_config in right_configurations.items()
     }
+    total_state = 0
+    for left_config in left_configurations.values():
+      if left_config['state'] is not None:
+        total_state += left_config['state']
+    self._current_state = total_state
     self._send_configure_left_to_right()
 
   def new_left_configurations(self, left_configurations):
@@ -111,9 +116,6 @@ class SumNode(Node):
     pass
 
   def new_right_configurations(self, right_configurations):
-    # FIXME(KK): Figure out a way to ensure the current state will be trasmitted to this receiver!
-    import ipdb
-    ipdb.set_trace()
     for right_config in right_configurations:
       node = right_config['parent_handle']
       exporter = self.linker.new_exporter(node)
@@ -121,7 +123,11 @@ class SumNode(Node):
       self.send(exporter.receiver,
                 messages.migration.configure_new_flow_left(None, [
                     messages.migration.left_configuration(
-                        node=self.new_handle(exporter.receiver['id']), height=-1, is_data=False, kids=[])
+                        node=self.new_handle(exporter.receiver['id']),
+                        height=-1,
+                        is_data=False,
+                        state=self._current_state,
+                        kids=[])
                 ]))
 
   def _send_configure_left_to_right(self):
@@ -133,6 +139,7 @@ class SumNode(Node):
               node=self.new_handle(receiver['id']),
               height=-1,
               is_data=False,
+              state=self._current_state,
               kids=[],
           )
       ])

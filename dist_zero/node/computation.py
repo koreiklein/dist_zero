@@ -345,12 +345,10 @@ class ComputationNode(Node):
 
   def new_right_configurations(self, right_configurations):
     '''For when a fully configured node gets new right_configurations'''
-    # FIXME(KK): Be sure you're getting this right
-    import ipdb
-    ipdb.set_trace()
-    raise errors.InternalError("Not Yet Implemented")
-    #return
-    #self._get_new_layers_edges_and_hourglasses(*self._connector.add_right_configurations(right_configurations))
+    for right_config in right_configurations:
+      node = right_config['parent_handle']
+      self._receivers[node['id']] = node
+    self._get_new_layers_edges_and_hourglasses(*self._connector.add_right_configurations(right_configurations))
 
   def receive(self, message, sender_id):
     if self._configuration_receiver.receive(message=message, sender_id=sender_id):

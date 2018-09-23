@@ -193,7 +193,9 @@ class Connector(object):
 
   def add_right_configurations(self, right_configurations):
     for right_configuration in right_configurations:
-      self._right_configurations[right_configuration['node']['id']] = right_configuration
+      self._right_configurations[right_configuration['parent_handle']['id']] = right_configuration
+    import ipdb
+    ipdb.set_trace()
 
   def _picker_append_all_right(self, node_ids):
     new_layers, hourglasses = self._picker.append_right(node_ids[0])
