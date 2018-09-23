@@ -30,9 +30,9 @@ class ConfigurationReceiver(object):
   def receive(self, message, sender_id):
     if self._fully_configured:
       if message['type'] == 'configure_right_parent':
-        # FIXME(KK): Implement this
-        import ipdb
-        ipdb.set_trace()
+        # This message should not be important.  configure_new_flow_right messages should arrive later and be
+        # processed normally
+        pass
       elif message['type'] == 'substitute_right_parent':
         # FIXME(KK): Implement this
         import ipdb

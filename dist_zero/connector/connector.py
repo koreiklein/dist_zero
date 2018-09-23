@@ -192,10 +192,23 @@ class Connector(object):
     return self._add_left_kids(node_ids)
 
   def add_right_configurations(self, right_configurations):
+    right_parent_ids = []
     for right_configuration in right_configurations:
-      self._right_configurations[right_configuration['parent_handle']['id']] = right_configuration
-    import ipdb
-    ipdb.set_trace()
+      right_parent_id = right_configuration['parent_handle']['id']
+      right_parent_ids.append(right_parent_id)
+      self._right_configurations[right_parent_id] = right_configuration
+
+    right_nodes = list(self._right_to_parent_ids.keys())
+    right_nodes.sort(key=lambda node: len(self._right_to_parent_ids[node]))
+    first = right_nodes[0]
+    if len(self._right_to_parent_ids[first]) + len(right_configurations) > 3:
+      # FIXME(KK): Implement this
+      import ipdb
+      ipdb.set_trace()
+      raise errors.InternalError("Not Yet Implemented: assign multiple parents to the same child right node")
+
+    self._right_to_parent_ids[first].extend(right_parent_ids)
+    return right_parent_ids
 
   def _picker_append_all_right(self, node_ids):
     new_layers, hourglasses = self._picker.append_right(node_ids[0])
@@ -258,7 +271,7 @@ class Connector(object):
   def graph(self):
     return self._graph
 
-  def _initialize_picker_lefts(self):
+  def _initialize_picker_lefts(self, new_node_ids=None):
     '''
     Called once at startup to initialize self._left_node_to_picker_left_node and return the
     list of left ids to be used by the picker.
@@ -268,7 +281,8 @@ class Connector(object):
       self._left_node_to_picker_left_node = {}
       for left in self._lefts:
         self._layers[0].append(left['id'])
-        adjacent_id = ids.new_id("{}_adjacent".format(self._name_prefix))
+        adjacent_id = ids.new_id("{}_adjacent".format(
+            self._name_prefix)) if new_node_ids is None else new_node_ids.pop(0)
         self._graph.add_node(left['id'])
         self._graph.add_node(adjacent_id)
         self._graph.add_edge(left['id'], adjacent_id)
@@ -282,7 +296,7 @@ class Connector(object):
   def right_to_parent_ids(self):
     return self._right_to_parent_ids
 
-  def _initialize_picker_rights(self):
+  def _initialize_picker_rights(self, new_node_ids=None):
     '''
     Called once at startup to initialize self._right_to_parent_ids and return the
     list of right ids to be used by the picker.
@@ -295,18 +309,19 @@ class Connector(object):
           raise errors.InternalError("When the right nodes are data nodes, the right configs must contain"
                                      " a not None 'n_kids' parameter.")
         for i in range(n_kids):
-          adjacent_id = ids.new_id("{}_adjacent".format(self._name_prefix))
+          adjacent_id = ids.new_id("{}_adjacent".format(
+              self._name_prefix)) if new_node_ids is None else new_node_ids.pop(0)
           self._right_to_parent_ids[adjacent_id].append(right_config['parent_handle']['id'])
     else:
       for right_config in self._right_configurations.values():
-        right_id = ids.new_id("{}_rightmost".format(self._name_prefix))
+        right_id = ids.new_id("{}_rightmost".format(self._name_prefix)) if new_node_ids is None else new_node_ids.pop(0)
         self._right_to_parent_ids[right_id].append(right_config['parent_handle']['id'])
 
     return list(self._right_to_parent_ids.keys())
 
   def fill_in(self, new_node_ids=None):
-    picker_lefts = self._initialize_picker_lefts()
-    picker_rights = self._initialize_picker_rights()
+    picker_lefts = self._initialize_picker_lefts(new_node_ids)
+    picker_rights = self._initialize_picker_rights(new_node_ids)
 
     self._picker = topology_picker.TopologyPicker(
         graph=self._graph,
@@ -316,5 +331,8 @@ class Connector(object):
         max_inputs=self._max_inputs,
         name_prefix=self._name_prefix)
     self._picker.fill_in(new_node_ids=new_node_ids)
+
+    if new_node_ids is not None and new_node_ids:
+      raise errors.InternalError("New all new_node_ids were used up.")
 
     self._layers.extend([list(x) for x in self._picker.layers])

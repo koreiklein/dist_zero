@@ -128,6 +128,9 @@ class ProxySpawner(object):
       ]
     else:
       raise errors.InternalError("Unrecognized variant {}".format(variant))
+    if any(ad not in self._node.kids for ad in adoptee_ids):
+      import ipdb
+      ipdb.set_trace()
     self._node._controller.spawn_node(
         messages.computation.computation_node_config(
             node_id=self._proxy_adjacent_id,

@@ -21,10 +21,10 @@ class TopologyPicker(object):
     # Invariants:
     #   ``self._left_tree.is_full == False``
     #   ``self._right_tree.is_full == False``
-    self._left_tree = NodeTree(self._lefts, max_kids=self._max_inputs)
+    self._left_tree = NodeTree(list(self._lefts), max_kids=self._max_inputs)
     self._left_tree.fill_in_tree()
 
-    self._right_tree = NodeTree(self._rights, max_kids=self._max_outputs)
+    self._right_tree = NodeTree(list(self._rights), max_kids=self._max_outputs)
     self._right_tree.fill_in_tree()
 
   def to_json(self):

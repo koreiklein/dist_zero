@@ -30,9 +30,6 @@ def computation_node_config(node_id,
     `ComputationNode`.
   :param list adoptees: A list of :ref:`handle` of the nodes to adopt upon spawn.
   '''
-  if adoptees is not None and not connector:
-    import ipdb
-    ipdb.set_trace()
   return {
       'type': 'ComputationNode',
       'id': node_id,

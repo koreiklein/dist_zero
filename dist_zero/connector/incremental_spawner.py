@@ -8,11 +8,12 @@ class IncrementalSpawner(object):
   For spawning, one at a time, the new layers of nodes that are being added to a preexisting `Connector` instance.
   '''
 
-  def __init__(self, new_layers, last_edges, hourglasses, connector, node):
+  def __init__(self, new_layers, last_edges, hourglasses, connector, layer_offset, node):
     self._layers = new_layers
     self._last_edges = last_edges
     self._hourglasses = hourglasses
     self._connector = connector
+    self._layer_offset = layer_offset
     self._node = node
 
     self.finished = False
@@ -105,7 +106,7 @@ class IncrementalSpawner(object):
         left_ids = self.graph.node_senders(node_id)
 
         self._node.spawn_kid(
-            layer_index=layer_index + 1,
+            layer_index=layer_index + self._layer_offset,
             configure_right_parent_ids=self._get_right_parent_ids_for_kid(node_id, layer_index),
             node_id=node_id,
             left_ids=left_ids,

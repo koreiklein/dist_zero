@@ -122,6 +122,9 @@ class LeafNode(Node):
       self.send(self._parent, messages.io.goodbye_parent())
       self._parent = message['new_parent']
       self._send_hello_parent()
+    elif message['type'] == 'configure_right_parent':
+      # No need to do anything here
+      pass
     elif message['type'] == 'configure_new_flow_left':
       for left_config in message['left_configurations']:
         node = left_config['node']

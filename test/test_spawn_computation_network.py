@@ -149,8 +149,9 @@ class TestSpawnComputationNetwork(object):
       'name,start_inputs,start_outputs,new_inputs,new_outputs,ending_input_height,ending_output_height,sender_limit',
       [
           ('grow_input', 2, 2, 5, 0, 1, 1, 10), # Just add inputs
-          ('grow_output', 2, 1, 0, 2, 1, 1, 6), # Just add outputs
+          ('grow_output', 2, 1, 0, 5, 1, 1, 10), # Just add outputs
           ('bump_input', 2, 2, 10, 0, 2, 1, 10), # Add enough inputs that the tree bumps its height
+          ('double_bump_input', 2, 2, 29, 0, 3, 1, 10), # Add enough inputs that the tree bumps its height twice
           ('cause_hourglass', 2, 2, 10, 0, 2, 1, 6), # Restrict sender_limit to cause hourglass operations
       ])
   def test_grow_trees(self, demo, name, start_inputs, start_outputs, new_inputs, new_outputs, ending_input_height,
@@ -176,11 +177,23 @@ class TestSpawnComputationNetwork(object):
         send_messages_for_ms=3000)
 
     demo.run_for(ms=5000)
+
     self.demo.render_network(self.root_computation)
+
     self.output_leaves = self.demo.all_io_kids(self.root_output)
+    self.input_leaves = self.demo.all_io_kids(self.root_input)
     assert start_outputs + new_outputs == len(self.output_leaves)
+
     for leaf in self.output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
+      senders = self.demo.system.get_senders(leaf)
+      assert 1 == len(senders)
+      assert 1 == len(self.demo.system.get_receivers(senders[0]))
+
+    for leaf in self.input_leaves:
+      receivers = self.demo.system.get_receivers(leaf)
+      assert 1 == len(receivers)
+      assert 1 == len(self.demo.system.get_senders(receivers[0]))
 
     assert ending_input_height == demo.system.get_stats(self.root_input)['height']
     assert ending_output_height == demo.system.get_stats(self.root_output)['height']

@@ -380,10 +380,9 @@ class InternalNode(Node):
                         )
                     ]))
     elif message['type'] == 'configure_new_flow_left':
-      # FIXME(KK): Implement this
-      import ipdb
-      ipdb.set_trace()
-      pass
+      for left_config in message['left_configurations']:
+        node = left_config['node']
+        self._set_input(node)
     elif message['type'] == 'hello_parent':
       if sender_id == self._startup_kid and self._parent is not None:
         self._send_hello_parent()
@@ -415,6 +414,18 @@ class InternalNode(Node):
         self._check_for_kid_limits()
     elif message['type'] == 'configure_right_parent':
       pass
+    elif message['type'] == 'added_sender':
+      node = message['node']
+      self.send(node,
+                messages.migration.configure_new_flow_right(None, [
+                    messages.migration.right_configuration(
+                        n_kids=len(self._kids),
+                        parent_handle=self.new_handle(node['id']),
+                        height=self.height,
+                        is_data=True,
+                        connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'],
+                    )
+                ]))
     elif message['type'] == 'merge_with':
       if self._parent is None:
         raise errors.InternalError("Root nodes can not merge with other nodes.")
