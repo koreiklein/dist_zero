@@ -12,11 +12,15 @@ logger = logging.getLogger(__name__)
 
 class ComputationNode(Node):
   def __init__(self, node_id, configure_right_parent_ids, left_is_data, right_is_data, parent, height, senders,
-               left_ids, receiver_ids, migrator_config, connector_json, adoptees, controller):
+               left_ids, is_mid_node, receiver_ids, migrator_config, connector_json, adoptees, controller):
     self.id = node_id
     self._controller = controller
 
+    self._is_mid_node = is_mid_node
+
     self._initial_connector_json = connector_json
+
+    self._added_sender_respond_tos = {}
 
     # Later, these will be initialized to booleans
     self._left_gap = None
@@ -85,7 +89,11 @@ class ComputationNode(Node):
     if self._adoptees is None and self.parent and not self.kids:
       self._send_hello_parent()
 
-    self._send_configure_right_to_left()
+    if self._is_mid_node:
+      self.send(self.parent, messages.hourglass.mid_node_up(self.new_handle(self.parent['id'])))
+
+    if not self._is_mid_node:
+      self._send_configure_right_to_left()
     self._configuration_receiver.initialize()
 
     self.linker.initialize()
@@ -104,6 +112,7 @@ class ComputationNode(Node):
         height=node_config['height'],
         senders=node_config['senders'],
         left_ids=node_config['left_ids'],
+        is_mid_node=node_config['is_mid_node'],
         receiver_ids=node_config['receiver_ids'],
         adoptees=node_config['adoptees'],
         connector_json=node_config['connector'],
@@ -194,7 +203,7 @@ class ComputationNode(Node):
 
       self.send(receiver, message)
 
-  def spawn_kid(self, layer_index, node_id, senders, configure_right_parent_ids, left_ids, migrator):
+  def spawn_kid(self, layer_index, node_id, senders, configure_right_parent_ids, left_ids, migrator, is_mid_node=False):
     self.kids[node_id] = None
     if self.height == 0:
       self._controller.spawn_node(
@@ -207,6 +216,7 @@ class ComputationNode(Node):
               and bool(self._connector.right_to_parent_ids[node_id]),
               senders=senders,
               receivers=[],
+              is_mid_node=is_mid_node,
               configure_right_parent_ids=configure_right_parent_ids,
               parent=self.new_handle(node_id),
               migrator=migrator,
@@ -218,6 +228,7 @@ class ComputationNode(Node):
               configure_right_parent_ids=configure_right_parent_ids,
               parent=self.new_handle(node_id),
               left_ids=left_ids,
+              is_mid_node=is_mid_node,
               height=self.height - 1,
               left_is_data=self.left_is_data and layer_index == 1,
               # TODO(KK): This business about right_map here is very ugly.
@@ -228,14 +239,14 @@ class ComputationNode(Node):
               receiver_ids=None,
               migrator=migrator))
 
-  def _get_new_layers_edges_and_hourglasses(self, layer_offset, new_layers, last_edges, hourglasses):
+  def _get_new_layers_edges_and_hourglasses(self, is_left, new_layers, last_edges, hourglasses):
     if new_layers or last_edges or hourglasses:
       self._incremental_spawner = connector.IncrementalSpawner(
           new_layers=new_layers,
           last_edges=last_edges,
           hourglasses=hourglasses,
           connector=self._connector,
-          layer_offset=layer_offset,
+          is_left=is_left,
           node=self)
       self._incremental_spawner.start_spawning()
 
@@ -252,10 +263,7 @@ class ComputationNode(Node):
       new_layers, last_edges, hourglasses = self._connector.add_kids_to_right_configuration(
           [(message['parent_id'], kid) for kid in message['new_kids']])
       self._get_new_layers_edges_and_hourglasses(
-          layer_offset=len(self._connector.layers) - len(new_layers),
-          new_layers=new_layers,
-          last_edges=last_edges,
-          hourglasses=hourglasses)
+          is_left=False, new_layers=new_layers, last_edges=last_edges, hourglasses=hourglasses)
 
   def _update_left_configuration(self, message):
     if self._left_gap:
@@ -268,7 +276,7 @@ class ComputationNode(Node):
                                    "can be received")
 
       self._get_new_layers_edges_and_hourglasses(
-          1,
+          True,
           *self._connector.add_kids_to_left_configuration([(message['parent_id'], kid) for kid in message['new_kids']]))
 
   @property
@@ -353,7 +361,13 @@ class ComputationNode(Node):
 
   def new_left_configurations(self, left_configurations):
     '''For when a fully configured node gets new left_configurations'''
-    self._get_new_layers_edges_and_hourglasses(1, *self._connector.add_left_configurations(left_configurations))
+    self._get_new_layers_edges_and_hourglasses(True, *self._connector.add_left_configurations(left_configurations))
+    for left_config in left_configurations:
+      node = left_config['node']
+      node_id = node['id']
+      if node_id in self._added_sender_respond_tos:
+        respond_to = self._added_sender_respond_tos.pop(node_id)
+        self.send(respond_to, messages.migration.finished_adding_sender(sender_id=node_id))
 
   def new_right_configurations(self, right_configurations):
     '''For when a fully configured node gets new right_configurations'''
@@ -382,6 +396,12 @@ class ComputationNode(Node):
   def receive(self, message, sender_id):
     if self._configuration_receiver.receive(message=message, sender_id=sender_id):
       return
+    elif message['type'] == 'mid_node_up':
+      self._incremental_spawner.mid_node_up(message['node'])
+    elif message['type'] == 'mid_node_ready':
+      self._incremental_spawner.mid_node_ready(message['node_id'])
+    elif message['type'] == 'finished_adding_sender' and self._incremental_spawner is not None:
+      self._incremental_spawner.finished_adding_sender(src_id=message['sender_id'], tgt_id=sender_id)
     elif message['type'] == 'added_sender':
       node = message['node']
       self._senders[node['id']] = node
@@ -395,6 +415,9 @@ class ComputationNode(Node):
                         connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'],
                     )
                 ]))
+      respond_to = message['respond_to']
+      if respond_to is not None:
+        self._added_sender_respond_tos[respond_to['id']] = respond_to
     elif message['type'] == 'adopt':
       if self.parent is None:
         raise errors.InternalError("Root nodes may not adopt a new parent.")
@@ -473,6 +496,6 @@ class ComputationNode(Node):
     elif message['type'] == 'get_senders':
       return self._senders
     elif message['type'] == 'get_receivers':
-      return self._receivers
+      return self._receivers if self._receivers is not None else {}
     else:
       return super(ComputationNode, self).handle_api_message(message)

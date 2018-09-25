@@ -223,22 +223,21 @@ class Connector(object):
     return new_layers, hourglasses
 
   def _picker_append_all_left(self, node_ids):
-    new_layers, hourglasses = self._picker.append_left(node_ids[0])
+    new_layers = self._picker.append_left(node_ids[0])
     for node_id in node_ids[1:]:
-      more_new_layers, more_hourglasses = self._picker.append_left(node_id)
-      hourglasses.extend(more_hourglasses)
+      more_new_layers = self._picker.append_left(node_id)
       if len(new_layers) != len(more_new_layers):
         raise errors.InternalError("Parallel calls to append_left must return layer lists of equal length")
       for new_layer, more_new_layer in zip(new_layers, more_new_layers):
         new_layer.extend(more_new_layer)
 
     if len(new_layers) == len(self._picker.layers):
-      # They go all the way through
-      return new_layers, None, hourglasses
-    else:
-      last_edges = [(node_id, receiver_id) for node_id in new_layers[-1]
-                    for receiver_id in self._graph.node_receivers(node_id)]
-      return new_layers, last_edges, hourglasses
+      raise errors.InternalError("The new layers should never be as long all the picker's layers.")
+
+    last_edges = [(node_id, receiver_id) for node_id in new_layers[-1]
+                  for receiver_id in self._graph.node_receivers(node_id)]
+    return new_layers, last_edges, (self._picker.insert_hourglass_layer_right()
+                                    if self._picker.needs_right_hourglass else [])
 
   def _add_left_kids(self, node_ids):
     if len(node_ids) == 0:

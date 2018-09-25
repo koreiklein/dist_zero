@@ -8,6 +8,7 @@ def computation_node_config(node_id,
                             senders,
                             receiver_ids,
                             migrator,
+                            is_mid_node=False,
                             connector=None,
                             adoptees=None):
   '''
@@ -23,6 +24,7 @@ def computation_node_config(node_id,
   :param int height: The height of the new computation node in its tree.
   :param list senders: A list of :ref:`handle` s of sending nodes.
   :param list[str] left_ids: A list of the ids of nodes for which the computation node should expect a left configuration.
+  :param bool is_mid_node: True iff this node is functioning as the mid node in an hourglass operation.
   :param list[str] receiver_ids: A list of ids of the nodes that should receive from self, or `None` if that list should
     be determined based on the right_configurations received by the node as it starts up.
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
@@ -39,6 +41,7 @@ def computation_node_config(node_id,
       'senders': senders,
       'left_is_data': left_is_data,
       'right_is_data': right_is_data,
+      'is_mid_node': is_mid_node,
       'configure_right_parent_ids': configure_right_parent_ids,
       'receiver_ids': receiver_ids,
       'migrator': migrator,

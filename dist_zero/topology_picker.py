@@ -163,7 +163,15 @@ class TopologyPicker(object):
 
     self._update_graph_edges([node for layer in new_node_layers for node in layer])
 
-    return new_node_layers, (self._insert_hourglass_layer_right() if self._left_tree.is_full else [])
+    return new_node_layers
+
+  @property
+  def needs_right_hourglass(self):
+    return self._left_tree.is_full
+
+  @property
+  def needs_left_hourglass(self):
+    return self._right_tree.is_full
 
   def _insert_hourglass_layer_left(self):
     # Remove the complete graphs that are being replaced by hourglasses.
@@ -189,7 +197,7 @@ class TopologyPicker(object):
     self._update_graph_edges(hourglass_layer)
     return [(node_id, self._incomming_nodes(node_id), self._outgoing_nodes(node_id)) for node_id in hourglass_layer]
 
-  def _insert_hourglass_layer_right(self):
+  def insert_hourglass_layer_right(self):
     # Remove the complete graphs that are being replaced by hourglasses.
     for left_index in self._left_tree.layers[-2]:
       for right_index in self._right_tree.layers[1]:
@@ -206,7 +214,7 @@ class TopologyPicker(object):
     hourglass_layer = []
     for right_index in right_indices:
       coords = (left_index, right_index)
-      new_node = self._new_node(coords)
+      new_node = self._new_node(coords, prefix=self._name_prefix + '_hourglass_center')
       hourglass_layer.append(new_node)
 
     self._layers.insert(len(self._layers) - 1, hourglass_layer)
@@ -218,11 +226,11 @@ class TopologyPicker(object):
     self._node_by_tree_coords[coords] = node
     self._tree_coords_by_node[node] = coords
 
-  def _new_node(self, coords):
+  def _new_node(self, coords, prefix=None):
     if coords in self._node_by_tree_coords:
       return self._node_by_tree_coords[coords]
     else:
-      node = ids.new_id(self._name_prefix)
+      node = ids.new_id(self._name_prefix if prefix is None else prefix)
       self._graph.add_node(node)
       self._set_node_coords(node, coords)
       return node

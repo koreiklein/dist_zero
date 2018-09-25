@@ -1,5 +1,7 @@
 import logging
 
+from collections import defaultdict
+
 from dist_zero import messages, errors, ids, deltas, settings, misc
 from dist_zero.migration.right_configuration import ConfigurationReceiver
 from .node import Node
@@ -36,6 +38,7 @@ class SumNode(Node):
                receivers,
                parent,
                controller,
+               is_mid_node,
                configure_right_parent_ids,
                migrator_config=None):
     '''
@@ -53,15 +56,19 @@ class SumNode(Node):
     '''
     self._controller = controller
 
-    self._FIXME_added_sender = None
-
     self.id = node_id
     self.parent = parent
+
+    self._is_mid_node = is_mid_node
+
+    self._hourglass_data = defaultdict(lambda: {'terminal_sequence_number': {}, 'mid_node': None, 'n_hourglass_senders': None})
 
     self.left_is_data = left_is_data
     self.right_is_data = right_is_data
 
     self.height = 0
+
+    self._added_sender_respond_tos = {}
 
     if settings.IS_TESTING_ENV:
       self._TESTING_total_before_first_swap = 0
@@ -113,7 +120,12 @@ class SumNode(Node):
 
   def new_left_configurations(self, left_configurations):
     # These left_configurations should already have been added.
-    pass
+    for left_config in left_configurations:
+      node = left_config['node']
+      node_id = node['id']
+      if node_id in self._added_sender_respond_tos:
+        respond_to = self._added_sender_respond_tos.pop(node_id)
+        self.send(respond_to, messages.migration.finished_adding_sender(sender_id=node_id))
 
   def new_right_configurations(self, right_configurations):
     for right_config in right_configurations:
@@ -187,6 +199,9 @@ class SumNode(Node):
     self.send(self.parent, messages.io.hello_parent(self.new_handle(self.parent['id'])))
     self._send_configure_right_to_left()
 
+    if self._is_mid_node:
+      self.send(self.parent, messages.hourglass.mid_node_up(self.new_handle(self.parent['id'])))
+
     self.linker.initialize()
 
   def _send_configure_right_to_left(self):
@@ -239,6 +254,7 @@ class SumNode(Node):
         receivers=node_config['receivers'],
         left_is_data=node_config['left_is_data'],
         right_is_data=node_config['right_is_data'],
+        is_mid_node=node_config['is_mid_node'],
         configure_right_parent_ids=node_config['configure_right_parent_ids'],
         parent=node_config['parent'],
         migrator_config=node_config['migrator'],
@@ -273,14 +289,60 @@ class SumNode(Node):
                           connection_limit=0)
                   ]))
 
-  def receive(self, sender_id, message):
+  def _maybe_swap_mid_node(self, mid_node_id):
+    data = self._hourglass_data[mid_node_id]
+    mid_node = data['mid_node']
+    n_hourglass_senders = data['n_hourglass_senders']
+    tsn = data['terminal_sequence_number']
+    # FIXME(KK): Make sure these importers are ultimately removed from the linker.
+    if len(tsn) == n_hourglass_senders:
+      for sender_id in tsn.keys():
+        self._importers.pop(sender_id)
 
+      self.import_from_node(mid_node)
+      self.send(mid_node,
+                messages.migration.configure_new_flow_right(None, [
+                    messages.migration.right_configuration(
+                        n_kids=None,
+                        parent_handle=self.new_handle(mid_node_id),
+                        height=-1,
+                        is_data=False,
+                        connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'],
+                    )
+                ]))
+      self._hourglass_data.pop(mid_node_id)
+
+  def receive(self, sender_id, message):
     if self._configuration_receiver.receive(message=message, sender_id=sender_id):
+      if self._is_mid_node and message['type'] == 'configure_new_flow_left':
+        if all(val is not None for val in self._configuration_receiver._left_configurations.values()):
+          self.send(self.parent, messages.hourglass.mid_node_ready(node_id=self.id))
       return
-    elif sender_id == self._FIXME_added_sender:
-      import ipdb
-      ipdb.set_trace()
-      print('FIXME')
+    elif message['type'] == 'start_hourglass':
+      self.send_forward_messages()
+      mid_node = message['mid_node']
+      self.send(
+          mid_node,
+          messages.migration.configure_new_flow_left(None, [
+              messages.migration.left_configuration(
+                  node=self.new_handle(mid_node['id']), height=-1, is_data=False, state=self._current_state, kids=[])
+          ]))
+      for receiver_id in message['receiver_ids']:
+        exporter = self._exporters.pop(receiver_id)
+        self.send(exporter.receiver,
+                  messages.hourglass.hourglass_swap(
+                      mid_node_id=mid_node['id'],
+                      sequence_number=exporter.internal_sequence_number,
+                  ))
+        self.export_to_node(mid_node)
+    elif message['type'] == 'hourglass_swap':
+      self._hourglass_data[message['mid_node_id']]['terminal_sequence_number'][sender_id] = message['sequence_number']
+      self._maybe_swap_mid_node(message['mid_node_id'])
+    elif message['type'] == 'hourglass_receive_from_mid_node':
+      node = message['mid_node']
+      self._hourglass_data[node['id']]['mid_node'] = node
+      self._hourglass_data[node['id']]['n_hourglass_senders'] = message['n_hourglass_senders']
+      self._maybe_swap_mid_node(node['id'])
     elif message['type'] == 'adopt':
       # FIXME(KK): Test and implement this
       import ipdb
@@ -308,9 +370,7 @@ class SumNode(Node):
         else:
           raise errors.InternalError("SumNode already has a distinct output node")
     elif message['type'] == 'added_sender':
-      # FIXME(KK): Maybe remove this case.
       node = message['node']
-      self._FIXME_added_sender = node
       self.import_from_node(node)
       self.send(node,
                 messages.migration.configure_new_flow_right(
@@ -323,6 +383,9 @@ class SumNode(Node):
                             n_kids=None,
                             connection_limit=0)
                     ]))
+      respond_to = message['respond_to']
+      if respond_to is not None:
+        self._added_sender_respond_tos[node['id']] = respond_to
     elif message['type'] == 'adjacent_has_split':
       # Spawn a new adjacent for the newly spawned io node and remove any kids stolen from self.
       node_id = ids.new_id('SumNode_adjacent_for_split')
