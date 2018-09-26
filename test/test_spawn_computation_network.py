@@ -36,7 +36,7 @@ class TestSpawnComputationNetwork(object):
     return node_id
 
   def spawn_users(self,
-                  root_input,
+                  root_node,
                   n_users,
                   ave_inter_message_time_ms=0,
                   send_messages_for_ms=0,
@@ -46,8 +46,8 @@ class TestSpawnComputationNetwork(object):
     total_wait = n_users * wait_per_loop
     waited_so_far = 0
     for i in range(n_users):
-      self.demo.system.create_descendant(
-          internal_node_id=root_input,
+      kid_id = self.demo.system.create_descendant(
+          internal_node_id=root_node,
           new_node_name='user_{}'.format(i),
           machine_id=self.machine_ids[i % len(self.machine_ids)],
           recorded_user=None if not add_user else self.demo.new_recorded_user(
@@ -77,7 +77,8 @@ class TestSpawnComputationNetwork(object):
         send_messages_for_ms=3000)
     self.demo.run_for(ms=6000)
 
-    root_computation = self.demo.connect_trees_with_sum_network(root_input, root_output, machine=self.machine_ids[0])
+    self.root_computation = self.demo.connect_trees_with_sum_network(
+        root_input, root_output, machine=self.machine_ids[0])
     # Ensure we haven't simulated any sends yet
     self.demo.run_for(ms=6000)
 
@@ -91,7 +92,6 @@ class TestSpawnComputationNetwork(object):
     assert len(output_leaves) == n_output_leaves
     self.demo.system.get_senders(root_output)
     self.demo.system.get_receivers(root_input)
-    self.demo.render_network(root_input)
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 
@@ -144,21 +144,52 @@ class TestSpawnComputationNetwork(object):
 
     self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=20)
 
-  def test_add_leaves_after_spawn(self, demo):
+  @pytest.mark.parametrize(
+      'name,start_inputs,start_outputs,new_inputs,new_outputs,ending_input_height,ending_output_height,sender_limit',
+      [
+          ('grow_input', 2, 2, 5, 0, 1, 1, 10), # Just add inputs
+          ('grow_output', 2, 1, 0, 5, 1, 1, 10), # Just add outputs
+          ('bump_input', 2, 2, 10, 0, 2, 1, 10), # Add enough inputs that the tree bumps its height
+          ('double_bump_input', 2, 2, 29, 0, 3, 1, 10), # Add enough inputs that the tree bumps its height twice
+          ('cause_hourglass', 2, 2, 10, 0, 2, 1, 3), # Restrict sender_limit to cause hourglass operations
+      ])
+  def test_grow_trees(self, demo, name, start_inputs, start_outputs, new_inputs, new_outputs, ending_input_height,
+                      ending_output_height, sender_limit):
     self.demo = demo
-    self.machine_ids = demo.new_machine_controllers(
-        1, base_config=self.base_config(), random_seed='test_add_leaves_after_spawn')
+    config = self.base_config()
+    # Make sure not to cause any hourglasses
+    config['system_config']['SUM_NODE_SENDER_LIMIT'] = sender_limit
 
-    self._connect_and_test_io_trees(n_input_leaves=5, n_output_leaves=5)
+    self.machine_ids = demo.new_machine_controllers(1, base_config=config, random_seed='test_add_leaves_after_spawn')
+
+    self._connect_and_test_io_trees(n_input_leaves=start_inputs, n_output_leaves=start_outputs)
     demo.run_for(ms=7000)
+    self.spawn_users(self.root_output, n_users=new_outputs)
+
     self.spawn_users(
         self.root_input,
-        n_users=5,
+        n_users=new_inputs,
         add_user=True,
         send_after=0,
         ave_inter_message_time_ms=500,
         send_messages_for_ms=3000)
 
     demo.run_for(ms=5000)
+
+    self.output_leaves = self.demo.all_io_kids(self.root_output)
+    self.input_leaves = self.demo.all_io_kids(self.root_input)
+    assert start_outputs + new_outputs == len(self.output_leaves)
+
     for leaf in self.output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
+      senders = self.demo.system.get_senders(leaf)
+      assert 1 == len(senders)
+      assert 1 == len(self.demo.system.get_receivers(senders[0]))
+
+    for leaf in self.input_leaves:
+      receivers = self.demo.system.get_receivers(leaf)
+      assert 1 == len(receivers)
+      assert 1 == len(self.demo.system.get_senders(receivers[0]))
+
+    assert ending_input_height == demo.system.get_stats(self.root_input)['height']
+    assert ending_output_height == demo.system.get_stats(self.root_output)['height']

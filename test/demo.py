@@ -195,13 +195,13 @@ class Demo(object):
                     node_id=root_computation_node_id,
                     height=1,
                     parent=None,
+                    left_is_data=True,
+                    right_is_data=True,
+                    configure_right_parent_ids=[node_id],
                     senders=[input_handle_for_migration],
-                    receivers=[output_handle_for_migration],
-                    migrator=messages.migration.insertion_migrator_config(
-                        configure_right_parent_ids=[],
-                        senders=[input_handle_for_migration],
-                        receivers=[output_handle_for_migration],
-                    ),
+                    left_ids=[input_handle_for_migration['id']],
+                    receiver_ids=None,
+                    migrator=messages.migration.insertion_migrator_config(),
                 )
             ]))
     return root_computation_node_id
@@ -234,16 +234,22 @@ class Demo(object):
     main_subgraph = Digraph()
     right_subgraph_visited = set()
 
+    nodes = set()
+
     def _add_node(graph, node_id):
-      if node_id.startswith('InternalNode') or node_id.startswith('LeafNode'):
-        kwargs = {'shape': 'ellipse', 'color': 'black', 'fillcolor': '#c7faff', 'style': 'filled'}
-      else:
-        kwargs = {'shape': 'diamond', 'color': 'black'}
-      graph.node(node_id, **kwargs)
+      if node_id not in nodes:
+        nodes.add(node_id)
+        if node_id.startswith('InternalNode') or node_id.startswith('LeafNode'):
+          kwargs = {'shape': 'ellipse', 'color': 'black', 'fillcolor': '#c7faff', 'style': 'filled'}
+        else:
+          kwargs = {'shape': 'diamond', 'color': 'black'}
+        graph.node(node_id, **kwargs)
 
     edges = set()
 
     def _add_edge(graph, left, right, *args, **kwargs):
+      _add_node(graph, left)
+      _add_node(graph, right)
       pair = (left, right)
       if pair not in edges:
         edges.add(pair)

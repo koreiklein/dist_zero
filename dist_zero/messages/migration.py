@@ -79,36 +79,34 @@ def removal_migrator_config(sender_ids, receiver_ids, will_sync):
   return {'type': 'removal_migrator', 'sender_ids': sender_ids, 'receiver_ids': receiver_ids, 'will_sync': will_sync}
 
 
-def insertion_migrator_config(configure_right_parent_ids,
-                              senders,
-                              receivers,
-                              left_configurations=None,
-                              right_configurations=None,
-                              migration=None):
+def insertion_migrator_config(migration=None):
   '''
-  :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
-    insertion node.
-  :param list senders: A list of :ref:`handle` of the `Node` s that will send to self by the end of the migration.
-  :param dict[str, object] left_configurations: In same cases, an insertion node can be preconfigured with left_configurations
-    given from the parent node that spawned it.   In that case, ``left_configurations`` is a dictionary mapping sender id
-    to prexisting left_configuration.  Otherwise, ``left_configurations`` is `None`
-  :param dict[str, object] right_configurations: In same cases, an insertion node can be preconfigured with right_configurations
-    given from the parent node that spawned it.   In that case, ``right_configurations`` is a dictionary mapping right node ids
-    to the prexisting right_configuration.  Otherwise, ``right_configurations`` is `None`
-  :param list receivers: A list of :ref:`handle` of the `Node` s that will receive from self by the end of the migration.
   :param migration: If the insertion node will communicate directly with the migration node, this is a handle for it.
     Otherwise, it is `None`
   :type migration: :ref:`handle` or `None`
   '''
-  return {
-      'type': 'insertion_migrator',
-      'configure_right_parent_ids': configure_right_parent_ids,
-      'senders': senders,
-      'left_configurations': left_configurations,
-      'right_configurations': right_configurations,
-      'receivers': receivers,
-      'migration': migration
-  }
+  return {'type': 'insertion_migrator', 'migration': migration}
+
+
+def added_sender(node, respond_to=None):
+  '''
+  Informs an already fully configured receiver when a new sender is being added and needs a right_configuration.
+  :param node: The :ref:`handle` of the new sender node to add.
+  :type node: :ref:`handle`
+  :param respond_to: An optional :ref:`handle` of a node.  If provided, once the sender is added, we should
+    send an finished_adding_sender message to it.
+  :type respond_to: :ref:`handle`
+  '''
+  return {'type': 'added_sender', 'node': node, 'respond_to': respond_to}
+
+
+def finished_adding_sender(sender_id):
+  '''
+  Responds that a sender is fully added.
+
+  :param str sender_id: The id of the node that was just added as a sender.
+  '''
+  return {'type': 'finished_adding_sender', 'sender_id': sender_id}
 
 
 def attach_migrator(migrator_config):
@@ -369,6 +367,15 @@ def substitute_right_parent(migration_id, new_parent_id):
   }
 
 
+def connect_to_receiver(receiver):
+  '''
+  Informs a node that it should send an add_left_configuration to a new receiver.
+  :param receiver: The :ref:`handle` of the node that will function as the new receiver.
+  :type receiver: :ref:`handle`
+  '''
+  return {'type': 'connect_to_receiver', 'receiver': receiver}
+
+
 def configure_right_parent(migration_id, kid_ids):
   '''
   A node will receive this message from the parents of its eventual receivers to indicate
@@ -389,13 +396,27 @@ def configure_right_parent(migration_id, kid_ids):
   }
 
 
-def configure_new_flow_right(migration_id, parent_handle, is_data, height, n_kids, connection_limit):
+def configure_new_flow_right(migration_id, right_configurations):
   '''
-  The 'right' configuration, sent while starting a new flow.
+  Transmit 'right' configurations, sent while starting a new flow.
 
   Either `InsertionMigrator` or `SourceMigrator` can receive this message.
-
   :param str migration_id: The id of the relevant migration.
+  :param list[object] right_configurations: The `right_configuration` messages.
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'configure_new_flow_right',
+          'right_configurations': right_configurations,
+      }
+  }
+
+
+def right_configuration(parent_handle, is_data, height, n_kids, connection_limit):
+  '''
+
   :param parent_handle: The :ref:`handle` of the sender. A sibling node to the right of the node receiving the message.
   :param int height: The height of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
   :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
@@ -406,16 +427,11 @@ def configure_new_flow_right(migration_id, parent_handle, is_data, height, n_kid
     right parent.
   '''
   return {
-      'type': 'migration',
-      'migration_id': migration_id,
-      'message': {
-          'type': 'configure_new_flow_right',
-          'parent_handle': parent_handle,
-          'is_data': is_data,
-          'height': height,
-          'n_kids': n_kids,
-          'connection_limit': connection_limit
-      }
+      'parent_handle': parent_handle,
+      'is_data': is_data,
+      'height': height,
+      'n_kids': n_kids,
+      'connection_limit': connection_limit
   }
 
 
@@ -437,13 +453,68 @@ def set_source_right_parents(migration_id, configure_right_parent_ids):
   }
 
 
-def configure_new_flow_left(migration_id, height, is_data, node, kids):
+def configure_new_flow_left(migration_id, left_configurations):
   '''
   The 'left' configuration, sent while starting a new flow.
 
   Either `InsertionMigrator` or `SinkMigrator` can receive this message.
 
   :param str migration_id: The id of the relevant migration.
+  :param list[object] left_configurations: The list of `left_configuration` messages.
+  '''
+  return {
+      'type': 'migration',
+      'migration_id': migration_id,
+      'message': {
+          'type': 'configure_new_flow_left',
+          'left_configurations': left_configurations,
+      }
+  }
+
+
+def add_left_configuration(left_configuration):
+  '''
+  Indicate to a node that it should add a new left_configuration.
+
+  :param object left_configuration: The `left_configuration` config to be added.
+  '''
+  return {'type': 'add_left_configuration', 'left_configuration': left_configuration}
+
+
+def update_right_configuration(parent_id, new_kids, new_height):
+  '''
+  Indicate to a node that one of its existing right configurations has received new kids.
+
+  :param str parent_id: The id of the parent whose right configuration has just changed.
+  :param list new_kids: The list of :ref:`handle" of kids that are being added to this parent's right configuration.
+  :param int new_height: The height of the parent at the time this message was sent.
+  '''
+  return {
+      'type': 'update_right_configuration',
+      'parent_id': parent_id,
+      'new_kids': new_kids,
+      'new_height': new_height,
+  }
+
+
+def update_left_configuration(parent_id, new_kids, new_height):
+  '''
+  Indicate to a node that one of its existing left configurations has received new kids.
+
+  :param str parent_id: The id of the parent whose left configuration has just changed.
+  :param list new_kids: The list of {'handle': :ref:`handle`, 'connection_limit': limit} of kids that are being added to this parent's left configuration.
+  :param int new_height: The height of the parent at the time this message was sent.
+  '''
+  return {
+      'type': 'update_left_configuration',
+      'parent_id': parent_id,
+      'new_kids': new_kids,
+      'new_height': new_height,
+  }
+
+
+def left_configuration(height, is_data, node, kids, state=None):
+  '''
   :param int height: The height of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
   :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
   :param node: The :ref:`handle` of the sending node.
@@ -451,17 +522,14 @@ def configure_new_flow_left(migration_id, height, is_data, node, kids):
   :param list kids: A list of dictionaries each with the following keys:
      'handle': A :ref:`handle` for a kid
      'connection_limit': The maximum number of outgoing nodes the next node is allowed to add to that kid
+  :param object state: If provided, gives the starting state sent to the receiving node.
   '''
   return {
-      'type': 'migration',
-      'migration_id': migration_id,
-      'message': {
-          'type': 'configure_new_flow_left',
-          'height': height,
-          'is_data': is_data,
-          'node': node,
-          'kids': kids
-      }
+      'height': height,
+      'is_data': is_data,
+      'node': node,
+      'kids': kids,
+      'state': state,
   }
 
 
@@ -479,3 +547,14 @@ def set_new_flow_adjacent(migration_id, adjacent):
           'adjacent': adjacent,
       }
   }
+
+
+def adopt(new_parent):
+  '''
+  Sent by newly spawner `InternalNode` instances to each of the kids they are meant to steal,
+  letting them know to change parents.
+
+  :param new_parent: The :ref:`handle` of the new parent node.
+  :type new_parent: :ref:`handle`
+  '''
+  return {'type': 'adopt', 'new_parent': new_parent}

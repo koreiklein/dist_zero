@@ -1,6 +1,9 @@
 import logging
 
+from collections import defaultdict
+
 from dist_zero import messages, errors, ids, deltas, settings, misc
+from dist_zero.migration.right_configuration import ConfigurationReceiver
 from .node import Node
 
 logger = logging.getLogger(__name__)
@@ -27,17 +30,21 @@ class SumNode(Node):
   SEND_INTERVAL_MS = 30
   '''The number of ms between sends to receivers.'''
 
-  def __init__(self, node_id, senders, receivers, input_node, output_node, parent, controller, migrator_config=None):
+  def __init__(self,
+               node_id,
+               left_is_data,
+               right_is_data,
+               senders,
+               receivers,
+               parent,
+               controller,
+               is_mid_node,
+               configure_right_parent_ids,
+               migrator_config=None):
     '''
     :param str node_id: The node id for this node.
     :param list senders: A list of :ref:`handle` of the nodes sending increments
     :param list receivers: A list of :ref:`handle` of the nodes to receive increments
-
-    :param input_node: The :ref:`handle` of the input node to this node if it has one.
-    :type input_node: :ref:`handle` or None
-
-    :param output_node: The :ref:`handle` of the output node to this node if it has one.
-    :type output_node: :ref:`handle` or None
 
     :param parent: The :ref:`handle` of the parent node that spawned this node.
     :type parent: :ref:`handle`
@@ -52,7 +59,16 @@ class SumNode(Node):
     self.id = node_id
     self.parent = parent
 
+    self._is_mid_node = is_mid_node
+
+    self._hourglass_data = defaultdict(lambda: {'terminal_sequence_number': {}, 'mid_node': None, 'n_hourglass_senders': None})
+
+    self.left_is_data = left_is_data
+    self.right_is_data = right_is_data
+
     self.height = 0
+
+    self._added_sender_respond_tos = {}
 
     if settings.IS_TESTING_ENV:
       self._TESTING_total_before_first_swap = 0
@@ -73,29 +89,101 @@ class SumNode(Node):
 
     self._time_since_had_enough_receivers_ms = 0
 
-    super(SumNode, self).__init__(logger)
+    self._configuration_receiver = ConfigurationReceiver(
+        node=self, configure_right_parent_ids=configure_right_parent_ids, left_ids=[sender['id'] for sender in senders])
 
-    if input_node is None:
-      self._input_importer = None
-    else:
-      self._input_importer = self.linker.new_importer(input_node)
-      self._deltas.add_sender(self._input_importer.sender_id)
+    super(SumNode, self).__init__(logger)
 
     self._initial_migrator_config = migrator_config
     self._initial_migrator = None # It will be initialized later.
 
-    self._output_exporter = None if output_node is None else self.linker.new_exporter(output_node)
-    self._exporters = {receiver['id']: self.linker.new_exporter(receiver) for receiver in receivers}
+    self.left_ids = [sender['id'] for sender in senders]
+
+    self._exporters = {}
     self._importers = {}
 
     for sender in senders:
       self.import_from_node(sender)
 
+  def has_left_and_right_configurations(self, left_configurations, right_configurations):
+    # Importers should already have been set during __init__.
+    self._exporters = {
+        receiver_id: self.linker.new_exporter(right_config['parent_handle'])
+        for receiver_id, right_config in right_configurations.items()
+    }
+    total_state = 0
+    for left_config in left_configurations.values():
+      if left_config['state'] is not None:
+        total_state += left_config['state']
+    self._current_state = total_state
+    self._send_configure_left_to_right()
+
+  def new_left_configurations(self, left_configurations):
+    # These left_configurations should already have been added.
+    for left_config in left_configurations:
+      node = left_config['node']
+      node_id = node['id']
+      if node_id in self._added_sender_respond_tos:
+        respond_to = self._added_sender_respond_tos.pop(node_id)
+        self.send(respond_to, messages.migration.finished_adding_sender(sender_id=node_id))
+
+  def new_right_configurations(self, right_configurations):
+    for right_config in right_configurations:
+      node = right_config['parent_handle']
+      exporter = self.linker.new_exporter(node)
+      self._exporters[node['id']] = exporter
+      self.send(exporter.receiver,
+                messages.migration.configure_new_flow_left(None, [
+                    messages.migration.left_configuration(
+                        node=self.new_handle(exporter.receiver['id']),
+                        height=-1,
+                        is_data=False,
+                        state=self._current_state,
+                        kids=[])
+                ]))
+
+  def _send_configure_left_to_right(self):
+    self.logger.info("Sending configure_new_flow_left")
+    for exporter in self._exporters.values():
+      receiver = exporter.receiver
+      message = messages.migration.configure_new_flow_left(self.migration_id, [
+          messages.migration.left_configuration(
+              node=self.new_handle(receiver['id']),
+              height=-1,
+              is_data=False,
+              state=self._current_state,
+              kids=[],
+          )
+      ])
+
+      self.send(receiver, message)
+
   def is_data(self):
     return False
 
-  def set_graph(self, graph):
-    self._graph = graph
+  @property
+  def _input_importer(self):
+    if self.left_is_data:
+      if len(self._importers) == 0:
+        return None
+      elif len(self._importers) == 1:
+        return next(iter(self._importers.values()))
+      else:
+        raise errors.InternalError("Sum node with a data node to the left may not have more than 1 importer")
+    else:
+      return None
+
+  @property
+  def _output_exporter(self):
+    if self.right_is_data:
+      if len(self._exporters) == 0:
+        return None
+      elif len(self._exporters) == 1:
+        return next(iter(self._exporters.values()))
+      else:
+        raise errors.InternalError("Sum node with a data node to the right may not have more than 1 exporter")
+    else:
+      return None
 
   def initialize(self):
     self.logger.info(
@@ -108,20 +196,35 @@ class SumNode(Node):
     if self._initial_migrator_config:
       self._initial_migrator = self.attach_migrator(self._initial_migrator_config)
 
-    if self._initial_migrator is None:
-      for importer in self._importers.values():
-        self.send(importer.sender, messages.sum.added_receiver(self.new_handle(importer.sender_id)))
-      if self._input_importer is not None:
-        self.send(self._input_importer.sender,
-                  messages.sum.added_receiver(self.new_handle(self._input_importer.sender_id)))
+    self.send(self.parent, messages.io.hello_parent(self.new_handle(self.parent['id'])))
+    self._send_configure_right_to_left()
 
-      for exporter in self._exporters.values():
-        self.send(exporter.receiver, messages.sum.added_sender(self.new_handle(exporter.receiver_id)))
-      if self._output_exporter is not None:
-        self.send(self._output_exporter.receiver,
-                  messages.sum.added_sender(self.new_handle(self._output_exporter.receiver_id)))
+    if self._is_mid_node:
+      self.send(self.parent, messages.hourglass.mid_node_up(self.new_handle(self.parent['id'])))
 
     self.linker.initialize()
+
+  def _send_configure_right_to_left(self):
+    self.logger.info("Sending configure_new_flow_right", extra={'receiver_ids': list(self._importers.keys())})
+    for importer in self._importers.values():
+      self.send(importer.sender,
+                messages.migration.configure_new_flow_right(self.migration_id, [
+                    messages.migration.right_configuration(
+                        n_kids=None,
+                        parent_handle=self.new_handle(importer.sender_id),
+                        height=-1,
+                        is_data=False,
+                        connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'],
+                    )
+                ]))
+    self._right_configurations_are_sent = True
+
+  @property
+  def migration_id(self):
+    if self._initial_migrator is not None:
+      return self._initial_migrator.migration_id
+    else:
+      return None
 
   def send_forward_messages(self, before=None):
     '''
@@ -133,6 +236,7 @@ class SumNode(Node):
     :rtype: int
     '''
     new_state, increment, updated = self._deltas.pop_deltas(state=self._current_state, before=before)
+
     if not updated:
       return self.least_unused_sequence_number
     else:
@@ -148,8 +252,10 @@ class SumNode(Node):
         node_id=node_config['id'],
         senders=node_config['senders'],
         receivers=node_config['receivers'],
-        output_node=node_config['output_node'],
-        input_node=node_config['input_node'],
+        left_is_data=node_config['left_is_data'],
+        right_is_data=node_config['right_is_data'],
+        is_mid_node=node_config['is_mid_node'],
+        configure_right_parent_ids=node_config['configure_right_parent_ids'],
         parent=node_config['parent'],
         migrator_config=node_config['migrator'],
         controller=controller)
@@ -162,20 +268,124 @@ class SumNode(Node):
     # Don't update any internal state just yet, but wait until the next sequence number is generated.
     self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
 
+  def generate_new_left_configuration(self, receiver):
+    return messages.migration.left_configuration(
+        height=-1, is_data=False, node=self.new_handle(receiver['id']), kids=[])
+
+  def add_left_configuration(self, left_configuration):
+    node = left_configuration['node']
+    self.import_from_node(node)
+    import ipdb
+    ipdb.set_trace()
+    self.send(node,
+              messages.migration.configure_new_flow_right(
+                  migration_id=None,
+                  right_configurations=[
+                      messages.migration.right_configuration(
+                          parent_handle=self.new_handle(node['id']),
+                          height=-1,
+                          is_data=False,
+                          n_kids=None,
+                          connection_limit=0)
+                  ]))
+
+  def _maybe_swap_mid_node(self, mid_node_id):
+    data = self._hourglass_data[mid_node_id]
+    mid_node = data['mid_node']
+    n_hourglass_senders = data['n_hourglass_senders']
+    tsn = data['terminal_sequence_number']
+    # FIXME(KK): Make sure these importers are ultimately removed from the linker.
+    if len(tsn) == n_hourglass_senders:
+      for sender_id in tsn.keys():
+        self._importers.pop(sender_id)
+
+      self.import_from_node(mid_node)
+      self.send(mid_node,
+                messages.migration.configure_new_flow_right(None, [
+                    messages.migration.right_configuration(
+                        n_kids=None,
+                        parent_handle=self.new_handle(mid_node_id),
+                        height=-1,
+                        is_data=False,
+                        connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'],
+                    )
+                ]))
+      self._hourglass_data.pop(mid_node_id)
+
   def receive(self, sender_id, message):
-    if message['type'] == 'set_input':
-      if self._input_importer is not None:
-        raise errors.InternalError("Can not set a new input node when one already exists.")
-      self._input_importer = self.linker.new_importer(message['input_node'])
-      self._deltas.add_sender(self._input_importer.sender_id)
+    if self._configuration_receiver.receive(message=message, sender_id=sender_id):
+      if self._is_mid_node and message['type'] == 'configure_new_flow_left':
+        if all(val is not None for val in self._configuration_receiver._left_configurations.values()):
+          self.send(self.parent, messages.hourglass.mid_node_ready(node_id=self.id))
+      return
+    elif message['type'] == 'start_hourglass':
+      self.send_forward_messages()
+      mid_node = message['mid_node']
+      self.send(
+          mid_node,
+          messages.migration.configure_new_flow_left(None, [
+              messages.migration.left_configuration(
+                  node=self.new_handle(mid_node['id']), height=-1, is_data=False, state=self._current_state, kids=[])
+          ]))
+      for receiver_id in message['receiver_ids']:
+        exporter = self._exporters.pop(receiver_id)
+        self.send(exporter.receiver,
+                  messages.hourglass.hourglass_swap(
+                      mid_node_id=mid_node['id'],
+                      sequence_number=exporter.internal_sequence_number,
+                  ))
+        self.export_to_node(mid_node)
+    elif message['type'] == 'hourglass_swap':
+      self._hourglass_data[message['mid_node_id']]['terminal_sequence_number'][sender_id] = message['sequence_number']
+      self._maybe_swap_mid_node(message['mid_node_id'])
+    elif message['type'] == 'hourglass_receive_from_mid_node':
+      node = message['mid_node']
+      self._hourglass_data[node['id']]['mid_node'] = node
+      self._hourglass_data[node['id']]['n_hourglass_senders'] = message['n_hourglass_senders']
+      self._maybe_swap_mid_node(node['id'])
+    elif message['type'] == 'adopt':
+      # FIXME(KK): Test and implement this
+      import ipdb
+      ipdb.set_trace()
+    elif message['type'] == 'set_input':
+      if not self.left_is_data:
+        raise errors.InternalError("Can't set input when the left node is not a data node")
+      if self._input_importer is None:
+        self.import_from_node(message['input_node'])
+      else:
+        if self._input_importer.sender_id == message['input_node']['id']:
+          # It was already set
+          pass
+        else:
+          raise errors.InternalError("SumNode already has a distinct input node")
     elif message['type'] == 'set_output':
-      if self._output_exporter is not None:
-        raise errors.InternalError("Can not set a new output node when one already exists.")
-      self._output_exporter = self.linker.new_exporter(message['output_node'])
+      if not self.right_is_data:
+        raise errors.InternalError("Can't set output when the right node is not a data node")
+      if self._output_exporter is None:
+        self._exporters[message['output_node']['id']] = self.linker.new_exporter(message['output_node'])
+      else:
+        if self._output_exporter.receiver_id == message['output_node']['id']:
+          # It was already set
+          pass
+        else:
+          raise errors.InternalError("SumNode already has a distinct output node")
     elif message['type'] == 'added_sender':
-      self.import_from_node(message['node'])
-    elif message['type'] == 'added_receiver':
-      self.export_to_node(message['node'])
+      node = message['node']
+      self.import_from_node(node)
+      self.send(node,
+                messages.migration.configure_new_flow_right(
+                    migration_id=None,
+                    right_configurations=[
+                        messages.migration.right_configuration(
+                            parent_handle=self.new_handle(node['id']),
+                            height=-1,
+                            is_data=False,
+                            n_kids=None,
+                            connection_limit=0)
+                    ]))
+      respond_to = message['respond_to']
+      if respond_to is not None:
+        self._added_sender_respond_tos[node['id']] = respond_to
     elif message['type'] == 'adjacent_has_split':
       # Spawn a new adjacent for the newly spawned io node and remove any kids stolen from self.
       node_id = ids.new_id('SumNode_adjacent_for_split')
@@ -239,64 +449,6 @@ class SumNode(Node):
       self._time_since_had_enough_receivers_ms = 0
     self.logger.info("current n_senders = {n_senders}", extra={'n_senders': len(self._importers)})
 
-    if len(self._importers) > SENDER_LIMIT:
-      if not self.migrators:
-        self.logger.info("Hitting sender limit of {sender_limit} senders", extra={'sender_limit': SENDER_LIMIT})
-        self._spawn_new_senders_migration()
-
-  def _spawn_new_senders_migration(self):
-    '''
-    Trigger a migration to spawn new sender nodes between self and its current senders.
-    '''
-    partition = {
-        ids.new_id('SumNode_middle_for_migration'): importers
-        for importers in misc.partition(
-            items=list(self._importers.values()), n_buckets=self.system_config['SUM_NODE_SPLIT_N_NEW_NODES'])
-    }
-    reverse_partition = {
-        importer.sender_id: middle_node_id
-        for middle_node_id, importers in partition.items() for importer in importers
-    }
-
-    insertion_node_configs = [
-        messages.sum.sum_node_config(
-            node_id=nid,
-            senders=[],
-            receivers=[],
-            migrator=messages.migration.insertion_migrator_config(
-                senders=[self.transfer_handle(importer.sender, for_node_id=nid) for importer in importers],
-                receivers=[self_handle],
-            ),
-        ) for nid, importers in partition.items() for self_handle in [self.new_handle(nid)]
-    ]
-
-    node_id = ids.new_id('MigrationNode_add_layer_before_sum_node')
-
-    return self._controller.spawn_node(
-        node_config=messages.migration.migration_node_config(
-            node_id=node_id,
-            source_nodes=[(self.transfer_handle(importer.sender, node_id),
-                           messages.migration.source_migrator_config(
-                               will_sync=False,
-                               exporter_swaps=[(self.id, [reverse_partition[importer.sender_id]])],
-                           )) for importer in self._importers.values()],
-            sink_nodes=[(self.new_handle(node_id),
-                         messages.migration.sink_migrator_config(
-                             will_sync=True,
-                             new_flow_sender_ids=[
-                                 insertion_node_config['id'] for insertion_node_config in insertion_node_configs
-                             ],
-                             old_flow_sender_ids=list(self._importers.keys()),
-                         ))],
-            removal_nodes=[],
-            insertion_node_configs=insertion_node_configs,
-            sync_pairs=[
-                # A single pair, indicating that self should sync to the insertion nodes.
-                (self.new_handle(node_id),
-                 [insertion_node_config['id'] for insertion_node_config in insertion_node_configs])
-            ],
-        ))
-
   def _send_increment(self, increment, sequence_number):
     if settings.IS_TESTING_ENV:
       if self._TESTING_swapped_once:
@@ -304,16 +456,17 @@ class SumNode(Node):
       else:
         self._TESTING_total_before_first_swap += increment
 
-    for exporter in self._exporters.values():
-      if self._output_exporter is None or exporter.receiver_id != self._output_exporter.receiver_id:
+    if self._output_exporter:
+      self._output_exporter.export_message(
+          message=messages.io.output_action(increment),
+          sequence_number=sequence_number,
+      )
+    else:
+      for exporter in self._exporters.values():
         exporter.export_message(
             message=messages.sum.increment(amount=increment),
             sequence_number=sequence_number,
         )
-
-    if self._output_exporter and self._output_exporter.receiver_id.startswith('LeafNode'):
-      message = messages.io.output_action(increment)
-      self._output_exporter.export_message(message=message, sequence_number=sequence_number)
 
     self._unsent_time_ms = 0
 
@@ -331,35 +484,16 @@ class SumNode(Node):
 
     self._exporters.update(new_exporters)
 
-  def activate_swap(self, migration_id, new_receiver_ids, kids, use_output=False, use_input=False):
+  def activate_swap(self, migration_id, kids, use_output=False, use_input=False):
     if len(kids) != 0:
       raise errors.InternalError("Sum nodes should never be passed kids by a migrator.")
-
-    if use_input:
-      if self._input_importer is not None:
-        raise errors.InternalError("Can't convert to use input, as there is already an input importer.")
-      elif len(self._importers) != 1:
-        raise errors.InternalError("Can't convert to use input, as there is not a unique importer.")
-      self._input_importer = next(iter(self._importers.values()))
-      self._importers = {}
-
-    if use_output:
-      if self._output_exporter is not None:
-        raise errors.InternalError("Can't convert to use output, as there is already an output exporter.")
-      elif len(self._exporters) != 1:
-        raise errors.InternalError("Can't convert to use output, as there is not a unique exporter.")
-      self._output_exporter = next(iter(self._exporters.values()))
-      self._exporters = {}
 
   def checkpoint(self, before=None):
     self.send_forward_messages(before=before)
 
   def remove_migrator(self, migration_id):
-    for nid in self.migrators[migration_id]._receivers:
-      if self._output_exporter is not None and nid == self._output_exporter.receiver_id:
-        self._output_exporter._migration_id = None
-      else:
-        self._exporters[nid]._migration_id = None
+    for exporter in self._exporters.values():
+      exporter._migration_id = None
 
     super(SumNode, self).remove_migrator(migration_id)
 
@@ -380,21 +514,11 @@ class SumNode(Node):
     }
 
   def handle_api_message(self, message):
-    if message['type'] == 'spawn_new_senders':
-      return self._spawn_new_senders_migration()
-    elif message['type'] == 'get_kids':
+    if message['type'] == 'get_kids':
       return {}
     elif message['type'] == 'get_senders':
-      result = {}
-      if self._input_importer:
-        result[self._input_importer.sender_id] = self._input_importer.sender
-      result.update((sender_id, importer.sender) for sender_id, importer in self._importers.items())
-      return result
+      return {sender_id: importer.sender for sender_id, importer in self._importers.items()}
     elif message['type'] == 'get_receivers':
-      result = {}
-      if self._output_exporter:
-        result[self._output_exporter.receiver_id] = self._output_exporter.receiver
-      result.update((receiver_id, exporter.receiver) for receiver_id, exporter in self._exporters.items())
-      return result
+      return {receiver_id: exporter.receiver for receiver_id, exporter in self._exporters.items()}
     else:
       return super(SumNode, self).handle_api_message(message)

@@ -6,8 +6,7 @@ from dist_zero.node import node
 import logging
 
 from dist_zero.migration.state.state import State
-from dist_zero.migration.state.state_01_starting_new_nodes import StartingNewNodesState
-from dist_zero.migration.state.state_02_starting_node_migrators import StartingNodeMigratorsState
+from dist_zero.migration.state.state_01_starting_node_migrators import StartingNodeMigratorsState
 from dist_zero.migration.state.state_03_starting_new_flow import StartingNewFlowState
 from dist_zero.migration.state.state_04_syncing_new_nodes import SyncingNewNodesState
 from dist_zero.migration.state.state_05_preparing_switching import PreparingSwitchingState
@@ -78,27 +77,25 @@ class MigrationNode(node.Node):
     self._state = to_state
 
   def initialize(self):
-    self._transition_state(State.NEW, State.STARTING_NEW_NODES)
+    self._transition_state(State.NEW, State.STARTING_NODE_MIGRATORS)
 
-    self._state_controller = StartingNewNodesState(self, self._controller, self._migration_config)
+    self._state_controller = StartingNodeMigratorsState(self, self._controller, self._migration_config)
     self._state_controller.initialize()
 
-  def finish_state_starting_new_nodes(self, insertion_nodes):
-    self._transition_state(State.STARTING_NEW_NODES, State.STARTING_NODE_MIGRATORS)
-    self.insertion_nodes = insertion_nodes
-
-    self._state_controller = StartingNodeMigratorsState(
-        self, self._controller, self._migration_config, insertion_nodes=self.insertion_nodes)
-    self._state_controller.initialize()
-
-  def finish_state_starting_node_migrators(self, source_nodes, sink_nodes, removal_nodes):
+  def finish_state_starting_node_migrators(self, source_nodes, sink_nodes, insertion_nodes, removal_nodes):
     self._transition_state(State.STARTING_NODE_MIGRATORS, State.STARTING_NEW_FLOW)
     self.source_nodes = source_nodes
     self.sink_nodes = sink_nodes
+    self.insertion_nodes = insertion_nodes
     self.removal_nodes = removal_nodes
 
     self._state_controller = StartingNewFlowState(
-        self, self._controller, self._migration_config, sink_nodes=self.sink_nodes)
+        self,
+        self._controller,
+        self._migration_config,
+        source_nodes=self.source_nodes,
+        sink_nodes=self.sink_nodes,
+        insertion_nodes=self.insertion_nodes)
     self._state_controller.initialize()
 
   def finish_state_starting_new_flow(self):

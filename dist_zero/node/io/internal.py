@@ -37,6 +37,7 @@ class InternalNode(Node):
     '''
     self._controller = controller
     self._parent = parent
+    self._sent_hello = False
     self._variant = variant
     self._height = height
     self.id = node_id
@@ -45,6 +46,8 @@ class InternalNode(Node):
     self._kid_summaries = {}
     self._initial_state = initial_state
     self._adjacent = adjacent
+
+    self._pending_spawned_kids = set()
 
     self._current_state = None
 
@@ -64,6 +67,11 @@ class InternalNode(Node):
     While in the process of bumping its height, the root node sets this to the id of the node that will take over as its
     proxy.
     '''
+    _kids_for_proxy_to_adopt = None
+    '''
+    While in the process of bumping its height, the root node sets this to the list of handles of the kids that the
+    proxy will be taking.
+    '''
 
     self._root_consuming_proxy_id = None
     '''
@@ -73,6 +81,10 @@ class InternalNode(Node):
 
     # To limit excessive warnings regarding being at low capacity.
     self._warned_low_capacity = False
+
+    # If this node is spawned at too great a height, it must spawn a kid before it's ready to do anything else.
+    # In case there is such a kid, self._startup_kid gives its id.
+    self._startup_kid = None
 
     super(InternalNode, self).__init__(logger)
 
@@ -124,7 +136,7 @@ class InternalNode(Node):
     if self._kids:
       # Must adopt any kids that were added before initialization.
       for kid in self._kids.values():
-        self.send(kid, messages.io.adopt(self.new_handle(kid['id'])))
+        self.send(kid, messages.migration.adopt(self.new_handle(kid['id'])))
 
     if self._adjacent is not None:
       if self._variant == 'input':
@@ -138,13 +150,19 @@ class InternalNode(Node):
 
     if self._height > 0 and len(self._kids) == 0:
       # unless we are height 0, we must have a new kid.
-      self._spawn_kid()
-
-    if self._parent is not None and not self._pending_adoptees:
-      self._send_hello_parent()
+      self._startup_kid = self._spawn_kid()
+    else:
+      if self._parent is not None and not self._pending_adoptees:
+        self._send_hello_parent()
 
   def _send_hello_parent(self):
-    self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
+    if not self._sent_hello:
+      self._sent_hello = True
+      self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
+    else:
+      import ipdb
+      ipdb.set_trace()
+      raise errors.InternalError("Already sent hello")
 
   def _spawn_kid(self):
     if self._height == 0:
@@ -156,6 +174,8 @@ class InternalNode(Node):
                                  "by consuming a proxy.")
     else:
       node_id = ids.new_id("InternalNode_kid")
+      self._pending_spawned_kids.add(node_id)
+      self._kid_summaries[node_id] = messages.io.kid_summary(size=0, n_kids=0)
       self.logger.info("InternalNode is spawning a new kid", extra={'new_kid_id': node_id})
       self._controller.spawn_node(
           messages.io.internal_node_config(
@@ -167,6 +187,7 @@ class InternalNode(Node):
               initial_state=self._initial_state,
               adoptees=[],
           ))
+      return node_id
 
   def _check_for_kid_limits(self):
     '''In case the kids of self are hitting any limits, address them.'''
@@ -271,7 +292,10 @@ class InternalNode(Node):
       raise errors.InternalError("Only the root node may bump its height.")
 
     self._root_proxy_id = ids.new_id('InternalNode_root_proxy')
+    self._kids_for_proxy_to_adopt = list(self._kids.values())
     self._height += 1
+    self._pending_spawned_kids.add(self._root_proxy_id)
+    self._kid_summaries[self._root_proxy_id] = messages.io.kid_summary(size=0, n_kids=0)
     self._controller.spawn_node(
         messages.io.internal_node_config(
             node_id=self._root_proxy_id,
@@ -280,32 +304,93 @@ class InternalNode(Node):
             height=self._height - 1,
             adjacent=None,
             initial_state=self._initial_state,
-            adoptees=[self.transfer_handle(kid, self._root_proxy_id) for kid in self._kids.values()],
+            adoptees=[self.transfer_handle(kid, self._root_proxy_id) for kid in self._kids_for_proxy_to_adopt],
         ))
 
-  def receive(self, message, sender_id):
-    if message['type'] == 'hello_parent':
-      if sender_id == self._root_proxy_id:
-        self._kid_summaries = {}
-        self._kids = {sender_id: message['kid']}
-        self._graph = NetworkGraph()
-        self._graph.add_node(sender_id)
-        self._root_proxy_id = None
+  def _finish_bumping_height(self, proxy):
+    self._kid_summaries = {}
+    self._kids = {proxy['id']: proxy}
+    self._graph = NetworkGraph()
+    self._graph.add_node(proxy['id'])
+    if self._adjacent is not None:
+      self.send(self._adjacent,
+                messages.io.bumped_height(
+                    proxy=self.transfer_handle(proxy, self._adjacent['id']),
+                    kid_ids=[kid['id'] for kid in self._kids_for_proxy_to_adopt],
+                    variant=self._variant))
+
+    self._root_proxy_id = None
+    self._kids_for_proxy_to_adopt = None
+
+  def _finish_adding_kid(self, kid):
+    kid_id = kid['id']
+    self._kids[kid_id] = kid
+    self._graph.add_node(kid_id)
+    if self._pending_adoptees:
+      if kid_id in self._pending_adoptees:
+        self._pending_adoptees[kid_id] = True
+      if all(self._pending_adoptees.values()):
+        self._pending_adoptees = None
+        self._send_hello_parent()
+
+    if self._adjacent is not None:
+      if self._variant == 'input':
+        self.send(self._adjacent,
+                  messages.migration.update_left_configuration(
+                      parent_id=self.id,
+                      new_kids=[{
+                          'connection_limit': self.system_config['SUM_NODE_SENDER_LIMIT'],
+                          'handle': self.transfer_handle(handle=kid, for_node_id=self._adjacent['id'])
+                      }],
+                      new_height=self._height))
+      elif self._variant == 'output':
+        self.send(self._adjacent,
+                  messages.migration.update_right_configuration(
+                      parent_id=self.id,
+                      new_kids=[self.transfer_handle(kid, self._adjacent['id'])],
+                      new_height=self._height))
       else:
-        self._kids[sender_id] = message['kid']
-        self._graph.add_node(sender_id)
-        if self._pending_adoptees is not None:
-          if sender_id in self._pending_adoptees:
-            self._pending_adoptees[sender_id] = True
-          if all(self._pending_adoptees.values()):
-            self._pending_adoptees = None
-            self._send_hello_parent()
+        raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
-        if self._height == 0:
-          self._added_leaf(message['kid'])
+    self._graph.add_node(kid_id)
 
-        self._graph.add_node(sender_id)
+  def receive(self, message, sender_id):
+    if message['type'] == 'configure_new_flow_right':
+      if self._adjacent is not None or len(message['right_configurations']) != 1 or self._variant != 'input':
+        import ipdb
+        ipdb.set_trace()
+        raise errors.InternalError("A new configure_new_flow_right should only ever arrive at an 'input' InternalNode "
+                                   "and only when it's waiting to set its adjacent,"
+                                   " and when the configure_new_flow_right has a single right_configuration.")
+      right_config, = message['right_configurations']
+      node = right_config['parent_handle']
+      self._set_output(node)
+      self.send(node,
+                messages.migration.configure_new_flow_left(
+                    migration_id=None,
+                    left_configurations=[
+                        messages.migration.left_configuration(
+                            height=self.height,
+                            is_data=True,
+                            node=self.new_handle(node['id']),
+                            kids=[{
+                                'connection_limit': self.system_config['SUM_NODE_SENDER_LIMIT'],
+                                'handle': self.transfer_handle(kid, node['id'])
+                            } for kid in self._kids.values()],
+                        )
+                    ]))
+    elif message['type'] == 'configure_new_flow_left':
+      for left_config in message['left_configurations']:
+        node = left_config['node']
+        self._set_input(node)
+    elif message['type'] == 'hello_parent':
+      if sender_id == self._startup_kid and self._parent is not None:
+        self._send_hello_parent()
 
+      if sender_id == self._root_proxy_id:
+        self._finish_bumping_height(message['kid'])
+      else:
+        self._finish_adding_kid(message['kid'])
       self._send_kid_summary()
     elif message['type'] == 'goodbye_parent':
       if sender_id in self._merging_kid_ids:
@@ -327,12 +412,26 @@ class InternalNode(Node):
       if sender_id in self._kids:
         self._kid_summaries[sender_id] = message
         self._check_for_kid_limits()
+    elif message['type'] == 'configure_right_parent':
+      pass
+    elif message['type'] == 'added_sender':
+      node = message['node']
+      self.send(node,
+                messages.migration.configure_new_flow_right(None, [
+                    messages.migration.right_configuration(
+                        n_kids=len(self._kids),
+                        parent_handle=self.new_handle(node['id']),
+                        height=self.height,
+                        is_data=True,
+                        connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'],
+                    )
+                ]))
     elif message['type'] == 'merge_with':
       if self._parent is None:
         raise errors.InternalError("Root nodes can not merge with other nodes.")
       new_parent = message['node']
       for kid in self._kids.values():
-        self.send(kid, messages.io.adopt(self.transfer_handle(new_parent, kid['id'])))
+        self.send(kid, messages.migration.adopt(self.transfer_handle(new_parent, kid['id'])))
       self.send(self._parent, messages.io.goodbye_parent())
       self._leaving_kids = set(self._kids.keys())
     elif message['type'] == 'adopt':
@@ -340,6 +439,7 @@ class InternalNode(Node):
         raise errors.InternalError("Root nodes may not adopt a new parent.")
       self.send(self._parent, messages.io.goodbye_parent())
       self._parent = message['new_parent']
+      self._sent_hello = False
       self._send_hello_parent()
     else:
       super(InternalNode, self).receive(message=message, sender_id=sender_id)
@@ -353,12 +453,12 @@ class InternalNode(Node):
     self._root_consuming_proxy_id = None
 
   def _set_input(self, node):
-    if self._adjacent is not None:
+    if self._adjacent is not None and self._adjacent['id'] != node['id']:
       raise errors.InternalError("InternalNodes can have only a single adjacent node.")
     self._adjacent = node
 
   def _set_output(self, node):
-    if self._adjacent is not None:
+    if self._adjacent is not None and self._adjacent['id'] != node['id']:
       raise errors.InternalError("InternalNodes can have only a single adjacent node.")
     self._adjacent = node
 
@@ -493,27 +593,6 @@ class InternalNode(Node):
         variant=self._variant,
         initial_state=self._initial_state,
     )
-
-  def _added_leaf(self, kid):
-    '''
-    :param kid: The :ref:`handle` of the leaf node that was just added.
-    :type kid: :ref:`handle`
-    '''
-    if kid['id'] not in self._kids:
-      self.logger.error(
-          "added_leaf: Could not find node matching id {missing_child_node_id}",
-          extra={'missing_child_node_id': kid['id']})
-    else:
-      self._graph.add_node(kid['id'])
-      self._kids[kid['id']] = kid
-
-      if self._adjacent is None:
-        self.logger.info("added_leaf: No adjacent was set when a kid was added."
-                         "  Unable to forward an added_leaf message to the adjacent.")
-      else:
-        self.send(self._adjacent,
-                  messages.io.added_adjacent_leaf(
-                      kid=self.transfer_handle(handle=kid, for_node_id=self._adjacent['id']), variant=self._variant))
 
   def deliver(self, message, sequence_number, sender_id):
     raise errors.InternalError("Messages should not be delivered to internal nodes.")

@@ -100,6 +100,10 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
   network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
   system_config = messages.machine.std_system_config()
+  system_config['INTERNAL_NODE_KIDS_LIMIT'] = 30
+  system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 0
+  system_config['SUM_NODE_SENDER_LIMIT'] = 30
+  system_config['SUM_NODE_RECEIVER_LIMIT'] = 30
 
   machine_a, machine_b, machine_c = demo.new_machine_controllers(
       3,
@@ -168,9 +172,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
 
   user_b_output_id = demo.system.create_kid(parent_node_id=output_kid, new_node_name='output_b', machine_id=machine_b)
   user_c_output_id = demo.system.create_kid(parent_node_id=output_kid, new_node_name='output_c', machine_id=machine_c)
-
-  # Wait for the output nodes to start up
-  demo.run_for(ms=200)
+  demo.run_for(ms=2000)
 
   user_b_input_id = demo.system.create_kid(
       parent_node_id=input_kid,
@@ -193,14 +195,19 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
   demo.run_for(ms=5000)
 
   # Smoke test that at least one message was acknowledged by sum node in the middle.
-  sum_node_stats = demo.system.get_stats(sum_kid_a)
-  if not sum_node_stats['acknowledged_messages'] > 0:
-    import ipdb
-    ipdb.set_trace()
-
-  assert sum_node_stats['acknowledged_messages'] > 0
   if network_error_type == 'duplicate':
-    assert sum_node_stats['n_duplicates'] > 0
+    all_sum_kids = []
+
+    def _explore(node):
+      kids = demo.system.get_kids(node)
+      if len(kids) == 0:
+        all_sum_kids.append(node)
+      else:
+        for kid in kids:
+          _explore(kid)
+
+    _explore(root_computation_node_id)
+    assert any(demo.system.get_stats(sum_kid)['n_duplicates'] > 0 for sum_kid in all_sum_kids)
 
   # Check that the output nodes receive the correct sum
   user_b_state = demo.system.get_output_state(user_b_output_id)
