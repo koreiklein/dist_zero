@@ -81,7 +81,7 @@ class ComputationNode(Node):
     if self._adoptees is not None:
       self._pending_adoptees = {adoptee['id'] for adoptee in self._adoptees}
       for adoptee in self._adoptees:
-        self.send(adoptee, messages.io.adopt(self.new_handle(adoptee['id'])))
+        self.send(adoptee, messages.migration.adopt(self.new_handle(adoptee['id'])))
 
     if self._initial_migrator_config:
       self._initial_migrator = self.attach_migrator(self._initial_migrator_config)
@@ -132,38 +132,6 @@ class ComputationNode(Node):
     if receiver['id'] in self._exporters:
       raise errors.InternalError("Already exporting to this node.", extra={'existing_node_id': receiver['id']})
     self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
-
-  def _pick_new_receivers_for_kid(self):
-    '''
-    Return a list of nodes in self._graph that should function as receivers for a newly added kid.
-    or None if no list is appropriate.
-    '''
-    if self.left_is_data:
-      if len(self._connector.layers) >= 3:
-        return [self.kids[node_id] for node_id in self._picker.get_layer(2)]
-      else:
-        return None
-    else:
-      if len(self._connector.layers) >= 2:
-        return [self.kids[node_id] for node_id in self._picker.get_layer(1)]
-      else:
-        return None
-
-  def _pick_new_sender_for_kid(self):
-    '''
-    Return a list of nodes in self._graph that should function as senders for a newly added kid.
-    or None if no list is appropriate.
-    '''
-    if self.right_is_data:
-      if len(self._connector.layers) >= 2:
-        return [self.kids[node_id] for node_id in self._connector.layers[len(self._connector.layers) - 1]]
-      else:
-        return None
-    else:
-      if len(self._connector.layers) >= 1:
-        return [self.kids[node_id] for node_id in self._picker.layers[len(self._connector.layers) - 1]]
-      else:
-        return None
 
   def all_incremental_kids_are_spawned(self):
     self._incremental_spawner = None

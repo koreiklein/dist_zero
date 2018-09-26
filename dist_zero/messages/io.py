@@ -66,17 +66,6 @@ def internal_node_config(node_id, parent, variant, height, adjacent=None, adopte
   }
 
 
-def adopt(new_parent):
-  '''
-  Sent by newly spawner `InternalNode` instances to each of the kids they are meant to steal,
-  letting them know to change parents.
-
-  :param new_parent: The :ref:`handle` of the new parent node.
-  :type new_parent: :ref:`handle`
-  '''
-  return {'type': 'adopt', 'new_parent': new_parent}
-
-
 def merge_with(node):
   '''
   Indicates to the receiver that it should merge with one of its sibling nodes.

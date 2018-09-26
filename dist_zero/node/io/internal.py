@@ -136,7 +136,7 @@ class InternalNode(Node):
     if self._kids:
       # Must adopt any kids that were added before initialization.
       for kid in self._kids.values():
-        self.send(kid, messages.io.adopt(self.new_handle(kid['id'])))
+        self.send(kid, messages.migration.adopt(self.new_handle(kid['id'])))
 
     if self._adjacent is not None:
       if self._variant == 'input':
@@ -431,7 +431,7 @@ class InternalNode(Node):
         raise errors.InternalError("Root nodes can not merge with other nodes.")
       new_parent = message['node']
       for kid in self._kids.values():
-        self.send(kid, messages.io.adopt(self.transfer_handle(new_parent, kid['id'])))
+        self.send(kid, messages.migration.adopt(self.transfer_handle(new_parent, kid['id'])))
       self.send(self._parent, messages.io.goodbye_parent())
       self._leaving_kids = set(self._kids.keys())
     elif message['type'] == 'adopt':

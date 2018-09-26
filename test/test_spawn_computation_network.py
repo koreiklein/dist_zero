@@ -92,7 +92,6 @@ class TestSpawnComputationNetwork(object):
     assert len(output_leaves) == n_output_leaves
     self.demo.system.get_senders(root_output)
     self.demo.system.get_receivers(root_input)
-    self.demo.render_network(self.root_output)
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 
@@ -165,7 +164,6 @@ class TestSpawnComputationNetwork(object):
 
     self._connect_and_test_io_trees(n_input_leaves=start_inputs, n_output_leaves=start_outputs)
     demo.run_for(ms=7000)
-    demo.render_network(self.root_output)
     self.spawn_users(self.root_output, n_users=new_outputs)
 
     self.spawn_users(
@@ -177,8 +175,6 @@ class TestSpawnComputationNetwork(object):
         send_messages_for_ms=3000)
 
     demo.run_for(ms=5000)
-
-    self.demo.render_network(self.root_computation)
 
     self.output_leaves = self.demo.all_io_kids(self.root_output)
     self.input_leaves = self.demo.all_io_kids(self.root_input)
