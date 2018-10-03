@@ -27,6 +27,7 @@ ssh -i .keys/dist_zero.pem centos@$MYSERVER <<EOF
 
   sudo mkdir -p /dist_zero
   sudo mkdir -p /logs
+  sudo mkdir -p /load_balancer
 
   # Set up dist_zero user
   sudo useradd dist_zero
@@ -57,6 +58,12 @@ ssh -i .keys/dist_zero.pem dist_zero@$MYSERVER <<EOF
   cd /dist_zero
   pipenv --python 3.6.5
   pipenv sync
+EOF
+
+ssh -i .keys/dist_zero.pem dist_zero@$MYSERVER <<EOF
+  cd /load_balancer
+  sudo bash -c "curl -L https://github.com/containous/traefik/releases/download/v1.7.1/traefik_linux-386 > traefik"
+  sudo chmod a+x traefik
 EOF
 
 # Remaining steps before we can actually run the dist-zero daemon:
