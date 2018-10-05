@@ -1,8 +1,9 @@
-import logging
 import json
-import tempfile
+import logging
 import os
+import tempfile
 import time
+import uuid
 
 from collections import defaultdict
 
@@ -14,6 +15,8 @@ from dist_zero import settings, messages, spawners, transport
 from .. import spawner
 
 logger = logging.getLogger(__name__)
+
+DNS_TTL = 1500
 
 
 class Ec2Spawner(spawner.Spawner):
@@ -55,13 +58,17 @@ class Ec2Spawner(spawner.Spawner):
     if not instance_type:
       raise RuntimeError("Missing instance_type parameter")
 
-    self._ec2 = boto3.client(
+    self._route53 = self._create_client_by_name('route53')
+    self._ec2 = self._create_client_by_name('ec2')
+    self._ec2_resource = boto3.resource(
         'ec2',
         region_name=self._aws_region,
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
-    self._ec2_resource = boto3.resource(
-        'ec2',
+
+  def _create_client_by_name(self, aws_service_name):
+    return boto3.client(
+        aws_service_name,
         region_name=self._aws_region,
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
@@ -293,6 +300,64 @@ class Ec2Spawner(spawner.Spawner):
         return True
       else:
         return False
+
+  def _canonicalize_domain_name(self, domain_name):
+    if domain_name[-1] != '.':
+      return domain_name + '.'
+    else:
+      return domain_name
+
+  def _get_zone_for_domain_name(self, canonical_domain_name):
+    parts = canonical_domain_name.split('.')
+    hosted_zones = self._route53.list_hosted_zones()
+    zone_by_name = {zone['Name']: zone for zone in hosted_zones}
+
+    for i in range(len(parts)):
+      suffix = '.'.join(parts[i:])
+      if suffix in zone_by_name:
+        return zone_by_name
+    return None
+
+  def _split_by_desired_zone_name(self, canonical_domain_name):
+    parts = canonical_domain_name.split('.')
+    return '.'.join(parts[:-3]), '.'.join(parts[-3:])
+
+  def _create_new_zone(self, canonical_domain_name):
+    before_zone_name, zone_name = self._split_by_desired_zone_name(canonical_domain_name)
+    response = self._route53.create_hosted_zone(
+        Name=zone_name,
+        CallerReference=uuid.uuid4(),
+        #VPC
+        #HostedZoneConfig
+        #DelegationSetId
+    )
+    return response['HostedZone']
+
+  def _make_domain_upsert_change(self, domain_name, ip_address):
+    return {
+        'Action': 'UPSERT',
+        'ResourceRecordSet': {
+            'Name': domain_name,
+            'Type': 'A',
+            'TTL': DNS_TTL,
+            'ResourceRecords': [{
+                'Value': ip_address
+            }],
+        },
+    }
+
+  def map_domain_to_ip(self, domain_name, ip_address):
+    canonical_domain_name = self._canonicalize_domain_name(domain_name)
+    zone = self._get_zone_for_domain_name(canonical_domain_name)
+    if zone is None:
+      zone = self._create_new_zone(canonical_domain_name)
+
+    self._route53.change_resource_record_sets(
+        HostedZoneId=zone['Id'],
+        ChangeBatch={
+            'Comment': 'Done as part of some scripted testing',
+            'Changes': [self._make_domain_upsert_change(domain_name=canonical_domain_name, ip_address=ip_address)],
+        })
 
 
 class _AwsInstanceProvisioner(object):

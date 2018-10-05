@@ -60,10 +60,12 @@ ssh -i .keys/dist_zero.pem dist_zero@$MYSERVER <<EOF
   pipenv sync
 EOF
 
+# Install and enable haproxy
 ssh -i .keys/dist_zero.pem dist_zero@$MYSERVER <<EOF
-  cd /load_balancer
-  sudo bash -c "curl -L https://github.com/containous/traefik/releases/download/v1.7.1/traefik_linux-386 > traefik"
-  sudo chmod a+x traefik
+  sudo yum -y install centos-release-scl
+  sudo yum -y install rh-haproxy18-haproxy rh-haproxy18-haproxy-syspaths socat
+  sudo systemctl enable rh-haproxy18-haproxy
+  sudo systemctl start rh-haproxy18-haproxy
 EOF
 
 # Remaining steps before we can actually run the dist-zero daemon:

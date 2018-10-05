@@ -6,7 +6,7 @@ import re
 from cryptography.fernet import Fernet
 from random import Random
 
-from dist_zero import errors, messages
+from dist_zero import errors, messages, dns
 
 from .node import io
 from .node.sum import SumNode
@@ -84,6 +84,45 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
+  def new_http_server(self, domain, f):
+    '''
+    Create a new http server running on this machine. It only processes HTTP GET requests.
+
+    :param str domain: The domain name under which the new server should listen.
+    :param f: A function that will be called on each GET request.  It should return the HTTP response.
+
+    :return: The server_address for the newly created server.
+    :rtype: object
+    '''
+    raise RuntimeError("Abstract Superclass")
+
+  def new_socket_server(self, f):
+    '''
+    Create and return a new socket server.  This server will accept persistent full-duplex connections to client.
+
+    :param f: A function that will be called on each new connection with f(accept_connection) where
+      f is expected to make one call to connection = accept_connection(receive, terminate) where
+      receive(msg) will be called wheneven msg is received from the connected party
+      terminate() will be called when the connected party terminates the connection
+      and connection will be a Connection object supporting:
+        connection.send(msg) to send a message to the connected party
+        connection.sender_id to give the id of the connected party
+        connection.terminate() to terminate the connection
+
+    :return: The server_address for the newly created server.
+    :rtype: object
+    '''
+    raise RuntimeError("Abstract Superclass")
+
+  def new_load_balancer_frontend(self, domain_name, height):
+    '''
+    For adding a frontend to this machine's load balancer.
+
+    :return: A new `LoadBalancerFrontend` instance.
+    :rtype: `LoadBalancerFrontend`
+    '''
+    raise RuntimeError("Abstract Superclass")
+
 
 class NodeManager(MachineController):
   '''
@@ -103,7 +142,7 @@ class NodeManager(MachineController):
   MAX_POSTPONE_TIME_MS = 1200
   '''Maximum time a message will be postpone when simulating a network drop or reorder'''
 
-  def __init__(self, machine_config, spawner, ip_host, send_to_machine):
+  def __init__(self, machine_config, spawner, ip_host, send_to_machine, machine_runner=None):
     '''
     :param machine_config: A configuration message of type 'machine_config'
     :type machine_config: :ref:`message`
@@ -114,6 +153,10 @@ class NodeManager(MachineController):
     :param str ip_host: The host parameter to use when generating transports that send to this machine.
     :param func send_to_machine: A function send_to_machine(message, transport)
       where message is a :ref:`message`, and transport is a :ref:`transport` for a receiving node.
+
+    :param `MachineRunner` machine_runner: An optional `MachineRunner` instance.
+      If provided, then this `NodeManager` instance will be able to create servers and
+      load balancers.
     '''
 
     self.id = machine_config['id']
@@ -129,6 +172,8 @@ class NodeManager(MachineController):
     self.system_id = machine_config['system_id']
 
     self._spawner = spawner
+
+    self._machine_runner = machine_runner
 
     self._ip_host = ip_host
 
@@ -392,3 +437,22 @@ class NodeManager(MachineController):
         return error_type
 
     return False
+
+  def _ensure_machine_runner(self):
+    if self._machine_runner is None:
+      raise errors.InternalError("Missing a MachineRunner instance on this NodeManager.")
+
+  def new_http_server(self, domain, f):
+    self._ensure_machine_runner()
+    return self._machine_runner.new_http_server(domain, f)
+
+  def new_socket_server(self, f):
+    self._ensure_machine_runner()
+    return self._machine_runner.new_socket_server(f)
+
+  def new_dns_controller(self, domain_name):
+    return dns.DNSController(domain_name, spawner=self._spawner)
+
+  def new_load_balancer_frontend(self, domain_name, height):
+    self._ensure_machine_runner()
+    return self._machine_runner.new_load_balancer_frontend(domain_name, height)

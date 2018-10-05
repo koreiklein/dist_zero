@@ -3,6 +3,13 @@ Messages relating to machines
 '''
 
 
+def server_address(domain, ip, port):
+  '''
+  A way to connect to a new web server.
+  '''
+  return {'domain': domain, 'ip': ip, 'port': port}
+
+
 def ip_transport(host):
   return {'type': 'ip_transport', 'host': host}
 

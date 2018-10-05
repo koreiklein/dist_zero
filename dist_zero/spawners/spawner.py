@@ -46,3 +46,12 @@ class Spawner(object):
     :rtype: list[str]
     '''
     raise RuntimeError("Abstract Superclass")
+
+  def map_domain_to_ip(self, domain_name, ip_address):
+    '''
+    Point a domain name at an ip address.
+
+    :param str domain_name: The domain name
+    :param str ip_address: The ip address
+    '''
+    raise RuntimeError("class {} does not implement map_domain_to_ip".format(self.__class__.__name__))

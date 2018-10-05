@@ -5,6 +5,33 @@ Messages to be received by input and output nodes.
 from dist_zero import errors
 
 
+def route_dns(domain_name):
+  '''
+  Indicates to a root io node that it should set up DNS to resolve domain_name
+  (possibly via some load balancers) to a server being run by a height 0
+  `InternalNode` with capacity to add new kids.
+  '''
+  return {'type': 'route_dns', 'domain_name': domain_name}
+
+
+def routing_start(domain_name):
+  '''
+  Indicates to a child node in an input tree that it should begin routing from
+  DNS and load balancers.
+  '''
+  return {'type': 'routing_start', 'domain_name': domain_name}
+
+
+def routing_started(server_address):
+  '''
+  Inform a parent that routing has started.
+
+  :param server_address: A `server_address` object that can be used to
+    send messages to the endpoint this child has just started.
+  '''
+  return {'type': 'routing_started', 'server_address': server_address}
+
+
 def input_action(number):
   '''
   A simple input action that generates a number

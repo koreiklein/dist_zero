@@ -96,6 +96,26 @@ class TestSpawnComputationNetwork(object):
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 
+  def test_dns(self, cloud_demo):
+    self.demo = cloud_demo
+
+    self.machine_ids = self.demo.new_machine_controllers(1, base_config=self.base_config(), random_seed='test_dns')
+
+    root_input = self.root_io_tree(machine=self.machine_ids[0], variant='input')
+    self.demo.run_for(ms=6000)
+    import ipdb
+    ipdb.set_trace()
+    self.spawn_users(root_input, n_users=6)
+    domain_name = 'www.distzerotesting.com'
+    import ipdb
+    ipdb.set_trace()
+    self.demo.system.route_dns(root_input, domain_name)
+
+    for i in range(10):
+      self.demo.run_for(ms=2000)
+      import ipdb
+      ipdb.set_trace()
+
   def test_spawn_small_small(self, demo):
     self.demo = demo
     self.machine_ids = demo.new_machine_controllers(
