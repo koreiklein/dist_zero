@@ -43,6 +43,7 @@ ssh -i .keys/dist_zero.pem centos@$MYSERVER <<EOF
 
 
   sudo bash -c "echo 'Cmnd_Alias DIST_ZERO_SERVICE = /usr/bin/systemctl start dist-zero, /usr/bin/systemctl stop dist-zero, /usr/bin/systemctl reload dist-zero, /usr/bin/systemctl restart dist-zero, /usr/bin/systemctl status dist-zero, /usr/bin/systemctl enable dist-zero, /usr/bin/systemctl disable dist-zero' >> /etc/sudoers"
+  sudo bash -c "echo 'Cmnd_Alias HAPROXY_SERVICE = /usr/bin/systemctl enable rh-haproxy18-haproxy, /usr/bin/systemctl start rh-haproxy18-haproxy, /usr/bin/systemctl reload rh-haproxy18-haproxy, /usr/bin/systemctl disable rh-haproxy18-haproxy, /usr/bin/systemctl stop rh-haproxy18-haproxy' >> /etc/sudoers"
 
   sudo bash -c "echo 'dist_zero ALL=(root) NOPASSWD: DIST_ZERO_SERVICE' >> /etc/sudoers"
   sudo bash -c "echo 'dist_zero ALL=(root) NOPASSWD: /sbin/sysctl -w net.ipv4.tcp_tw_recycle=*' >> /etc/sudoers"
@@ -64,6 +65,7 @@ EOF
 ssh -i .keys/dist_zero.pem dist_zero@$MYSERVER <<EOF
   sudo yum -y install centos-release-scl
   sudo yum -y install rh-haproxy18-haproxy rh-haproxy18-haproxy-syspaths socat
+  sudo chown dist_zero:dist_zero /etc/haproxy/haproxy.cfg
   sudo systemctl enable rh-haproxy18-haproxy
   sudo systemctl start rh-haproxy18-haproxy
 EOF
