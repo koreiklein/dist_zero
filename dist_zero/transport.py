@@ -46,8 +46,7 @@ def send_tcp(message, dst):
     response = sock.recv(settings.MSG_BUFSIZE)
     logger.debug("received MachineController API response message from {dst_host}", extra={'dst_host': dst[0]})
     msg = json.loads(response.decode(messages.ENCODING))
-    if msg['status'] == 'ok':
-      return msg['data']
-    else:
+    if msg['status'] != 'ok':
       raise errors.InternalError("Failed to communicate over TCP api to MachineController. reason: {}".format(
           msg.get('reason', '')))
+    return msg['data']

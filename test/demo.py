@@ -156,7 +156,9 @@ class Demo(object):
 
       configs.append(messages.machine.machine_config(**machine_config))
 
-    return self.system.create_machines(configs)
+    result = self.system.create_machines(configs)
+    self.run_for(ms=2000)
+    return result
 
   def new_machine_controller(self):
     '''Like `Demo.new_machine_controllers` but only creates and returns one.'''

@@ -67,7 +67,6 @@ class TestSpawnComputationNetwork(object):
 
     self.demo.run_for(ms=200)
     self.spawn_users(root_output, n_users=n_output_leaves)
-    self.demo.run_for(ms=6000)
     self.spawn_users(
         root_input,
         n_users=n_input_leaves,
@@ -75,6 +74,8 @@ class TestSpawnComputationNetwork(object):
         send_after=9000,
         ave_inter_message_time_ms=500,
         send_messages_for_ms=3000)
+
+    # Need to wait for the new users to be fully connected.
     self.demo.run_for(ms=6000)
 
     self.root_computation = self.demo.connect_trees_with_sum_network(
@@ -105,7 +106,7 @@ class TestSpawnComputationNetwork(object):
   def test_spawn_small_large(self, demo):
     self.demo = demo
     self.machine_ids = demo.new_machine_controllers(
-        1, base_config=self.base_config(), random_seed='test_spawn_small_large')
+        4, base_config=self.base_config(), random_seed='test_spawn_small_large')
 
     self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=10)
 

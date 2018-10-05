@@ -39,6 +39,12 @@ ssh -i .keys/dist_zero.pem centos@$MYSERVER <<EOF
   sudo mv dist-zero.service /lib/systemd/system/dist-zero.service
   sudo systemctl daemon-reload
   # Do not enable or actually run the dist-zero daemon until the specific instance is spawned.
+
+
+  sudo bash -c "echo 'Cmnd_Alias DIST_ZERO_SERVICE = /usr/bin/systemctl start dist-zero, /usr/bin/systemctl stop dist-zero, /usr/bin/systemctl reload dist-zero, /usr/bin/systemctl restart dist-zero, /usr/bin/systemctl status dist-zero, /usr/bin/systemctl enable dist-zero, /usr/bin/systemctl disable dist-zero' >> /etc/sudoers"
+
+  sudo bash -c "echo 'dist_zero ALL=(root) NOPASSWD: DIST_ZERO_SERVICE' >> /etc/sudoers"
+  sudo bash -c "echo 'dist_zero ALL=(root) NOPASSWD: /sbin/sysctl -w net.ipv4.tcp_tw_recycle=*' >> /etc/sudoers"
 EOF
 
 # Rsync some files over.  When a specific instance is spawned, these should be rsynced again to send

@@ -332,7 +332,7 @@ class NodeManager(MachineController):
   def _receive_without_error_simulation(self, node_id, message, sender_id):
     '''receive a message to the proper node without any network error simulations'''
     node = self._node_by_id[node_id]
-    logger.info(
+    logger.debug(
         "Node is receiving message of type {message_type} from {sender_id}",
         extra={
             'message_type': message['type'],

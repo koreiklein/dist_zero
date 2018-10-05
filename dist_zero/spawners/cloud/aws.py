@@ -44,6 +44,8 @@ class Ec2Spawner(spawner.Spawner):
     self._security_group = security_group
     self._instance_type = instance_type
 
+    self._owned_instances = []
+
     if not aws_region:
       raise RuntimeError("Missing aws region parameter")
     if not base_ami:
@@ -89,8 +91,10 @@ class Ec2Spawner(spawner.Spawner):
     return spawners.MODE_CLOUD
 
   def clean_all(self):
-    if self.aws_instance_by_id:
-      self._ec2.terminate_instances(InstanceIds=[instance.id for instance in self.aws_instance_by_id.values()], )
+    if self._owned_instances:
+      instance_ids = [instance.id for instance in self._owned_instances]
+      self._ec2.create_tags(Resources=instance_ids, Tags=[{'Key': 'DistZeroFree', 'Value': 'True'}])
+      #self._ec2.terminate_instances(InstanceIds=instance_ids, )
 
   def create_machine(self, machine_config):
     return self.create_machines([machine_config])[0]
@@ -122,40 +126,79 @@ class Ec2Spawner(spawner.Spawner):
         },
     ]
 
+  def _instance_tags(self):
+    return [{
+        'Key': 'Application',
+        'Value': 'dist_zero'
+    }, {
+        'Key': 'dist_zero_type',
+        'Value': 'std_instance'
+    }, {
+        'Key': 'DistZeroFree',
+        'Value': 'False'
+    }, {
+        'Key': 'System ID',
+        'Value': self._system_id,
+    }]
+
   def _instance_tag_specifications(self):
     return [{
-        'ResourceType':
-        'instance',
-        'Tags': [{
-            'Key': 'Application',
-            'Value': 'dist_zero'
-        }, {
-            'Key': 'dist_zero_type',
-            'Value': 'std_instance'
-        }, {
-            'Key': 'System ID',
-            'Value': self._system_id,
-        }],
+        'ResourceType': 'instance',
+        'Tags': self._instance_tags(),
     }]
+
+  def _free_instance_ids(self):
+    '''
+    Search AWS for instances that are for dist_zero but are not part of any system
+    and return their ids.
+    '''
+    return [
+        instance['InstanceId'] for reservation in self._ec2.describe_instances(Filters=[
+            {
+                'Name': 'instance-state-name',
+                'Values': ['running']
+            },
+            {
+                'Name': 'tag:Application',
+                'Values': ['dist_zero']
+            },
+            {
+                'Name': 'tag:DistZeroFree',
+                'Values': ['True']
+            },
+        ])['Reservations'] for instance in reservation['Instances']
+    ]
 
   def create_machines(self, machine_configs):
     # see http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.ServiceResource.create_instances
     # For available parameters.
     n_new_machines = len(machine_configs)
+
+    free_instance_ids = self._free_instance_ids()
+    if free_instance_ids:
+      instances = list(self._ec2_resource.instances.filter(InstanceIds=free_instance_ids))[:n_new_machines]
+      self._ec2.create_tags(Resources=free_instance_ids, Tags=self._instance_tags())
+    else:
+      instances = []
+    n_reused_machines = len(instances)
+
+    n_missing_machines = n_new_machines - n_reused_machines
     logger.info("Creating new instance(s) on on aws ec2. n={n_instances}", extra={'n_instances': n_new_machines})
-    instances = self._ec2_resource.create_instances(
-        #BlockDeviceMappings=self._instance_block_device_mappings(),
-        #Placement=self._instance_placement(),
-        ImageId=self._base_ami,
-        KeyName='dist_zero',
-        MaxCount=n_new_machines,
-        MinCount=n_new_machines,
-        InstanceType=self._instance_type,
-        Monitoring={'Enabled': False},
-        SecurityGroupIds=[self._security_group],
-        InstanceInitiatedShutdownBehavior='stop',
-        TagSpecifications=self._instance_tag_specifications(),
-    )
+    if n_missing_machines > 0:
+      instances += self._ec2_resource.create_instances(
+          #BlockDeviceMappings=self._instance_block_device_mappings(),
+          #Placement=self._instance_placement(),
+          ImageId=self._base_ami,
+          KeyName='dist_zero',
+          MaxCount=n_missing_machines,
+          MinCount=n_missing_machines,
+          InstanceType=self._instance_type,
+          Monitoring={'Enabled': False},
+          SecurityGroupIds=[self._security_group],
+          InstanceInitiatedShutdownBehavior='stop',
+          TagSpecifications=self._instance_tag_specifications(),
+      )
+    self._owned_instances = instances
     self._wait_for_running_instances(instances)
     # NOTE(KK): reachability can take longer than it takes before ssh works.  We should skip this check to run faster.
     #self._wait_for_reachable_instances(instances)
@@ -277,12 +320,14 @@ class _AwsInstanceProvisioner(object):
         'provisioning_aws_instance': True,
     }
 
-  def _exec_command(self, ssh, command):
+  def _exec_commands(self, ssh, commands):
+    command = " && ".join(commands)
     stdin, stdout, stderr = ssh.exec_command(command)
     # Wait for the command to finish
     status = stdout.channel.recv_exit_status()
     if 0 != status:
-      raise RuntimeError("Command did not execute with 0 exit status. Got {} for {}".format(status, command))
+      raise RuntimeError("Command did not execute with 0 exit status."
+                         " Got {}: {} for {}.".format(status, ''.join(stderr.readlines()), command))
 
   def _connect_as(self, key_filename, username):
     ssh = paramiko.SSHClient()
@@ -309,10 +354,11 @@ class _AwsInstanceProvisioner(object):
     machine_config_with_spawner = {'spawner': {'type': 'aws', 'value': self._ec2_spawner.remote_spawner_json()}}
     machine_config_with_spawner.update(self._machine_config)
     # Create local machine config file
-    local_config_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
-    json.dump(machine_config_with_spawner, local_config_file)
-    local_config_file.close()
-    return local_config_file.name
+    tempdir = tempfile.mkdtemp()
+    filename = os.path.join(tempdir, 'machine_config.json')
+    with open(filename, 'w') as f:
+      json.dump(machine_config_with_spawner, f)
+    return filename
 
   def _rsync(self, source, target):
     '''Rsync as the dist_zero user on the remote instance.'''
@@ -356,24 +402,34 @@ class _AwsInstanceProvisioner(object):
     # Wait for ssh to be up and running *before* running any rsync.
     ssh = self._connect_as(key_filename='.keys/dist_zero.pem', username='dist_zero')
 
+    recycle_in_secs = 3
+    self._exec_commands(
+        ssh,
+        [
+            # Allow faster recycling of tcp connections
+            "sudo /sbin/sysctl -w net.ipv4.tcp_tw_recycle={}".format(recycle_in_secs),
+            # In case it's already running, stop the dist-zero process
+            "sudo /usr/bin/systemctl stop dist-zero",
+        ])
+
     # Do the rsync
-    self._rsync('dist_zero', '/dist_zero/')
-    self._rsync('Pipfile', '/dist_zero/Pipfile')
-    self._rsync('Pipfile.lock', '/dist_zero/Pipfile.lock')
     local_config_filename = self._write_machine_config_locally()
-    self._rsync(local_config_filename, '/dist_zero/machine_config.json')
+    self._rsync('dist_zero Pipfile Pipfile.lock {}'.format(local_config_filename), '/dist_zero/')
 
     logger.debug("Copying relevant environment variables", extra=self._extra)
-    self._exec_command(ssh, '''cat << EOF > /dist_zero/.env\n\n{}\nEOF\n'''.format('\n'.join(
-        "{}='{}'".format(variable, getattr(settings, variable)) for variable in settings.CLOUD_ENV_VARS)))
 
-    logger.debug("Running pip install", extra=self._extra)
-    self._exec_command(ssh, "cd /dist_zero && pipenv sync")
+    copy_environment_command = '''cat << EOF > /dist_zero/.env\n\n{}\nEOF'''.format('\n'.join(
+        "{}='{}'".format(variable, getattr(settings, variable)) for variable in settings.CLOUD_ENV_VARS))
 
-    logger.info("Configuring systemd on an AWS centos instance to run the DistZero daemon", extra=self._extra)
-    ssh = self._connect_as(
-        key_filename='.keys/dist_zero.pem', username='centos') # Reconnect as 'centos' to get sudo permissions.
-    self._exec_command(ssh, "sudo systemctl enable dist-zero")
-    self._exec_command(ssh, "sudo systemctl start dist-zero")
+    self._exec_commands(ssh, [copy_environment_command])
+    self._exec_commands(
+        ssh,
+        [
+            # FIXME(KK): It would be better to always do a pipenv install, but it's just so darn slow!
+            #   See https://github.com/pypa/pipenv/issues/2207
+            #"cd /dist_zero && pipenv install",
+            "sudo /usr/bin/systemctl enable dist-zero",
+            "sudo /usr/bin/systemctl start dist-zero",
+        ])
 
     return self._machine_controller_id
