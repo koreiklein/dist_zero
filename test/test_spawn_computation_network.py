@@ -103,12 +103,8 @@ class TestSpawnComputationNetwork(object):
 
     root_input = self.root_io_tree(machine=self.machine_ids[0], variant='input')
     self.demo.run_for(ms=6000)
-    import ipdb
-    ipdb.set_trace()
-    self.spawn_users(root_input, n_users=6)
+    self.spawn_users(root_input, n_users=2)
     domain_name = 'www.distzerotesting.com'
-    import ipdb
-    ipdb.set_trace()
     self.demo.system.route_dns(root_input, domain_name)
 
     for i in range(10):

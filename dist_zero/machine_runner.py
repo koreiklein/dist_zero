@@ -48,7 +48,10 @@ class MachineRunner(object):
     self._udp_socket = None
     self._tcp_socket = None
 
-    self._ip_host = socket.gethostname()
+    self._ip_host = machine_config['ip_address']
+    if self._ip_host is None:
+      logger.warning("An ip_address was no provided in the machine config.")
+      self._ip_host = socket.gethostbyname(socket.gethostname())
 
     self._load_balancer = None
 
@@ -82,14 +85,15 @@ class MachineRunner(object):
     logger.info('MachineRunner creating a new server.')
     server_address = self._new_address(domain)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(server_address['ip'])
+    dst = ('', server_address['port'])
+    sock.bind(dst)
     sock.listen()
     return server_address, sock
 
   def new_http_server(self, domain, f):
-    address, sock = self._new_socket(domain)
-    server = web_servers.HttpServer(address=address, socket=sock, on_request=f)
-    self._server_by_socket[sock] = server
+    address = self._new_address(domain)
+    server = web_servers.HttpServer(address=address, on_request=f)
+    self._server_by_socket[server.socket()] = server
     return server
 
   def new_socket_server(self, f):

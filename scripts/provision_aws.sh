@@ -68,6 +68,9 @@ ssh -i .keys/dist_zero.pem dist_zero@$MYSERVER <<EOF
   sudo chown dist_zero:dist_zero /etc/haproxy/haproxy.cfg
   sudo systemctl enable rh-haproxy18-haproxy
   sudo systemctl start rh-haproxy18-haproxy
+
+  # Necessary for haproxy to be able to proxy http to servers on nonstandard http ports
+  sudo semanage port --add --type http_port_t --proto tcp 10000-20000
 EOF
 
 # Remaining steps before we can actually run the dist-zero daemon:

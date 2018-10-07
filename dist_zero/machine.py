@@ -308,6 +308,11 @@ class NodeManager(MachineController):
     '''
     logger.info("API Message of type {message_type}", extra={'message_type': message['type']})
     if message['type'] == 'api_node_message':
+      if message['node_id'] not in self._node_by_id:
+        raise errors.NoNodeForId("Can't find {} for api message of type {}".format(
+            message['node_id'],
+            message['message']['type'],
+        ))
       node = self._node_by_id[message['node_id']]
       return {
           'status': 'ok',

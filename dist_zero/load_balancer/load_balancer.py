@@ -2,7 +2,7 @@ import os
 
 from collections import defaultdict
 
-from dist_zero import errors
+from dist_zero import errors, settings
 
 
 class LoadBalancer(object):
@@ -14,6 +14,9 @@ class LoadBalancer(object):
     self._frontend_by_port = {}
     self._started = False
     self._frontends_by_domain = defaultdict(list)
+    '''
+    Map each domain name to the list of frontends matching on that domain.
+    '''
 
   def _start(self):
     if self._started:
@@ -71,34 +74,61 @@ defaults
 
 {frontends}
 
-{default_frontends}
+{default_frontend}
 
+# Stats endpoint
+listen stats
+  bind *:5000
+  mode http
+  stats uri /stats
+  stats auth {haproxy_stats_username}:{haproxy_stats_password}
 '''
 
   def _haproxy_config_filename(self):
     return '/etc/haproxy/haproxy.cfg'
 
-  def _default_frontend_strings(self):
-    result = []
-    for frontends in self._frontends_by_domain.values():
+  def _domain_to_default_frontend(self):
+    '''
+    Return a dict ``result`` such that for each domain ``d`` that has a frontend installed,
+    ``result[d]`` is the frontend of greatest height installed on that domain.
+    '''
+    result = {}
+    for domain, frontends in self._frontends_by_domain.items():
       if frontends:
-        frontends.sort(key=lambda frontend: -frontend._height)
-        best = frontends[0]
-        result.append(best._default_frontend_string())
+        frontends.sort(key=lambda frontend: frontend._height)
+        result[domain] = frontends[-1]
     return result
 
+  def _default_frontend_string(self):
+    '''
+    haproxy string configuring the frontend for port 80
+    This frontend should map each domain to the servers of LoadBalancerFrontend with
+    greatest height for that domain.
+    '''
+
+    return '''
+frontend default
+  bind *:80
+
+  {acls}
+'''.format(acls='  \n'.join(
+        frontend._map_domain_default_string() for frontend in self._domain_to_default_frontend().values()))
+
   def _write_haproxy_config(self):
+    '''Write the current frontend configuration in self to the system haproxy.cfg file'''
     backend_strings = []
     frontend_strings = []
     for frontend in self._frontend_by_port.values():
-      frontend_string, backend_string = frontend._generate_haproxy_strings()
+      frontend_string, backend_string = (frontend._frontend_string(), frontend._backend_string())
       backend_strings.append(backend_string)
       frontend_strings.append(frontend_string)
 
     text = self._haproxy_template_string().format(
         backends='\n'.join(backend_strings),
         frontends='\n'.join(frontend_strings),
-        default_frontends='\n'.join(self._default_frontend_strings()),
+        default_frontend=self._default_frontend_string(),
+        haproxy_stats_username=settings.HAPROXY_STATS_USERNAME,
+        haproxy_stats_password=settings.HAPROXY_STATS_PASSWORD,
     )
     with open(self._haproxy_config_filename(), 'w') as f:
       f.write(text)
@@ -191,10 +221,12 @@ class LoadBalancerFrontend(object):
     '''Remove this entire frontend from the load balancer.'''
     self._load_balancer._remove_frontend(self)
 
-  def _server_strings(self):
+  def _backend_server_strings(self):
+    '''the haproxy 'server ...' lines that go in the backend configuration for this `LoadBalancerFrontend` insteance.'''
     result = []
-    for server_address, weight in self._backends_by_ip.values():
-      result.append('server {host}:{port} weight {weight}'.format(
+    for i, (server_address, weight) in enumerate(self._backends_by_ip.values()):
+      result.append('server {name} {host}:{port} weight {weight}'.format(
+          name='server_{}'.format(i),
           host=server_address['ip'],
           port=server_address['port'],
           weight=weight,
@@ -207,46 +239,33 @@ class LoadBalancerFrontend(object):
   def _frontend_name(self):
     return '{}_frontend'.format(self._port)
 
+  def _map_domain_default_string(self):
+    '''
+    return the line(s) in the haproxy config to put in the default frontend
+    to map this frontend's domain to its backends
+    '''
+    return 'acl {acl_name} hdr_dom(host) -i {domain}\n  use_backend {backend_name} if {acl_name}'.format(
+        acl_name='for_{}'.format(self._port), domain=self._domain, backend_name=self._backend_name())
+
   def _backend_string(self):
+    '''haproxy backend configuration for the `LoadBalancerFrontend` instance.'''
     return '''
 backend {backend_name}
   balance roundrobin
   {servers}
 '''.format(
         backend_name=self._backend_name(),
-        servers='\n  '.join(self._server_strings()),
+        servers='\n  '.join(self._backend_server_strings()),
     )
 
   def _frontend_string(self):
+    '''haproxy frontend configuration for the `LoadBalancerFrontend` instance.'''
     return '''
 frontend {frontend_name}
-  bind {domain_name}:{port}
+  bind *:{port}
   default_backend {backend_name}
 '''.format(
         frontend_name=self._frontend_name(),
-        domain_name=self._domain,
         port=self._port,
         backend_name=self._backend_name(),
     )
-
-  def _default_frontend_string(self):
-    return '''
-frontend {frontend_name}
-  bind {domain_name}:80
-  default_backend {backend_name}
-'''.format(
-        frontend_name='{}_default_frontend'.format(self._port),
-        domain_name=self._domain,
-        backend_name=self._backend_name())
-
-  def _generate_haproxy_strings(self):
-    '''
-    Generate parts of the haproxy config for this `LoadBalancerFrontend` instance.
-
-    :return: A pair of strings (haproxy_frontend, haproxy_backend) that configure an haproxy frontend and 
-      backend respectively for this `LoadBalancerFrontend` instance.
-
-    :rtype: tuple[string]
-    '''
-
-    return (self._frontend_string(), self._backend_string())

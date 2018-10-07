@@ -309,13 +309,13 @@ class Ec2Spawner(spawner.Spawner):
 
   def _get_zone_for_domain_name(self, canonical_domain_name):
     parts = canonical_domain_name.split('.')
-    hosted_zones = self._route53.list_hosted_zones()
+    hosted_zones = self._route53.list_hosted_zones()['HostedZones']
     zone_by_name = {zone['Name']: zone for zone in hosted_zones}
 
     for i in range(len(parts)):
       suffix = '.'.join(parts[i:])
       if suffix in zone_by_name:
-        return zone_by_name
+        return zone_by_name[suffix]
     return None
 
   def _split_by_desired_zone_name(self, canonical_domain_name):
@@ -386,13 +386,16 @@ class _AwsInstanceProvisioner(object):
     }
 
   def _exec_commands(self, ssh, commands):
+    # NOTE(KK): ``commands`` may contain sensitive data like cloud access credentials.
+    #  They need to be send SAFELY to the remote host via ssh.
+    #  Please be a mensch and do not let them get into the logs, or anywhere else they shouldn't be.
     command = " && ".join(commands)
     stdin, stdout, stderr = ssh.exec_command(command)
     # Wait for the command to finish
     status = stdout.channel.recv_exit_status()
     if 0 != status:
       raise RuntimeError("Command did not execute with 0 exit status."
-                         " Got {}: {} for {}.".format(status, ''.join(stderr.readlines()), command))
+                         " Got {}: {}.".format(status, ''.join(stderr.readlines())))
 
   def _connect_as(self, key_filename, username):
     ssh = paramiko.SSHClient()
@@ -416,13 +419,19 @@ class _AwsInstanceProvisioner(object):
 
   def _write_machine_config_locally(self):
     '''Write a local file for this instance's machine_config.json and return the filename'''
-    machine_config_with_spawner = {'spawner': {'type': 'aws', 'value': self._ec2_spawner.remote_spawner_json()}}
-    machine_config_with_spawner.update(self._machine_config)
+    machine_config_with_extras = dict(self._machine_config)
+    machine_config_with_extras.update({
+        'spawner': {
+            'type': 'aws',
+            'value': self._ec2_spawner.remote_spawner_json()
+        },
+        'ip_address': self._instance.public_ip_address,
+    })
     # Create local machine config file
     tempdir = tempfile.mkdtemp()
     filename = os.path.join(tempdir, 'machine_config.json')
     with open(filename, 'w') as f:
-      json.dump(machine_config_with_spawner, f)
+      json.dump(machine_config_with_extras, f)
     return filename
 
   def _rsync(self, source, target):

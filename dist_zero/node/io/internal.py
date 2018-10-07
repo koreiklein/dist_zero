@@ -561,7 +561,14 @@ class InternalNode(Node):
 
   def _add_leaf_from_http_get(self, request):
     # FIXME(KK): Implement this
-    raise RuntimeError("Not Yet Implemented")
+    return '''<html>
+  <head>
+    <title>Dist Zero</title>
+  </head>
+  <body>
+    <p> Hello world </p>
+  </body>
+</html>'''
 
   def _on_routing_start(self, message, sender_id):
     self._domain_name = message['domain_name']
