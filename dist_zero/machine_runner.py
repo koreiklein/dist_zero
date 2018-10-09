@@ -1,4 +1,4 @@
-import itertools
+import asyncio
 import json
 import logging
 import os
@@ -30,15 +30,17 @@ class MachineRunner(object):
 
   STEP_LENGTH_MS = 5 # Target number of milliseconds per iteration of the run loop.
 
-  def __init__(self, machine_config):
+  def __init__(self, machine_config, event_loop):
 
     self._udp_port = settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT
-    self._udp_dst = ('', self._udp_port)
+    self._udp_dst = ('0.0.0.0', self._udp_port)
 
     self._tcp_port = settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT
     self._tcp_dst = ('', self._tcp_port)
 
     start, stop = self._parse_port_range()
+
+    self._event_loop = event_loop
 
     self._available_server_ports = set(range(start, stop))
     # When we create and listen on new sockets, this dict will always map the socket
@@ -81,15 +83,6 @@ class MachineRunner(object):
     port = self._new_server_port()
     return messages.machine.server_address(domain=domain, ip=self._ip_host, port=port)
 
-  def _new_socket(self, domain):
-    logger.info('MachineRunner creating a new server.')
-    server_address = self._new_address(domain)
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    dst = ('', server_address['port'])
-    sock.bind(dst)
-    sock.listen()
-    return server_address, sock
-
   def new_http_server(self, domain, f):
     address = self._new_address(domain)
     server = web_servers.HttpServer(address=address, on_request=f)
@@ -119,26 +112,62 @@ class MachineRunner(object):
     dst = (transport['host'], settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
     dist_zero.transport.send_udp(message, dst)
 
-  def _bind_udp(self):
+  async def _bind_udp(self):
     logger.info("MachineRunner binding UDP port {}".format(self._udp_port), extra={'port': self._udp_port})
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(self._udp_dst)
-    self._udp_socket = sock
 
-  def _bind_and_listen_tcp(self):
+    runner = self
+
+    class handler(asyncio.DatagramProtocol):
+      def datagram_received(self, data, addr):
+        message = json.loads(data.decode(messages.ENCODING))
+        runner.node_manager.handle_message(message)
+
+      def error_received(self, exc):
+        logger.error(f"UDP error: {exc}")
+
+    result = await self._event_loop.create_datagram_endpoint(
+        handler,
+        local_addr=self._udp_dst,
+        # Deal with TIME_WAIT issues by reusing the address.
+        # WARNING(KK): This risks that if a machine_runner is run twice, datagrams destined for the first
+        #   instance could be accidentally received by the second instance.
+        #   It is possible that appropriate cryptography could protect against that problem.
+        reuse_address=True,
+    )
+
+    logger.info("MachineRunner listening on UDP port {port}", extra={'port': self._udp_port})
+
+    return result
+
+  async def _bind_and_listen_tcp(self):
     logger.info("MachineRunner binding TCP port {}".format(self._tcp_port), extra={'port': self._tcp_port})
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(self._tcp_dst)
-    sock.listen()
-    logger.info("MachineRunner listening on TCP port {}".format(self._tcp_port), extra={'port': self._tcp_port})
-    self._tcp_socket = sock
+
+    async def handler(reader, writer):
+      buf = await reader.read(settings.MSG_BUFSIZE)
+      message = json.loads(buf.decode(messages.ENCODING))
+      response = self.node_manager.handle_api_message(message)
+      binary = bytes(json.dumps(response), messages.ENCODING)
+      writer.write(binary)
+      await writer.drain()
+      writer.close()
+
+    result = await asyncio.start_server(
+        handler,
+        host='',
+        port=self._tcp_port,
+        loop=self._event_loop,
+        # Deal with TIME_WAIT issues by reusing the address.
+        # WARNING(KK): This risks that if a machine_runner is run twice, datagrams destined for the first
+        #   instance could be accidentally received by the second instance.
+        #   It is possible that appropriate cryptography could protect against that problem.
+        reuse_address=True,
+    )
+    logger.info("MachineRunner listening on TCP port {port}", extra={'port': self._tcp_port})
+    return result
 
   def runloop(self):
     '''
-    Enter a runloop for the contained `NodeManager`.
-
-    In each iteration of the loop, pass the real elapsed time to `NodeManager.elapse_nodes` on the `NodeManager` and
-    pass messages from sockets to `NodeManager.handle_message` and `NodeManager.handle_api_message`.
+    Enter an asyncio runloop for the contained `NodeManager`.
     '''
     logger.info(
         "Starting run loop for machine {machine_name}: {machine_id}",
@@ -147,89 +176,10 @@ class MachineRunner(object):
             'machine_name': self.node_manager.name,
         })
 
-    self._bind_udp()
-    self._bind_and_listen_tcp()
+    self._event_loop.create_task(self._bind_udp())
+    self._event_loop.create_task(self._bind_and_listen_tcp())
 
-    while True:
-      try:
-        self._loop_iteration()
-      except Exception as exn:
-        e_type, e_value, e_tb = sys.exc_info()
-        #tb_lines = traceback.format_tb(e_tb)
-        exn_lines = traceback.format_exception(e_type, e_value, e_tb)
-        logger.error("Exception in run loop: {e_lines}", extra={'e_type': str(e_type), 'e_lines': ''.join(exn_lines)})
-        # log the exception and go on.  These exceptions should not stop the run loop.
-        continue
-
-    for sock in [self._udp_socket, self._tcp_socket]:
-      sock.close()
-
-  def _loop_iteration(self):
-    '''Run a single iterator of the run loop, raising any errors that come up.'''
-
-    current_time_s = time.time()
-    remaining_ms = MachineRunner.STEP_LENGTH_MS
-
-    # First, elapse the whole time interval on all the nodes.
-    self.node_manager.elapse_nodes(remaining_ms)
-    after_elapse_s = time.time()
-    time_running_nodes_ms = (after_elapse_s - current_time_s) * 1000
-
-    # Then, spend the remaining time waiting on messages from the network
-    network_ms = remaining_ms - time_running_nodes_ms
-    self._elapse_network(network_ms)
-
-  def _elapse_zero_or_one_network_messages(self, max_s):
-    '''
-    Wait on the network for not more than max_ms milleseconds, and process 0 or 1 messages.
-
-    :param number max_s: The maximum number of seconds to wait for.
-    '''
-    sockets = list(itertools.chain([self._udp_socket, self._tcp_socket], self._server_by_socket.keys()))
-    readers, writers, errs = select.select(
-        sockets,
-        [],
-        [],
-        max_s,
-    )
-    for sock in readers:
-      if sock == self._udp_socket:
-        self._read_udp()
-      elif sock == self._tcp_socket:
-        self._accept_tcp()
-      elif sock in self._server_by_socket:
-        self._server_by_socket[sock].receive()
-      else:
-        logger.error(
-            "Impossible! Unrecognized socket returned by select() {bad_socket}", extra={'bad_socket': str(sock)})
-
-  def _elapse_network(self, remaining_ms):
-    '''read and process network messages for remaining_ms milliseconds of real time'''
-    while remaining_ms > 0:
-      before_network_s = time.time()
-      self._elapse_zero_or_one_network_messages(remaining_ms / 1000)
-      after_network_s = time.time()
-      remaining_ms -= (after_network_s - before_network_s) * 1000
-
-  def _accept_tcp(self):
-    '''
-    Process to completion a new tcp conection now available on the self._tcp_socket server socket.
-    '''
-    logger.debug("Accepting new TCP connection")
-    client_sock, client_addr = self._tcp_socket.accept()
-    buf = client_sock.recv(settings.MSG_BUFSIZE)
-    logger.debug("Received {} bytes from TCP socket".format(len(buf)), extra={'bufsize': len(buf)})
-    message = json.loads(buf.decode(messages.ENCODING))
-    response = self.node_manager.handle_api_message(message)
-    binary = bytes(json.dumps(response), messages.ENCODING)
-    client_sock.send(binary)
-    client_sock.close()
-
-  def _read_udp(self):
-    '''Call this method whenever there is a datagram ready to read on the UDP socket'''
-    buf, sender_address = self._udp_socket.recvfrom(settings.MSG_BUFSIZE)
-    message = json.loads(buf.decode(messages.ENCODING))
-    self.node_manager.handle_message(message)
+    self._event_loop.run_forever()
 
   def configure_logging(self):
     '''

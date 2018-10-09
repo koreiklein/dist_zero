@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import sys
@@ -14,7 +15,7 @@ def run_new_machine_runner_from_args():
   '''
   config_filename = sys.argv[1]
   with open(config_filename, 'r') as f:
-    machine_runner = MachineRunner(machine_config=json.load(f))
+    machine_runner = MachineRunner(machine_config=json.load(f), event_loop=asyncio.get_event_loop())
   machine_runner.configure_logging()
   machine_runner.runloop()
 
