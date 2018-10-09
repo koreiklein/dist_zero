@@ -31,13 +31,16 @@ class SimulatedSpawner(spawner.Spawner):
   AVERAGE_SEND_TIME_MS = 10
   SEND_TIME_STDDEV_MS = 3
 
-  def __init__(self, system_id, random_seed='random_seed'):
+  def __init__(self, system_id, event_loop, random_seed='random_seed'):
     '''
     :param str system_id: The id of the overall simulated distributed system.
+    :param event_loop: The asyncio event loop for this simulation.
+    :type event_loop: `asyncio.AbstractEventLoop`
     :param str random_seed: A random seed for all randomness employed by this class.
     '''
 
     self._system_id = system_id
+    self._event_loop = event_loop
     self._start_datetime = datetime.datetime.now()
     self._controller_by_id = {}
     self._elapsed_time_ms = None # None if unstarted, otherwise the number of ms simulated so far
@@ -95,23 +98,19 @@ class SimulatedSpawner(spawner.Spawner):
     else:
       return "Control Message: {}".format(message['type'])
 
+  def _process_current_events_in_loop(self):
+    # TODO(KK): Does it actually matter how many times we call stop() ? Or will one call be enough.
+    #   The concern is that some callback may be ready, and will run on a call to stop(), but will register
+    #   another callback to be called in the next loop, and that we'll have to call stop() a second time
+    #   to run that callback.
+    for i in range(30):
+      # Checks for and processes any callbacks that are currently ready to run.
+      self._event_loop.stop()
+
   def run_for(self, ms):
     '''
     Run the simulation for a number of milliseconds.
     Wrap exceptions thrown by the underlying nodes in a `SimulationError`.
-
-    :param int ms: The number of milliseconds to run for
-    '''
-    try:
-      self._run_for_throwing_inner_exns(ms)
-    except RuntimeError:
-      exc_info = sys.exc_info()
-      raise errors.SimulationError(log_lines=[self._format_log(x) for x in self._log], exc_info=exc_info)
-
-  def _run_for_throwing_inner_exns(self, ms):
-    '''
-    Run the simulation for a number of milliseconds.  Raise any
-    exception thrown by the underlying nodes directly.
 
     :param int ms: The number of milliseconds to run for
     '''
@@ -120,39 +119,16 @@ class SimulatedSpawner(spawner.Spawner):
 
     stop_time_ms = self._elapsed_time_ms + ms
 
-    while stop_time_ms > self._elapsed_time_ms:
-      # The amount of time to simulate in this iteration of the loop
-      step_time_ms = min(stop_time_ms - self._elapsed_time_ms, SimulatedSpawner.MAX_STEP_TIME_MS)
-      # The value of self._elapsed_time at the end of this iteration of the loop
-      new_elapsed_time_ms = step_time_ms + self._elapsed_time_ms
+    self._process_current_events_in_loop()
+    while self._pending_receives and self._pending_receives[0].t <= stop_time_ms:
+      received_at, to_receive = heapq.heappop(self._pending_receives).tuple()
 
-      # Even for debug logs, the below logging statement is overly verbose.
-      #logger.debug(
-      #    "Simulating from {start_time} ms to {end_time} ms",
-      #    extra={
-      #        'start_time': self._elapsed_time_ms,
-      #        'end_time': new_elapsed_time_ms,
-      #    })
+      # Simulate the event
+      receiving_controller = self._controller_by_id[to_receive['machine_id']]
+      receiving_controller.handle_message(message=to_receive['message'])
 
-      # Simulate every event in the queue
-      while self._pending_receives and self._pending_receives[0].t <= new_elapsed_time_ms:
-        received_at, to_receive = heapq.heappop(self._pending_receives).tuple()
-        # Simulate the time before this event
-        for controller in self._controller_by_id.values():
-          controller.elapse_nodes(received_at - self._elapsed_time_ms)
-
-        # Simulate the event
-        receiving_controller = self._controller_by_id[to_receive['machine_id']]
-        receiving_controller.handle_message(message=to_receive['message'])
-
-        self._elapsed_time_ms = received_at
-
-      # Simulate the rest of step_time_ms not simulated in the above loop over events
-      if self._elapsed_time_ms < new_elapsed_time_ms:
-        for controller in self._controller_by_id.values():
-          controller.elapse_nodes(new_elapsed_time_ms - self._elapsed_time_ms)
-
-      self._elapsed_time_ms = new_elapsed_time_ms
+      self._elapsed_time_ms = received_at
+      self._process_current_events_in_loop()
 
   def get_machine_by_id(self, machine_id):
     '''

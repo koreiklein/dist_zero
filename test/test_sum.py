@@ -58,6 +58,8 @@ def test_add_one_leaf_to_empty_input_tree(demo):
   demo.run_for(ms=1000)
 
   leaves = demo.all_io_kids(root_input_node_id)
+  import ipdb
+  ipdb.set_trace()
   assert 1 == len(leaves)
 
 

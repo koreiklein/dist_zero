@@ -1,3 +1,4 @@
+import asyncio
 import json
 import random
 import pytest
@@ -114,7 +115,8 @@ class Demo(object):
     # Use the
     self.system_id = self._new_unique_system_id()
     if self.mode == spawners.MODE_SIMULATED:
-      self.spawner = self.simulated_spawner = SimulatedSpawner(system_id=self.system_id, random_seed=self.random_seed)
+      self.spawner = self.simulated_spawner = SimulatedSpawner(
+          system_id=self.system_id, random_seed=self.random_seed, event_loop=asyncio.get_event_loop())
     elif self.mode == spawners.MODE_VIRTUAL:
       self.spawner = self.virtual_spawner = DockerSpawner(system_id=self.system_id, inside_container=False)
     elif self.mode == spawners.MODE_CLOUD:
