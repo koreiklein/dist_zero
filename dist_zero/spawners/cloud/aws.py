@@ -1,8 +1,9 @@
-import logging
 import json
-import tempfile
+import logging
 import os
+import tempfile
 import time
+import uuid
 
 from collections import defaultdict
 
@@ -14,6 +15,8 @@ from dist_zero import settings, messages, spawners, transport
 from .. import spawner
 
 logger = logging.getLogger(__name__)
+
+DNS_TTL = 1500
 
 
 class Ec2Spawner(spawner.Spawner):
@@ -55,13 +58,17 @@ class Ec2Spawner(spawner.Spawner):
     if not instance_type:
       raise RuntimeError("Missing instance_type parameter")
 
-    self._ec2 = boto3.client(
+    self._route53 = self._create_client_by_name('route53')
+    self._ec2 = self._create_client_by_name('ec2')
+    self._ec2_resource = boto3.resource(
         'ec2',
         region_name=self._aws_region,
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
-    self._ec2_resource = boto3.resource(
-        'ec2',
+
+  def _create_client_by_name(self, aws_service_name):
+    return boto3.client(
+        aws_service_name,
         region_name=self._aws_region,
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
@@ -294,6 +301,64 @@ class Ec2Spawner(spawner.Spawner):
       else:
         return False
 
+  def _canonicalize_domain_name(self, domain_name):
+    if domain_name[-1] != '.':
+      return domain_name + '.'
+    else:
+      return domain_name
+
+  def _get_zone_for_domain_name(self, canonical_domain_name):
+    parts = canonical_domain_name.split('.')
+    hosted_zones = self._route53.list_hosted_zones()['HostedZones']
+    zone_by_name = {zone['Name']: zone for zone in hosted_zones}
+
+    for i in range(len(parts)):
+      suffix = '.'.join(parts[i:])
+      if suffix in zone_by_name:
+        return zone_by_name[suffix]
+    return None
+
+  def _split_by_desired_zone_name(self, canonical_domain_name):
+    parts = canonical_domain_name.split('.')
+    return '.'.join(parts[:-3]), '.'.join(parts[-3:])
+
+  def _create_new_zone(self, canonical_domain_name):
+    before_zone_name, zone_name = self._split_by_desired_zone_name(canonical_domain_name)
+    response = self._route53.create_hosted_zone(
+        Name=zone_name,
+        CallerReference=uuid.uuid4(),
+        #VPC
+        #HostedZoneConfig
+        #DelegationSetId
+    )
+    return response['HostedZone']
+
+  def _make_domain_upsert_change(self, domain_name, ip_address):
+    return {
+        'Action': 'UPSERT',
+        'ResourceRecordSet': {
+            'Name': domain_name,
+            'Type': 'A',
+            'TTL': DNS_TTL,
+            'ResourceRecords': [{
+                'Value': ip_address
+            }],
+        },
+    }
+
+  def map_domain_to_ip(self, domain_name, ip_address):
+    canonical_domain_name = self._canonicalize_domain_name(domain_name)
+    zone = self._get_zone_for_domain_name(canonical_domain_name)
+    if zone is None:
+      zone = self._create_new_zone(canonical_domain_name)
+
+    self._route53.change_resource_record_sets(
+        HostedZoneId=zone['Id'],
+        ChangeBatch={
+            'Comment': 'Done as part of some scripted testing',
+            'Changes': [self._make_domain_upsert_change(domain_name=canonical_domain_name, ip_address=ip_address)],
+        })
+
 
 class _AwsInstanceProvisioner(object):
   RSYNC_SSH_PARAMS = 'ssh -oStrictHostKeyChecking=no -i {keyfile}'
@@ -321,13 +386,16 @@ class _AwsInstanceProvisioner(object):
     }
 
   def _exec_commands(self, ssh, commands):
+    # NOTE(KK): ``commands`` may contain sensitive data like cloud access credentials.
+    #  They need to be send SAFELY to the remote host via ssh.
+    #  Please be a mensch and do not let them get into the logs, or anywhere else they shouldn't be.
     command = " && ".join(commands)
     stdin, stdout, stderr = ssh.exec_command(command)
     # Wait for the command to finish
     status = stdout.channel.recv_exit_status()
     if 0 != status:
       raise RuntimeError("Command did not execute with 0 exit status."
-                         " Got {}: {} for {}.".format(status, ''.join(stderr.readlines()), command))
+                         " Got {}: {}.".format(status, ''.join(stderr.readlines())))
 
   def _connect_as(self, key_filename, username):
     ssh = paramiko.SSHClient()
@@ -351,13 +419,19 @@ class _AwsInstanceProvisioner(object):
 
   def _write_machine_config_locally(self):
     '''Write a local file for this instance's machine_config.json and return the filename'''
-    machine_config_with_spawner = {'spawner': {'type': 'aws', 'value': self._ec2_spawner.remote_spawner_json()}}
-    machine_config_with_spawner.update(self._machine_config)
+    machine_config_with_extras = dict(self._machine_config)
+    machine_config_with_extras.update({
+        'spawner': {
+            'type': 'aws',
+            'value': self._ec2_spawner.remote_spawner_json()
+        },
+        'ip_address': self._instance.public_ip_address,
+    })
     # Create local machine config file
     tempdir = tempfile.mkdtemp()
     filename = os.path.join(tempdir, 'machine_config.json')
     with open(filename, 'w') as f:
-      json.dump(machine_config_with_spawner, f)
+      json.dump(machine_config_with_extras, f)
     return filename
 
   def _rsync(self, source, target):

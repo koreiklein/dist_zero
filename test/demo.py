@@ -48,6 +48,16 @@ def simulated_demo(request):
   result.tear_down()
 
 
+@pytest.fixture(params=[
+    pytest.param(spawners.MODE_CLOUD, marks=pytest.mark.cloud),
+])
+def cloud_demo(request):
+  result = Demo(mode=request.param)
+  result.start()
+  request.addfinalizer(lambda: result.tear_down())
+  return result
+
+
 class Demo(object):
   '''
   For running Demos of a full distributed system.

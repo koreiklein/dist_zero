@@ -34,6 +34,11 @@ class SimulationError(DistZeroError):
     super(SimulationError, self).__init__(''.join(exn_lines))
 
 
+class NoNodeForId(DistZeroError):
+  '''For when we can't find a node on a machine for a given id.'''
+  pass
+
+
 class NoCapacityError(DistZeroError):
   '''
   Raised when attempting to add a data node to a tree that has no capacity for new nodes.

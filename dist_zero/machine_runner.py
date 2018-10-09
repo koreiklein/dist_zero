@@ -1,8 +1,9 @@
+import itertools
 import json
-import signal
 import logging
 import os
 import select
+import signal
 import socket
 import sys
 import time
@@ -14,7 +15,8 @@ import dist_zero.transport
 import dist_zero.logging
 
 import dist_zero.spawners.parse
-from dist_zero import settings, machine, messages
+import dist_zero.load_balancer
+from dist_zero import settings, machine, messages, web_servers, errors
 from dist_zero.spawners import docker
 
 logger = logging.getLogger(__name__)
@@ -36,15 +38,82 @@ class MachineRunner(object):
     self._tcp_port = settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT
     self._tcp_dst = ('', self._tcp_port)
 
+    start, stop = self._parse_port_range()
+
+    self._available_server_ports = set(range(start, stop))
+    # When we create and listen on new sockets, this dict will always map the socket
+    # object to the associated web server.
+    self._server_by_socket = {}
+
     self._udp_socket = None
     self._tcp_socket = None
+
+    self._ip_host = machine_config['ip_address']
+    if self._ip_host is None:
+      logger.warning("An ip_address was no provided in the machine config.")
+      self._ip_host = socket.gethostbyname(socket.gethostname())
+
+    self._load_balancer = None
 
     self.node_manager = machine.NodeManager(
         machine_config=machine_config,
         spawner=dist_zero.spawners.parse.from_config(machine_config['spawner']),
-        ip_host=socket.gethostname(),
-        send_to_machine=self._send_to_machine)
+        ip_host=self._ip_host,
+        send_to_machine=self._send_to_machine,
+        machine_runner=self)
     '''The `NodeManager` underlying this `MachineRunner`'''
+
+  def _parse_port_range(self):
+    port_range = settings.MACHINE_CONTROLLER_ROUTING_PORT_RANGE
+    if isinstance(port_range, str):
+      start_s, stop_s = port_range[1:-1].split(', ')
+      return int(start_s), int(stop_s)
+    else:
+      return port_range
+
+  def _new_server_port(self):
+    if self._available_server_ports:
+      return self._available_server_ports.pop()
+    else:
+      raise errors.InternalError("Ran out of available server ports.")
+
+  def _new_address(self, domain):
+    port = self._new_server_port()
+    return messages.machine.server_address(domain=domain, ip=self._ip_host, port=port)
+
+  def _new_socket(self, domain):
+    logger.info('MachineRunner creating a new server.')
+    server_address = self._new_address(domain)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    dst = ('', server_address['port'])
+    sock.bind(dst)
+    sock.listen()
+    return server_address, sock
+
+  def new_http_server(self, domain, f):
+    address = self._new_address(domain)
+    server = web_servers.HttpServer(address=address, on_request=f)
+    self._server_by_socket[server.socket()] = server
+    return server
+
+  def new_socket_server(self, f):
+    # FIXME(KK): Implement this!
+    raise RuntimeError("Not Yet Implemented")
+
+  def _create_load_balancer(self):
+    load_balancer = dist_zero.load_balancer.LoadBalancer()
+    return load_balancer
+
+  def _get_load_balancer(self):
+    if self._load_balancer is None:
+      self._load_balancer = self._create_load_balancer()
+
+    return self._load_balancer
+
+  def new_load_balancer_frontend(self, domain_name, height):
+    load_balancer = self._get_load_balancer()
+    server_address = self._new_address(domain_name)
+    return load_balancer.new_frontend(server_address=server_address, height=height)
 
   def _send_to_machine(self, message, transport):
     dst = (transport['host'], settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT)
@@ -116,8 +185,9 @@ class MachineRunner(object):
 
     :param number max_s: The maximum number of seconds to wait for.
     '''
+    sockets = list(itertools.chain([self._udp_socket, self._tcp_socket], self._server_by_socket.keys()))
     readers, writers, errs = select.select(
-        [self._udp_socket, self._tcp_socket],
+        sockets,
         [],
         [],
         max_s,
@@ -127,6 +197,8 @@ class MachineRunner(object):
         self._read_udp()
       elif sock == self._tcp_socket:
         self._accept_tcp()
+      elif sock in self._server_by_socket:
+        self._server_by_socket[sock].receive()
       else:
         logger.error(
             "Impossible! Unrecognized socket returned by select() {bad_socket}", extra={'bad_socket': str(sock)})

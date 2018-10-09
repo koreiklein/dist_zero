@@ -42,6 +42,13 @@ class SystemController(object):
     '''The underlying spawner of this `SystemController`'''
     return self._spawner
 
+  def route_dns(self, node_id, domain_name):
+    '''
+    :param str node_id: The id of a root input `InternalNode` instance.
+    :param str domain_name: The domain name to map.
+    '''
+    self.send_api_message(node_id, messages.io.route_dns(domain_name=domain_name))
+
   def get_adjacent(self, node_id):
     adjacent_handle = self.send_api_message(node_id, messages.machine.get_adjacent_handle())
     if adjacent_handle is None:
@@ -187,6 +194,9 @@ class SystemController(object):
           sock_type=sock_type)
     else:
       raise errors.InternalError('Unrecognized mode "{}"'.format(self._spawner.mode()))
+
+  def mode(self):
+    return self._spawner.mode()
 
   def create_machine(self, machine_config):
     '''

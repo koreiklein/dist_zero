@@ -352,8 +352,6 @@ class NodeTree(object):
       if necessary.
     '''
     if len(self.layers) == 0:
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError("There must be at least one layer before appending new nodes.")
     self._base_nodes.append(node)
     results = []

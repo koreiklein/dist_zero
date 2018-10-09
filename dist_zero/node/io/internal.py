@@ -4,6 +4,7 @@ import dist_zero.ids
 from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids, ticker
 from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
+from dist_zero.node.io import leaf_html
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,22 @@ class InternalNode(Node):
     self._initial_state = initial_state
     self._adjacent = adjacent
 
+    self._domain_name = None
+    self._routing_kids_listener = None
+
     self._pending_spawned_kids = set()
+
+    self._load_balancer_frontend = None
+    '''
+    InternalNodes with height > 0 will manager a `LoadBalancerFrontend` when
+    they start routing.
+    '''
+
+    self._dns_controller = None
+    '''
+    Root InternalNodes will create a `DNSController` instance when they start routing,
+    and use it configure the appropriate DNS mapping.
+    '''
 
     self._current_state = None
 
@@ -85,6 +101,14 @@ class InternalNode(Node):
     # If this node is spawned at too great a height, it must spawn a kid before it's ready to do anything else.
     # In case there is such a kid, self._startup_kid gives its id.
     self._startup_kid = None
+
+    self._http_server_for_adding_leaves = None
+    '''
+    Height 0 `InternalNode` instances when bound to a domain name will bind an http server
+    to a port on their machine and that server will respond to http GET requests
+    by creating new leaf configs and sending back appropriate html for running
+    the leaf.
+    '''
 
     super(InternalNode, self).__init__(logger)
 
@@ -160,8 +184,6 @@ class InternalNode(Node):
       self._sent_hello = True
       self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
     else:
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError("Already sent hello")
 
   def _spawn_kid(self):
@@ -355,10 +377,11 @@ class InternalNode(Node):
     self._graph.add_node(kid_id)
 
   def receive(self, message, sender_id):
-    if message['type'] == 'configure_new_flow_right':
+    if self._routing_kids_listener is not None and self._routing_kids_listener.receive(
+        message=message, sender_id=sender_id):
+      pass
+    elif message['type'] == 'configure_new_flow_right':
       if self._adjacent is not None or len(message['right_configurations']) != 1 or self._variant != 'input':
-        import ipdb
-        ipdb.set_trace()
         raise errors.InternalError("A new configure_new_flow_right should only ever arrive at an 'input' InternalNode "
                                    "and only when it's waiting to set its adjacent,"
                                    " and when the configure_new_flow_right has a single right_configuration.")
@@ -383,6 +406,8 @@ class InternalNode(Node):
       for left_config in message['left_configurations']:
         node = left_config['node']
         self._set_input(node)
+    elif message['type'] == 'routing_start':
+      self._on_routing_start(message=message, sender_id=sender_id)
     elif message['type'] == 'hello_parent':
       if sender_id == self._startup_kid and self._parent is not None:
         self._send_hello_parent()
@@ -531,9 +556,56 @@ class InternalNode(Node):
         'acknowledged_messages': self.linker.least_unacknowledged_sequence_number(),
     }
 
+  def _add_leaf_from_http_get(self, request):
+    client_host, client_port = request.client_address
+    # Please don't let any unsanitized user provived data into the id
+    user_machine_id = ids.new_id('web_client_machine')
+    user_name = 'std_web_client_node'
+    kid_config = self.create_kid_config(name=user_name, machine_id=user_machine_id)
+    return leaf_html.from_kid_config(kid_config)
+
+  def _on_routing_start(self, message, sender_id):
+    self._domain_name = message['domain_name']
+    if self._height == 0:
+      self._http_server_for_adding_leaves = self._controller.new_http_server(
+          self._domain_name, lambda request: self._add_leaf_from_http_get(request))
+      self.send(self._parent, messages.io.routing_started(server_address=self._http_server_for_adding_leaves.address()))
+    else:
+      self._routing_kids_listener = RoutingKidsListener(self)
+      self._routing_kids_listener.start()
+
+  def routing_kids_finished(self, kid_to_address):
+    # Start a load balancer based on kid_to_addresses
+    self._load_balancer_frontend = self._controller.new_load_balancer_frontend(
+        domain_name=self._domain_name, height=self._height)
+
+    for kid_id, address in kid_to_address.items():
+      weight = 1
+      self._load_balancer_frontend[address] = weight
+
+    self._load_balancer_frontend.sync()
+
+    if self._parent is not None:
+      # Send a routing_started with the address of the load balancer.
+      self.send(self._parent, messages.io.routing_started(self._load_balancer_frontend.address()))
+    else:
+      # Configure DNS based on kid_to_addresses (or the load balancer)
+      self._map_all_dns_to(self._load_balancer_frontend.address())
+
+  def _map_all_dns_to(self, server_address):
+    self._dns_controller = self._controller.new_dns_controller(self._domain_name)
+    self._dns_controller.set_all(server_address['ip'])
+
+  def _route_dns(self, message):
+    self._domain_name = message['domain_name']
+    self._routing_kids_listener = RoutingKidsListener(self)
+    self._routing_kids_listener.start()
+
   def handle_api_message(self, message):
     if message['type'] == 'create_kid_config':
       return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
+    elif message['type'] == 'route_dns':
+      self._route_dns(message)
     elif message['type'] == 'get_capacity':
       return self._get_capacity()
     elif message['type'] == 'get_kids':
@@ -596,3 +668,22 @@ class InternalNode(Node):
 
   def deliver(self, message, sequence_number, sender_id):
     raise errors.InternalError("Messages should not be delivered to internal nodes.")
+
+
+class RoutingKidsListener(object):
+  def __init__(self, node):
+    self._node = node
+    self._kid_to_address = {node_id: None for node_id in node._kids.keys()}
+
+  def start(self):
+    for node_id, node in self._node._kids.items():
+      self._node.send(node, messages.io.routing_start(self._node._domain_name))
+
+  def receive(self, message, sender_id):
+    if message['type'] == 'routing_started':
+      self._kid_to_address[sender_id] = message['server_address']
+      if all(val is not None for val in self._kid_to_address.values()):
+        self._node.routing_kids_finished(self._kid_to_address)
+      return True
+
+    return False

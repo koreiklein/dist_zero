@@ -203,8 +203,6 @@ class Connector(object):
     first = right_nodes[0]
     if len(self._right_to_parent_ids[first]) + len(right_configurations) > 3:
       # FIXME(KK): Implement this
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError("Not Yet Implemented: assign multiple parents to the same child right node")
 
     self._right_to_parent_ids[first].extend(right_parent_ids)

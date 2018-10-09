@@ -1,0 +1,28 @@
+
+global
+  stats socket /var/run/haproxy.sock mode 600 level admin
+  maxconn 4096
+  ssl-server-verify none
+
+defaults
+  mode http
+  stats enable
+  stats uri /stats
+  balance roundrobin
+  option redispatch
+  option forwardfor
+  option log-health-checks
+
+  log     global
+
+  timeout connect 100ms
+  timeout check 40ms
+  timeout queue 5s
+  timeout client 700ms
+  timeout server 330ms
+  timeout tunnel  1h
+
+{backends}
+
+{frontends}
+
