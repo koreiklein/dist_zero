@@ -4,6 +4,7 @@ import dist_zero.ids
 from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids, ticker
 from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
+from dist_zero.node.io import leaf_html
 
 logger = logging.getLogger(__name__)
 
@@ -560,15 +561,12 @@ class InternalNode(Node):
     }
 
   def _add_leaf_from_http_get(self, request):
-    # FIXME(KK): Implement this
-    return '''<html>
-  <head>
-    <title>Dist Zero</title>
-  </head>
-  <body>
-    <p> Hello world </p>
-  </body>
-</html>'''
+    client_host, client_port = request.client_address
+    # Please don't let any unsanitized user provived data into the id
+    user_machine_id = ids.new_id('web_client_machine')
+    user_name = 'std_web_client_node'
+    kid_config = self.create_kid_config(name=user_name, machine_id=user_machine_id)
+    return leaf_html.from_kid_config(kid_config)
 
   def _on_routing_start(self, message, sender_id):
     self._domain_name = message['domain_name']

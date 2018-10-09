@@ -21,19 +21,16 @@ class HttpServer(object):
       as its argument, and return the output HTML as a python string.
     '''
     self._address = address
-    self._socket = socket
-    self._on_request = on_request
 
     class handler(http.server.BaseHTTPRequestHandler):
       def _send_disallow_robots_header(self):
         self.send_header('X-Robots-Tag', 'none')
 
       def _send_body(self, body):
-        buf = bytes(body, encoding='UTF-8')
-        self.send_header('Connection', 'close')
-        self.send_header('Content-Length', str(len(buf)))
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(buf)
+        self.wfile.write(body)
+        self.close_connection = True
 
       def do_GET(self):
         logger.info("Handling GET request: {requestline}", extra={'requestline': self.requestline})
@@ -41,7 +38,7 @@ class HttpServer(object):
           self.send_response(404)
           self.send_header('Content-Type', 'text/plain')
           self._send_disallow_robots_header()
-          self._send_body('File not found')
+          self._send_body(bytes('File not found', encoding='UTF-8'))
         else:
           self.send_response(200)
           self.send_header('Content-Type', 'text/html')
