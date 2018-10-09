@@ -206,8 +206,8 @@ class DockerSpawner(spawner.Spawner):
     os.makedirs(host_msg_dir)
     os.makedirs(log_dir)
 
-    machine_config_with_spawner = {'spawner': {'type': 'docker', 'value': self._remote_spawner_json()}}
-    machine_config_with_spawner.update(machine_config)
+    machine_config_with_spawner = dict(machine_config)
+    machine_config_with_spawner.update({'spawner': {'type': 'docker', 'value': self._remote_spawner_json()}})
 
     config_filename = 'machine_config.json'
     with open(os.path.join(host_msg_dir, config_filename), 'w') as f:

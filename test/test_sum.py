@@ -36,7 +36,7 @@ def test_add_one_leaf_to_empty_input_tree(demo):
           'system_config': system_config,
           'network_errors_config': messages.machine.std_simulated_network_errors_config(),
       },
-      random_seed='test_simple_io_tree')
+      random_seed='test_add_one_leaf_to_empty_input_tree')
   demo.run_for(ms=200)
   root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
   demo.system.spawn_node(
