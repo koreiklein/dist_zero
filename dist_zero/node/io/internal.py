@@ -184,8 +184,6 @@ class InternalNode(Node):
       self._sent_hello = True
       self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
     else:
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError("Already sent hello")
 
   def _spawn_kid(self):
@@ -384,8 +382,6 @@ class InternalNode(Node):
       pass
     elif message['type'] == 'configure_new_flow_right':
       if self._adjacent is not None or len(message['right_configurations']) != 1 or self._variant != 'input':
-        import ipdb
-        ipdb.set_trace()
         raise errors.InternalError("A new configure_new_flow_right should only ever arrive at an 'input' InternalNode "
                                    "and only when it's waiting to set its adjacent,"
                                    " and when the configure_new_flow_right has a single right_configuration.")
@@ -577,8 +573,6 @@ class InternalNode(Node):
     else:
       self._routing_kids_listener = RoutingKidsListener(self)
       self._routing_kids_listener.start()
-      import ipdb
-      ipdb.set_trace()
 
   def routing_kids_finished(self, kid_to_address):
     # Start a load balancer based on kid_to_addresses

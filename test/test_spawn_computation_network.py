@@ -107,10 +107,7 @@ class TestSpawnComputationNetwork(object):
     domain_name = 'www.distzerotesting.com'
     self.demo.system.route_dns(root_input, domain_name)
 
-    for i in range(10):
-      self.demo.run_for(ms=2000)
-      import ipdb
-      ipdb.set_trace()
+    self.demo.run_for(ms=2000)
 
   def test_spawn_small_small(self, demo):
     self.demo = demo

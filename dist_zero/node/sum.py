@@ -275,8 +275,6 @@ class SumNode(Node):
   def add_left_configuration(self, left_configuration):
     node = left_configuration['node']
     self.import_from_node(node)
-    import ipdb
-    ipdb.set_trace()
     self.send(node,
               messages.migration.configure_new_flow_right(
                   migration_id=None,
@@ -344,9 +342,7 @@ class SumNode(Node):
       self._hourglass_data[node['id']]['n_hourglass_senders'] = message['n_hourglass_senders']
       self._maybe_swap_mid_node(node['id'])
     elif message['type'] == 'adopt':
-      # FIXME(KK): Test and implement this
-      import ipdb
-      ipdb.set_trace()
+      raise errors.InternalError("Sum nodes should not be adopting kids")
     elif message['type'] == 'set_input':
       if not self.left_is_data:
         raise errors.InternalError("Can't set input when the left node is not a data node")

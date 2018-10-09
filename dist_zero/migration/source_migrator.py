@@ -117,8 +117,6 @@ class SourceMigrator(migrator.Migrator):
                         messages.migration.set_source_right_parents(
                             migration_id=self.migration_id, configure_right_parent_ids=[new_receiver_id]))
     else:
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError(
           "right parents of a node's kids should only be set when the node has a unique receiver")
 

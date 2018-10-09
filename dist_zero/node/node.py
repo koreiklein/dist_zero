@@ -151,8 +151,6 @@ class Node(object):
       else:
         self.migrators[migration_id].receive(sender_id=sender_id, message=migration_message)
     else:
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError("Unrecognized message type {}".format(message['type']))
 
   def checkpoint(self, before=None):

@@ -273,8 +273,6 @@ class SinkMigrator(migrator.Migrator):
         for left_config in self._left_configurations.values():
           left_kids = left_config['kids']
           if len(left_kids) > len(my_unmatched_kids):
-            import ipdb
-            ipdb.set_trace()
             raise errors.InternalError("Sink node does not have enough unmatched kids to pair with adjacents.")
           matched_kids, my_unmatched_kids = my_unmatched_kids[:len(left_kids)], my_unmatched_kids[len(left_kids):]
 

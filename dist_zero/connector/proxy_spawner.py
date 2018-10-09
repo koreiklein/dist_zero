@@ -29,8 +29,6 @@ class ProxySpawner(object):
 
   def _finished_bumping(self, proxy_handle):
     if len(self._node.kids) != 2:
-      import ipdb
-      ipdb.set_trace()
       raise errors.InternalError("A computation node should have exactly 2 kids after it finishes bumping.")
 
     # Pass on the right_configurations of self (as in dist_zero.connector.Spawner when the right gap child is spawned)
@@ -64,9 +62,6 @@ class ProxySpawner(object):
     Once that proxy has reported that it is up and running, this node will call ``_spawn_proxy`` to
     spawn the second node to adopt the remaining kids of self as part of the process of bumping height.
     '''
-    if self._proxy_id is not None:
-      import ipdb
-      ipdb.set_trace()
     self._proxy_id = ids.new_id('ComputationNode_proxy')
     if self._proxy_adjacent_variant == 'input':
       senders = [self._node.transfer_handle(proxy_adjacent_handle, self._proxy_id)]
@@ -128,9 +123,6 @@ class ProxySpawner(object):
       ]
     else:
       raise errors.InternalError("Unrecognized variant {}".format(variant))
-    if any(ad not in self._node.kids for ad in adoptee_ids):
-      import ipdb
-      ipdb.set_trace()
     self._node._controller.spawn_node(
         messages.computation.computation_node_config(
             node_id=self._proxy_adjacent_id,
