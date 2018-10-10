@@ -30,7 +30,7 @@ class MachineRunner(object):
 
   STEP_LENGTH_MS = 5 # Target number of milliseconds per iteration of the run loop.
 
-  def __init__(self, machine_config, event_loop):
+  def __init__(self, machine_config):
 
     self._udp_port = settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT
     self._udp_dst = ('0.0.0.0', self._udp_port)
@@ -39,8 +39,6 @@ class MachineRunner(object):
     self._tcp_dst = ('', self._tcp_port)
 
     start, stop = self._parse_port_range()
-
-    self._event_loop = event_loop
 
     self._available_server_ports = set(range(start, stop))
     # When we create and listen on new sockets, this dict will always map the socket
@@ -125,7 +123,7 @@ class MachineRunner(object):
       def error_received(self, exc):
         logger.error(f"UDP error: {exc}")
 
-    result = await self._event_loop.create_datagram_endpoint(
+    result = await asyncio.get_event_loop().create_datagram_endpoint(
         handler,
         local_addr=self._udp_dst,
         # Deal with TIME_WAIT issues by reusing the address.
@@ -155,7 +153,6 @@ class MachineRunner(object):
         handler,
         host='',
         port=self._tcp_port,
-        loop=self._event_loop,
         # Deal with TIME_WAIT issues by reusing the address.
         # WARNING(KK): This risks that if a machine_runner is run twice, datagrams destined for the first
         #   instance could be accidentally received by the second instance.
@@ -176,10 +173,10 @@ class MachineRunner(object):
             'machine_name': self.node_manager.name,
         })
 
-    self._event_loop.create_task(self._bind_udp())
-    self._event_loop.create_task(self._bind_and_listen_tcp())
+    asyncio.get_event_loop().create_task(self._bind_udp())
+    asyncio.get_event_loop().create_task(self._bind_and_listen_tcp())
 
-    self._event_loop.run_forever()
+    asyncio.get_event_loop().run_forever()
 
   def configure_logging(self):
     '''

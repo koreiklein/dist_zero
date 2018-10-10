@@ -115,8 +115,7 @@ class Demo(object):
     # Use the
     self.system_id = self._new_unique_system_id()
     if self.mode == spawners.MODE_SIMULATED:
-      self.spawner = self.simulated_spawner = SimulatedSpawner(
-          system_id=self.system_id, random_seed=self.random_seed, event_loop=asyncio.get_event_loop())
+      self.spawner = self.simulated_spawner = SimulatedSpawner(system_id=self.system_id, random_seed=self.random_seed)
     elif self.mode == spawners.MODE_VIRTUAL:
       self.spawner = self.virtual_spawner = DockerSpawner(system_id=self.system_id, inside_container=False)
     elif self.mode == spawners.MODE_CLOUD:
@@ -138,14 +137,17 @@ class Demo(object):
     else:
       return time.time()
 
+  def sleep_ms(self, ms):
+    return self.spawner.sleep_ms(ms)
+
   def run_for(self, ms):
     '''Run for ms milliseconds, in either real or simulated time depending on the current mode.'''
     if self.simulated:
-      self.spawner.run_for(int(ms))
+      return self.spawner.run_for(int(ms))
     else:
-      time.sleep(ms / 1000)
+      return asyncio.sleep(ms / 1000)
 
-  def new_machine_controllers(self, n, base_config=None, random_seed=None):
+  async def new_machine_controllers(self, n, base_config=None, random_seed=None):
     '''
     Create n new machine controllers
 
@@ -169,12 +171,12 @@ class Demo(object):
       configs.append(messages.machine.machine_config(**machine_config))
 
     result = self.system.create_machines(configs)
-    self.run_for(ms=2000)
     return result
 
-  def new_machine_controller(self):
+  async def new_machine_controller(self):
     '''Like `Demo.new_machine_controllers` but only creates and returns one.'''
-    return self.new_machine_controllers(1)[0]
+    controllers = await self.new_machine_controllers(1)
+    return controllers[0]
 
   def connect_trees_with_sum_network(self, root_input_id, root_output_id, machine):
     '''

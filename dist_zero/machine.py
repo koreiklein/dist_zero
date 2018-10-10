@@ -1,3 +1,4 @@
+import asyncio
 import heapq
 import json
 import logging
@@ -8,7 +9,9 @@ from random import Random
 
 from dist_zero import errors, messages, dns
 
+from .node.node import AsyncNode
 from .node import io
+from .node.io import leaf
 from .node.sum import SumNode
 from .node.computation import ComputationNode
 from .migration.migration_node import MigrationNode
@@ -30,6 +33,15 @@ class MachineController(object):
     :param message message: A message for that node
     :type message: :ref:`message`
     :param str sending_node_id: The id of the sending node.
+    '''
+    raise RuntimeError("Abstract Superclass")
+
+  def sleep_ms(self, ms):
+    '''
+    Return an awaitable that sleeps for some number of milliseconds.
+
+    Note that the awaitable is different from that returned by asyncio.sleep in that when DistZero is in simulated
+    mode, time is entirely simulated, and the awaitable may resolve in much less than ms milliseconds.
     '''
     raise RuntimeError("Abstract Superclass")
 
@@ -154,6 +166,7 @@ class NodeManager(MachineController):
     :param func send_to_machine: A function send_to_machine(message, transport)
       where message is a :ref:`message`, and transport is a :ref:`transport` for a receiving node.
 
+
     :param `MachineRunner` machine_runner: An optional `MachineRunner` instance.
       If provided, then this `NodeManager` instance will be able to create servers and
       load balancers.
@@ -202,6 +215,9 @@ class NodeManager(MachineController):
         }
         for direction, direction_config in network_errors_config.items()
     }
+
+  def sleep_ms(self, ms):
+    return self._spawner.sleep_ms(ms)
 
   def send(self, node_handle, message, sending_node):
     sending_node_id = None if sending_node is None else sending_node.id
@@ -275,6 +291,12 @@ class NodeManager(MachineController):
   def n_nodes(self):
     return len(self._node_by_id)
 
+  def _run_first_function(self, node, first_function_name, kwargs):
+    if first_function_name == leaf.first_function_name:
+      asyncio.get_event_loop().create_task(leaf.first_function(node, **kwargs))
+    else:
+      raise RuntimeError(f"Unrecognized first function name {first_function_name}")
+
   def start_node(self, node_config):
     logger.info(
         "Starting new '{node_type}' node {node_id} on machine '{machine_name}'",
@@ -283,22 +305,30 @@ class NodeManager(MachineController):
             'node_id': self._format_node_id_for_logs(node_config['id']),
             'machine_name': self.name,
         })
-    if node_config['type'] == 'LeafNode':
-      node = io.LeafNode.from_config(node_config=node_config, controller=self)
-    elif node_config['type'] == 'InternalNode':
-      node = io.InternalNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'SumNode':
-      node = SumNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'MigrationNode':
-      node = MigrationNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'ComputationNode':
-      node = ComputationNode.from_config(node_config, controller=self)
+    # FIXME(KK): Once we've swtiched all the *Node subclasses to run as functions on the asynchronous
+    #   ASyncNode class, only the 'node_config' should appear here.
+    if node_config['type'] == 'node_config':
+      node = AsyncNode(node_id=node_config['id'], controller=self)
+      self._run_first_function(node, node_config['first_function_name'], node_config['first_function_kwargs'])
+      self._node_by_id[node.id] = node
+      return node
     else:
-      raise RuntimeError("Unrecognized type {}".format(node_config['type']))
+      if node_config['type'] == 'LeafNode':
+        node = io.LeafNode.from_config(node_config=node_config, controller=self)
+      elif node_config['type'] == 'InternalNode':
+        node = io.InternalNode.from_config(node_config, controller=self)
+      elif node_config['type'] == 'SumNode':
+        node = SumNode.from_config(node_config, controller=self)
+      elif node_config['type'] == 'MigrationNode':
+        node = MigrationNode.from_config(node_config, controller=self)
+      elif node_config['type'] == 'ComputationNode':
+        node = ComputationNode.from_config(node_config, controller=self)
+      else:
+        raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 
-    self._node_by_id[node.id] = node
-    node.initialize()
-    return node
+      self._node_by_id[node.id] = node
+      node.initialize()
+      return node
 
   def handle_api_message(self, message):
     '''
@@ -388,7 +418,10 @@ class NodeManager(MachineController):
             'message_type': message['type'],
             'sender_id': sender_id,
         })
-    node.receive(message=message, sender_id=sender_id)
+    if isinstance(node, AsyncNode):
+      asyncio.get_event_loop().create_task(node.receive(message=message, sender_id=sender_id))
+    else:
+      node.receive(message=message, sender_id=sender_id)
 
   def elapse_nodes(self, ms):
     '''

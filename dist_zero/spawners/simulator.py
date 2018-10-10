@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import heapq
 import json
@@ -31,16 +32,13 @@ class SimulatedSpawner(spawner.Spawner):
   AVERAGE_SEND_TIME_MS = 10
   SEND_TIME_STDDEV_MS = 3
 
-  def __init__(self, system_id, event_loop, random_seed='random_seed'):
+  def __init__(self, system_id, random_seed='random_seed'):
     '''
     :param str system_id: The id of the overall simulated distributed system.
-    :param event_loop: The asyncio event loop for this simulation.
-    :type event_loop: `asyncio.AbstractEventLoop`
     :param str random_seed: A random seed for all randomness employed by this class.
     '''
 
     self._system_id = system_id
-    self._event_loop = event_loop
     self._start_datetime = datetime.datetime.now()
     self._controller_by_id = {}
     self._elapsed_time_ms = None # None if unstarted, otherwise the number of ms simulated so far
@@ -98,16 +96,7 @@ class SimulatedSpawner(spawner.Spawner):
     else:
       return "Control Message: {}".format(message['type'])
 
-  def _process_current_events_in_loop(self):
-    # TODO(KK): Does it actually matter how many times we call stop() ? Or will one call be enough.
-    #   The concern is that some callback may be ready, and will run on a call to stop(), but will register
-    #   another callback to be called in the next loop, and that we'll have to call stop() a second time
-    #   to run that callback.
-    for i in range(30):
-      # Checks for and processes any callbacks that are currently ready to run.
-      self._event_loop.stop()
-
-  def run_for(self, ms):
+  async def run_for(self, ms):
     '''
     Run the simulation for a number of milliseconds.
     Wrap exceptions thrown by the underlying nodes in a `SimulationError`.
@@ -119,16 +108,25 @@ class SimulatedSpawner(spawner.Spawner):
 
     stop_time_ms = self._elapsed_time_ms + ms
 
-    self._process_current_events_in_loop()
     while self._pending_receives and self._pending_receives[0].t <= stop_time_ms:
       received_at, to_receive = heapq.heappop(self._pending_receives).tuple()
 
       # Simulate the event
-      receiving_controller = self._controller_by_id[to_receive['machine_id']]
-      receiving_controller.handle_message(message=to_receive['message'])
+      if isinstance(to_receive, asyncio.Future):
+        to_receive.set_result(None)
+      else:
+        receiving_controller = self._controller_by_id[to_receive['machine_id']]
+        receiving_controller.handle_message(message=to_receive['message'])
+
+      # FIXME(KK): Surely there must be a better way to run the events that were scheduled by the above few lines.
+      await asyncio.sleep(0.001)
 
       self._elapsed_time_ms = received_at
-      self._process_current_events_in_loop()
+
+  def sleep_ms(self, ms):
+    future = asyncio.get_event_loop().create_future()
+    self._add_to_heap((self._elapsed_time_ms + ms, future))
+    return future
 
   def get_machine_by_id(self, machine_id):
     '''
@@ -196,7 +194,6 @@ class SimulatedSpawner(spawner.Spawner):
           'message': message,
       }))
     elif sock_type == 'tcp':
-      self.run_for(ms=sending_time_ms)
       receiving_controller = self._controller_by_id[machine_id]
       response = receiving_controller.handle_api_message(message)
       if response['status'] == 'ok':
@@ -229,6 +226,8 @@ class _Event(object):
   def __lt__(self, other):
     if self.t != other.t:
       return self.t < other.t
+    elif isinstance(self.value, asyncio.Future):
+      return True
     else:
       # Return a consistent answer when comparing events that occur at the exact same time.
       return json.dumps(self.value) < json.dumps(other.value)

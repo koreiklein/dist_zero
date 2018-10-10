@@ -66,6 +66,9 @@ class Ec2Spawner(spawner.Spawner):
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
 
+  def sleep_ms(self, ms):
+    return asyncio.sleep(ms / 1000)
+
   def _create_client_by_name(self, aws_service_name):
     return boto3.client(
         aws_service_name,

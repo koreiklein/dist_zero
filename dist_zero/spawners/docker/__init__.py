@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -77,6 +78,9 @@ class DockerSpawner(spawner.Spawner):
 
   def mode(self):
     return spawners.MODE_VIRTUAL
+
+  def sleep_ms(self, ms):
+    return asyncio.sleep(ms / 1000)
 
   def send_to_container_from_host(self, machine_id, message, sock_type='udp'):
     '''

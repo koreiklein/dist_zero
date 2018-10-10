@@ -5,6 +5,7 @@ from dist_zero import settings, messages, errors, recorded, importer, exporter, 
 from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
 from dist_zero.node.io import leaf_html
+from dist_zero.node.io import leaf
 
 logger = logging.getLogger(__name__)
 
@@ -658,12 +659,14 @@ class InternalNode(Node):
         })
     self._kids[node_id] = None
 
-    return messages.io.leaf_config(
+    return messages.common.node_config(
         node_id=node_id,
-        name=name,
-        parent=self.new_handle(node_id),
-        variant=self._variant,
-        initial_state=self._initial_state,
+        first_function_name=leaf.first_function_name,
+        first_function_kwargs={
+            'parent': self.new_handle(node_id),
+            'variant': self._variant,
+            'initial_state': self._initial_state,
+        },
     )
 
   def deliver(self, message, sequence_number, sender_id):

@@ -18,6 +18,7 @@ ipdb = "*"
 pytest = "*"
 sphinx = "*"
 graphviz = "==0.9"
+pytest-asyncio = "*"
 
 [requires]
 python_version = "3.6"
