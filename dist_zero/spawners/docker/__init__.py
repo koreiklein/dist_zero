@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -77,6 +78,9 @@ class DockerSpawner(spawner.Spawner):
 
   def mode(self):
     return spawners.MODE_VIRTUAL
+
+  def sleep_ms(self, ms):
+    return asyncio.sleep(ms / 1000)
 
   def send_to_container_from_host(self, machine_id, message, sock_type='udp'):
     '''
@@ -193,10 +197,10 @@ class DockerSpawner(spawner.Spawner):
     '''
     return os.path.join(self._all_containers_msg_dir, machine_controller_id)
 
-  def create_machines(self, machine_configs):
-    return [self.create_machine(machine_config) for machine_config in machine_configs]
+  async def create_machines(self, machine_configs):
+    return [ await self.create_machine(machine_config) for machine_config in machine_configs]
 
-  def create_machine(self, machine_config):
+  async def create_machine(self, machine_config):
     machine_name = machine_config['machine_name']
     machine_controller_id = machine_config['id']
 

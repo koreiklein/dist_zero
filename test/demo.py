@@ -1,3 +1,4 @@
+import asyncio
 import json
 import random
 import pytest
@@ -96,6 +97,9 @@ class Demo(object):
 
   def tear_down(self):
     '''Remove any resources created as part of the demo.'''
+    if self.simulated_spawner:
+      self.simulated_spawner.clean_all()
+
     if self.virtual_spawner and self.virtual_spawner.started:
       self.virtual_spawner.clean_all()
 
@@ -136,14 +140,17 @@ class Demo(object):
     else:
       return time.time()
 
+  def sleep_ms(self, ms):
+    return self.spawner.sleep_ms(ms)
+
   def run_for(self, ms):
     '''Run for ms milliseconds, in either real or simulated time depending on the current mode.'''
     if self.simulated:
-      self.spawner.run_for(int(ms))
+      return self.spawner.run_for(int(ms))
     else:
-      time.sleep(ms / 1000)
+      return asyncio.sleep(ms / 1000)
 
-  def new_machine_controllers(self, n, base_config=None, random_seed=None):
+  async def new_machine_controllers(self, n, base_config=None, random_seed=None):
     '''
     Create n new machine controllers
 
@@ -166,13 +173,13 @@ class Demo(object):
 
       configs.append(messages.machine.machine_config(**machine_config))
 
-    result = self.system.create_machines(configs)
-    self.run_for(ms=2000)
+    result = await self.system.create_machines(configs)
     return result
 
-  def new_machine_controller(self):
+  async def new_machine_controller(self):
     '''Like `Demo.new_machine_controllers` but only creates and returns one.'''
-    return self.new_machine_controllers(1)[0]
+    controllers = await self.new_machine_controllers(1)
+    return controllers[0]
 
   def connect_trees_with_sum_network(self, root_input_id, root_output_id, machine):
     '''

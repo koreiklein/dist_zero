@@ -1,9 +1,14 @@
+import asyncio
+import logging
+
 from collections import defaultdict
 
 from cryptography.fernet import Fernet
 
 import dist_zero.logging
 from dist_zero import messages, linker, migration, deltas, errors
+
+logger = logging.getLogger(__name__)
 
 
 class Node(object):

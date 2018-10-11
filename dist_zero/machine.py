@@ -1,3 +1,4 @@
+import asyncio
 import heapq
 import json
 import logging
@@ -6,9 +7,10 @@ import re
 from cryptography.fernet import Fernet
 from random import Random
 
-from dist_zero import errors, messages, dns
+from dist_zero import errors, messages, dns, settings
 
 from .node import io
+from .node.io import leaf
 from .node.sum import SumNode
 from .node.computation import ComputationNode
 from .migration.migration_node import MigrationNode
@@ -30,6 +32,15 @@ class MachineController(object):
     :param message message: A message for that node
     :type message: :ref:`message`
     :param str sending_node_id: The id of the sending node.
+    '''
+    raise RuntimeError("Abstract Superclass")
+
+  def sleep_ms(self, ms):
+    '''
+    Return an awaitable that sleeps for some number of milliseconds.
+
+    Note that the awaitable is different from that returned by asyncio.sleep in that when DistZero is in simulated
+    mode, time is entirely simulated, and the awaitable may resolve in much less than ms milliseconds.
     '''
     raise RuntimeError("Abstract Superclass")
 
@@ -123,6 +134,12 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
+  def clean_all(self):
+    '''
+    Finalize everything running on this controller.
+    '''
+    raise RuntimeError("Abstract Superclass")
+
 
 class NodeManager(MachineController):
   '''
@@ -154,6 +171,7 @@ class NodeManager(MachineController):
     :param func send_to_machine: A function send_to_machine(message, transport)
       where message is a :ref:`message`, and transport is a :ref:`transport` for a receiving node.
 
+
     :param `MachineRunner` machine_runner: An optional `MachineRunner` instance.
       If provided, then this `NodeManager` instance will be able to create servers and
       load balancers.
@@ -178,6 +196,7 @@ class NodeManager(MachineController):
     self._ip_host = ip_host
 
     self._node_by_id = {}
+    self._running = True
 
     self._now_ms = 0 # Current elapsed time in milliseconds
     # a heap (as in heapq) of tuples (ms_of_occurence, send_receive, args)
@@ -186,6 +205,8 @@ class NodeManager(MachineController):
     self._pending_events = []
 
     self._send_to_machine = send_to_machine
+
+    asyncio.get_event_loop().create_task(self._elapse_time_periodically())
 
   @property
   def random(self):
@@ -202,6 +223,9 @@ class NodeManager(MachineController):
         }
         for direction, direction_config in network_errors_config.items()
     }
+
+  def sleep_ms(self, ms):
+    return self._spawner.sleep_ms(ms)
 
   def send(self, node_handle, message, sending_node):
     sending_node_id = None if sending_node is None else sending_node.id
@@ -240,8 +264,8 @@ class NodeManager(MachineController):
             'message_type': message['type'],
         })
 
-    fernet = Fernet(node_handle['fernet_key'])
-    encoded_message = fernet.encrypt(json.dumps(message).encode(messages.ENCODING)).decode(messages.ENCODING)
+    encoded_message = self._encrypt(node_handle, json.dumps(message))
+
     self._send_to_machine(
         message=messages.machine.machine_deliver_to_node(
             node_id=node_handle['id'], message=encoded_message, sending_node_id=sending_node_id),
@@ -334,6 +358,20 @@ class NodeManager(MachineController):
     else:
       return node_id[:8]
 
+  def _encrypt(self, node_handle, message):
+    if settings.encrypt_all_messages:
+      fernet = Fernet(node_handle['fernet_key'])
+      encoded_message = fernet.encrypt(message.encode(messages.ENCODING)).decode(messages.ENCODING)
+      return encoded_message
+    else:
+      return message
+
+  def _decrypt(self, node, message):
+    if settings.encrypt_all_messages:
+      return node.fernet.decrypt(message.encode(messages.ENCODING)).decode(messages.ENCODING)
+    else:
+      return message
+
   def handle_message(self, message):
     '''
     Handle an arbitrary machine message for this `MachineController` instance.
@@ -354,8 +392,7 @@ class NodeManager(MachineController):
         return
       node = self._node_by_id[node_id]
 
-      decoded_message = json.loads(
-          node.fernet.decrypt(message['message'].encode(messages.ENCODING)).decode(messages.ENCODING))
+      decoded_message = json.loads(self._decrypt(node, message['message']))
 
       error_type = self._get_simulated_network_error(message, direction='outgoing')
       receive_args = (node_id, decoded_message, sender_id)
@@ -389,6 +426,15 @@ class NodeManager(MachineController):
             'sender_id': sender_id,
         })
     node.receive(message=message, sender_id=sender_id)
+
+  def clean_all(self):
+    self._running = False
+
+  async def _elapse_time_periodically(self):
+    ELAPSE_TIME_MS = 220
+    while self._running:
+      await self.sleep_ms(ELAPSE_TIME_MS)
+      self.elapse_nodes(ELAPSE_TIME_MS)
 
   def elapse_nodes(self, ms):
     '''

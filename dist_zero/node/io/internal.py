@@ -5,6 +5,7 @@ from dist_zero import settings, messages, errors, recorded, importer, exporter, 
 from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
 from dist_zero.node.io import leaf_html
+from dist_zero.node.io import leaf
 
 logger = logging.getLogger(__name__)
 
@@ -663,8 +664,7 @@ class InternalNode(Node):
         name=name,
         parent=self.new_handle(node_id),
         variant=self._variant,
-        initial_state=self._initial_state,
-    )
+        initial_state=self._initial_state)
 
   def deliver(self, message, sequence_number, sender_id):
     raise errors.InternalError("Messages should not be delivered to internal nodes.")

@@ -11,6 +11,7 @@ python-logstash-async = "*"
 docker = "*"
 python-json-logger = "*"
 cryptography = "==2.3.1"
+uvloop = "*"
 
 [dev-packages]
 yapf = "*"
@@ -18,6 +19,7 @@ ipdb = "*"
 pytest = "*"
 sphinx = "*"
 graphviz = "==0.9"
+pytest-asyncio = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.6"

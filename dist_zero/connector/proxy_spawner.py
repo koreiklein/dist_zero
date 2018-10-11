@@ -18,6 +18,13 @@ class ProxySpawner(object):
     self._proxy_id = None
     '''The id of node that is spawned as this node's proxy.'''
 
+    self._kid_to_finish_bumping = None
+
+  def lost_a_kid(self):
+    if self._kid_to_finish_bumping and len(self._node.kids) <= 2:
+      self._finished_bumping(self._kid_to_finish_bumping)
+      self._kid_to_finish_bumping = None
+
   def spawned_a_kid(self, kid):
     '''
     Called when a child responds with hello_parent.
@@ -25,7 +32,10 @@ class ProxySpawner(object):
     if kid['id'] == self._proxy_adjacent_id:
       self._spawn_proxy(kid)
     elif kid['id'] == self._proxy_id:
-      self._finished_bumping(kid)
+      if len(self._node.kids) > 2:
+        self._kid_to_finish_bumping = kid
+      else:
+        self._finished_bumping(kid)
 
   def _finished_bumping(self, proxy_handle):
     if len(self._node.kids) != 2:

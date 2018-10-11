@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import dist_zero.ids
@@ -73,6 +74,7 @@ class LeafNode(Node):
       if len(new_receivers) != 1:
         raise errors.InternalError("switch_flows should be called on a leaf node only when there is a unique receiver.")
       self._set_output(new_receivers[0])
+      self._activate()
     elif self._variant == 'output':
       raise errors.InternalError("An input LeafNode should never function as a source node in a migration.")
     else:
@@ -152,6 +154,7 @@ class LeafNode(Node):
       right_config, = right_configs
       node = right_config['parent_handle']
       self._set_output(node)
+      self._activate()
       self.send(node,
                 messages.migration.configure_new_flow_left(
                     migration_id=None,
@@ -164,7 +167,7 @@ class LeafNode(Node):
 
   def _activate(self):
     for message in self._pre_active_messages:
-      self.receive(message)
+      self.receive(message, sender_id=None)
     self._pre_active_messages = None
 
   def _receive_input_action(self, message):
@@ -175,7 +178,8 @@ class LeafNode(Node):
       self.logger.debug("Forwarding input message via exporter")
       self._exporter.export_message(message=message, sequence_number=self.linker.advance_sequence_number())
     else:
-      self.logger.debug("Leaf node is postponing an input_action message send since it does not yet have an exporter.")
+      self.logger.warning(
+          "Leaf node is postponing an input_action message send since it does not yet have an exporter.")
       self._pre_active_messages.append(message)
 
   def deliver(self, message, sequence_number, sender_id):

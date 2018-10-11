@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import heapq
 import json
@@ -53,6 +54,10 @@ class SimulatedSpawner(spawner.Spawner):
   def mode(self):
     return spawners.MODE_SIMULATED
 
+  def clean_all(self):
+    for controller in self._controller_by_id.values():
+      controller.clean_all()
+
   def _random_ms_for_send(self):
     return max(1,
                int(
@@ -95,23 +100,10 @@ class SimulatedSpawner(spawner.Spawner):
     else:
       return "Control Message: {}".format(message['type'])
 
-  def run_for(self, ms):
+  async def run_for(self, ms):
     '''
     Run the simulation for a number of milliseconds.
     Wrap exceptions thrown by the underlying nodes in a `SimulationError`.
-
-    :param int ms: The number of milliseconds to run for
-    '''
-    try:
-      self._run_for_throwing_inner_exns(ms)
-    except RuntimeError:
-      exc_info = sys.exc_info()
-      raise errors.SimulationError(log_lines=[self._format_log(x) for x in self._log], exc_info=exc_info)
-
-  def _run_for_throwing_inner_exns(self, ms):
-    '''
-    Run the simulation for a number of milliseconds.  Raise any
-    exception thrown by the underlying nodes directly.
 
     :param int ms: The number of milliseconds to run for
     '''
@@ -120,39 +112,25 @@ class SimulatedSpawner(spawner.Spawner):
 
     stop_time_ms = self._elapsed_time_ms + ms
 
-    while stop_time_ms > self._elapsed_time_ms:
-      # The amount of time to simulate in this iteration of the loop
-      step_time_ms = min(stop_time_ms - self._elapsed_time_ms, SimulatedSpawner.MAX_STEP_TIME_MS)
-      # The value of self._elapsed_time at the end of this iteration of the loop
-      new_elapsed_time_ms = step_time_ms + self._elapsed_time_ms
+    while self._pending_receives and self._pending_receives[0].t <= stop_time_ms:
+      received_at, to_receive = heapq.heappop(self._pending_receives).tuple()
 
-      # Even for debug logs, the below logging statement is overly verbose.
-      #logger.debug(
-      #    "Simulating from {start_time} ms to {end_time} ms",
-      #    extra={
-      #        'start_time': self._elapsed_time_ms,
-      #        'end_time': new_elapsed_time_ms,
-      #    })
-
-      # Simulate every event in the queue
-      while self._pending_receives and self._pending_receives[0].t <= new_elapsed_time_ms:
-        received_at, to_receive = heapq.heappop(self._pending_receives).tuple()
-        # Simulate the time before this event
-        for controller in self._controller_by_id.values():
-          controller.elapse_nodes(received_at - self._elapsed_time_ms)
-
-        # Simulate the event
+      # Simulate the event
+      if isinstance(to_receive, asyncio.Future):
+        to_receive.set_result(None)
+      else:
         receiving_controller = self._controller_by_id[to_receive['machine_id']]
         receiving_controller.handle_message(message=to_receive['message'])
 
-        self._elapsed_time_ms = received_at
+      # FIXME(KK): Surely there must be a better way to run the events that were scheduled by the above few lines.
+      await asyncio.sleep(0.001)
 
-      # Simulate the rest of step_time_ms not simulated in the above loop over events
-      if self._elapsed_time_ms < new_elapsed_time_ms:
-        for controller in self._controller_by_id.values():
-          controller.elapse_nodes(new_elapsed_time_ms - self._elapsed_time_ms)
+      self._elapsed_time_ms = received_at
 
-      self._elapsed_time_ms = new_elapsed_time_ms
+  def sleep_ms(self, ms):
+    future = asyncio.get_event_loop().create_future()
+    self._add_to_heap((self._elapsed_time_ms + ms, future))
+    return future
 
   def get_machine_by_id(self, machine_id):
     '''
@@ -168,10 +146,10 @@ class SimulatedSpawner(spawner.Spawner):
         for machine in self._controller_by_id.values() for node_id, node in machine._node_by_id.items()
     }
 
-  def create_machines(self, machine_configs):
-    return [self.create_machine(machine_config) for machine_config in machine_configs]
+  async def create_machines(self, machine_configs):
+    return [ await self.create_machine(machine_config) for machine_config in machine_configs]
 
-  def create_machine(self, machine_config):
+  async def create_machine(self, machine_config):
     result = machine.NodeManager(
         machine_config=machine_config,
         ip_host=machine_config['id'],
@@ -220,7 +198,6 @@ class SimulatedSpawner(spawner.Spawner):
           'message': message,
       }))
     elif sock_type == 'tcp':
-      self.run_for(ms=sending_time_ms)
       receiving_controller = self._controller_by_id[machine_id]
       response = receiving_controller.handle_api_message(message)
       if response['status'] == 'ok':
@@ -253,6 +230,10 @@ class _Event(object):
   def __lt__(self, other):
     if self.t != other.t:
       return self.t < other.t
+    elif isinstance(self.value, asyncio.Future):
+      return True
+    elif isinstance(other.value, asyncio.Future):
+      return False
     else:
       # Return a consistent answer when comparing events that occur at the exact same time.
       return json.dumps(self.value) < json.dumps(other.value)
