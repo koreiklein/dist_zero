@@ -54,6 +54,10 @@ class SimulatedSpawner(spawner.Spawner):
   def mode(self):
     return spawners.MODE_SIMULATED
 
+  def clean_all(self):
+    for controller in self._controller_by_id.values():
+      controller.clean_all()
+
   def _random_ms_for_send(self):
     return max(1,
                int(
@@ -142,10 +146,10 @@ class SimulatedSpawner(spawner.Spawner):
         for machine in self._controller_by_id.values() for node_id, node in machine._node_by_id.items()
     }
 
-  def create_machines(self, machine_configs):
-    return [self.create_machine(machine_config) for machine_config in machine_configs]
+  async def create_machines(self, machine_configs):
+    return [ await self.create_machine(machine_config) for machine_config in machine_configs]
 
-  def create_machine(self, machine_config):
+  async def create_machine(self, machine_config):
     result = machine.NodeManager(
         machine_config=machine_config,
         ip_host=machine_config['id'],
@@ -228,6 +232,8 @@ class _Event(object):
       return self.t < other.t
     elif isinstance(self.value, asyncio.Future):
       return True
+    elif isinstance(other.value, asyncio.Future):
+      return False
     else:
       # Return a consistent answer when comparing events that occur at the exact same time.
       return json.dumps(self.value) < json.dumps(other.value)

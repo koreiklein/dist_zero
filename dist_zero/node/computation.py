@@ -410,6 +410,8 @@ class ComputationNode(Node):
         raise errors.InternalError(
             "Got a goodbye_parent from a node that is not a kid of self.", extra={'kid_id': sender_id})
       self.kids.pop(sender_id)
+      if self._proxy_spawner is not None:
+        self._proxy_spawner.lost_a_kid()
     elif message['type'] == 'bumped_height':
       self._proxy_spawner = proxy_spawner.ProxySpawner(node=self)
       self._proxy_spawner.respond_to_bumped_height(

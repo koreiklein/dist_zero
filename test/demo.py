@@ -97,6 +97,9 @@ class Demo(object):
 
   def tear_down(self):
     '''Remove any resources created as part of the demo.'''
+    if self.simulated_spawner:
+      self.simulated_spawner.clean_all()
+
     if self.virtual_spawner and self.virtual_spawner.started:
       self.virtual_spawner.clean_all()
 
@@ -170,7 +173,7 @@ class Demo(object):
 
       configs.append(messages.machine.machine_config(**machine_config))
 
-    result = self.system.create_machines(configs)
+    result = await self.system.create_machines(configs)
     return result
 
   async def new_machine_controller(self):

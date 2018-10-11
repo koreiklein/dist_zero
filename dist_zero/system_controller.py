@@ -201,7 +201,7 @@ class SystemController(object):
   def mode(self):
     return self._spawner.mode()
 
-  def create_machine(self, machine_config):
+  async def create_machine(self, machine_config):
     '''
     Start up a new machine and run a `MachineController` instance on it.
 
@@ -210,9 +210,9 @@ class SystemController(object):
     :return: The id of the new `MachineController`
     :rtype: str
     '''
-    return self.create_machines([machine_config])[0]
+    return await self.create_machines([machine_config])[0]
 
-  def create_machines(self, machine_configs):
+  async def create_machines(self, machine_configs):
     '''
     Start up new machines and run `MachineController` instances on them.
 
@@ -221,7 +221,7 @@ class SystemController(object):
     :return: The list of ids of the new `MachineController` in the same order as the matching 
     :rtype: list[str]
     '''
-    return self._spawner.create_machines(machine_configs)
+    return await self._spawner.create_machines(machine_configs)
 
   def get_output_state(self, output_node_id):
     '''

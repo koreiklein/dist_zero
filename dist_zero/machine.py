@@ -135,6 +135,12 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
+  def clean_all(self):
+    '''
+    Finalize everything running on this controller.
+    '''
+    raise RuntimeError("Abstract Superclass")
+
 
 class NodeManager(MachineController):
   '''
@@ -191,6 +197,7 @@ class NodeManager(MachineController):
     self._ip_host = ip_host
 
     self._node_by_id = {}
+    self._running = True
 
     self._now_ms = 0 # Current elapsed time in milliseconds
     # a heap (as in heapq) of tuples (ms_of_occurence, send_receive, args)
@@ -199,6 +206,8 @@ class NodeManager(MachineController):
     self._pending_events = []
 
     self._send_to_machine = send_to_machine
+
+    asyncio.get_event_loop().create_task(self._elapse_time_periodically())
 
   @property
   def random(self):
@@ -291,12 +300,6 @@ class NodeManager(MachineController):
   def n_nodes(self):
     return len(self._node_by_id)
 
-  def _run_first_function(self, node, first_function_name, kwargs):
-    if first_function_name == leaf.first_function_name:
-      asyncio.get_event_loop().create_task(leaf.first_function(node, **kwargs))
-    else:
-      raise RuntimeError(f"Unrecognized first function name {first_function_name}")
-
   def start_node(self, node_config):
     logger.info(
         "Starting new '{node_type}' node {node_id} on machine '{machine_name}'",
@@ -305,30 +308,22 @@ class NodeManager(MachineController):
             'node_id': self._format_node_id_for_logs(node_config['id']),
             'machine_name': self.name,
         })
-    # FIXME(KK): Once we've swtiched all the *Node subclasses to run as functions on the asynchronous
-    #   ASyncNode class, only the 'node_config' should appear here.
-    if node_config['type'] == 'node_config':
-      node = AsyncNode(node_id=node_config['id'], controller=self)
-      self._run_first_function(node, node_config['first_function_name'], node_config['first_function_kwargs'])
-      self._node_by_id[node.id] = node
-      return node
+    if node_config['type'] == 'LeafNode':
+      node = io.LeafNode.from_config(node_config=node_config, controller=self)
+    elif node_config['type'] == 'InternalNode':
+      node = io.InternalNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'SumNode':
+      node = SumNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'MigrationNode':
+      node = MigrationNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'ComputationNode':
+      node = ComputationNode.from_config(node_config, controller=self)
     else:
-      if node_config['type'] == 'LeafNode':
-        node = io.LeafNode.from_config(node_config=node_config, controller=self)
-      elif node_config['type'] == 'InternalNode':
-        node = io.InternalNode.from_config(node_config, controller=self)
-      elif node_config['type'] == 'SumNode':
-        node = SumNode.from_config(node_config, controller=self)
-      elif node_config['type'] == 'MigrationNode':
-        node = MigrationNode.from_config(node_config, controller=self)
-      elif node_config['type'] == 'ComputationNode':
-        node = ComputationNode.from_config(node_config, controller=self)
-      else:
-        raise RuntimeError("Unrecognized type {}".format(node_config['type']))
+      raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 
-      self._node_by_id[node.id] = node
-      node.initialize()
-      return node
+    self._node_by_id[node.id] = node
+    node.initialize()
+    return node
 
   def handle_api_message(self, message):
     '''
@@ -422,6 +417,15 @@ class NodeManager(MachineController):
       asyncio.get_event_loop().create_task(node.receive(message=message, sender_id=sender_id))
     else:
       node.receive(message=message, sender_id=sender_id)
+
+  def clean_all(self):
+    self._running = False
+
+  async def _elapse_time_periodically(self):
+    ELAPSE_TIME_MS = 70
+    while self._running:
+      await self.sleep_ms(ELAPSE_TIME_MS)
+      self.elapse_nodes(ELAPSE_TIME_MS)
 
   def elapse_nodes(self, ms):
     '''
