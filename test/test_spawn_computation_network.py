@@ -76,7 +76,7 @@ class TestSpawnComputationNetwork(object):
         send_messages_for_ms=3000)
 
     # Need to wait for the new users to be fully connected.
-    await self.demo.run_for(ms=2000)
+    await self.demo.run_for(ms=4000)
 
     self.root_computation = self.demo.connect_trees_with_sum_network(
         root_input, root_output, machine=self.machine_ids[0])

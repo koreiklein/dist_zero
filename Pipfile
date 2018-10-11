@@ -11,6 +11,7 @@ python-logstash-async = "*"
 docker = "*"
 python-json-logger = "*"
 cryptography = "==2.3.1"
+uvloop = "*"
 
 [dev-packages]
 yapf = "*"

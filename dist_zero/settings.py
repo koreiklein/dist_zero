@@ -5,9 +5,20 @@ All environment variables used to configure DistZero should be accessed by only 
 and stored in python variables for use by other modules.
 '''
 
+import asyncio
 import os
 
+import uvloop
+
 from dotenv import load_dotenv, find_dotenv
+
+USE_UV_LOOP = os.environ.get('USE_UV_LOOP', '')
+use_uv_loop = USE_UV_LOOP.strip().lower() == 'true'
+if USE_UV_LOOP:
+  asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+ENCRYPT_ALL_MESSAGES = os.environ.get('ENCRYPT_ALL_MESSAGES', 'true')
+encrypt_all_messages = ENCRYPT_ALL_MESSAGES.strip().lower() == 'true'
 
 load_dotenv(find_dotenv())
 
@@ -15,7 +26,7 @@ DIST_ZERO_ENV = os.environ['DIST_ZERO_ENV']
 
 IS_TESTING_ENV = DIST_ZERO_ENV == 'test'
 
-ALWAYS_REBUILD_DOCKER_IMAGES = os.environ.get('ALWAYS_REBUILD_DOCKER_IMAGES', '').lower() == 'true'
+ALWAYS_REBUILD_DOCKER_IMAGES = os.environ.get('ALWAYS_REBUILD_DOCKER_IMAGES', '').strip().lower() == 'true'
 
 # URL for the docker server
 DOCKER_BASE_URL = os.environ.get('DOCKER_BASE_URL', '')
@@ -72,4 +83,6 @@ CLOUD_ENV_VARS = [
     'AWS_ACCESS_KEY_ID',
     'AWS_SECRET_ACCESS_KEY_ID',
     'DEFAULT_AWS_REGION',
+    'ENCRYPT_ALL_MESSAGES',
+    'USE_UV_LOOP',
 ]
