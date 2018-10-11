@@ -659,6 +659,13 @@ class InternalNode(Node):
         })
     self._kids[node_id] = None
 
+    return messages.io.leaf_config(
+        node_id=node_id,
+        name=name,
+        parent=self.new_handle(node_id),
+        variant=self._variant,
+        initial_state=self._initial_state)
+
     return messages.common.node_config(
         node_id=node_id,
         first_function_name=leaf.first_function_name,

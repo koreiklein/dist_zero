@@ -151,7 +151,7 @@ class SystemController(object):
         machine_id=machine_id,
     )
     if recorded_user is not None:
-      node_config['first_function_kwargs']['recorded_user_json'] = recorded_user.to_json()
+      node_config['recorded_user_json'] = recorded_user.to_json()
     return self.spawn_node(on_machine=machine_id, node_config=node_config)
 
   def spawn_node(self, node_config, on_machine):
