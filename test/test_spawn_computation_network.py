@@ -115,10 +115,14 @@ class TestSpawnComputationNetwork(object):
   @pytest.mark.asyncio
   async def test_spawn_small_small(self, demo):
     self.demo = demo
-    self.machine_ids = await demo.new_machine_controllers(
-        1, base_config=self.base_config(), random_seed='test_spawn_small_small')
+    try:
+      self.machine_ids = await demo.new_machine_controllers(
+          1, base_config=self.base_config(), random_seed='test_spawn_small_small')
 
-    await self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=1)
+      await self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=1)
+    except Exception as e:
+      import ipdb
+      ipdb.set_trace()
 
   @pytest.mark.asyncio
   async def test_spawn_small_large(self, demo):

@@ -50,7 +50,7 @@ class MachineRunner(object):
 
     self._ip_host = machine_config['ip_address']
     if self._ip_host is None:
-      logger.warning("An ip_address was no provided in the machine config.")
+      logger.warning("An ip_address was not provided in the machine config.")
       self._ip_host = socket.gethostbyname(socket.gethostname())
 
     self._load_balancer = None
