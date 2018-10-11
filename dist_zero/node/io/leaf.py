@@ -174,6 +174,8 @@ class LeafNode(Node):
     '''
     self._controller = controller
     self.id = node_id
+    self._exporter = None
+    self._importer = None
     self._variant = variant
 
     self._recorded_user = recorded_user
@@ -222,6 +224,88 @@ class LeafNode(Node):
   @property
   def height(self):
     return 0
+
+  def _set_input(self, node):
+    if self._importer is not None:
+      raise errors.InternalError("LeafNodes have only a single input node."
+                                 "  Can not add a new one once an input already exists")
+    if self._variant != 'output':
+      raise errors.InternalError("Only output LeafNodes can set their input.")
+
+    self._importer = self.linker.new_importer(node)
+
+  def _set_output(self, node):
+    if self._exporter is not None:
+      if node['id'] != self._exporter.receiver_id:
+        raise errors.InternalError("LeafNodes have only a single output node."
+                                   "  Can not add a new one once an output already exists")
+    else:
+      if self._variant != 'input':
+        raise errors.InternalError("Only input LeafNodes can set their output.")
+      self._exporter = self.linker.new_exporter(node)
+
+  def receive(self, message, sender_id):
+    if message['type'] == 'input_action':
+      self._receive_input_action(message)
+    elif message['type'] == 'adopt':
+      self.send(self._parent, messages.io.goodbye_parent())
+      self._parent = message['new_parent']
+      self._send_hello_parent()
+    elif message['type'] == 'configure_right_parent':
+      # No need to do anything here
+      pass
+    elif message['type'] == 'configure_new_flow_left':
+      for left_config in message['left_configurations']:
+        node = left_config['node']
+        if left_config['state']:
+          self._current_state = left_config['state']
+        self._set_input(node)
+    elif message['type'] == 'added_sender':
+      node = message['node']
+      self.send(node,
+                messages.migration.configure_new_flow_right(None, [
+                    messages.migration.right_configuration(
+                        n_kids=None,
+                        parent_handle=self.new_handle(node['id']),
+                        height=-1,
+                        is_data=True,
+                        connection_limit=1,
+                    )
+                ]))
+    elif message['type'] == 'configure_new_flow_right':
+      if self._variant != 'input':
+        raise errors.InternalError("Only 'input' leaves may be given a new right node.")
+      right_configs = message['right_configurations']
+      if len(right_configs) != 1:
+        raise errors.InternalError("'input' leaves must be configured with a unique receiver.")
+      right_config, = right_configs
+      node = right_config['parent_handle']
+      self._set_output(node)
+      self.send(node,
+                messages.migration.configure_new_flow_left(
+                    migration_id=None,
+                    left_configurations=[
+                        messages.migration.left_configuration(
+                            height=-1, is_data=True, node=self.new_handle(node['id']), kids=[])
+                    ]))
+    else:
+      super(LeafNode, self).receive(message=message, sender_id=sender_id)
+
+  def _activate(self):
+    for message in self._pre_active_messages:
+      self.receive(message)
+    self._pre_active_messages = None
+
+  def _receive_input_action(self, message):
+    if self._variant != 'input':
+      raise errors.InternalError("Only 'input' variant nodes may receive input actions")
+
+    if self._exporter is not None:
+      self.logger.debug("Forwarding input message via exporter")
+      self._exporter.export_message(message=message, sequence_number=self.linker.advance_sequence_number())
+    else:
+      self.logger.debug("Leaf node is postponing an input_action message send since it does not yet have an exporter.")
+      self._pre_active_messages.append(message)
 
   def deliver(self, message, sequence_number, sender_id):
     if self._variant != 'output':
