@@ -666,16 +666,6 @@ class InternalNode(Node):
         variant=self._variant,
         initial_state=self._initial_state)
 
-    return messages.common.node_config(
-        node_id=node_id,
-        first_function_name=leaf.first_function_name,
-        first_function_kwargs={
-            'parent': self.new_handle(node_id),
-            'variant': self._variant,
-            'initial_state': self._initial_state,
-        },
-    )
-
   def deliver(self, message, sequence_number, sender_id):
     raise errors.InternalError("Messages should not be delivered to internal nodes.")
 

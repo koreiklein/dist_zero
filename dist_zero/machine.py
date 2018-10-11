@@ -9,7 +9,6 @@ from random import Random
 
 from dist_zero import errors, messages, dns, settings
 
-from .node.node import AsyncNode
 from .node import io
 from .node.io import leaf
 from .node.sum import SumNode
@@ -426,10 +425,7 @@ class NodeManager(MachineController):
             'message_type': message['type'],
             'sender_id': sender_id,
         })
-    if isinstance(node, AsyncNode):
-      asyncio.get_event_loop().create_task(node.receive(message=message, sender_id=sender_id))
-    else:
-      node.receive(message=message, sender_id=sender_id)
+    node.receive(message=message, sender_id=sender_id)
 
   def clean_all(self):
     self._running = False
