@@ -34,13 +34,15 @@ class LeafNode(Node):
   so leaves are designed never to have to manage complex sets of senders or receivers.
   '''
 
-  def __init__(self, node_id, parent, controller, variant, initial_state, recorded_user=None):
+  def __init__(self, node_id, parent, controller, variant, initial_state, state_updater, recorded_user=None):
     '''
     :param `MachineController` controller: the controller for this node's machine.
     :param parent: The :ref:`handle` of the parent `InternalNode` of this node.
     :type parent: :ref:`handle`
     :param str variant: 'input' or 'output'
     :param object initial_state: The initial state of the value mantained by this leaf node.
+    :param str state_updater: 'sum' or 'collect'.  This parameter defines how this leaf updates its state
+      upon delivery of a new message.
     :param `RecordedUser` recorded_user: In tests, this parameter may be not null to indicate that this
       node should playback the actions of an attached `RecordedUser` instance.
     '''
@@ -49,6 +51,8 @@ class LeafNode(Node):
     self._exporter = None
     self._importer = None
     self._variant = variant
+
+    self._state_updater = state_updater
 
     self._recorded_user = recorded_user
 
@@ -186,11 +190,20 @@ class LeafNode(Node):
     if self._variant != 'output':
       raise errors.InternalError("Only 'output' variant nodes may receive output actions")
 
-    increment = message['number']
-    self.logger.debug("Output incrementing state by {increment}", extra={'increment': increment})
-    self._current_state += increment
+    self._update_current_state(message)
 
     self.linker.advance_sequence_number()
+
+  def _update_current_state(self, message):
+    if self._state_updater == 'sum':
+      increment = message['number']
+      self.logger.debug("Output incrementing state by {increment}", extra={'increment': increment})
+      self._current_state += increment
+    elif self._state_updater == 'collect':
+      import ipdb
+      ipdb.set_trace()
+    else:
+      raise errors.InternalError(f"Unrecognized state_updater {self._state_updater}")
 
   @staticmethod
   def _init_recorded_user_from_config(recorded_user_json):
@@ -213,6 +226,7 @@ class LeafNode(Node):
         controller=controller,
         node_id=node_config['id'],
         parent=node_config['parent'],
+        state_updater=node_config['state_updater'],
         variant=node_config['variant'],
         initial_state=node_config['initial_state'],
         recorded_user=LeafNode._init_recorded_user_from_config(node_config['recorded_user_json']))

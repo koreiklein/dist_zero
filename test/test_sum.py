@@ -67,13 +67,14 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
   root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
   demo.system.spawn_node(
       on_machine=machine_a,
-      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, height=1, variant='input'))
+      node_config=messages.io.internal_node_config(
+          root_input_node_id, parent=None, height=1, state_updater='sum', variant='input'))
 
   root_output_node_id = dist_zero.ids.new_id('InternalNode_output')
   demo.system.spawn_node(
       on_machine=machine_c,
       node_config=messages.io.internal_node_config(
-          root_output_node_id, parent=None, height=1, variant='output', initial_state=0))
+          root_output_node_id, parent=None, height=1, variant='output', state_updater='sum', initial_state=0))
 
   await demo.run_for(ms=200)
 

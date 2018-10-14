@@ -62,7 +62,14 @@ def set_adjacent(node):
   return {'type': 'set_adjacent', 'node': node}
 
 
-def internal_node_config(node_id, parent, variant, height, adjacent=None, adoptees=None, initial_state=None):
+def internal_node_config(node_id,
+                         parent,
+                         variant,
+                         height,
+                         state_updater,
+                         adjacent=None,
+                         adoptees=None,
+                         initial_state=None):
   '''
   A node config for creating an internal node to manage a new list of io nodes.
 
@@ -73,6 +80,7 @@ def internal_node_config(node_id, parent, variant, height, adjacent=None, adopte
   :param int height: The height of the node in the tree.  See `InternalNode`
   :param adjacent: The :ref:`handle` adjacent node to either receiver from or forward to or `None`
   :type adjacent: :ref:`handle` or `None`
+  :param str state_updater: 'sum' or 'collect'.  This parameter defines how the leaves in this tree updates their state
   :param adoptees: The list of `Node` instances that this node should adopt as its kids upon initialization,
     or `None` if the node should not initially adopt any kids.
   :type adoptees: list[:ref:`handle`] or `None`
@@ -88,6 +96,7 @@ def internal_node_config(node_id, parent, variant, height, adjacent=None, adopte
       'variant': variant,
       'height': height,
       'adjacent': adjacent,
+      'state_updater': state_updater,
       'adoptees': [] if adoptees is None else adoptees,
       'initial_state': initial_state
   }
@@ -137,7 +146,7 @@ def set_output(output_node):
   return {'type': 'set_output', 'output_node': output_node}
 
 
-def leaf_config(node_id, name, parent, variant, initial_state, recorded_user_json=None):
+def leaf_config(node_id, name, parent, variant, initial_state, state_updater, recorded_user_json=None):
   '''
   A node config for a new leaf node.
 
@@ -147,6 +156,7 @@ def leaf_config(node_id, name, parent, variant, initial_state, recorded_user_jso
   :type parent: :ref:`handle`
   :param str variant: 'input' or 'output'
   :param object initial_state: A json serializeable starting state for this node.
+  :param str state_updater: 'sum' or 'collect'.  This parameter defines how this leaf updates its state
   :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
   '''
   return {
@@ -156,6 +166,7 @@ def leaf_config(node_id, name, parent, variant, initial_state, recorded_user_jso
       'parent': parent,
       'variant': variant,
       'initial_state': initial_state,
+      'state_updater': state_updater,
       'recorded_user_json': recorded_user_json,
   }
 

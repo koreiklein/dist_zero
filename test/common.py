@@ -15,13 +15,18 @@ class Utils(object):
         'network_errors_config': messages.machine.std_simulated_network_errors_config(),
     }
 
-  async def root_io_tree(self, machine, variant):
+  async def root_io_tree(self, machine, variant, state_updater):
     '''spawn a new io tree and return the id of the root.'''
     node_id = dist_zero.ids.new_id('InternalNode_{}_root'.format(variant))
     self.demo.system.spawn_node(
         on_machine=machine,
         node_config=messages.io.internal_node_config(
-            node_id, parent=None, height=1, variant=variant, initial_state=0 if variant == 'output' else None))
+            node_id,
+            parent=None,
+            height=1,
+            variant=variant,
+            state_updater=state_updater,
+            initial_state=0 if variant == 'output' else None))
     await self.demo.run_for(ms=200)
     return node_id
 

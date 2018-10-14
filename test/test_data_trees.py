@@ -23,7 +23,8 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
   root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
   demo.system.spawn_node(
       on_machine=machine,
-      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, height=1, variant='input'))
+      node_config=messages.io.internal_node_config(
+          root_input_node_id, parent=None, height=1, state_updater='sum', variant='input'))
   await demo.run_for(ms=2000)
 
   leaves = demo.all_io_kids(root_input_node_id)
@@ -64,7 +65,8 @@ async def test_scale_unconnected_io_tree(demo):
   root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
   demo.system.spawn_node(
       on_machine=machine,
-      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, height=1, variant='input'))
+      node_config=messages.io.internal_node_config(
+          root_input_node_id, parent=None, height=1, state_updater='sum', variant='input'))
   await demo.run_for(ms=2000)
 
   leaf_ids = []
@@ -97,8 +99,6 @@ async def test_scale_unconnected_io_tree(demo):
     demo.system.kill_node(leaf_ids.pop())
     await demo.run_for(ms=1000)
 
-  demo.render_network(root_input_node_id)
   await demo.run_for(ms=60 * 1000)
-  demo.render_network(root_input_node_id)
 
   assert 1 == demo.system.get_capacity(root_input_node_id)['height']

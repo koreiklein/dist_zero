@@ -9,9 +9,9 @@ from .common import Utils
 
 class TestSpawnComputationNetwork(Utils):
   async def _connect_and_test_io_trees(self, n_input_leaves, n_output_leaves):
-    root_input = await self.root_io_tree(machine=self.machine_ids[0], variant='input')
+    root_input = await self.root_io_tree(machine=self.machine_ids[0], variant='input', state_updater='sum')
     self.root_input = root_input
-    root_output = await self.root_io_tree(machine=self.machine_ids[0], variant='output')
+    root_output = await self.root_io_tree(machine=self.machine_ids[0], variant='output', state_updater='sum')
     self.root_output = root_output
 
     await self.demo.run_for(ms=200)
@@ -42,7 +42,6 @@ class TestSpawnComputationNetwork(Utils):
     assert len(output_leaves) == n_output_leaves
     self.demo.system.get_senders(root_output)
     self.demo.system.get_receivers(root_input)
-    self.demo.render_network(self.root_computation)
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 
@@ -53,7 +52,7 @@ class TestSpawnComputationNetwork(Utils):
     self.machine_ids = await self.demo.new_machine_controllers(
         1, base_config=self.base_config(), random_seed='test_dns')
 
-    root_input = await self.root_io_tree(machine=self.machine_ids[0], variant='input')
+    root_input = await self.root_io_tree(machine=self.machine_ids[0], variant='input', state_updater='sum')
     await self.demo.run_for(ms=6000)
     await self.spawn_users(root_input, n_users=2)
     domain_name = 'www.distzerotesting.com'
@@ -68,6 +67,7 @@ class TestSpawnComputationNetwork(Utils):
         1, base_config=self.base_config(), random_seed='test_spawn_small_small')
 
     await self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=1)
+    self.demo.render_network(self.root_computation)
 
   @pytest.mark.asyncio
   async def test_spawn_small_large(self, demo):

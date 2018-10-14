@@ -22,13 +22,14 @@ class InternalNode(Node):
   minimal assignment such that n.height+1 == n.parent.height for every node n that has a parent.
   '''
 
-  def __init__(self, node_id, parent, variant, height, adjacent, adoptees, initial_state, controller):
+  def __init__(self, node_id, parent, variant, height, state_updater, adjacent, adoptees, initial_state, controller):
     '''
     :param str node_id: The id to use for this node
     :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
     :type parent: :ref:`handle` or `None`
     :param str variant: 'input' or 'output'
     :param int height: The height of the node in the tree.  See `InternalNode`
+    :param str state_updater: 'sum' or 'collect'.  This parameter defines how the leaves in this tree updates their state
     :param adjacent: The :ref:`handle` of the adjacent node or `None` if this node should not start with an adjacent.
     :type adjacent: :ref:`handle` or `None`
     :param adoptees: Nodes to adopt upon initialization.
@@ -41,6 +42,7 @@ class InternalNode(Node):
     self._parent = parent
     self._sent_hello = False
     self._variant = variant
+    self._state_updater = state_updater
     self._height = height
     self.id = node_id
     self._pending_adoptees = None if parent is None else {adoptee['id']: False for adoptee in adoptees}
@@ -211,6 +213,7 @@ class InternalNode(Node):
               node_id=node_id,
               parent=self.new_handle(node_id),
               variant=self._variant,
+              state_updater=self._state_updater,
               height=self._height - 1,
               adjacent=None,
               initial_state=self._initial_state,
@@ -334,6 +337,7 @@ class InternalNode(Node):
             node_id=self._root_proxy_id,
             parent=self.new_handle(self._root_proxy_id),
             variant=self._variant,
+            state_updater=self._state_updater,
             height=self._height - 1,
             adjacent=None,
             initial_state=self._initial_state,
@@ -514,6 +518,7 @@ class InternalNode(Node):
         parent=node_config['parent'],
         controller=controller,
         adjacent=node_config['adjacent'],
+        state_updater=node_config['state_updater'],
         adoptees=node_config['adoptees'],
         variant=node_config['variant'],
         height=node_config['height'],
@@ -688,6 +693,7 @@ class InternalNode(Node):
         name=name,
         parent=self.new_handle(node_id),
         variant=self._variant,
+        state_updater=self._state_updater,
         initial_state=self._initial_state)
 
   def deliver(self, message, sequence_number, sender_id):
