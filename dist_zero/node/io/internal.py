@@ -49,6 +49,10 @@ class InternalNode(Node):
     self._initial_state = initial_state
     self._adjacent = adjacent
 
+    self._updated_summary = True
+    '''Set to true when the currenty summary may have changed.'''
+    self._last_kid_summary = None
+
     self._domain_name = None
     self._routing_kids_listener = None
 
@@ -143,6 +147,7 @@ class InternalNode(Node):
       raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
   def switch_flows(self, migration_id, old_exporters, new_exporters, new_receivers):
+    self._updated_summary = True
     if self._variant == 'input':
       if len(new_receivers) != 1:
         raise errors.InternalError("Not sure how to set an input node's receives to a list not of length 1.")
@@ -199,6 +204,7 @@ class InternalNode(Node):
       node_id = ids.new_id("InternalNode_kid")
       self._pending_spawned_kids.add(node_id)
       self._kid_summaries[node_id] = messages.io.kid_summary(size=0, n_kids=0)
+      self._updated_summary = True
       self.logger.info("InternalNode is spawning a new kid", extra={'new_kid_id': node_id})
       self._controller.spawn_node(
           messages.io.internal_node_config(
@@ -242,7 +248,7 @@ class InternalNode(Node):
 
   def _check_for_mergeable_kids(self, ms):
     '''Check whether any two kids should be merged.'''
-    TIME_TO_WAIT_BEFORE_KID_MERGE_MS = 4 * 1000
+    TIME_TO_WAIT_BEFORE_KID_MERGE_MS = 2 * 1000
 
     if self._height > 0:
       best_pair = self._best_mergeable_kids()
@@ -274,12 +280,15 @@ class InternalNode(Node):
     # Current algorithm: 2 kids can be merged if each has n_kids less than 1/3 the max
     if len(self._kid_summaries) >= 2:
       MAX_N_KIDS = self.system_config['INTERNAL_NODE_KIDS_LIMIT']
-      MERGEABLE_N_KIDS = MAX_N_KIDS // 3
+      if MAX_N_KIDS <= 3:
+        MERGEABLE_N_KIDS_FIRST = MERGEABLE_N_KIDS_SECOND = 1
+      else:
+        MERGEABLE_N_KIDS_FIRST = MERGEABLE_N_KIDS_SECOND = MAX_N_KIDS // 3
       n_kids_kid_id_pairs = [(kid_summary['n_kids'], kid_id) for kid_id, kid_summary in self._kid_summaries.items()]
       n_kids_kid_id_pairs.sort()
       (least_n_kids, least_id), (next_least_n_kids, next_least_id) = n_kids_kid_id_pairs[:2]
 
-      if least_n_kids <= MERGEABLE_N_KIDS and next_least_n_kids <= MERGEABLE_N_KIDS:
+      if least_n_kids <= MERGEABLE_N_KIDS_FIRST and next_least_n_kids <= MERGEABLE_N_KIDS_SECOND:
         return least_id, next_least_id
     return None
 
@@ -318,7 +327,8 @@ class InternalNode(Node):
     self._kids_for_proxy_to_adopt = list(self._kids.values())
     self._height += 1
     self._pending_spawned_kids.add(self._root_proxy_id)
-    self._kid_summaries[self._root_proxy_id] = messages.io.kid_summary(size=0, n_kids=0)
+    self._kid_summaries = {}
+    self._updated_summary = True
     self._controller.spawn_node(
         messages.io.internal_node_config(
             node_id=self._root_proxy_id,
@@ -332,6 +342,7 @@ class InternalNode(Node):
 
   def _finish_bumping_height(self, proxy):
     self._kid_summaries = {}
+    self._updated_summary = True
     self._kids = {proxy['id']: proxy}
     self._graph = NetworkGraph()
     self._graph.add_node(proxy['id'])
@@ -347,6 +358,7 @@ class InternalNode(Node):
 
   def _finish_adding_kid(self, kid):
     kid_id = kid['id']
+    self._updated_summary = True
     self._kids[kid_id] = kid
     self._graph.add_node(kid_id)
     if self._pending_adoptees:
@@ -376,6 +388,10 @@ class InternalNode(Node):
         raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
     self._graph.add_node(kid_id)
+
+  def _maybe_kids_have_left(self):
+    if not self._leaving_kids:
+      self._controller.terminate_node(self.id)
 
   def receive(self, message, sender_id):
     if self._routing_kids_listener is not None and self._routing_kids_listener.receive(
@@ -417,27 +433,28 @@ class InternalNode(Node):
         self._finish_bumping_height(message['kid'])
       else:
         self._finish_adding_kid(message['kid'])
-      self._send_kid_summary()
+      self._updated_summary = True
     elif message['type'] == 'goodbye_parent':
+      self._updated_summary = True
       if sender_id in self._merging_kid_ids:
         self._merging_kid_ids.remove(sender_id)
       if sender_id in self._kids:
         self._kids.pop(sender_id)
       if sender_id in self._kid_summaries:
         self._kid_summaries.pop(sender_id)
-        self._send_kid_summary()
 
       if self._leaving_kids is not None and sender_id in self._leaving_kids:
         self._leaving_kids.remove(sender_id)
-        if not self._leaving_kids:
-          self._controller.terminate_node(self.id)
+        self._maybe_kids_have_left()
 
       if sender_id == self._root_consuming_proxy_id:
         self._complete_consuming_proxy()
     elif message['type'] == 'kid_summary':
-      if sender_id in self._kids:
-        self._kid_summaries[sender_id] = message
-        self._check_for_kid_limits()
+      if message != self._kid_summaries.get(sender_id, None):
+        if sender_id in self._kids:
+          self._kid_summaries[sender_id] = message
+          self._updated_summary = True
+          self._check_for_kid_limits()
     elif message['type'] == 'configure_right_parent':
       pass
     elif message['type'] == 'added_sender':
@@ -460,11 +477,13 @@ class InternalNode(Node):
         self.send(kid, messages.migration.adopt(self.transfer_handle(new_parent, kid['id'])))
       self.send(self._parent, messages.io.goodbye_parent())
       self._leaving_kids = set(self._kids.keys())
+      self._maybe_kids_have_left()
     elif message['type'] == 'adopt':
       if self._parent is None:
         raise errors.InternalError("Root nodes may not adopt a new parent.")
       self.send(self._parent, messages.io.goodbye_parent())
       self._parent = message['new_parent']
+      self._updated_summary = True
       self._sent_hello = False
       self._send_hello_parent()
     else:
@@ -503,17 +522,22 @@ class InternalNode(Node):
   def elapse(self, ms):
     n_ticks = self._ticker.elapse(ms)
     if n_ticks > 0:
-      self._send_kid_summary()
+      if self._updated_summary or self._height == 0:
+        self._send_kid_summary()
+        self._updated_summary = False
+      self._check_for_kid_limits()
       self._check_for_mergeable_kids(self._ticker.interval_ms * n_ticks)
       self._check_for_consumable_proxy(self._ticker.interval_ms * n_ticks)
 
   def _send_kid_summary(self):
     if self._parent is not None:
-      self.send(self._parent,
-                messages.io.kid_summary(
-                    size=(sum(kid_summary['size'] for kid_summary in self._kid_summaries.values())
-                          if self._height > 0 else len(self._kids)),
-                    n_kids=len(self._kids)))
+      message = messages.io.kid_summary(
+          size=(sum(kid_summary['size'] for kid_summary in self._kid_summaries.values())
+                if self._height > 0 else len(self._kids)),
+          n_kids=len(self._kids))
+      if (self._parent['id'], message) != self._last_kid_summary:
+        self._last_kid_summary = (self._parent['id'], message)
+        self.send(self._parent, message)
 
   @property
   def _branching_factor(self):
