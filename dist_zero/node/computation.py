@@ -11,8 +11,24 @@ logger = logging.getLogger(__name__)
 
 
 class ComputationNode(Node):
-  def __init__(self, node_id, configure_right_parent_ids, left_is_data, right_is_data, parent, height, senders,
-               left_ids, is_mid_node, receiver_ids, migrator_config, connector_json, adoptees, controller):
+  def __init__(
+      self,
+      node_id,
+      left_is_data,
+      right_is_data,
+      parent,
+      senders,
+      controller,
+      configure_right_parent_ids,
+      is_mid_node,
+      left_ids,
+      receiver_ids,
+      migrator_config,
+      connector_json,
+      adoptees,
+      height,
+  ):
+
     self.id = node_id
     self._controller = controller
 
@@ -183,7 +199,6 @@ class ComputationNode(Node):
               right_is_data=self.right_is_data and layer_index + 1 == len(self._connector.layers)
               and bool(self._connector.right_to_parent_ids[node_id]),
               senders=senders,
-              receivers=[],
               is_mid_node=is_mid_node,
               configure_right_parent_ids=configure_right_parent_ids,
               parent=self.new_handle(node_id),

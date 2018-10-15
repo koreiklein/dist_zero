@@ -34,17 +34,15 @@ class SumNode(Node):
                node_id,
                left_is_data,
                right_is_data,
-               senders,
-               receivers,
                parent,
+               senders,
                controller,
-               is_mid_node,
                configure_right_parent_ids,
+               is_mid_node,
                migrator_config=None):
     '''
     :param str node_id: The node id for this node.
     :param list senders: A list of :ref:`handle` of the nodes sending increments
-    :param list receivers: A list of :ref:`handle` of the nodes to receive increments
 
     :param parent: The :ref:`handle` of the parent node that spawned this node.
     :type parent: :ref:`handle`
@@ -251,7 +249,6 @@ class SumNode(Node):
     return SumNode(
         node_id=node_config['id'],
         senders=node_config['senders'],
-        receivers=node_config['receivers'],
         left_is_data=node_config['left_is_data'],
         right_is_data=node_config['right_is_data'],
         is_mid_node=node_config['is_mid_node'],
@@ -382,16 +379,6 @@ class SumNode(Node):
       respond_to = message['respond_to']
       if respond_to is not None:
         self._added_sender_respond_tos[node['id']] = respond_to
-    elif message['type'] == 'adjacent_has_split':
-      # Spawn a new adjacent for the newly spawned io node and remove any kids stolen from self.
-      node_id = ids.new_id('SumNode_adjacent_for_split')
-      new_node = message['new_node']
-      self._controller.spawn_node(
-          messages.sum.sum_node_config(
-              node_id=node_id,
-              senders=[new_node],
-              receivers=[self.transfer_handle(exporter.receiver, node_id) for exporter in self._exporters.values()],
-          ))
     else:
       super(SumNode, self).receive(message=message, sender_id=sender_id)
 

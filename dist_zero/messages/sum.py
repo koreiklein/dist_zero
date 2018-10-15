@@ -23,7 +23,6 @@ def sum_node_started(sum_node_handle):
 def sum_node_config(
     node_id,
     senders,
-    receivers,
     configure_right_parent_ids,
     parent,
     left_is_data,
@@ -40,7 +39,6 @@ def sum_node_config(
   :param bool right_is_data: True iff the node just to the right is a data node.
 
   :param list senders: A list of :ref:`handle` for sending nodes.
-  :param list receivers: A list of :ref:`handle` for receiving nodes.
   :param bool is_mid_node: True iff this node is functioning as the mid node in an hourglass operation.
 
   :param parent: A :ref:`handle` for the parent `ComputationNode`
@@ -53,7 +51,6 @@ def sum_node_config(
       'id': node_id,
       'configure_right_parent_ids': configure_right_parent_ids,
       'senders': senders,
-      'receivers': receivers,
       'parent': parent,
       'left_is_data': left_is_data,
       'right_is_data': right_is_data,

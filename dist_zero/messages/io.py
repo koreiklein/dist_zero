@@ -103,20 +103,6 @@ def merge_with(node):
   return {'type': 'merge_with', 'node': node}
 
 
-def adjacent_has_split(new_node, stolen_io_kid_ids):
-  '''
-  Sent by a newly spawned `DataNode` that was spawned as part of an `DataNode` split operation.
-  This message will be recived by the node adjacent to the spawning node, and indicates that the newly
-  spawned node is running, but needs to have the receiver spawn an adjacent for it.
-
-  :param new_node: A :ref:`handle` for the sender.
-  :type new_node: :ref:`handle`
-  :param list[str] stolen_io_kid_ids: A list of ids of the io nodes that have been stolen from the recipient
-    and should now belong to the sender.
-  '''
-  return {'type': 'adjacent_has_split', 'new_node': new_node, 'stolen_io_kid_ids': stolen_io_kid_ids}
-
-
 def set_input(input_node):
   '''
   Configure the input node for a calculating node at the edge.
