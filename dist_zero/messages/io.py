@@ -103,26 +103,6 @@ def merge_with(node):
   return {'type': 'merge_with', 'node': node}
 
 
-def set_input(input_node):
-  '''
-  Configure the input node for a calculating node at the edge.
-
-  :param input_node: The :ref:`handle` of the node to use as input.
-  :type input_node: :ref:`handle`
-  '''
-  return {'type': 'set_input', 'input_node': input_node}
-
-
-def set_output(output_node):
-  '''
-  This message informs a computation node of the data node it should output to.
-
-  :param output_node: The :ref:`handle` of the node to use as output.
-  :type output_node: :ref:`handle`
-  '''
-  return {'type': 'set_output', 'output_node': output_node}
-
-
 def sum_leaf_config(initial_state):
   return {'type': 'sum_leaf_config', 'initial_state': initial_state}
 

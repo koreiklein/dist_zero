@@ -340,28 +340,6 @@ class SumNode(Node):
       self._maybe_swap_mid_node(node['id'])
     elif message['type'] == 'adopt':
       raise errors.InternalError("Sum nodes should not be adopting kids")
-    elif message['type'] == 'set_input':
-      if not self.left_is_data:
-        raise errors.InternalError("Can't set input when the left node is not a data node")
-      if self._input_importer is None:
-        self.import_from_node(message['input_node'])
-      else:
-        if self._input_importer.sender_id == message['input_node']['id']:
-          # It was already set
-          pass
-        else:
-          raise errors.InternalError("SumNode already has a distinct input node")
-    elif message['type'] == 'set_output':
-      if not self.right_is_data:
-        raise errors.InternalError("Can't set output when the right node is not a data node")
-      if self._output_exporter is None:
-        self._exporters[message['output_node']['id']] = self.linker.new_exporter(message['output_node'])
-      else:
-        if self._output_exporter.receiver_id == message['output_node']['id']:
-          # It was already set
-          pass
-        else:
-          raise errors.InternalError("SumNode already has a distinct output node")
     elif message['type'] == 'added_sender':
       node = message['node']
       self.import_from_node(node)
