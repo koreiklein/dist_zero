@@ -10,15 +10,15 @@ from dist_zero.node.io import leaf
 logger = logging.getLogger(__name__)
 
 
-class InternalNode(Node):
+class DataNode(Node):
   '''
   The root of a tree of leaf instances of the same ``variant``.
 
-  Each `InternalNode` instance is responsible for keeping track of the state of its subtree, and for growing
-  or shrinking it as necessary.  In particular, when new leaves are created, `InternalNode.create_kid_config` must
+  Each `DataNode` instance is responsible for keeping track of the state of its subtree, and for growing
+  or shrinking it as necessary.  In particular, when new leaves are created, `DataNode.create_kid_config` must
   be called on the desired immediate parent to generate the node config for starting that child.
 
-  Each `InternalNode` will have an associated height.  The assignment of heights to internal nodes is the unique
+  Each `DataNode` will have an associated height.  The assignment of heights to data nodes is the unique
   minimal assignment such that n.height+1 == n.parent.height for every node n that has a parent.
   '''
 
@@ -28,7 +28,7 @@ class InternalNode(Node):
     :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
     :type parent: :ref:`handle` or `None`
     :param str variant: 'input' or 'output'
-    :param int height: The height of the node in the tree.  See `InternalNode`
+    :param int height: The height of the node in the tree.  See `DataNode`
     :param adoptees: Nodes to adopt upon initialization.
     :type adoptees: list[:ref:`handle`]
     :param `MachineController` controller: The controller for this node.
@@ -65,7 +65,7 @@ class InternalNode(Node):
 
     self._load_balancer_frontend = None
     '''
-    InternalNodes with height > 0 will manager a `LoadBalancerFrontend` when
+    DataNodes with height > 0 will manager a `LoadBalancerFrontend` when
     they start routing.
     '''
 
@@ -76,7 +76,7 @@ class InternalNode(Node):
 
     self._dns_controller = None
     '''
-    Root InternalNodes will create a `DNSController` instance when they start routing,
+    Root DataNodes will create a `DNSController` instance when they start routing,
     and use it configure the appropriate DNS mapping.
     '''
 
@@ -117,13 +117,13 @@ class InternalNode(Node):
 
     self._http_server_for_adding_leaves = None
     '''
-    Height 0 `InternalNode` instances when bound to a domain name will bind an http server
+    Height 0 `DataNode` instances when bound to a domain name will bind an http server
     to a port on their machine and that server will respond to http GET requests
     by creating new leaf configs and sending back appropriate html for running
     the leaf.
     '''
 
-    super(InternalNode, self).__init__(logger)
+    super(DataNode, self).__init__(logger)
 
     CHECK_INTERVAL = self.system_config['KID_SUMMARY_INTERVAL']
     self._stop_recorded_user = None
@@ -154,7 +154,7 @@ class InternalNode(Node):
   @property
   def current_state(self):
     if self._height != -1:
-      raise errors.InternalError("Non-leaf InternalNodes do not maintain a current_state.")
+      raise errors.InternalError("Non-leaf DataNodes do not maintain a current_state.")
     else:
       return self._leaf.state
 
@@ -187,10 +187,10 @@ class InternalNode(Node):
     if self._variant == 'output':
       if len(new_senders) != 1:
         raise errors.InternalError(
-            "sink_swap should be called on an edge internal node only when there is a unique new sender.")
+            "sink_swap should be called on an edge data node only when there is a unique new sender.")
       self._set_input(new_senders[0])
     elif self._variant == 'input':
-      raise errors.InternalError("An input InternalNode should never function as a sink node in a migration.")
+      raise errors.InternalError("An input DataNode should never function as a sink node in a migration.")
     else:
       raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
@@ -200,7 +200,7 @@ class InternalNode(Node):
       for receiver in new_receivers:
         self._set_output(receiver)
     elif self._variant == 'output':
-      raise errors.InternalError("Output InternalNode should never function as a source migrator in a migration.")
+      raise errors.InternalError("Output DataNode should never function as a source migrator in a migration.")
     else:
       raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
@@ -229,20 +229,20 @@ class InternalNode(Node):
 
   def _spawn_kid(self):
     if self._height == 0:
-      raise errors.InternalError("height 0 InternalNode instances can not spawn kids")
+      raise errors.InternalError("height 0 DataNode instances can not spawn kids")
     elif self._root_proxy_id is not None:
       raise errors.InternalError("Root nodes may not spawn new kids while their are bumping their height.")
     elif self._root_consuming_proxy_id is not None:
       raise errors.InternalError("Root nodes may not spawn new kids while their are decreasing their height "
                                  "by consuming a proxy.")
     else:
-      node_id = ids.new_id("InternalNode_kid")
+      node_id = ids.new_id("DataNode_kid")
       self._pending_spawned_kids.add(node_id)
       self._kid_summaries[node_id] = messages.io.kid_summary(size=0, n_kids=0)
       self._updated_summary = True
-      self.logger.info("InternalNode is spawning a new kid", extra={'new_kid_id': node_id})
+      self.logger.info("DataNode is spawning a new kid", extra={'new_kid_id': node_id})
       self._controller.spawn_node(
-          messages.io.internal_node_config(
+          messages.io.data_node_config(
               node_id=node_id,
               parent=self.new_handle(node_id),
               variant=self._variant,
@@ -313,7 +313,7 @@ class InternalNode(Node):
     '''
     # Current algorithm: 2 kids can be merged if each has n_kids less than 1/3 the max
     if len(self._kid_summaries) >= 2:
-      MAX_N_KIDS = self.system_config['INTERNAL_NODE_KIDS_LIMIT']
+      MAX_N_KIDS = self.system_config['DATA_NODE_KIDS_LIMIT']
       if MAX_N_KIDS <= 3:
         MERGEABLE_N_KIDS_FIRST = MERGEABLE_N_KIDS_SECOND = 1
       else:
@@ -332,7 +332,7 @@ class InternalNode(Node):
         self._kid_capacity_limit - kid_summary['size'] for kid_summary in self._kid_summaries.values())
 
     if total_kid_capacity <= self.system_config['TOTAL_KID_CAPACITY_TRIGGER']:
-      if len(self._kids) < self.system_config['INTERNAL_NODE_KIDS_LIMIT']:
+      if len(self._kids) < self.system_config['DATA_NODE_KIDS_LIMIT']:
         if self._root_proxy_id is None:
           self._spawn_kid()
         else:
@@ -348,7 +348,7 @@ class InternalNode(Node):
         else:
           if not self._warned_low_capacity:
             self._warned_low_capacity = True
-            self.logger.warning("nonroot InternalNode instance had too little capacity and no room to spawn more kids. "
+            self.logger.warning("nonroot DataNode instance had too little capacity and no room to spawn more kids. "
                                 "Capacity is remaining low and is not being increased.")
     else:
       self._warned_low_capacity = False
@@ -357,14 +357,14 @@ class InternalNode(Node):
     if self._parent is not None:
       raise errors.InternalError("Only the root node may bump its height.")
 
-    self._root_proxy_id = ids.new_id('InternalNode_root_proxy')
+    self._root_proxy_id = ids.new_id('DataNode_root_proxy')
     self._kids_for_proxy_to_adopt = list(self._kids.values())
     self._height += 1
     self._pending_spawned_kids.add(self._root_proxy_id)
     self._kid_summaries = {}
     self._updated_summary = True
     self._controller.spawn_node(
-        messages.io.internal_node_config(
+        messages.io.data_node_config(
             node_id=self._root_proxy_id,
             parent=self.new_handle(self._root_proxy_id),
             variant=self._variant,
@@ -436,7 +436,7 @@ class InternalNode(Node):
       pass
     elif message['type'] == 'configure_new_flow_right':
       if self._exporter is not None or len(message['right_configurations']) != 1 or self._variant != 'input':
-        raise errors.InternalError("A new configure_new_flow_right should only ever arrive at an 'input' InternalNode "
+        raise errors.InternalError("A new configure_new_flow_right should only ever arrive at an 'input' DataNode "
                                    "and only when it's waiting to set its exporter,"
                                    " and when the configure_new_flow_right has a single right_configuration.")
       right_config, = message['right_configurations']
@@ -526,7 +526,7 @@ class InternalNode(Node):
       self._sent_hello = False
       self._send_hello_parent()
     else:
-      super(InternalNode, self).receive(message=message, sender_id=sender_id)
+      super(DataNode, self).receive(message=message, sender_id=sender_id)
 
   def _complete_consuming_proxy(self):
     if self._parent is not None:
@@ -538,26 +538,26 @@ class InternalNode(Node):
 
   def _set_input(self, node):
     if self._importer is not None:
-      raise errors.InternalError("InternalNodes have only a single input node."
+      raise errors.InternalError("DataNodes have only a single input node."
                                  "  Can not add a new one once an input already exists")
     if self._variant != 'output':
-      raise errors.InternalError("Only output InternalNodes can set their input.")
+      raise errors.InternalError("Only output DataNodes can set their input.")
 
     self._importer = self.linker.new_importer(node)
 
   def _set_output(self, node):
     if self._exporter is not None:
       if node['id'] != self._exporter.receiver_id:
-        raise errors.InternalError("InternalNodes have only a single output node."
+        raise errors.InternalError("DataNodes have only a single output node."
                                    "  Can not add a new one once an output already exists")
     else:
       if self._variant != 'input':
-        raise errors.InternalError("Only input InternalNodes can set their output.")
+        raise errors.InternalError("Only input DataNodes can set their output.")
       self._exporter = self.linker.new_exporter(node)
 
   @staticmethod
   def from_config(node_config, controller):
-    return InternalNode(
+    return DataNode(
         node_id=node_config['id'],
         parent=node_config['parent'],
         controller=controller,
@@ -590,7 +590,7 @@ class InternalNode(Node):
 
   @property
   def _branching_factor(self):
-    return self.system_config['INTERNAL_NODE_KIDS_LIMIT']
+    return self.system_config['DATA_NODE_KIDS_LIMIT']
 
   @property
   def _kid_capacity_limit(self):
@@ -702,10 +702,10 @@ class InternalNode(Node):
       return self._adjacent
     elif message['type'] == 'get_output_state':
       if self._height != -1:
-        raise errors.InternalError("Can't get output state for an InternalNode with height >= 0")
+        raise errors.InternalError("Can't get output state for an DataNode with height >= 0")
       return self._leaf.state
     else:
-      return super(InternalNode, self).handle_api_message(message)
+      return super(DataNode, self).handle_api_message(message)
 
   def create_kid_config(self, name, machine_id):
     '''
@@ -718,19 +718,19 @@ class InternalNode(Node):
     :rtype: :ref:`message`
     '''
     if self._height != 0:
-      raise errors.InternalError("Only InternalNode instances of height 0 should create kid configs.")
+      raise errors.InternalError("Only DataNode instances of height 0 should create kid configs.")
 
     node_id = dist_zero.ids.new_id('LeafNode_{}'.format(name))
     self.logger.info(
         "Registering a new leaf node config for an internal node. name='{node_name}'",
         extra={
-            'internal_node_id': self.id,
+            'data_node_id': self.id,
             'leaf_node_id': node_id,
             'node_name': name
         })
     self._kids[node_id] = None
 
-    return messages.io.internal_node_config(
+    return messages.io.data_node_config(
         node_id=node_id,
         parent=self.new_handle(node_id),
         variant=self._variant,

@@ -10,7 +10,7 @@ class ProxySpawner(object):
     self._node = node
 
     self._proxy_adjacent_id = None
-    '''The id of node that is spawned adjacent to the `InternalNode`'s proxy.'''
+    '''The id of node that is spawned adjacent to the `DataNode`'s proxy.'''
 
     self._proxy_adjacent_variant = None
     '''input' or 'output' depending on which node bumped its height.'''

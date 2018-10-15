@@ -6,7 +6,7 @@ import pytest
 import dist_zero.ids
 from dist_zero import messages, errors
 from dist_zero.node.sum import SumNode
-from dist_zero.node.io import InternalNode
+from dist_zero.node.io import DataNode
 from dist_zero.recorded import RecordedUser
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
   network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
   network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
   system_config = messages.machine.std_system_config()
-  system_config['INTERNAL_NODE_KIDS_LIMIT'] = 30
+  system_config['DATA_NODE_KIDS_LIMIT'] = 30
   system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 0
   system_config['SUM_NODE_SENDER_LIMIT'] = 30
   system_config['SUM_NODE_RECEIVER_LIMIT'] = 30
@@ -64,16 +64,16 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
   await demo.run_for(ms=200)
 
   # Configure the starting network topology
-  root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
+  root_input_node_id = dist_zero.ids.new_id('DataNode_input')
   demo.system.spawn_node(
       on_machine=machine_a,
-      node_config=messages.io.internal_node_config(
+      node_config=messages.io.data_node_config(
           root_input_node_id, parent=None, height=1, state_updater='sum', variant='input'))
 
-  root_output_node_id = dist_zero.ids.new_id('InternalNode_output')
+  root_output_node_id = dist_zero.ids.new_id('DataNode_output')
   demo.system.spawn_node(
       on_machine=machine_c,
-      node_config=messages.io.internal_node_config(
+      node_config=messages.io.data_node_config(
           root_output_node_id, parent=None, height=1, variant='output', state_updater='sum', initial_state=0))
 
   await demo.run_for(ms=200)

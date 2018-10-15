@@ -1,1 +1,1 @@
-from .internal import InternalNode
+from .data import DataNode

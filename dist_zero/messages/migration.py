@@ -551,7 +551,7 @@ def set_new_flow_adjacent(migration_id, adjacent):
 
 def adopt(new_parent):
   '''
-  Sent by newly spawner `InternalNode` instances to each of the kids they are meant to steal,
+  Sent by newly spawner `DataNode` instances to each of the kids they are meant to steal,
   letting them know to change parents.
 
   :param new_parent: The :ref:`handle` of the new parent node.

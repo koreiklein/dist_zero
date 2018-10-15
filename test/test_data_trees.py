@@ -10,7 +10,7 @@ from .common import Utils
 @pytest.mark.asyncio
 async def test_add_one_leaf_to_empty_input_tree(demo):
   system_config = messages.machine.std_system_config()
-  system_config['INTERNAL_NODE_KIDS_LIMIT'] = 3
+  system_config['DATA_NODE_KIDS_LIMIT'] = 3
   system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 0
   machine, = await demo.new_machine_controllers(
       1,
@@ -20,10 +20,10 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
       },
       random_seed='test_add_one_leaf_to_empty_input_tree')
   await demo.run_for(ms=200)
-  root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
+  root_input_node_id = dist_zero.ids.new_id('DataNode_input')
   demo.system.spawn_node(
       on_machine=machine,
-      node_config=messages.io.internal_node_config(
+      node_config=messages.io.data_node_config(
           root_input_node_id, parent=None, height=1, state_updater='sum', variant='input'))
   await demo.run_for(ms=2000)
 
@@ -33,7 +33,7 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
   leaf_ids = []
 
   create_new_leaf = lambda name: leaf_ids.append(demo.system.create_descendant(
-      internal_node_id=root_input_node_id,
+      data_node_id=root_input_node_id,
       new_node_name=name,
       machine_id=machine,
       recorded_user=RecordedUser('user b', [
@@ -52,7 +52,7 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
 @pytest.mark.asyncio
 async def test_scale_unconnected_io_tree(demo):
   system_config = messages.machine.std_system_config()
-  system_config['INTERNAL_NODE_KIDS_LIMIT'] = 3
+  system_config['DATA_NODE_KIDS_LIMIT'] = 3
   system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 0
   machine, = await demo.new_machine_controllers(
       1,
@@ -62,10 +62,10 @@ async def test_scale_unconnected_io_tree(demo):
       },
       random_seed='test_scale_unconnected_io_tree')
   await demo.run_for(ms=200)
-  root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
+  root_input_node_id = dist_zero.ids.new_id('DataNode_input')
   demo.system.spawn_node(
       on_machine=machine,
-      node_config=messages.io.internal_node_config(
+      node_config=messages.io.data_node_config(
           root_input_node_id, parent=None, height=1, state_updater='sum', variant='input'))
   await demo.run_for(ms=2000)
 
@@ -73,7 +73,7 @@ async def test_scale_unconnected_io_tree(demo):
 
   async def create_new_leaf(name):
     leaf_ids.append(
-        demo.system.create_descendant(internal_node_id=root_input_node_id, new_node_name=name, machine_id=machine))
+        demo.system.create_descendant(data_node_id=root_input_node_id, new_node_name=name, machine_id=machine))
 
   assert 1 == demo.system.get_capacity(root_input_node_id)['height']
 

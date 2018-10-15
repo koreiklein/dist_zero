@@ -9,7 +9,7 @@ def route_dns(domain_name):
   '''
   Indicates to a root io node that it should set up DNS to resolve domain_name
   (possibly via some load balancers) to a server being run by a height 0
-  `InternalNode` with capacity to add new kids.
+  `DataNode` with capacity to add new kids.
   '''
   return {'type': 'route_dns', 'domain_name': domain_name}
 
@@ -62,15 +62,15 @@ def set_adjacent(node):
   return {'type': 'set_adjacent', 'node': node}
 
 
-def internal_node_config(node_id, parent, variant, height, leaf_config, adoptees=None, recorded_user_json=None):
+def data_node_config(node_id, parent, variant, height, leaf_config, adoptees=None, recorded_user_json=None):
   '''
-  A node config for creating an internal node to manage a new list of io nodes.
+  A node config for creating an data node to manage a new list of io nodes.
 
   :param str node_id: The id of the new node.
   :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
   :type parent: :ref:`handle` or `None`
   :param str variant: 'input' or 'output'
-  :param int height: The height of the node in the tree.  See `InternalNode`
+  :param int height: The height of the node in the tree.  See `DataNode`
   :param object leaf_config: Configuration information for what kind of leaf nodes to run.
   :param adoptees: The list of `Node` instances that this node should adopt as its kids upon initialization,
     or `None` if the node should not initially adopt any kids.
@@ -79,10 +79,10 @@ def internal_node_config(node_id, parent, variant, height, leaf_config, adoptees
   :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
   '''
   if parent is None and height == 0:
-    raise errors.InternalError("internal_node_config for root nodes must have nonzero height.")
+    raise errors.InternalError("data_node_config for root nodes must have nonzero height.")
 
   return {
-      'type': 'InternalNode',
+      'type': 'DataNode',
       'id': node_id,
       'parent': parent,
       'variant': variant,
@@ -105,7 +105,7 @@ def merge_with(node):
 
 def adjacent_has_split(new_node, stolen_io_kid_ids):
   '''
-  Sent by a newly spawned `InternalNode` that was spawned as part of an `InternalNode` split operation.
+  Sent by a newly spawned `DataNode` that was spawned as part of an `DataNode` split operation.
   This message will be recived by the node adjacent to the spawning node, and indicates that the newly
   spawned node is running, but needs to have the receiver spawn an adjacent for it.
 
@@ -170,14 +170,14 @@ def hello_parent(kid):
 
 def goodbye_parent():
   '''
-  Sent by a leaf node to inform its parent `InternalNode` that it has left the system.
+  Sent by a leaf node to inform its parent `DataNode` that it has left the system.
   '''
   return {'type': 'goodbye_parent'}
 
 
 def kid_summary(size, n_kids):
   '''
-  Periodically sent by `InternalNode` kids to their parents to give generally summary information
+  Periodically sent by `DataNode` kids to their parents to give generally summary information
   that the parent needs to know about that kid.
 
   :param int size: An estimate of the number of leaves descended from the sender.
@@ -190,11 +190,11 @@ def kid_summary(size, n_kids):
 
 def bumped_height(proxy, kid_ids, variant):
   '''
-  Sent by an `InternalNode` to its adjacent node to inform it that the internal node has bumped its height
+  Sent by an `DataNode` to its adjacent node to inform it that the data node has bumped its height
   and now has a single child as its proxy.
 
-  :param str variant: 'input' or 'output' according to the variant of the adjacent `InternalNode`.
-  :param list[str] kid_ids: The ids of the `InternalNode`'s kids which are being adopted by the proxy node.
+  :param str variant: 'input' or 'output' according to the variant of the adjacent `DataNode`.
+  :param list[str] kid_ids: The ids of the `DataNode`'s kids which are being adopted by the proxy node.
   :param proxy: The :ref:`handle` of the new proxy node.
   :type proxy: :ref:`handle`
   '''

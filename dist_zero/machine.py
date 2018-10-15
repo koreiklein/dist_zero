@@ -331,8 +331,8 @@ class NodeManager(MachineController):
             'node_id': self._format_node_id_for_logs(node_config['id']),
             'machine_name': self.name,
         })
-    if node_config['type'] == 'InternalNode':
-      node = io.InternalNode.from_config(node_config, controller=self)
+    if node_config['type'] == 'DataNode':
+      node = io.DataNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'SumNode':
       node = SumNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'MigrationNode':

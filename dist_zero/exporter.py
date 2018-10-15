@@ -30,7 +30,7 @@ class Exporter(object):
 
   def __init__(self, receiver, linker, migration_id):
     '''
-    :param receiver: The :ref:`handle` of the node receiving from this internal node.
+    :param receiver: The :ref:`handle` of the node receiving from this data node.
     :type receiver: :ref:`handle`
 
     :param linker: The linker associated with this exporter

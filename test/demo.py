@@ -225,13 +225,11 @@ class Demo(object):
             ]))
     return root_computation_node_id
 
-  def all_io_kids(self, internal_node_id):
-    if self.system.get_stats(internal_node_id)['height'] == 0:
-      return self.system.get_kids(internal_node_id)
+  def all_io_kids(self, data_node_id):
+    if self.system.get_stats(data_node_id)['height'] == 0:
+      return self.system.get_kids(data_node_id)
     else:
-      return [
-          descendant for kid_id in self.system.get_kids(internal_node_id) for descendant in self.all_io_kids(kid_id)
-      ]
+      return [descendant for kid_id in self.system.get_kids(data_node_id) for descendant in self.all_io_kids(kid_id)]
 
   def new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms, send_after=0):
     time_message_pairs = []
@@ -258,7 +256,7 @@ class Demo(object):
     def _add_node(graph, node_id):
       if node_id not in nodes:
         nodes.add(node_id)
-        if node_id.startswith('InternalNode') or node_id.startswith('LeafNode'):
+        if node_id.startswith('DataNode') or node_id.startswith('LeafNode'):
           kwargs = {'shape': 'ellipse', 'color': 'black', 'fillcolor': '#c7faff', 'style': 'filled'}
         else:
           kwargs = {'shape': 'diamond', 'color': 'black'}

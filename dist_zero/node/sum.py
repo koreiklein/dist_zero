@@ -15,16 +15,16 @@ class SumNode(Node):
 
   Each `SumNode` is of one of three types
 
-  * input `SumNode`, which receive as the adjacent node to an `InternalNode` and send to ``receivers``.
+  * input `SumNode`, which receive as the adjacent node to an `DataNode` and send to ``receivers``.
     These nodes have an ``input_node`` but no ``output_node`` and some nonempty list of ``receivers``.
-  * output `SumNode`, which send as the adjacent node to an `InternalNode` and receive from ``senders``.
+  * output `SumNode`, which send as the adjacent node to an `DataNode` and receive from ``senders``.
     These nodes have an ``output_node`` but no ``input_node`` and some nonempty list of ``senders``.
   * internal `SumNode`, which receive from senders and send to receivers.  These nodes have ``input_node is None``
     and ``output_node is None``
 
-  Note that input/output `SumNode` could be for `InternalNode`.  A `SumNode` adjacent to an 
-  height >= 0`InternalNode` is primarily responsible for helping to spin up new leaves, whereas a `SumNode` adjacent to a
-  leaf InternalNode (with height == -1) will actually receive input messages from (or send output messages to) its adjacent leaf.
+  Note that input/output `SumNode` could be for `DataNode`.  A `SumNode` adjacent to an 
+  height >= 0`DataNode` is primarily responsible for helping to spin up new leaves, whereas a `SumNode` adjacent to a
+  leaf DataNode (with height == -1) will actually receive input messages from (or send output messages to) its adjacent leaf.
   '''
 
   SEND_INTERVAL_MS = 30
