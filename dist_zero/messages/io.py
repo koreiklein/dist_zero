@@ -62,14 +62,7 @@ def set_adjacent(node):
   return {'type': 'set_adjacent', 'node': node}
 
 
-def internal_node_config(node_id,
-                         parent,
-                         variant,
-                         height,
-                         state_updater,
-                         adjacent=None,
-                         adoptees=None,
-                         initial_state=None):
+def internal_node_config(node_id, parent, variant, height, state_updater, adoptees=None, initial_state=None):
   '''
   A node config for creating an internal node to manage a new list of io nodes.
 
@@ -78,8 +71,6 @@ def internal_node_config(node_id,
   :type parent: :ref:`handle` or `None`
   :param str variant: 'input' or 'output'
   :param int height: The height of the node in the tree.  See `InternalNode`
-  :param adjacent: The :ref:`handle` adjacent node to either receiver from or forward to or `None`
-  :type adjacent: :ref:`handle` or `None`
   :param str state_updater: 'sum' or 'collect'.  This parameter defines how the leaves in this tree updates their state
   :param adoptees: The list of `Node` instances that this node should adopt as its kids upon initialization,
     or `None` if the node should not initially adopt any kids.
@@ -95,7 +86,6 @@ def internal_node_config(node_id,
       'parent': parent,
       'variant': variant,
       'height': height,
-      'adjacent': adjacent,
       'state_updater': state_updater,
       'adoptees': [] if adoptees is None else adoptees,
       'initial_state': initial_state

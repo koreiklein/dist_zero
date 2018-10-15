@@ -87,6 +87,7 @@ class Spawner(object):
         left_ids=left_ids,
         senders=[self._id_to_handle(sender_id) for sender_id in left_ids],
         configure_right_parent_ids=[self._node.id],
+        # FIXME(KK): Sometimes the _initial_migrator parameter doesn't exist.  Fix that!
         migrator=messages.migration.insertion_migrator_config(
             self._node.transfer_handle(self._node._initial_migrator.migration, node_id)))
 
