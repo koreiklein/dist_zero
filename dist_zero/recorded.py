@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from dist_zero import errors
@@ -12,7 +13,6 @@ class RecordedUser(object):
   system.
   Instances of this class represent the recorded user.
   '''
-  MAX_STEP_TIME_MS = 3
 
   def __init__(self, name, time_action_pairs=None):
     self.name = name
@@ -22,10 +22,22 @@ class RecordedUser(object):
       if self._time_action_pairs[i - 1][0] > self._time_action_pairs[i][0]:
         raise errors.InternalError('Times are not in order.')
 
-  def start(self):
-    self.now_ms = 0
-    self._index = 0
+  def simulate(self, controller, deliver):
+    '''
+    Start an asyncio task to simulate the messages recorded is self.
+    Use controller.sleep_ms() to wait for the next message, and
+    call deliver(m) with each message m when it arrives.
+    '''
     self._started = True
+
+    async def _loop(i):
+      if i < len(self._time_action_pairs):
+        t, m = self._time_action_pairs[i]
+        await controller.sleep_ms(t if i == 0 else t - self._time_action_pairs[i - 1][0])
+        deliver(m)
+        asyncio.get_event_loop().create_task(_loop(i + 1))
+
+    asyncio.get_event_loop().create_task(_loop(0))
 
   def to_json(self):
     return {
@@ -39,25 +51,6 @@ class RecordedUser(object):
         name=recorded_user_json['name'],
         time_action_pairs=recorded_user_json['time_action_pairs'],
     )
-
-  def elapse_and_get_messages(self, ms):
-    '''
-    :param int ms: The number of milliseconds to elapse.
-    :yield: pairs (ms, msg) where ms is the amount of elapsed time, and msg is a :ref:`message` generated at that time.
-    '''
-    if not self._started:
-      raise errors.InternalError("Can't elapse time until the RecordedUser has been started.")
-
-    stop_time_ms = self.now_ms + ms
-    while self.now_ms < stop_time_ms:
-      step_time_ms = min(stop_time_ms - self.now_ms, RecordedUser.MAX_STEP_TIME_MS)
-      step_stop_ms = self.now_ms + step_time_ms
-
-      while self._index < len(self._time_action_pairs) and self._time_action_pairs[self._index][0] < step_stop_ms:
-        yield step_time_ms, self._time_action_pairs[self._index][1]
-        self._index += 1
-
-      self.now_ms = step_stop_ms
 
   def record_actions(self, time_action_pairs):
     if self._started:

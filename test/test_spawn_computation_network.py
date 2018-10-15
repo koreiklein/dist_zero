@@ -4,14 +4,18 @@ Tests for spawning networks of sum nodes between variously sized input/output tr
 
 import pytest
 
+from dist_zero import messages
+
 from .common import Utils
 
 
 class TestSpawnComputationNetwork(Utils):
   async def _connect_and_test_io_trees(self, n_input_leaves, n_output_leaves):
-    root_input = await self.root_io_tree(machine=self.machine_ids[0], variant='input', state_updater='sum')
+    root_input = await self.root_io_tree(
+        machine=self.machine_ids[0], variant='input', leaf_config=messages.io.sum_leaf_config(0))
     self.root_input = root_input
-    root_output = await self.root_io_tree(machine=self.machine_ids[0], variant='output', state_updater='sum')
+    root_output = await self.root_io_tree(
+        machine=self.machine_ids[0], variant='output', leaf_config=messages.io.sum_leaf_config(0))
     self.root_output = root_output
 
     await self.demo.run_for(ms=200)
@@ -29,7 +33,7 @@ class TestSpawnComputationNetwork(Utils):
 
     self.root_computation = self.demo.connect_trees_with_sum_network(
         root_input, root_output, machine=self.machine_ids[0])
-    # Ensure we haven't simulated any sends yet
+
     await self.demo.run_for(ms=8000)
 
     if n_input_leaves > 0:
@@ -53,7 +57,8 @@ class TestSpawnComputationNetwork(Utils):
     self.machine_ids = await self.demo.new_machine_controllers(
         1, base_config=self.base_config(), random_seed='test_dns')
 
-    root_input = await self.root_io_tree(machine=self.machine_ids[0], variant='input', state_updater='sum')
+    root_input = await self.root_io_tree(
+        machine=self.machine_ids[0], variant='input', leaf_config=messages.io.sum_leaf_config(0))
     await self.demo.run_for(ms=6000)
     await self.spawn_users(root_input, n_users=2)
     domain_name = 'www.distzerotesting.com'

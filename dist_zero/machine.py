@@ -10,7 +10,6 @@ from random import Random
 from dist_zero import errors, messages, dns, settings
 
 from .node import io
-from .node.io import leaf
 from .node.sum import SumNode
 from .node.computation import ComputationNode
 from .migration.migration_node import MigrationNode
@@ -332,9 +331,7 @@ class NodeManager(MachineController):
             'node_id': self._format_node_id_for_logs(node_config['id']),
             'machine_name': self.name,
         })
-    if node_config['type'] == 'LeafNode':
-      node = io.LeafNode.from_config(node_config=node_config, controller=self)
-    elif node_config['type'] == 'InternalNode':
+    if node_config['type'] == 'InternalNode':
       node = io.InternalNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'SumNode':
       node = SumNode.from_config(node_config, controller=self)
@@ -355,8 +352,8 @@ class NodeManager(MachineController):
     :return: The API response to the message
     :rtype: object
     '''
-    logger.info("API Message of type {message_type}", extra={'message_type': message['type']})
     if message['type'] == 'api_node_message':
+      logger.info("API Message of type {message_type}", extra={'message_type': message['message']['type']})
       if message['node_id'] not in self._node_by_id:
         raise errors.NoNodeForId("Can't find {} for api message of type {}".format(
             message['node_id'],

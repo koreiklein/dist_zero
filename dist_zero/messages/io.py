@@ -62,7 +62,7 @@ def set_adjacent(node):
   return {'type': 'set_adjacent', 'node': node}
 
 
-def internal_node_config(node_id, parent, variant, height, state_updater, adoptees=None, initial_state=None):
+def internal_node_config(node_id, parent, variant, height, leaf_config, adoptees=None, recorded_user_json=None):
   '''
   A node config for creating an internal node to manage a new list of io nodes.
 
@@ -71,11 +71,12 @@ def internal_node_config(node_id, parent, variant, height, state_updater, adopte
   :type parent: :ref:`handle` or `None`
   :param str variant: 'input' or 'output'
   :param int height: The height of the node in the tree.  See `InternalNode`
-  :param str state_updater: 'sum' or 'collect'.  This parameter defines how the leaves in this tree updates their state
+  :param object leaf_config: Configuration information for what kind of leaf nodes to run.
   :param adoptees: The list of `Node` instances that this node should adopt as its kids upon initialization,
     or `None` if the node should not initially adopt any kids.
   :type adoptees: list[:ref:`handle`] or `None`
   :param object initial_state: The initial state to use for new nodes.
+  :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
   '''
   if parent is None and height == 0:
     raise errors.InternalError("internal_node_config for root nodes must have nonzero height.")
@@ -86,9 +87,9 @@ def internal_node_config(node_id, parent, variant, height, state_updater, adopte
       'parent': parent,
       'variant': variant,
       'height': height,
-      'state_updater': state_updater,
       'adoptees': [] if adoptees is None else adoptees,
-      'initial_state': initial_state
+      'leaf_config': leaf_config,
+      'recorded_user_json': recorded_user_json,
   }
 
 
@@ -136,29 +137,12 @@ def set_output(output_node):
   return {'type': 'set_output', 'output_node': output_node}
 
 
-def leaf_config(node_id, name, parent, variant, initial_state, state_updater, recorded_user_json=None):
-  '''
-  A node config for a new leaf node.
+def sum_leaf_config(initial_state):
+  return {'type': 'sum_leaf_config', 'initial_state': initial_state}
 
-  :param str node_id: The id to use for the new leaf node.
-  :param str name: The name to use for the new node.
-  :param parent: The handle of the parent node.
-  :type parent: :ref:`handle`
-  :param str variant: 'input' or 'output'
-  :param object initial_state: A json serializeable starting state for this node.
-  :param str state_updater: 'sum' or 'collect'.  This parameter defines how this leaf updates its state
-  :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
-  '''
-  return {
-      'type': 'LeafNode',
-      'id': node_id,
-      'name': name,
-      'parent': parent,
-      'variant': variant,
-      'initial_state': initial_state,
-      'state_updater': state_updater,
-      'recorded_user_json': recorded_user_json,
-  }
+
+def collect_leaf_config():
+  return {'type': 'collect_leaf_config'}
 
 
 def added_sibling_kid(kid, height, variant):
@@ -186,7 +170,7 @@ def hello_parent(kid):
 
 def goodbye_parent():
   '''
-  Sent by a `LeafNode` to inform its parent `InternalNode` that it has left the system.
+  Sent by a leaf node to inform its parent `InternalNode` that it has left the system.
   '''
   return {'type': 'goodbye_parent'}
 
@@ -196,7 +180,7 @@ def kid_summary(size, n_kids):
   Periodically sent by `InternalNode` kids to their parents to give generally summary information
   that the parent needs to know about that kid.
 
-  :param int size: An estimate of the number of `LeafNode` instances descended from the sender.
+  :param int size: An estimate of the number of leaves descended from the sender.
     It need not be perfectly accurate, but should be fairly close, especially if new descendents haven't been
     added in a while.
   :param n_kids: The number of immediate kids of the sender.

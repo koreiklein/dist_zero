@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class InternalNode(Node):
   '''
-  The root of a tree of `LeafNode` instances of the same ``variant``.
+  The root of a tree of leaf instances of the same ``variant``.
 
   Each `InternalNode` instance is responsible for keeping track of the state of its subtree, and for growing
   or shrinking it as necessary.  In particular, when new leaves are created, `InternalNode.create_kid_config` must
@@ -22,32 +22,37 @@ class InternalNode(Node):
   minimal assignment such that n.height+1 == n.parent.height for every node n that has a parent.
   '''
 
-  def __init__(self, node_id, parent, controller, variant, initial_state, state_updater, height, adoptees):
+  def __init__(self, node_id, parent, controller, variant, leaf_config, height, adoptees, recorded_user_json):
     '''
     :param str node_id: The id to use for this node
     :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
     :type parent: :ref:`handle` or `None`
     :param str variant: 'input' or 'output'
     :param int height: The height of the node in the tree.  See `InternalNode`
-    :param str state_updater: 'sum' or 'collect'.  This parameter defines how the leaves in this tree updates their state
     :param adoptees: Nodes to adopt upon initialization.
     :type adoptees: list[:ref:`handle`]
     :param `MachineController` controller: The controller for this node.
-    :param object initial_state: A json serializeable starting state for all leaves spawned from this node.
-      This state is important for output leaves that update that state over time.
+    :param objcect leaf_config: Configuration information for how to run a leaf.
+    :param object recorded_user_json: None, or configuration for a recorded user.  Only allowed if this is a height -1 Node.
     '''
     self._controller = controller
     self._parent = parent
     self._sent_hello = False
     self._variant = variant
-    self._state_updater = state_updater
     self._height = height
+    self._leaf_config = leaf_config
+    if self._height == -1:
+      self._leaf = leaf.Leaf.from_config(leaf_config)
+    else:
+      self._leaf = None
+
     self.id = node_id
     self._pending_adoptees = None if parent is None else {adoptee['id']: False for adoptee in adoptees}
     self._kids = {adoptee['id']: adoptee for adoptee in adoptees}
     self._kid_summaries = {}
-    self._initial_state = initial_state
-    self._adjacent = None
+
+    self._exporter = None
+    self._importer = None
 
     self._updated_summary = True
     '''Set to true when the currenty summary may have changed.'''
@@ -64,13 +69,16 @@ class InternalNode(Node):
     they start routing.
     '''
 
+    if recorded_user_json is None:
+      self._recorded_user = None
+    else:
+      self._recorded_user = recorded.RecordedUser.from_json(recorded_user_json)
+
     self._dns_controller = None
     '''
     Root InternalNodes will create a `DNSController` instance when they start routing,
     and use it configure the appropriate DNS mapping.
     '''
-
-    self._current_state = None
 
     self._leaving_kids = None
     '''
@@ -118,14 +126,37 @@ class InternalNode(Node):
     super(InternalNode, self).__init__(logger)
 
     CHECK_INTERVAL = self.system_config['KID_SUMMARY_INTERVAL']
+    self._stop_recorded_user = None
+    if self._recorded_user is not None:
+      self._recorded_user.simulate(self._controller, self._receive_input_action)
+
     self._stop_checking_limits = self._controller.periodically(CHECK_INTERVAL,
                                                                lambda: self._check_limits(CHECK_INTERVAL))
 
     self._time_since_no_mergable_kids_ms = 0
     self._time_since_no_consumable_proxy = 0
 
+  def _receive_input_action(self, message):
+    if self._variant != 'input':
+      raise errors.InternalError("Only 'input' variant nodes may receive input actions")
+
+    if self._exporter is not None:
+      self.logger.debug(
+          "Leaf node is forwarding input_action of {number} via exporter", extra={'number': message['number']})
+      self._exporter.export_message(message=message, sequence_number=self.linker.advance_sequence_number())
+    else:
+      self.logger.warning(
+          "Leaf node is not generating an input_action message send since it does not yet have an exporter.")
+
   def is_data(self):
     return True
+
+  @property
+  def current_state(self):
+    if self._height != -1:
+      raise errors.InternalError("Non-leaf InternalNodes do not maintain a current_state.")
+    else:
+      return self._leaf.state
 
   @property
   def height(self):
@@ -133,6 +164,21 @@ class InternalNode(Node):
 
   def get_adjacent_id(self):
     return None if self._adjacent is None else self._adjacent['id']
+
+  @property
+  def _adjacent(self):
+    if self._variant == 'input':
+      if self._exporter is None:
+        return None
+      else:
+        return self._exporter.receiver
+    elif self._variant == 'output':
+      if self._importer is None:
+        return None
+      else:
+        return self._importer.sender
+    else:
+      raise errors.InternalError(f"Unrecognized variant {self._variant}")
 
   def checkpoint(self, before=None):
     pass
@@ -142,7 +188,7 @@ class InternalNode(Node):
       if len(new_senders) != 1:
         raise errors.InternalError(
             "sink_swap should be called on an edge internal node only when there is a unique new sender.")
-      self._adjacent = new_senders[0]
+      self._set_input(new_senders[0])
     elif self._variant == 'input':
       raise errors.InternalError("An input InternalNode should never function as a sink node in a migration.")
     else:
@@ -151,11 +197,8 @@ class InternalNode(Node):
   def switch_flows(self, migration_id, old_exporters, new_exporters, new_receivers):
     self._updated_summary = True
     if self._variant == 'input':
-      if len(new_receivers) != 1:
-        raise errors.InternalError("Not sure how to set an input node's receives to a list not of length 1.")
-      if self._adjacent is not None and self._adjacent['id'] != new_receivers[0]['id']:
-        raise errors.InternalError("Not sure how to set an input node's receives when it already has an adjacent.")
-      self._adjacent = new_receivers[0]
+      for receiver in new_receivers:
+        self._set_output(receiver)
     elif self._variant == 'output':
       raise errors.InternalError("Output InternalNode should never function as a source migrator in a migration.")
     else:
@@ -203,9 +246,8 @@ class InternalNode(Node):
               node_id=node_id,
               parent=self.new_handle(node_id),
               variant=self._variant,
-              state_updater=self._state_updater,
+              leaf_config=self._leaf_config,
               height=self._height - 1,
-              initial_state=self._initial_state,
               adoptees=[],
           ))
       return node_id
@@ -326,9 +368,8 @@ class InternalNode(Node):
             node_id=self._root_proxy_id,
             parent=self.new_handle(self._root_proxy_id),
             variant=self._variant,
-            state_updater=self._state_updater,
+            leaf_config=self._leaf_config,
             height=self._height - 1,
-            initial_state=self._initial_state,
             adoptees=[self.transfer_handle(kid, self._root_proxy_id) for kid in self._kids_for_proxy_to_adopt],
         ))
 
@@ -381,19 +422,22 @@ class InternalNode(Node):
 
     self._graph.add_node(kid_id)
 
+  def _terminate(self):
+    self._stop_checking_limits()
+    self._controller.terminate_node(self.id)
+
   def _maybe_kids_have_left(self):
     if not self._leaving_kids:
-      self._stop_checking_limits()
-      self._controller.terminate_node(self.id)
+      self._terminate()
 
   def receive(self, message, sender_id):
     if self._routing_kids_listener is not None and self._routing_kids_listener.receive(
         message=message, sender_id=sender_id):
       pass
     elif message['type'] == 'configure_new_flow_right':
-      if self._adjacent is not None or len(message['right_configurations']) != 1 or self._variant != 'input':
+      if self._exporter is not None or len(message['right_configurations']) != 1 or self._variant != 'input':
         raise errors.InternalError("A new configure_new_flow_right should only ever arrive at an 'input' InternalNode "
-                                   "and only when it's waiting to set its adjacent,"
+                                   "and only when it's waiting to set its exporter,"
                                    " and when the configure_new_flow_right has a single right_configuration.")
       right_config, = message['right_configurations']
       node = right_config['parent_handle']
@@ -403,7 +447,7 @@ class InternalNode(Node):
                     migration_id=None,
                     left_configurations=[
                         messages.migration.left_configuration(
-                            height=self.height,
+                            height=self._height,
                             is_data=True,
                             node=self.new_handle(node['id']),
                             kids=[{
@@ -415,6 +459,8 @@ class InternalNode(Node):
     elif message['type'] == 'configure_new_flow_left':
       for left_config in message['left_configurations']:
         node = left_config['node']
+        if self._height == -1 and left_config['state']:
+          self._leaf.set_state(left_config['state'])
         self._set_input(node)
     elif message['type'] == 'routing_start':
       self._on_routing_start(message=message, sender_id=sender_id)
@@ -455,11 +501,11 @@ class InternalNode(Node):
       self.send(node,
                 messages.migration.configure_new_flow_right(None, [
                     messages.migration.right_configuration(
-                        n_kids=len(self._kids),
+                        n_kids=len(self._kids) if self._height >= 0 else None,
                         parent_handle=self.new_handle(node['id']),
-                        height=self.height,
+                        height=self._height,
                         is_data=True,
-                        connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'],
+                        connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'] if self._height >= 0 else 1,
                     )
                 ]))
     elif message['type'] == 'merge_with':
@@ -491,14 +537,23 @@ class InternalNode(Node):
     self._root_consuming_proxy_id = None
 
   def _set_input(self, node):
-    if self._adjacent is not None and self._adjacent['id'] != node['id']:
-      raise errors.InternalError("InternalNodes can have only a single adjacent node.")
-    self._adjacent = node
+    if self._importer is not None:
+      raise errors.InternalError("InternalNodes have only a single input node."
+                                 "  Can not add a new one once an input already exists")
+    if self._variant != 'output':
+      raise errors.InternalError("Only output InternalNodes can set their input.")
+
+    self._importer = self.linker.new_importer(node)
 
   def _set_output(self, node):
-    if self._adjacent is not None and self._adjacent['id'] != node['id']:
-      raise errors.InternalError("InternalNodes can have only a single adjacent node.")
-    self._adjacent = node
+    if self._exporter is not None:
+      if node['id'] != self._exporter.receiver_id:
+        raise errors.InternalError("InternalNodes have only a single output node."
+                                   "  Can not add a new one once an output already exists")
+    else:
+      if self._variant != 'input':
+        raise errors.InternalError("Only input InternalNodes can set their output.")
+      self._exporter = self.linker.new_exporter(node)
 
   @staticmethod
   def from_config(node_config, controller):
@@ -506,14 +561,14 @@ class InternalNode(Node):
         node_id=node_config['id'],
         parent=node_config['parent'],
         controller=controller,
-        state_updater=node_config['state_updater'],
+        leaf_config=node_config['leaf_config'],
         adoptees=node_config['adoptees'],
         variant=node_config['variant'],
         height=node_config['height'],
-        initial_state=node_config['initial_state'])
+        recorded_user_json=node_config['recorded_user_json'])
 
   def elapse(self, ms):
-    pass
+    self.linker.elapse(ms)
 
   def _check_limits(self, ms):
     if self._updated_summary or self._height == 0:
@@ -524,7 +579,7 @@ class InternalNode(Node):
     self._check_for_consumable_proxy(ms)
 
   def _send_kid_summary(self):
-    if self._parent is not None:
+    if self._parent is not None and self._height >= 0:
       message = messages.io.kid_summary(
           size=(sum(kid_summary['size'] for kid_summary in self._kid_summaries.values())
                 if self._height > 0 else len(self._kids)),
@@ -623,6 +678,10 @@ class InternalNode(Node):
   def handle_api_message(self, message):
     if message['type'] == 'create_kid_config':
       return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
+    elif message['type'] == 'kill_node':
+      if self._parent:
+        self.send(self._parent, messages.io.goodbye_parent())
+      self._terminate()
     elif message['type'] == 'route_dns':
       self._route_dns(message)
     elif message['type'] == 'get_capacity':
@@ -630,27 +689,21 @@ class InternalNode(Node):
     elif message['type'] == 'get_kids':
       return self._kids
     elif message['type'] == 'get_senders':
-      if self._adjacent is not None:
-        if self._variant == 'input':
-          return {}
-        elif self._variant == 'output':
-          return {self._adjacent['id']: self._adjacent}
-        else:
-          raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
-      else:
+      if self._importer is None:
         return {}
+      else:
+        return {self._importer.sender_id: self._importer.sender}
     elif message['type'] == 'get_receivers':
-      if self._adjacent is not None:
-        if self._variant == 'input':
-          return {self._adjacent['id']: self._adjacent}
-        elif self._variant == 'output':
-          return {}
-        else:
-          raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
-      else:
+      if self._exporter is None:
         return {}
+      else:
+        return {self._exporter.receiver_id: self._exporter.receiver}
     elif message['type'] == 'get_adjacent_handle':
       return self._adjacent
+    elif message['type'] == 'get_output_state':
+      if self._height != -1:
+        raise errors.InternalError("Can't get output state for an InternalNode with height >= 0")
+      return self._leaf.state
     else:
       return super(InternalNode, self).handle_api_message(message)
 
@@ -677,16 +730,20 @@ class InternalNode(Node):
         })
     self._kids[node_id] = None
 
-    return messages.io.leaf_config(
+    return messages.io.internal_node_config(
         node_id=node_id,
-        name=name,
         parent=self.new_handle(node_id),
         variant=self._variant,
-        state_updater=self._state_updater,
-        initial_state=self._initial_state)
+        height=-1,
+        leaf_config=self._leaf_config)
 
   def deliver(self, message, sequence_number, sender_id):
-    raise errors.InternalError("Messages should not be delivered to internal nodes.")
+    if self._variant != 'output' or self._height != -1:
+      raise errors.InternalError("Only 'output' variant leaf nodes may receive output actions")
+
+    self._leaf.update_current_state(message)
+
+    self.linker.advance_sequence_number()
 
 
 class RoutingKidsListener(object):

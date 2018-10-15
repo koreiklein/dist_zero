@@ -19,7 +19,7 @@ class Exporter(object):
 
   '''
 
-  PENDING_EXPIRATION_TIME_MS = 1 * 700
+  PENDING_EXPIRATION_TIME_MS = 2 * 1000
   '''
   When a message has been sent, it will be put into a pending state.
   PENDING_EXPIRATION_TIME_MS milliseconds after a message is sent, if it still hasn't been acknowledged,

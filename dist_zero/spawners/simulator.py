@@ -28,7 +28,6 @@ class SimulatedSpawner(spawner.Spawner):
   '''
 
   # The number of milliseconds to simulate at a time
-  MAX_STEP_TIME_MS = 5
   AVERAGE_SEND_TIME_MS = 10
   SEND_TIME_STDDEV_MS = 3
 

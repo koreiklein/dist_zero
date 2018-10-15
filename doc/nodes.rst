@@ -40,9 +40,11 @@ are sent on any importer for any message M once all the messages exporter becaus
 IO trees
 -----------------
 
-User input and output are modeled by trees of nodes.
-Each `LeafNode` instance represents a particular input device or output device.
-The `LeafNode` instances are organized into a tree of `InternalNode` instances, culminating in a root
+User input and output are modeled by trees of nodes, each of which is in instance of `InternalNode`.
+The nodes with height >= 0 are for managing child nodes, and the nodes of height -1 do the "actual work",
+manage no kids, and are referred to as "leaf nodes".
+Each leaf node represents a particular input device or output device.
+The leaf nodes are organized into a tree of `InternalNode` instances, culminating in a root
 `InternalNode` .
 
 These trees are designed to grow and shrink as devices enter and leave the network.
