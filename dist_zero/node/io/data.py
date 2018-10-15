@@ -10,6 +10,49 @@ from dist_zero.node.io import leaf
 logger = logging.getLogger(__name__)
 
 
+class AdopterNode(Node):
+  def __init__(self, node_id, parent, adoptees, data_node_config, controller):
+    self.id = node_id
+    self._parent = parent
+    self._controller = controller
+    self._data_node_config = data_node_config
+
+    self._pending_adoptees = {adoptee['id']: False for adoptee in adoptees}
+    self._kids = {adoptee['id']: adoptee for adoptee in adoptees}
+
+    super(AdopterNode, self).__init__(logger)
+
+  @staticmethod
+  def from_config(config, controller):
+    return AdopterNode(
+        adoptees=config['adoptees'],
+        node_id=config['data_node_config']['id'],
+        parent=config['data_node_config']['parent'],
+        data_node_config=config['data_node_config'],
+        controller=controller)
+
+  def initialize(self):
+    # Must adopt any kids that were added before initialization.
+    for kid in self._kids.values():
+      self.send(kid, messages.migration.adopt(self.new_handle(kid['id'])))
+
+  def _added_kid(self, kid):
+    kid_id = kid['id']
+    self._kids[kid_id] = kid
+    self._pending_adoptees[kid_id] = True
+    if all(self._pending_adoptees.values()):
+      new_node = DataNode.from_config(self._data_node_config, self._controller)
+      new_node.set_initial_kids(self._kids)
+      self._controller.change_node(self.id, new_node)
+      new_node.initialize()
+
+  def receive(self, message, sender_id):
+    if message['type'] == 'hello_parent':
+      self._added_kid(message['kid'])
+    else:
+      super(AdopterNode, self).receive(message=message, sender_id=sender_id)
+
+
 class DataNode(Node):
   '''
   The root of a tree of leaf instances of the same ``variant``.
@@ -22,15 +65,13 @@ class DataNode(Node):
   minimal assignment such that n.height+1 == n.parent.height for every node n that has a parent.
   '''
 
-  def __init__(self, node_id, parent, controller, variant, leaf_config, height, adoptees, recorded_user_json):
+  def __init__(self, node_id, parent, controller, variant, leaf_config, height, recorded_user_json):
     '''
     :param str node_id: The id to use for this node
     :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
     :type parent: :ref:`handle` or `None`
     :param str variant: 'input' or 'output'
     :param int height: The height of the node in the tree.  See `DataNode`
-    :param adoptees: Nodes to adopt upon initialization.
-    :type adoptees: list[:ref:`handle`]
     :param `MachineController` controller: The controller for this node.
     :param objcect leaf_config: Configuration information for how to run a leaf.
     :param object recorded_user_json: None, or configuration for a recorded user.  Only allowed if this is a height -1 Node.
@@ -47,8 +88,7 @@ class DataNode(Node):
       self._leaf = None
 
     self.id = node_id
-    self._pending_adoptees = None if parent is None else {adoptee['id']: False for adoptee in adoptees}
-    self._kids = {adoptee['id']: adoptee for adoptee in adoptees}
+    self._kids = {}
     self._kid_summaries = {}
 
     self._exporter = None
@@ -205,16 +245,11 @@ class DataNode(Node):
       self.send(kid, messages.migration.switch_flows(migration_id))
 
   def initialize(self):
-    if self._kids:
-      # Must adopt any kids that were added before initialization.
-      for kid in self._kids.values():
-        self.send(kid, messages.migration.adopt(self.new_handle(kid['id'])))
-
     if self._height > 0 and len(self._kids) == 0:
       # unless we are height 0, we must have a new kid.
       self._startup_kid = self._spawn_kid()
     else:
-      if self._parent is not None and not self._pending_adoptees:
+      if self._parent is not None:
         self._send_hello_parent()
 
   def _send_hello_parent(self):
@@ -245,7 +280,6 @@ class DataNode(Node):
               variant=self._variant,
               leaf_config=self._leaf_config,
               height=self._height - 1,
-              adoptees=[],
           ))
       return node_id
 
@@ -361,14 +395,15 @@ class DataNode(Node):
     self._kid_summaries = {}
     self._updated_summary = True
     self._controller.spawn_node(
-        messages.io.data_node_config(
-            node_id=self._root_proxy_id,
-            parent=self.new_handle(self._root_proxy_id),
-            variant=self._variant,
-            leaf_config=self._leaf_config,
-            height=self._height - 1,
+        messages.io.adopter_node_config(
             adoptees=[self.transfer_handle(kid, self._root_proxy_id) for kid in self._kids_for_proxy_to_adopt],
-        ))
+            data_node_config=messages.io.data_node_config(
+                node_id=self._root_proxy_id,
+                parent=self.new_handle(self._root_proxy_id),
+                variant=self._variant,
+                leaf_config=self._leaf_config,
+                height=self._height - 1,
+            )))
 
   def _finish_bumping_height(self, proxy):
     self._kid_summaries = {}
@@ -386,17 +421,19 @@ class DataNode(Node):
     self._root_proxy_id = None
     self._kids_for_proxy_to_adopt = None
 
+  def set_initial_kids(self, kids):
+    if self._kids:
+      raise errors.InternalError("DataNode already has kids")
+
+    self._kids = kids
+    for kid_id in kids.keys():
+      self._graph.add_node(kid_id)
+
   def _finish_adding_kid(self, kid):
     kid_id = kid['id']
     self._updated_summary = True
     self._kids[kid_id] = kid
     self._graph.add_node(kid_id)
-    if self._pending_adoptees:
-      if kid_id in self._pending_adoptees:
-        self._pending_adoptees[kid_id] = True
-      if all(self._pending_adoptees.values()):
-        self._pending_adoptees = None
-        self._send_hello_parent()
 
     if self._exporter is not None:
       self.send(self._exporter.receiver,
@@ -557,7 +594,6 @@ class DataNode(Node):
         parent=node_config['parent'],
         controller=controller,
         leaf_config=node_config['leaf_config'],
-        adoptees=node_config['adoptees'],
         variant=node_config['variant'],
         height=node_config['height'],
         recorded_user_json=node_config['recorded_user_json'])

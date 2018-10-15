@@ -60,6 +60,17 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
+  def change_node(self, node_id, node):
+    '''
+    Stop sending messages to the node currently identified node_id, and send them instead to a new node.
+    Do not try to initialize the node.
+
+    :param str node_id: The id of a running node.
+    :param node: A `Node` instance with the same id.
+    :type node: `Node`
+    '''
+    raise RuntimeError("Abstract Superclass")
+
   def terminate_node(self, node_id):
     '''
     Stop running a `Node`.
@@ -230,7 +241,7 @@ class NodeManager(MachineController):
     self._send_to_machine = send_to_machine
 
     ELAPSE_TIME_MS = 220
-    self.periodically(ELAPSE_TIME_MS, lambda: self.elapse_nodes(ELAPSE_TIME_MS))
+    self._stop_elapse_nodes = self.periodically(ELAPSE_TIME_MS, lambda: self.elapse_nodes(ELAPSE_TIME_MS))
 
   @property
   def random(self):
@@ -307,6 +318,15 @@ class NodeManager(MachineController):
 
     return node_config['id']
 
+  def change_node(self, node_id, node):
+    if node_id not in self._node_by_id:
+      raise errors.InternalError(f"Can't change_node for {node_id}, as no node by that id is currently running.")
+
+    if node_id != node.id:
+      raise errors.InternalError(f"Can't change_node for {node_id}, as the new node has a different id {node.id}")
+
+    self._node_by_id[node_id] = node
+
   def terminate_node(self, node_id):
     self._node_by_id.pop(node_id)
 
@@ -333,6 +353,8 @@ class NodeManager(MachineController):
         })
     if node_config['type'] == 'DataNode':
       node = io.DataNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'AdopterNode':
+      node = io.AdopterNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'SumNode':
       node = SumNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'MigrationNode':

@@ -62,7 +62,19 @@ def set_adjacent(node):
   return {'type': 'set_adjacent', 'node': node}
 
 
-def data_node_config(node_id, parent, variant, height, leaf_config, adoptees=None, recorded_user_json=None):
+def adopter_node_config(adoptees, data_node_config):
+  '''
+  An `AdopterNode` that will wait until some nodes child nodes have been adopted, and 
+  '''
+  return {
+      'type': 'AdopterNode',
+      'id': data_node_config['id'],
+      'adoptees': adoptees,
+      'data_node_config': data_node_config
+  }
+
+
+def data_node_config(node_id, parent, variant, height, leaf_config, recorded_user_json=None):
   '''
   A node config for creating an data node to manage a new list of io nodes.
 
@@ -72,9 +84,6 @@ def data_node_config(node_id, parent, variant, height, leaf_config, adoptees=Non
   :param str variant: 'input' or 'output'
   :param int height: The height of the node in the tree.  See `DataNode`
   :param object leaf_config: Configuration information for what kind of leaf nodes to run.
-  :param adoptees: The list of `Node` instances that this node should adopt as its kids upon initialization,
-    or `None` if the node should not initially adopt any kids.
-  :type adoptees: list[:ref:`handle`] or `None`
   :param object initial_state: The initial state to use for new nodes.
   :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
   '''
@@ -87,7 +96,6 @@ def data_node_config(node_id, parent, variant, height, leaf_config, adoptees=Non
       'parent': parent,
       'variant': variant,
       'height': height,
-      'adoptees': [] if adoptees is None else adoptees,
       'leaf_config': leaf_config,
       'recorded_user_json': recorded_user_json,
   }
