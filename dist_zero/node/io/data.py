@@ -162,9 +162,6 @@ class DataNode(Node):
   def height(self):
     return self._height
 
-  def get_adjacent_id(self):
-    return None if self._adjacent is None else self._adjacent['id']
-
   @property
   def _adjacent(self):
     if self._variant == 'input':
@@ -401,24 +398,22 @@ class DataNode(Node):
         self._pending_adoptees = None
         self._send_hello_parent()
 
-    if self._adjacent is not None:
-      if self._variant == 'input':
-        self.send(self._adjacent,
-                  messages.migration.update_left_configuration(
-                      parent_id=self.id,
-                      new_kids=[{
-                          'connection_limit': self.system_config['SUM_NODE_SENDER_LIMIT'],
-                          'handle': self.transfer_handle(handle=kid, for_node_id=self._adjacent['id'])
-                      }],
-                      new_height=self._height))
-      elif self._variant == 'output':
-        self.send(self._adjacent,
-                  messages.migration.update_right_configuration(
-                      parent_id=self.id,
-                      new_kids=[self.transfer_handle(kid, self._adjacent['id'])],
-                      new_height=self._height))
-      else:
-        raise errors.InternalError("Unrecognized variant {}".format(self._variant))
+    if self._exporter is not None:
+      self.send(self._exporter.receiver,
+                messages.migration.update_left_configuration(
+                    parent_id=self.id,
+                    new_kids=[{
+                        'connection_limit': self.system_config['SUM_NODE_SENDER_LIMIT'],
+                        'handle': self.transfer_handle(handle=kid, for_node_id=self._exporter.receiver_id)
+                    }],
+                    new_height=self._height))
+
+    if self._importer is not None:
+      self.send(self._importer.sender,
+                messages.migration.update_right_configuration(
+                    parent_id=self.id,
+                    new_kids=[self.transfer_handle(kid, self._importer.sender_id)],
+                    new_height=self._height))
 
     self._graph.add_node(kid_id)
 
