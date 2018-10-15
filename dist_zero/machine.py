@@ -140,6 +140,30 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
+  def periodically(self, interval_ms, f):
+    '''
+    Run a function periodically until it is cancelled.
+
+    :param int interval_ms: The number of milliseconds between calls to f().
+    :param f: Any function taking no arguments.
+
+    :return: A function to cancel the periodic calls.
+    '''
+    cancelled = [False]
+
+    async def _loop():
+      if not cancelled[0]:
+        f()
+        await self.sleep_ms(interval_ms)
+        asyncio.get_event_loop().create_task(_loop())
+
+    asyncio.get_event_loop().create_task(_loop())
+
+    def _cancel():
+      cancelled[0] = True
+
+    return _cancel
+
 
 class NodeManager(MachineController):
   '''
@@ -206,7 +230,8 @@ class NodeManager(MachineController):
 
     self._send_to_machine = send_to_machine
 
-    asyncio.get_event_loop().create_task(self._elapse_time_periodically())
+    ELAPSE_TIME_MS = 220
+    self.periodically(ELAPSE_TIME_MS, lambda: self.elapse_nodes(ELAPSE_TIME_MS))
 
   @property
   def random(self):
@@ -429,12 +454,6 @@ class NodeManager(MachineController):
 
   def clean_all(self):
     self._running = False
-
-  async def _elapse_time_periodically(self):
-    ELAPSE_TIME_MS = 220
-    while self._running:
-      await self.sleep_ms(ELAPSE_TIME_MS)
-      self.elapse_nodes(ELAPSE_TIME_MS)
 
   def elapse_nodes(self, ms):
     '''

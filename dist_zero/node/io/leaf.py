@@ -179,7 +179,8 @@ class LeafNode(Node):
       raise errors.InternalError("Only 'input' variant nodes may receive input actions")
 
     if self._exporter is not None:
-      self.logger.debug("Forwarding input message via exporter")
+      self.logger.debug(
+          "Leaf node is forwarding input_action of {number} via exporter", extra={'number': message['number']})
       self._exporter.export_message(message=message, sequence_number=self.linker.advance_sequence_number())
     else:
       self.logger.warning(

@@ -1,7 +1,7 @@
 import logging
 
 import dist_zero.ids
-from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids, ticker
+from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids
 from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
 from dist_zero.node.io import leaf_html
@@ -117,7 +117,9 @@ class InternalNode(Node):
 
     super(InternalNode, self).__init__(logger)
 
-    self._ticker = ticker.Ticker(interval_ms=self.system_config['KID_SUMMARY_INTERVAL'])
+    CHECK_INTERVAL = self.system_config['KID_SUMMARY_INTERVAL']
+    self._stop_checking_limits = self._controller.periodically(CHECK_INTERVAL,
+                                                               lambda: self._check_limits(CHECK_INTERVAL))
 
     self._time_since_no_mergable_kids_ms = 0
     self._time_since_no_consumable_proxy = 0
@@ -167,16 +169,6 @@ class InternalNode(Node):
       # Must adopt any kids that were added before initialization.
       for kid in self._kids.values():
         self.send(kid, messages.migration.adopt(self.new_handle(kid['id'])))
-
-    if self._adjacent is not None:
-      if self._variant == 'input':
-        self.logger.info("internal node sending 'set_input' message to adjacent node")
-        self.send(self._adjacent, messages.io.set_input(self.new_handle(self._adjacent['id'])))
-      elif self._variant == 'output':
-        self.logger.info("internal node sending 'set_output' message to adjacent node")
-        self.send(self._adjacent, messages.io.set_output(self.new_handle(self._adjacent['id'])))
-      else:
-        raise errors.InternalError("Unrecognized variant {}".format(self._variant))
 
     if self._height > 0 and len(self._kids) == 0:
       # unless we are height 0, we must have a new kid.
@@ -391,6 +383,7 @@ class InternalNode(Node):
 
   def _maybe_kids_have_left(self):
     if not self._leaving_kids:
+      self._stop_checking_limits()
       self._controller.terminate_node(self.id)
 
   def receive(self, message, sender_id):
@@ -520,14 +513,15 @@ class InternalNode(Node):
         initial_state=node_config['initial_state'])
 
   def elapse(self, ms):
-    n_ticks = self._ticker.elapse(ms)
-    if n_ticks > 0:
-      if self._updated_summary or self._height == 0:
-        self._send_kid_summary()
-        self._updated_summary = False
-      self._check_for_kid_limits()
-      self._check_for_mergeable_kids(self._ticker.interval_ms * n_ticks)
-      self._check_for_consumable_proxy(self._ticker.interval_ms * n_ticks)
+    pass
+
+  def _check_limits(self, ms):
+    if self._updated_summary or self._height == 0:
+      self._send_kid_summary()
+      self._updated_summary = False
+    self._check_for_kid_limits()
+    self._check_for_mergeable_kids(ms)
+    self._check_for_consumable_proxy(ms)
 
   def _send_kid_summary(self):
     if self._parent is not None:

@@ -17,7 +17,7 @@ class Linker(object):
   and that `Importer` instances generate proper acknowledgements.
   '''
 
-  TIME_BETWEEN_ACKNOWLEDGEMENTS_MS = 30
+  TIME_BETWEEN_ACKNOWLEDGEMENTS_MS = 50
   '''The number of ms between acknowledgements sent to senders.'''
 
   TIME_BETWEEN_RETRANSMISSION_CHECKS_MS = 20

@@ -240,7 +240,7 @@ class SumNode(Node):
     if not updated:
       return self.least_unused_sequence_number
     else:
-      self.logger.debug("Sending new increment of {increment}.", extra={'increment': increment})
+      self.logger.debug("Sending new increment of {increment} from {cur_node_id}.", extra={'increment': increment})
       self._current_state = new_state
       sequence_number = self.linker.advance_sequence_number()
       self._send_increment(increment=increment, sequence_number=sequence_number)

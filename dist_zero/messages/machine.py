@@ -149,7 +149,7 @@ def machine_config(
       'network_errors_config': network_errors_config or std_simulated_network_errors_config(),
       'system_config': system_config or std_system_config(),
       'random_seed': random_seed,
-      'spawner': spawner,
+      'spawner': None,
       'ip_address': ip_address,
   }
 

@@ -20,17 +20,17 @@ class TestSpawnComputationNetwork(Utils):
         root_input,
         n_users=n_input_leaves,
         add_user=True,
-        send_after=9000,
+        send_after=4000,
         ave_inter_message_time_ms=500,
         send_messages_for_ms=3000)
 
     # Need to wait for the new users to be fully connected.
-    await self.demo.run_for(ms=4000)
+    await self.demo.run_for(ms=1000)
 
     self.root_computation = self.demo.connect_trees_with_sum_network(
         root_input, root_output, machine=self.machine_ids[0])
     # Ensure we haven't simulated any sends yet
-    await self.demo.run_for(ms=6000)
+    await self.demo.run_for(ms=8000)
 
     if n_input_leaves > 0:
       assert self.demo.total_simulated_amount > 10 # Smoke test that sends were in fact simulated
@@ -42,6 +42,7 @@ class TestSpawnComputationNetwork(Utils):
     assert len(output_leaves) == n_output_leaves
     self.demo.system.get_senders(root_output)
     self.demo.system.get_receivers(root_input)
+
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 
@@ -67,7 +68,6 @@ class TestSpawnComputationNetwork(Utils):
         1, base_config=self.base_config(), random_seed='test_spawn_small_small')
 
     await self._connect_and_test_io_trees(n_input_leaves=1, n_output_leaves=1)
-    self.demo.render_network(self.root_computation)
 
   @pytest.mark.asyncio
   async def test_spawn_small_large(self, demo):
