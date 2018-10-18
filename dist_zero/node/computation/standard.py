@@ -2,10 +2,10 @@ import logging
 
 from dist_zero import messages, ids, errors, network_graph, connector
 from dist_zero import topology_picker
-from dist_zero.connector import proxy_spawner
 from dist_zero.migration.right_configuration import ConfigurationReceiver
 
-from .node import Node
+from ..node import Node
+from . import transactions
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ class ComputationNode(Node):
   def _get_new_layers_edges_and_hourglasses(self, is_left, new_layers, last_edges, hourglasses):
     if new_layers or last_edges or hourglasses:
       self.start_transaction(
-          connector.IncrementalSpawnerTransaction(
+          transactions.IncrementalSpawnerTransaction(
               new_layers=new_layers,
               last_edges=last_edges,
               hourglasses=hourglasses,
@@ -304,7 +304,7 @@ class ComputationNode(Node):
       )
       self.height = self._connector.max_height()
       self._connector.fill_in()
-      self.start_transaction(connector.SpawnerTransaction(node=self, connector=self._connector))
+      self.start_transaction(transactions.SpawnerTransaction(node=self, connector=self._connector))
     else:
       # Since this node was adopting, all its eventual kids are already up and running and do not need spawning.
       # We should have received an appropriate Connector instance in the config.
@@ -408,7 +408,7 @@ class ComputationNode(Node):
       self.kids.pop(sender_id)
     elif message['type'] == 'bumped_height':
       self.start_transaction(
-          proxy_spawner.BumpHeightTransaction(
+          transactions.BumpHeightTransaction(
               node=self, proxy=message['proxy'], kid_ids=message['kid_ids'], variant=message['variant']))
     elif message['type'] == 'update_left_configuration':
       self._update_left_configuration(message)

@@ -47,6 +47,8 @@ class DataNode(Node):
     self._kids = {}
     self._kid_summaries = {}
 
+    self._added_sender_respond_to = None
+
     self._exporter = None
     self._importer = None
 
@@ -498,6 +500,7 @@ class DataNode(Node):
                         connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'] if self._height >= 0 else 1,
                     )
                 ]))
+      self._added_sender_respond_to = message['respond_to']
     elif message['type'] == 'merge_with':
       if self._parent is None:
         raise errors.InternalError("Root nodes can not merge with other nodes.")
@@ -534,6 +537,9 @@ class DataNode(Node):
       raise errors.InternalError("Only output DataNodes can set their input.")
 
     self._importer = self.linker.new_importer(node)
+    if self._added_sender_respond_to:
+      self.send(self._added_sender_respond_to, messages.migration.finished_adding_sender(sender_id=node['id']))
+      self._added_sender_respond_to = None
 
   def _set_output(self, node):
     if self._exporter is not None:
