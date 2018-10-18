@@ -1,4 +1,31 @@
-from dist_zero import errors, ids, messages
+from dist_zero import errors, ids, messages, connector
+
+
+class BumpHeightTransaction(object):
+  def __init__(self, node, message, sender_id):
+    self._node = node
+    self._proxy_spawner = ProxySpawner(node=node)
+    self._message = message
+    self._sender_id = sender_id
+
+  def receive(self, message, sender_id):
+    '''
+    If this Transaction can handle the message, process it and return True
+    otherwise, receive will return False and the surrounding code should be sure
+    to delay the message until the transaction ends.
+    '''
+    if message['type'] == 'hello_parent':
+      if self._proxy_spawner.spawned_a_kid(message['kid']):
+        return True
+    elif message['type'] == 'goodbye_parent':
+      if self._proxy_spawner.lost_a_kid(sender_id):
+        return True
+
+    return False
+
+  def start(self):
+    self._proxy_spawner.respond_to_bumped_height(
+        proxy=self._message['proxy'], kid_ids=self._message['kid_ids'], variant=self._message['variant'])
 
 
 class ProxySpawner(object):
@@ -11,44 +38,55 @@ class ProxySpawner(object):
 
     self._proxy_adjacent_id = None
     '''The id of node that is spawned adjacent to the `DataNode`'s proxy.'''
+    self._proxy_adjacent = None
 
     self._proxy_adjacent_variant = None
     '''input' or 'output' depending on which node bumped its height.'''
 
     self._proxy_id = None
     '''The id of node that is spawned as this node's proxy.'''
+    self._proxy = None
 
     self._kid_to_finish_bumping = None
 
-  def lost_a_kid(self):
-    if self._kid_to_finish_bumping and len(self._node.kids) <= 2:
-      self._finished_bumping(self._kid_to_finish_bumping)
-      self._kid_to_finish_bumping = None
+  def lost_a_kid(self, kid_id):
+    if kid_id in self._old_kids:
+      self._old_kids.pop(kid_id)
+      self._maybe_finished_bumping()
+      return True
+
+    return False
 
   def spawned_a_kid(self, kid):
     '''
     Called when a child responds with hello_parent.
+
+    :return: True iff this proxy spawner is responsible for this kid.
     '''
     if kid['id'] == self._proxy_adjacent_id:
+      self._proxy_adjacent = kid
       self._spawn_proxy(kid)
+      return True
     elif kid['id'] == self._proxy_id:
-      if len(self._node.kids) > 2:
-        self._kid_to_finish_bumping = kid
-      else:
-        self._finished_bumping(kid)
+      self._proxy = kid
+      self._maybe_finished_bumping()
+      return True
+    else:
+      return False
 
-  def _finished_bumping(self, proxy_handle):
-    if len(self._node.kids) != 2:
-      raise errors.InternalError("A computation node should have exactly 2 kids after it finishes bumping.")
+  def _maybe_finished_bumping(self):
+    if not self._old_kids and self._proxy and self._proxy_adjacent:
+      self._finished_bumping()
 
+  def _finished_bumping(self):
     # Pass on the right_configurations of self (as in dist_zero.connector.Spawner when the right gap child is spawned)
-    self._node.send(proxy_handle,
+    self._node.send(self._proxy,
                     messages.migration.configure_right_parent(
                         migration_id=None, kid_ids=list(self._node._connector._right_configurations.keys())))
-    self._node.send(proxy_handle,
+    self._node.send(self._proxy,
                     messages.migration.configure_new_flow_right(None, [
                         messages.migration.right_configuration(
-                            parent_handle=self._node.transfer_handle(right_config['parent_handle'], proxy_handle['id']),
+                            parent_handle=self._node.transfer_handle(right_config['parent_handle'], self._proxy['id']),
                             height=right_config['height'],
                             is_data=right_config['is_data'],
                             n_kids=right_config['n_kids'],
@@ -63,7 +101,20 @@ class ProxySpawner(object):
         'handle': self._left_proxy
     }]
     left_configuration['height'] += 1
-    self._node.bumped_to_new_connector({left_root: left_configuration}, self._proxy_adjacent_id, self._proxy_id)
+
+    self._node._connector = connector.Connector(
+        height=self._node.height,
+        left_configurations={left_root: left_configuration},
+        left_is_data=self._node.left_is_data,
+        right_is_data=self._node.right_is_data,
+        right_configurations=self._node._connector._right_configurations,
+        max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
+        max_inputs=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
+    )
+    self._node._connector.fill_in(new_node_ids=[self._proxy_adjacent_id, self._proxy_id])
+    self._node.height = self._node._connector.max_height()
+    self._node.kids = {self._proxy_id: self._proxy, self._proxy_adjacent_id: self._proxy_adjacent}
+    self._node.end_transaction()
 
   def _spawn_proxy(self, proxy_adjacent_handle):
     '''
@@ -110,6 +161,7 @@ class ProxySpawner(object):
 
   def respond_to_bumped_height(self, proxy, kid_ids, variant):
     '''Called in response to an adjacent node informing self that it has bumped its height.'''
+    self._old_kids = self._node.kids
     self._proxy_adjacent_id = ids.new_id('ComputationNode_{}_proxy_adjacent'.format(variant))
     self._proxy_adjacent_variant = variant
     self._left_proxy = proxy

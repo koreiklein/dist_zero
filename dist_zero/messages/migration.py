@@ -88,13 +88,12 @@ def insertion_migrator_config(migration=None):
   return {'type': 'insertion_migrator', 'migration': migration}
 
 
-def added_sender(node, respond_to=None):
+def added_sender(node, respond_to):
   '''
   Informs an already fully configured receiver when a new sender is being added and needs a right_configuration.
   :param node: The :ref:`handle` of the new sender node to add.
   :type node: :ref:`handle`
-  :param respond_to: An optional :ref:`handle` of a node.  If provided, once the sender is added, we should
-    send an finished_adding_sender message to it.
+  :param respond_to: If provided, once the sender is added, we should send an finished_adding_sender message to it.
   :type respond_to: :ref:`handle`
   '''
   return {'type': 'added_sender', 'node': node, 'respond_to': respond_to}

@@ -341,8 +341,6 @@ class DataNode(Node):
       self._warned_low_capacity = False
 
   def _bump_height(self):
-    import ipdb
-    ipdb.set_trace()
     if self._parent is not None:
       raise errors.InternalError("Only the root node may bump its height.")
 
@@ -366,8 +364,6 @@ class DataNode(Node):
             )))
 
   def _finish_bumping_height(self, proxy):
-    import ipdb
-    ipdb.set_trace()
     self._kid_summaries = {}
     self._updated_summary = True
     self._kids = {proxy['id']: proxy}

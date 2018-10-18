@@ -50,14 +50,6 @@ class ComputationNode(Node):
     self.height = height
     self.kids = {}
 
-    self._proxy_spawner = None
-    self._proxy_spawner_message = None
-    '''
-    Sometimes, a proxy_spawner message is postponed b/c an incremental spawner is not yet finished.
-    When than happens, leave the message triggering the bump in self._proxy_spawner_message until
-    the incremental spawner is finished, and process it thereafter.
-    '''
-
     self._exporters = {}
 
     self._senders = {sender['id']: sender for sender in senders}
@@ -75,14 +67,20 @@ class ComputationNode(Node):
     self._right_configurations_are_sent = False
     self._left_configurations_are_sent = False
 
+    self._transaction = None
+    '''The currently transaction instance if there is one.'''
+    self._blocked_messages = []
+    '''
+    Any messages not processed by a currently running transaction will be placed in _blocked_messages until
+    the transaction ends, at which point they'll all be processed in the order received.
+    '''
+
     super(ComputationNode, self).__init__(logger)
 
     for sender_id in self._senders.keys():
       self._deltas.add_sender(sender_id)
 
     self._connector = None
-    self._spawner = None
-    self._incremental_spawner = None
 
   def is_data(self):
     return False
@@ -101,7 +99,7 @@ class ComputationNode(Node):
     if self._initial_migrator_config:
       self._initial_migrator = self.attach_migrator(self._initial_migrator_config)
 
-    if self.parent and not self.kids:
+    if self.parent:
       self._send_hello_parent()
 
     if self._is_mid_node:
@@ -146,24 +144,6 @@ class ComputationNode(Node):
     if receiver['id'] in self._exporters:
       raise errors.InternalError("Already exporting to this node.", extra={'existing_node_id': receiver['id']})
     self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
-
-  def all_incremental_kids_are_spawned(self):
-    self._incremental_spawner = None
-    if self._proxy_spawner_message is not None:
-      self._process_proxy_spawner_message
-
-  def all_kids_are_spawned(self, left_gap, right_gap):
-    self._spawner = None
-    if left_gap and right_gap:
-      raise errors.InternalError("There may not be both a left and a right gap.")
-    self._left_gap = left_gap
-    self._right_gap = right_gap
-    if self._left_configurations_are_sent:
-      raise errors.InternalError("all_kids_are_spawned should only be called before left_configurations are sent.")
-
-    self._send_configure_left_to_right()
-    if self.parent:
-      self._send_hello_parent()
 
   def _send_configure_left_to_right(self):
     self._left_configurations_are_sent = True
@@ -224,14 +204,14 @@ class ComputationNode(Node):
 
   def _get_new_layers_edges_and_hourglasses(self, is_left, new_layers, last_edges, hourglasses):
     if new_layers or last_edges or hourglasses:
-      self._incremental_spawner = connector.IncrementalSpawner(
-          new_layers=new_layers,
-          last_edges=last_edges,
-          hourglasses=hourglasses,
-          connector=self._connector,
-          is_left=is_left,
-          node=self)
-      self._incremental_spawner.start_spawning()
+      self.start_transaction(
+          connector.IncrementalSpawnerTransaction(
+              new_layers=new_layers,
+              last_edges=last_edges,
+              hourglasses=hourglasses,
+              connector=self._connector,
+              is_left=is_left,
+              node=self))
 
   def _update_right_configuration(self, message):
     if self._right_gap:
@@ -324,8 +304,7 @@ class ComputationNode(Node):
       )
       self.height = self._connector.max_height()
       self._connector.fill_in()
-      self._spawner = connector.Spawner(node=self, connector=self._connector)
-      self._spawner.start_spawning()
+      self.start_transaction(connector.SpawnerTransaction(node=self, connector=self._connector))
     else:
       # Since this node was adopting, all its eventual kids are already up and running and do not need spawning.
       # We should have received an appropriate Connector instance in the config.
@@ -339,7 +318,6 @@ class ComputationNode(Node):
           max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
           max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'])
       self.height = self._connector.max_height()
-      self._spawner = None
       self._send_configure_left_to_right()
 
   def set_initial_kids(self, kids):
@@ -383,15 +361,24 @@ class ComputationNode(Node):
 
       self.send(receiver, message)
 
+  def end_transaction(self):
+    if self._transaction is None:
+      raise errors.InternalError("No transaction in currently running.")
+    else:
+      self._transaction = None
+      messages = self._blocked_messages
+      self._blocked_messages = []
+      for message, sender_id in messages:
+        self.receive(message=message, sender_id=sender_id)
+
   def receive(self, message, sender_id):
-    if self._configuration_receiver.receive(message=message, sender_id=sender_id):
+    if self._transaction is not None:
+      if self._transaction.receive(message, sender_id):
+        return
+      else:
+        self._blocked_messages.append((message, sender_id))
+    elif self._configuration_receiver.receive(message=message, sender_id=sender_id):
       return
-    elif message['type'] == 'mid_node_up':
-      self._incremental_spawner.mid_node_up(message['node'])
-    elif message['type'] == 'mid_node_ready':
-      self._incremental_spawner.mid_node_ready(message['node_id'])
-    elif message['type'] == 'finished_adding_sender' and self._incremental_spawner is not None:
-      self._incremental_spawner.finished_adding_sender(src_id=message['sender_id'], tgt_id=sender_id)
     elif message['type'] == 'added_sender':
       node = message['node']
       self._senders[node['id']] = node
@@ -405,9 +392,7 @@ class ComputationNode(Node):
                         connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'],
                     )
                 ]))
-      respond_to = message['respond_to']
-      if respond_to is not None:
-        self._added_sender_respond_tos[respond_to['id']] = respond_to
+      self._added_sender_respond_tos[node['id']] = message['respond_to']
     elif message['type'] == 'adopt':
       if self.parent is None:
         raise errors.InternalError("Root nodes may not adopt a new parent.")
@@ -416,27 +401,13 @@ class ComputationNode(Node):
       self._send_hello_parent()
     elif message['type'] == 'hello_parent':
       self.kids[sender_id] = message['kid']
-      if self._spawner is not None:
-        self._spawner.spawned_a_kid(message['kid'])
-      if self._incremental_spawner is not None:
-        self._incremental_spawner.spawned_a_kid(message['kid'])
-      if self._proxy_spawner is not None:
-        self._proxy_spawner.spawned_a_kid(message['kid'])
     elif message['type'] == 'goodbye_parent':
       if sender_id not in self.kids:
         raise errors.InternalError(
             "Got a goodbye_parent from a node that is not a kid of self.", extra={'kid_id': sender_id})
       self.kids.pop(sender_id)
-      if self._proxy_spawner is not None:
-        self._proxy_spawner.lost_a_kid()
     elif message['type'] == 'bumped_height':
-      self._proxy_spawner_message = message
-      import ipdb
-      ipdb.set_trace()
-      if self._incremental_spawner is None:
-        self._process_proxy_spawner_message()
-      else:
-        pass
+      self.start_transaction(proxy_spawner.BumpHeightTransaction(node=self, message=message, sender_id=sender_id))
     elif message['type'] == 'update_left_configuration':
       self._update_left_configuration(message)
     elif message['type'] == 'update_right_configuration':
@@ -444,30 +415,11 @@ class ComputationNode(Node):
     else:
       super(ComputationNode, self).receive(message=message, sender_id=sender_id)
 
-  def _process_proxy_spawner_message(self):
-    message = self._proxy_spawner_message
-    import ipdb
-    ipdb.set_trace()
-    self._proxy_spawner = proxy_spawner.ProxySpawner(node=self)
-    self._proxy_spawner.respond_to_bumped_height(
-        proxy=message['proxy'], kid_ids=message['kid_ids'], variant=message['variant'])
-    self._proxy_spawner_message = None
-
-  def bumped_to_new_connector(self, left_configurations, left_id, right_id):
-    import ipdb
-    ipdb.set_trace()
-    self._proxy_spawner = None
-    self._connector = connector.Connector(
-        height=self.height,
-        left_configurations=left_configurations,
-        left_is_data=self.left_is_data,
-        right_is_data=self.right_is_data,
-        right_configurations=self._connector._right_configurations,
-        max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
-        max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],
-    )
-    self._connector.fill_in(new_node_ids=[left_id, right_id])
-    self.height = self._connector.max_height()
+  def start_transaction(self, transaction):
+    if self._transaction is not None:
+      raise errors.InternalError("Can't start a transaction while a separate transaction is running.")
+    self._transaction = transaction
+    transaction.start()
 
   def _receiver_to_kids(self):
     if self._connector is not None:

@@ -3,13 +3,14 @@ from collections import defaultdict
 from dist_zero import errors, messages
 
 
-class IncrementalSpawner(object):
+class IncrementalSpawnerTransaction(object):
   '''
   For spawning, one at a time, the new layers of nodes that are being added to a preexisting `Connector` instance.
   '''
 
   def __init__(self, new_layers, last_edges, hourglasses, connector, is_left, node):
     self._layers = new_layers
+    self._new_layer_ids = set(node_id for layer in new_layers for node_id in layer)
     self._last_edges = last_edges
     self._mid_node_by_id = {}
     self._hourglasses = hourglasses
@@ -24,6 +25,24 @@ class IncrementalSpawner(object):
 
     self.finished = False
 
+  def receive(self, message, sender_id):
+    if message['type'] == 'mid_node_up':
+      self.mid_node_up(message['node'])
+      return True
+    elif message['type'] == 'mid_node_ready':
+      self.mid_node_ready(message['node_id'])
+      return True
+    elif message['type'] == 'finished_adding_sender':
+      self.finished_adding_sender(src_id=message['sender_id'], tgt_id=sender_id)
+      return True
+    elif message['type'] == 'hello_parent':
+      if sender_id in self._new_layer_ids:
+        self._node.kids[sender_id] = message['kid']
+        self._maybe_spawned_kids()
+        return True
+
+    return False
+
   @property
   def graph(self):
     return self._connector.graph
@@ -32,7 +51,7 @@ class IncrementalSpawner(object):
   def layers(self):
     return self._layers
 
-  def start_spawning(self):
+  def start(self):
     if self._layers:
       befores = set(before for node in self._layers[0] for before in self._connector.graph.node_senders(node))
       for before in befores:
@@ -61,12 +80,9 @@ class IncrementalSpawner(object):
 
   def _maybe_spawned_kids(self):
     if not self.finished and \
-        all(val is not None for val in self._node.kids.values()):
+        all(self._node.kids.get(kid_id, None) for kid_id in self._layers[self._current_spawning_layer]):
 
       self._spawn_layer(self._current_spawning_layer + 1)
-
-  def spawned_a_kid(self, node):
-    self._maybe_spawned_kids()
 
   def _finished_spawning_edges(self):
     self._hourglass_results = {}
@@ -123,7 +139,7 @@ class IncrementalSpawner(object):
 
   def _maybe_finished_hourglasses(self):
     if all(val == 'done' for val in self._hourglass_results.values()):
-      self._node.all_incremental_kids_are_spawned()
+      self._node.end_transaction()
 
   def _make_lookup_src(self):
     left_kid_to_handle = {

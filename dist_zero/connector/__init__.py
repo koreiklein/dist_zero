@@ -1,3 +1,3 @@
-from .spawner import Spawner
-from .incremental_spawner import IncrementalSpawner
+from .spawner import SpawnerTransaction
+from .incremental_spawner import IncrementalSpawnerTransaction
 from .connector import Connector

@@ -30,9 +30,6 @@ def computation_node_config(node_id,
   :param object connector: Serializable json object representing the `Connector` instance of the newly spawned
     `ComputationNode`.
   '''
-  if node_id == 'ComputationNode_adjacent_dvW3HJ7BCOlT':
-    import ipdb
-    ipdb.set_trace()
   return {
       'type': 'ComputationNode',
       'id': node_id,
