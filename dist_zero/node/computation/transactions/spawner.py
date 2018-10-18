@@ -26,7 +26,6 @@ class SpawnerTransaction(object):
 
   def receive(self, message, sender_id):
     if message['type'] == 'hello_parent' and sender_id in self._layer_kid_ids:
-      self._node.kids[sender_id] = message['kid']
       self.spawned_a_kid(message['kid'])
       return True
 
@@ -165,6 +164,7 @@ class SpawnerTransaction(object):
     self._maybe_spawned_kids()
 
   def spawned_a_kid(self, node):
+    self._node.kids[node['id']] = node
     if node['id'] == self._left_gap_child_id:
       self._node.send(node,
                       messages.migration.configure_new_flow_left(self._node.migration_id, [
