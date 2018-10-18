@@ -18,6 +18,9 @@ class AdopterNode(Node):
 
     super(AdopterNode, self).__init__(logger)
 
+  def elapse(self, ms):
+    pass
+
   @staticmethod
   def from_config(config, controller):
     return AdopterNode(

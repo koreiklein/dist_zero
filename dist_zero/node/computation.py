@@ -407,7 +407,9 @@ class ComputationNode(Node):
             "Got a goodbye_parent from a node that is not a kid of self.", extra={'kid_id': sender_id})
       self.kids.pop(sender_id)
     elif message['type'] == 'bumped_height':
-      self.start_transaction(proxy_spawner.BumpHeightTransaction(node=self, message=message, sender_id=sender_id))
+      self.start_transaction(
+          proxy_spawner.BumpHeightTransaction(
+              node=self, proxy=message['proxy'], kid_ids=message['kid_ids'], variant=message['variant']))
     elif message['type'] == 'update_left_configuration':
       self._update_left_configuration(message)
     elif message['type'] == 'update_right_configuration':
