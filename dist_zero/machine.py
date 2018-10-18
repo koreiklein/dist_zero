@@ -71,6 +71,14 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
+  def parse_node(self, node_config):
+    '''
+    Generate a node from any node_config, but do not add on initialize it.
+
+    :param object node_config: Any node configuration message.
+    '''
+    raise RuntimeError("Abstract Superclass")
+
   def terminate_node(self, node_id):
     '''
     Stop running a `Node`.
@@ -325,6 +333,7 @@ class NodeManager(MachineController):
     if node_id != node.id:
       raise errors.InternalError(f"Can't change_node for {node_id}, as the new node has a different id {node.id}")
 
+    node.set_fernet(self._node_by_id[node_id])
     self._node_by_id[node_id] = node
 
   def terminate_node(self, node_id):
@@ -343,6 +352,20 @@ class NodeManager(MachineController):
   def n_nodes(self):
     return len(self._node_by_id)
 
+  def parse_node(self, node_config):
+    if node_config['type'] == 'DataNode':
+      return io.DataNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'AdopterNode':
+      return io.AdopterNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'SumNode':
+      return SumNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'MigrationNode':
+      return MigrationNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'ComputationNode':
+      return ComputationNode.from_config(node_config, controller=self)
+    else:
+      raise RuntimeError("Unrecognized type {}".format(node_config['type']))
+
   def start_node(self, node_config):
     logger.info(
         "Starting new '{node_type}' node {node_id} on machine '{machine_name}'",
@@ -351,18 +374,7 @@ class NodeManager(MachineController):
             'node_id': self._format_node_id_for_logs(node_config['id']),
             'machine_name': self.name,
         })
-    if node_config['type'] == 'DataNode':
-      node = io.DataNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'AdopterNode':
-      node = io.AdopterNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'SumNode':
-      node = SumNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'MigrationNode':
-      node = MigrationNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'ComputationNode':
-      node = ComputationNode.from_config(node_config, controller=self)
-    else:
-      raise RuntimeError("Unrecognized type {}".format(node_config['type']))
+    node = self.parse_node(node_config)
 
     self._node_by_id[node.id] = node
     node.initialize()

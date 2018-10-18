@@ -9,8 +9,7 @@ def computation_node_config(node_id,
                             receiver_ids,
                             migrator,
                             is_mid_node=False,
-                            connector=None,
-                            adoptees=None):
+                            connector=None):
   '''
   A node config for creating an internal `ComputationNode` in a network of computation nodes.
 
@@ -30,8 +29,10 @@ def computation_node_config(node_id,
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
   :param object connector: Serializable json object representing the `Connector` instance of the newly spawned
     `ComputationNode`.
-  :param list adoptees: A list of :ref:`handle` of the nodes to adopt upon spawn.
   '''
+  if node_id == 'ComputationNode_adjacent_dvW3HJ7BCOlT':
+    import ipdb
+    ipdb.set_trace()
   return {
       'type': 'ComputationNode',
       'id': node_id,
@@ -45,6 +46,5 @@ def computation_node_config(node_id,
       'configure_right_parent_ids': configure_right_parent_ids,
       'receiver_ids': receiver_ids,
       'migrator': migrator,
-      'adoptees': adoptees,
       'connector': connector,
   }

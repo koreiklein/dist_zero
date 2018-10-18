@@ -3,8 +3,6 @@ import logging
 from dist_zero import messages
 from dist_zero.node.node import Node
 
-from .data import DataNode
-
 logger = logging.getLogger(__name__)
 
 
@@ -39,7 +37,7 @@ class AdopterNode(Node):
     self._kids[kid_id] = kid
     self._pending_adoptees[kid_id] = True
     if all(self._pending_adoptees.values()):
-      new_node = DataNode.from_config(self._data_node_config, self._controller)
+      new_node = self._controller.parse_node(self._data_node_config)
       new_node.set_initial_kids(self._kids)
       self._controller.change_node(self.id, new_node)
       new_node.initialize()

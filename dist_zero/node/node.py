@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 class Node(object):
   '''Abstract base class for nodes'''
 
+  def set_fernet(self, node):
+    self._fernet_key = node._fernet_key
+    self.fernet = node.fernet
+
   def __init__(self, logger):
     self.logger = dist_zero.logging.LoggerAdapter(logger, extra={'cur_node_id': self.id})
 

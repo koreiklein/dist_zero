@@ -36,6 +36,8 @@ class Utils(object):
     total_wait = n_users * wait_per_loop
     waited_so_far = 0
     for i in range(n_users):
+      if hasattr(self, 'root_computation'):
+        self.demo.render_network(self.root_computation)
       kid_id = self.demo.system.create_descendant(
           data_node_id=root_node,
           new_node_name='user_{}'.format(i),

@@ -90,6 +90,10 @@ def data_node_config(node_id, parent, variant, height, leaf_config, recorded_use
   if parent is None and height == 0:
     raise errors.InternalError("data_node_config for root nodes must have nonzero height.")
 
+  if node_id == 'DataNode_kid_nCzWZDCwkmxs':
+    import ipdb
+    ipdb.set_trace()
+
   return {
       'type': 'DataNode',
       'id': node_id,

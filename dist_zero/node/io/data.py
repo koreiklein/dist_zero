@@ -92,7 +92,7 @@ class DataNode(Node):
     While in the process of bumping its height, the root node sets this to the id of the node that will take over as its
     proxy.
     '''
-    _kids_for_proxy_to_adopt = None
+    self._kids_for_proxy_to_adopt = None
     '''
     While in the process of bumping its height, the root node sets this to the list of handles of the kids that the
     proxy will be taking.
@@ -341,8 +341,12 @@ class DataNode(Node):
       self._warned_low_capacity = False
 
   def _bump_height(self):
+    import ipdb
+    ipdb.set_trace()
     if self._parent is not None:
       raise errors.InternalError("Only the root node may bump its height.")
+
+    self.logger.info("Root node is starting to bump its height in response to low capacity.")
 
     self._root_proxy_id = ids.new_id('DataNode_root_proxy')
     self._kids_for_proxy_to_adopt = list(self._kids.values())
@@ -362,6 +366,8 @@ class DataNode(Node):
             )))
 
   def _finish_bumping_height(self, proxy):
+    import ipdb
+    ipdb.set_trace()
     self._kid_summaries = {}
     self._updated_summary = True
     self._kids = {proxy['id']: proxy}

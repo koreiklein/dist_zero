@@ -76,6 +76,9 @@ class Spawner(object):
     node_id = self._get_unique_node_in_layer(layer_index)
     for right_config in self._connector._right_configurations.values():
       # Let right parents know to listen for a left_config from the new node instead of from self.
+      if right_config['parent_handle']['id'].startswith('ComputationNode'):
+        import ipdb
+        ipdb.set_trace()
       self._node.send(right_config['parent_handle'],
                       messages.migration.substitute_left_configuration(self._node.migration_id, new_node_id=node_id))
 
@@ -87,8 +90,7 @@ class Spawner(object):
         left_ids=left_ids,
         senders=[self._id_to_handle(sender_id) for sender_id in left_ids],
         configure_right_parent_ids=[self._node.id],
-        # FIXME(KK): Sometimes the _initial_migrator parameter doesn't exist.  Fix that!
-        migrator=messages.migration.insertion_migrator_config(
+        migrator=self._node._initial_migrator and messages.migration.insertion_migrator_config(
             self._node.transfer_handle(self._node._initial_migrator.migration, node_id)))
 
   def _spawn_layer_with_left_gap(self, layer_index):

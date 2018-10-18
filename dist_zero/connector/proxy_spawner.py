@@ -90,22 +90,23 @@ class ProxySpawner(object):
                     messages.migration.configure_right_parent(migration_id=None, kid_ids=[self._proxy_id]))
 
     self._node._controller.spawn_node(
-        messages.computation.computation_node_config(
-            node_id=self._proxy_id,
-            parent=self._node.new_handle(self._proxy_id),
-            height=self._node.height,
-            left_is_data=False,
-            right_is_data=False,
-            configure_right_parent_ids=[self._node.id],
+        messages.io.adopter_node_config(
             adoptees=[
                 self._node.transfer_handle(kid, self._proxy_id) for kid in self._node.kids.values()
                 if kid['id'] != proxy_adjacent_handle['id']
             ],
-            connector=self._node._connector.non_left_part_json(),
-            left_ids=left_ids,
-            senders=senders,
-            receiver_ids=[], # Make sure not actually send based on the right config for a differently layered parent.
-            migrator=None))
+            data_node_config=messages.computation.computation_node_config(
+                node_id=self._proxy_id,
+                parent=self._node.new_handle(self._proxy_id),
+                height=self._node.height,
+                left_is_data=False,
+                right_is_data=False,
+                configure_right_parent_ids=[self._node.id],
+                connector=self._node._connector.non_left_part_json(),
+                left_ids=left_ids,
+                senders=senders,
+                receiver_ids=[], # Make sure not actually send based on the right config for a differently layered parent.
+                migrator=None)))
 
   def respond_to_bumped_height(self, proxy, kid_ids, variant):
     '''Called in response to an adjacent node informing self that it has bumped its height.'''
@@ -134,19 +135,20 @@ class ProxySpawner(object):
     else:
       raise errors.InternalError("Unrecognized variant {}".format(variant))
     self._node._controller.spawn_node(
-        messages.computation.computation_node_config(
-            node_id=self._proxy_adjacent_id,
-            parent=self._node.new_handle(self._proxy_adjacent_id),
-            left_is_data=variant == 'input',
-            right_is_data=variant == 'output',
-            configure_right_parent_ids=configure_right_parent_ids,
-            left_ids=left_ids,
-            height=self._node.height,
+        messages.io.adopter_node_config(
             adoptees=[
                 self._node.transfer_handle(self._node.kids[adoptee_id], self._proxy_adjacent_id)
                 for adoptee_id in adoptee_ids
             ],
-            connector=self._node._connector.left_part_json(parent_id=self._node.id),
-            senders=senders,
-            receiver_ids=None,
-            migrator=None))
+            data_node_config=messages.computation.computation_node_config(
+                node_id=self._proxy_adjacent_id,
+                parent=self._node.new_handle(self._proxy_adjacent_id),
+                left_is_data=variant == 'input',
+                right_is_data=variant == 'output',
+                configure_right_parent_ids=configure_right_parent_ids,
+                left_ids=left_ids,
+                height=self._node.height,
+                connector=self._node._connector.left_part_json(parent_id=self._node.id),
+                senders=senders,
+                receiver_ids=None,
+                migrator=None)))
