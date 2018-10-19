@@ -352,9 +352,7 @@ class SumNode(Node):
                             n_kids=None,
                             connection_limit=0)
                     ]))
-      respond_to = message['respond_to']
-      if respond_to is not None:
-        self._added_sender_respond_tos[node['id']] = respond_to
+      self._added_sender_respond_tos[node['id']] = message['respond_to']
     else:
       super(SumNode, self).receive(message=message, sender_id=sender_id)
 
@@ -437,12 +435,6 @@ class SumNode(Node):
       exporter._migration_id = None
 
     super(SumNode, self).remove_migrator(migration_id)
-
-  def sink_swap(self, deltas, old_sender_ids, new_senders, new_importers, linker):
-    self._deltas = deltas
-    self.linker.remove_importers(old_sender_ids)
-    self.linker.absorb_linker(linker)
-    self._importers = new_importers
 
   def stats(self):
     return {

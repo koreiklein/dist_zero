@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 class ComputationNode(Node):
+  '''
+  Class representing the standard state of a ComputationNode.
+  '''
+
   def __init__(
       self,
       node_id,
@@ -135,7 +139,7 @@ class ComputationNode(Node):
     pass
 
   def deliver(self, message, sequence_number, sender_id):
-    pass
+    self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
 
   def send_forward_messages(self, before=None):
     return 1 + self._linker.advance_sequence_number()
