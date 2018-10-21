@@ -16,6 +16,8 @@ class AdopterNode(Node):
     self._pending_adoptees = {adoptee['id']: False for adoptee in adoptees}
     self._kids = {adoptee['id']: adoptee for adoptee in adoptees}
 
+    self._pending_messages = []
+
     super(AdopterNode, self).__init__(logger)
 
   def elapse(self, ms):
@@ -44,9 +46,16 @@ class AdopterNode(Node):
       new_node.set_initial_kids(self._kids)
       self._controller.change_node(self.id, new_node)
       new_node.initialize()
+      self._receive_pending_messages(new_node)
+
+  def _receive_pending_messages(self, node):
+    for message, sender_id in self._pending_messages:
+      node.receive(message=message, sender_id=sender_id)
 
   def receive(self, message, sender_id):
     if message['type'] == 'hello_parent':
       self._added_kid(message['kid'])
+    elif message['type'] == 'kid_summary':
+      self._pending_messages.append((message, sender_id))
     else:
       super(AdopterNode, self).receive(message=message, sender_id=sender_id)
