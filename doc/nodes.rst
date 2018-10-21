@@ -81,5 +81,3 @@ dropped.
 Node classes for performing computations
 --------------------------------------------
 
-.. automodule:: dist_zero.node.sum
-   :members:

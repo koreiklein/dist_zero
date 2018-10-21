@@ -7,7 +7,7 @@ class Importer(object):
   a source of input messages to that node.
 
   As messages arrive from the sender, the underlying `Node` should pass them to the `Importer.import_message` method.
-  Internally, the `Importer` will de-duplicate and re-order messages, and eventually call `SumNode.deliver` on
+  Internally, the `Importer` will de-duplicate and re-order messages, and eventually call `deliver` on
   each message, exactly once, and in the right order.
   '''
 

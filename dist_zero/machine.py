@@ -10,7 +10,6 @@ from random import Random
 from dist_zero import errors, messages, dns, settings
 
 from .node import io
-from .node.sum import SumNode
 from .node.computation import ComputationNode
 from .migration.migration_node import MigrationNode
 
@@ -357,8 +356,6 @@ class NodeManager(MachineController):
       return io.DataNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'AdopterNode':
       return io.AdopterNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'SumNode':
-      return SumNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'MigrationNode':
       return MigrationNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'ComputationNode':

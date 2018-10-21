@@ -5,7 +5,6 @@ import pytest
 
 import dist_zero.ids
 from dist_zero import messages, errors
-from dist_zero.node.sum import SumNode
 from dist_zero.node.io import DataNode
 from dist_zero.recorded import RecordedUser
 
