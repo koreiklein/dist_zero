@@ -91,6 +91,9 @@ class SystemController(object):
     return result
 
   def _add_node_machine_mapping(self, handle):
+    if handle is None:
+      import ipdb
+      ipdb.set_trace()
     if handle['id'] not in self._node_id_to_machine_id:
       self._node_id_to_machine_id[handle['id']] = handle['controller_id']
 

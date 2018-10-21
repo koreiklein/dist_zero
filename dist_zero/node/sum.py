@@ -282,60 +282,12 @@ class SumNode(Node):
                           connection_limit=0)
                   ]))
 
-  def _maybe_swap_mid_node(self, mid_node_id):
-    data = self._hourglass_data[mid_node_id]
-    mid_node = data['mid_node']
-    n_hourglass_senders = data['n_hourglass_senders']
-    tsn = data['terminal_sequence_number']
-    # FIXME(KK): Make sure these importers are ultimately removed from the linker.
-    if len(tsn) == n_hourglass_senders:
-      for sender_id in tsn.keys():
-        self._importers.pop(sender_id)
-
-      self.import_from_node(mid_node)
-      self.send(mid_node,
-                messages.migration.configure_new_flow_right(None, [
-                    messages.migration.right_configuration(
-                        n_kids=None,
-                        parent_handle=self.new_handle(mid_node_id),
-                        height=-1,
-                        is_data=False,
-                        connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'],
-                    )
-                ]))
-      self._hourglass_data.pop(mid_node_id)
-
   def receive(self, sender_id, message):
     if self._configuration_receiver.receive(message=message, sender_id=sender_id):
       if self._is_mid_node and message['type'] == 'configure_new_flow_left':
         if all(val is not None for val in self._configuration_receiver._left_configurations.values()):
           self.send(self.parent, messages.hourglass.mid_node_ready(node_id=self.id))
       return
-    elif message['type'] == 'start_hourglass':
-      self.send_forward_messages()
-      mid_node = message['mid_node']
-      self.send(
-          mid_node,
-          messages.migration.configure_new_flow_left(None, [
-              messages.migration.left_configuration(
-                  node=self.new_handle(mid_node['id']), height=-1, is_data=False, state=self._current_state, kids=[])
-          ]))
-      for receiver_id in message['receiver_ids']:
-        exporter = self._exporters.pop(receiver_id)
-        self.send(exporter.receiver,
-                  messages.hourglass.hourglass_swap(
-                      mid_node_id=mid_node['id'],
-                      sequence_number=exporter.internal_sequence_number,
-                  ))
-        self.export_to_node(mid_node)
-    elif message['type'] == 'hourglass_swap':
-      self._hourglass_data[message['mid_node_id']]['terminal_sequence_number'][sender_id] = message['sequence_number']
-      self._maybe_swap_mid_node(message['mid_node_id'])
-    elif message['type'] == 'hourglass_receive_from_mid_node':
-      node = message['mid_node']
-      self._hourglass_data[node['id']]['mid_node'] = node
-      self._hourglass_data[node['id']]['n_hourglass_senders'] = message['n_hourglass_senders']
-      self._maybe_swap_mid_node(node['id'])
     elif message['type'] == 'adopt':
       raise errors.InternalError("Sum nodes should not be adopting kids")
     elif message['type'] == 'added_sender':
@@ -387,27 +339,6 @@ class SumNode(Node):
       migrator.elapse(ms)
 
     self.linker.elapse(ms)
-
-  def _send_increment(self, increment, sequence_number):
-    if settings.IS_TESTING_ENV:
-      if self._TESTING_swapped_once:
-        self._TESTING_total_after_first_swap += increment
-      else:
-        self._TESTING_total_before_first_swap += increment
-
-    if self._output_exporter:
-      self._output_exporter.export_message(
-          message=messages.io.output_action(increment),
-          sequence_number=sequence_number,
-      )
-    else:
-      for exporter in self._exporters.values():
-        exporter.export_message(
-            message=messages.sum.increment(amount=increment),
-            sequence_number=sequence_number,
-        )
-
-    self._unsent_time_ms = 0
 
   def switch_flows(self, migration_id, old_exporters, new_exporters, new_receivers):
     for receiver_id in old_exporters:

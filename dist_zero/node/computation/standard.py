@@ -1,6 +1,6 @@
 import logging
 
-from dist_zero import messages, ids, errors, network_graph, connector
+from dist_zero import messages, ids, errors, network_graph, connector, settings
 from dist_zero import topology_picker
 from dist_zero.migration.right_configuration import ConfigurationReceiver
 
@@ -14,6 +14,9 @@ class ComputationNode(Node):
   '''
   Class representing the standard state of a ComputationNode.
   '''
+
+  SEND_INTERVAL_MS = 100
+  '''The number of ms between sends to their receivers by the leaves of the tree.'''
 
   def __init__(
       self,
@@ -56,7 +59,9 @@ class ComputationNode(Node):
 
     self._exporters = {}
 
-    self._senders = {sender['id']: sender for sender in senders}
+    super(ComputationNode, self).__init__(logger)
+
+    self._importers = {}
 
     self._initial_migrator_config = migrator_config
     self._initial_migrator = None # It will be initialized later.
@@ -71,6 +76,10 @@ class ComputationNode(Node):
     self._right_configurations_are_sent = False
     self._left_configurations_are_sent = False
 
+    # FIXME(KK): Move this into a class specific to summing.
+    self._current_state = 0
+    '''For when sum computation nodes (of height -1) track their internal state'''
+
     self._transaction = None
     '''The currently transaction instance if there is one.'''
     self._blocked_messages = []
@@ -79,10 +88,8 @@ class ComputationNode(Node):
     the transaction ends, at which point they'll all be processed in the order received.
     '''
 
-    super(ComputationNode, self).__init__(logger)
-
-    for sender_id in self._senders.keys():
-      self._deltas.add_sender(sender_id)
+    for sender in senders:
+      self.import_from_node(sender)
 
     self._connector = None
 
@@ -109,11 +116,29 @@ class ComputationNode(Node):
     if self._is_mid_node:
       self.send(self.parent, messages.hourglass.mid_node_up(self.new_handle(self.parent['id'])))
 
-    if not self._is_mid_node:
-      self._send_configure_right_to_left()
     self._configuration_receiver.initialize()
 
+    if self.height == -1:
+      self._controller.periodically(ComputationNode.SEND_INTERVAL_MS,
+                                    lambda: self._maybe_send_forward_messages(ComputationNode.SEND_INTERVAL_MS))
+      self._send_configure_right_to_left()
+    else:
+      if not self._is_mid_node:
+        self._send_configure_right_to_left()
+
     self.linker.initialize()
+
+  def _maybe_send_forward_messages(self, ms):
+    '''Called peridocillay to give leaf nodes an opportunity to send their messages.'''
+    if not self.deltas_only and \
+        self._deltas.has_data():
+
+      self.send_forward_messages()
+
+    for migrator in self.migrators.values():
+      migrator.elapse(ms)
+
+    self.linker.elapse(ms)
 
   def _send_hello_parent(self):
     self.send(self.parent, messages.io.hello_parent(self.new_handle(self.parent['id'])))
@@ -141,12 +166,35 @@ class ComputationNode(Node):
   def deliver(self, message, sequence_number, sender_id):
     self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
 
+  def _send_increment(self, increment, sequence_number):
+    if self.right_is_data:
+      exporter, = self._exporters.values()
+      exporter.export_message(
+          message=messages.io.output_action(increment),
+          sequence_number=sequence_number,
+      )
+    else:
+      for exporter in self._exporters.values():
+        exporter.export_message(
+            message=messages.sum.increment(amount=increment),
+            sequence_number=sequence_number,
+        )
+
   def send_forward_messages(self, before=None):
-    return 1 + self._linker.advance_sequence_number()
+    new_state, increment, updated = self._deltas.pop_deltas(state=self._current_state, before=before)
+
+    if not updated:
+      return self.least_unused_sequence_number
+    else:
+      self.logger.debug("Sending new increment of {increment} from {cur_node_id}.", extra={'increment': increment})
+      self._current_state = new_state
+      sequence_number = self.linker.advance_sequence_number()
+      self._send_increment(increment=increment, sequence_number=sequence_number)
+      return sequence_number + 1
 
   def export_to_node(self, receiver):
     if receiver['id'] in self._exporters:
-      raise errors.InternalError("Already exporting to this node.", extra={'existing_node_id': receiver['id']})
+      raise errors.InternalError(f"Already exporting to external node {receiver['id']}.")
     self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
 
   def _send_configure_left_to_right(self):
@@ -162,6 +210,7 @@ class ComputationNode(Node):
               node=self.new_handle(receiver['id']),
               height=self.height,
               is_data=False,
+              state=self._current_state,
               kids=[{
                   'handle': self.transfer_handle(self.kids[kid_id], receiver['id']),
                   'connection_limit': self.system_config['SUM_NODE_RECEIVER_LIMIT']
@@ -173,41 +222,32 @@ class ComputationNode(Node):
 
   def spawn_kid(self, layer_index, node_id, senders, configure_right_parent_ids, left_ids, migrator, is_mid_node=False):
     self.kids[node_id] = None
-    if self.height == 0:
-      self._controller.spawn_node(
-          messages.sum.sum_node_config(
-              node_id=node_id,
-              left_is_data=self.left_is_data and layer_index == 1,
-              # TODO(KK): This business about right_map here is very ugly.
-              # Think hard and try to come up with a way to avoid it.
-              right_is_data=self.right_is_data and layer_index + 1 == len(self._connector.layers)
-              and bool(self._connector.right_to_parent_ids[node_id]),
-              senders=senders,
-              is_mid_node=is_mid_node,
-              configure_right_parent_ids=configure_right_parent_ids,
-              parent=self.new_handle(node_id),
-              migrator=migrator,
-          ))
-    else:
-      self._controller.spawn_node(
-          messages.computation.computation_node_config(
-              node_id=node_id,
-              configure_right_parent_ids=configure_right_parent_ids,
-              parent=self.new_handle(node_id),
-              left_ids=left_ids,
-              is_mid_node=is_mid_node,
-              height=self.height - 1,
-              left_is_data=self.left_is_data and layer_index == 1,
-              # TODO(KK): This business about right_map here is very ugly.
-              #   Think hard and try to come up with a way to avoid it.
-              right_is_data=self.right_is_data and layer_index + 1 == len(self._connector.layers)
-              and bool(self._connector.right_to_parent_ids[node_id]),
-              senders=senders,
-              receiver_ids=None,
-              migrator=migrator))
+    self._controller.spawn_node(
+        messages.computation.computation_node_config(
+            node_id=node_id,
+            configure_right_parent_ids=configure_right_parent_ids,
+            parent=self.new_handle(node_id),
+            left_ids=left_ids,
+            is_mid_node=is_mid_node,
+            height=self.height - 1,
+            left_is_data=self.left_is_data and layer_index == 1,
+            # TODO(KK): This business about right_map here is very ugly.
+            #   Think hard and try to come up with a way to avoid it.
+            right_is_data=self.right_is_data and layer_index + 1 == len(self._connector.layers)
+            and bool(self._connector.right_to_parent_ids[node_id]),
+            senders=senders,
+            receiver_ids=None,
+            migrator=migrator))
 
   def _get_new_layers_edges_and_hourglasses(self, is_left, new_layers, last_edges, hourglasses):
     if new_layers or last_edges or hourglasses:
+      if hourglasses and self.height >= 1:
+        # FIXME(KK): Ultimately, we should be able to create hourglasses for ComputationNodes of height >= 1,
+        #   but it will be complex to orchestrate, as it involves reassigning all the receivers recursively of the
+        #   rightmost kids of the nodes on the left of the hourglass.
+        import ipdb
+        ipdb.set_trace()
+        hourglasses = []
       self.start_transaction(
           transactions.IncrementalSpawnerTransaction(
               new_layers=new_layers,
@@ -255,13 +295,13 @@ class ComputationNode(Node):
 
   def _send_configure_right_to_left(self):
     if not self._right_configurations_are_sent:
-      self.logger.info("Sending configure_new_flow_right", extra={'receiver_ids': list(self._senders.keys())})
-      for sender in self._senders.values():
-        self.send(sender,
+      self.logger.info("Sending configure_new_flow_right", extra={'receiver_ids': list(self._importers.keys())})
+      for importer in self._importers.values():
+        self.send(importer.sender,
                   messages.migration.configure_new_flow_right(self.migration_id, [
                       messages.migration.right_configuration(
                           n_kids=None,
-                          parent_handle=self.new_handle(sender['id']),
+                          parent_handle=self.new_handle(importer.sender_id),
                           height=self.height,
                           is_data=False,
                           connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'],
@@ -296,7 +336,14 @@ class ComputationNode(Node):
       raise errors.InternalError(
           "self._connector may not be initialized hen has_left_and_right_configurations is called.")
 
-    if not self._kids_are_adopted:
+    if self.height == -1:
+      total_state = 0
+      for left_config in left_configurations.values():
+        if left_config['state'] is not None:
+          total_state += left_config['state']
+      self._current_state = total_state
+      self._send_configure_left_to_right()
+    elif not self._kids_are_adopted:
       self._connector = connector.Connector(
           height=self.height,
           left_configurations=left_configurations,
@@ -331,9 +378,23 @@ class ComputationNode(Node):
     self.kids = kids
     self._kids_are_adopted = True
 
+  def import_from_node(self, node, first_sequence_number=0):
+    '''
+    Start importing from node.
+
+    :param node: The :ref:`handle` of a `Node` that should now be sending to self.
+    :type node: :ref:`handle`
+    '''
+    if node['id'] in self._importers:
+      raise errors.InternalError("Already importing from this node.", extra={'existing_node_id': node['id']})
+    self._importers[node['id']] = self.linker.new_importer(sender=node, first_sequence_number=first_sequence_number)
+    self._deltas.add_sender(node['id'])
+
   def new_left_configurations(self, left_configurations):
     '''For when a fully configured node gets new left_configurations'''
-    self._get_new_layers_edges_and_hourglasses(True, *self._connector.add_left_configurations(left_configurations))
+    if self.height >= 0:
+      self._get_new_layers_edges_and_hourglasses(True, *self._connector.add_left_configurations(left_configurations))
+
     for left_config in left_configurations:
       node = left_config['node']
       node_id = node['id']
@@ -343,12 +404,16 @@ class ComputationNode(Node):
 
   def new_right_configurations(self, right_configurations):
     '''For when a fully configured node gets new right_configurations'''
+    right_parent_ids = []
     for right_config in right_configurations:
       node = right_config['parent_handle']
+      right_parent_ids.append(node['id'])
       self._receivers[node['id']] = node
 
-    right_parent_ids = self._connector.add_right_configurations(right_configurations)
-    receiver_to_kids = self._receiver_to_kids()
+    if self.height >= 0:
+      self._connector.add_right_configurations(right_configurations)
+      receiver_to_kids = self._receiver_to_kids()
+
     for right_parent_id in right_parent_ids:
       receiver = self._receivers[right_parent_id]
       message = messages.migration.configure_new_flow_left(None, [
@@ -356,7 +421,8 @@ class ComputationNode(Node):
               node=self.new_handle(receiver['id']),
               height=self.height,
               is_data=False,
-              kids=[{
+              state=self._current_state,
+              kids=[] if self.height == -1 else [{
                   'handle': self.transfer_handle(self.kids[kid_id], receiver['id']),
                   'connection_limit': self.system_config['SUM_NODE_RECEIVER_LIMIT']
               } for kid_id in receiver_to_kids.get(receiver['id'], [])],
@@ -378,14 +444,16 @@ class ComputationNode(Node):
   def receive(self, message, sender_id):
     if self._transaction is not None:
       if self._transaction.receive(message, sender_id):
-        return
+        pass
       else:
         self._blocked_messages.append((message, sender_id))
     elif self._configuration_receiver.receive(message=message, sender_id=sender_id):
-      return
+      if self._is_mid_node and message['type'] == 'configure_new_flow_left':
+        if all(val is not None for val in self._configuration_receiver._left_configurations.values()):
+          self.send(self.parent, messages.hourglass.mid_node_ready(node_id=self.id))
     elif message['type'] == 'added_sender':
       node = message['node']
-      self._senders[node['id']] = node
+      self.import_from_node(node)
       self.send(node,
                 messages.migration.configure_new_flow_right(None, [
                     messages.migration.right_configuration(
@@ -418,6 +486,40 @@ class ComputationNode(Node):
       self._update_left_configuration(message)
     elif message['type'] == 'update_right_configuration':
       self._update_right_configuration(message)
+    elif message['type'] == 'start_hourglass':
+      self.send_forward_messages()
+      mid_node = message['mid_node']
+      if self.height >= 0:
+        # FIXME(KK): Set kids appropriately in this case.
+        #self._connector.set_right_parent_ids(kid_ids=message['receiver_ids'], parent_ids=[mid_node['id']])
+        import ipdb
+        ipdb.set_trace()
+      self.send(mid_node,
+                messages.migration.configure_new_flow_left(None, [
+                    messages.migration.left_configuration(
+                        node=self.new_handle(mid_node['id']),
+                        height=self.height,
+                        is_data=False,
+                        state=self._current_state,
+                        kids=[])
+                ]))
+      for receiver_id in message['receiver_ids']:
+        exporter = self._exporters.pop(receiver_id)
+        self._receivers.pop(receiver_id)
+        self.send(exporter.receiver,
+                  messages.hourglass.hourglass_swap(
+                      mid_node_id=mid_node['id'],
+                      sequence_number=exporter.internal_sequence_number,
+                  ))
+      self.export_to_node(mid_node)
+    elif message['type'] == 'hourglass_swap':
+      t = transactions.StartHourglassTransaction(node=self, mid_node_id=message['mid_node_id'])
+      self.start_transaction(t)
+      t.receive(message=message, sender_id=sender_id)
+    elif message['type'] == 'hourglass_receive_from_mid_node':
+      t = transactions.StartHourglassTransaction(node=self, mid_node_id=message['mid_node']['id'])
+      self.start_transaction(t)
+      t.receive(message=message, sender_id=sender_id)
     else:
       super(ComputationNode, self).receive(message=message, sender_id=sender_id)
 
@@ -452,9 +554,9 @@ class ComputationNode(Node):
 
   def handle_api_message(self, message):
     if message['type'] == 'get_kids':
-      return self.kids
+      return {key: value for key, value in self.kids.items() if value is not None}
     elif message['type'] == 'get_senders':
-      return self._senders
+      return {importer.sender_id: importer.sender for importer in self._importers.values()}
     elif message['type'] == 'get_receivers':
       return self._receivers if self._receivers is not None else {}
     else:

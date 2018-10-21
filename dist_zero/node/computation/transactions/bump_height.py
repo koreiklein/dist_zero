@@ -63,7 +63,7 @@ class BumpHeightTransaction(object):
                         ) for right_config in self._node._connector._right_configurations.values()
                     ]))
 
-    left_root, = self._node._senders.keys()
+    left_root, = self._node._importers.keys()
     left_configuration = self._node._connector._left_configurations[left_root]
     left_configuration['kids'] = [{
         'connection_limit': self._node.system_config['SUM_NODE_SENDER_LIMIT'],
@@ -92,7 +92,6 @@ class BumpHeightTransaction(object):
     Once that proxy has reported that it is up and running, this node will call ``_spawn_proxy`` to
     spawn the second node to adopt the remaining kids of self as part of the process of bumping height.
     '''
-    self._proxy_id = ids.new_id('ComputationNode_proxy')
     if self._proxy_adjacent_variant == 'input':
       senders = [self._node.transfer_handle(self._proxy_adjacent, self._proxy_id)]
       left_ids = [self._proxy_adjacent['id']]
@@ -132,8 +131,9 @@ class BumpHeightTransaction(object):
     '''Called in response to an adjacent node informing self that it has bumped its height.'''
     self._old_kids = self._node.kids
     self._proxy_adjacent_id = ids.new_id('ComputationNode_{}_proxy_adjacent'.format(self._proxy_adjacent_variant))
+    self._proxy_id = ids.new_id('ComputationNode_proxy')
     if self._proxy_adjacent_variant == 'input':
-      left_root, = self._node._senders.keys()
+      left_root, = self._node._importers.keys()
       senders = [self._node.transfer_handle(self._external_proxy, self._proxy_adjacent_id)]
       receivers = [] # The receiver will be added later
       configure_right_parent_ids = [self._node.id]
@@ -167,7 +167,7 @@ class BumpHeightTransaction(object):
                 configure_right_parent_ids=configure_right_parent_ids,
                 left_ids=left_ids,
                 height=self._node.height,
-                connector=self._node._connector.left_part_json(parent_id=self._node.id),
+                connector=self._node._connector.left_part_json(parent_id=self._proxy_id),
                 senders=senders,
                 receiver_ids=None,
                 migrator=None)))

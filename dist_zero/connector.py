@@ -47,7 +47,7 @@ class Connector(object):
     for layer in self._layers[1:]:
       for node_id in layer:
         graph.add_node(node_id)
-        for receiver_id in graph.node_receivers(node_id):
+        for receiver_id in self._graph.node_receivers(node_id):
           graph.add_node(receiver_id)
           graph.add_edge(node_id, receiver_id)
 
@@ -68,12 +68,12 @@ class Connector(object):
       receiver_id, = self._graph.node_receivers(node_id)
       graph.add_node(node_id)
       graph.add_node(receiver_id)
-      graph.add_edge(receiver_id, node_id)
+      graph.add_edge(node_id, receiver_id)
 
     return {
         'layers': self._layers[:1],
         'right_to_parent_ids': {node_id: [parent_id]
-                                for node_id in self._layers[0]},
+                                for node_id in self._layers[1]},
         'left_node_to_picker_left_node': self._left_node_to_picker_left_node,
         'graph': graph.to_json(),
         'picker': self._picker.to_json(),
@@ -154,6 +154,10 @@ class Connector(object):
     self._layers[-1].extend(new_adjacent_ids)
     new_layers, hourglasses = self._picker_append_all_right(new_adjacent_ids)
     return new_layers, last_edges, hourglasses
+
+  def set_right_parent_ids(self, kid_ids, parent_ids):
+    for kid_id in kid_ids:
+      self._right_to_parent_ids[kid_id] = parent_ids
 
   def add_kids_to_left_configuration(self, parent_id_kid_pairs):
     '''
