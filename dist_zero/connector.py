@@ -3,7 +3,35 @@ from collections import defaultdict
 from dist_zero import errors, topology_picker, network_graph, ids
 
 
-class Connector(object):
+def from_json(j, *args, **kwargs):
+  if j['type'] == 'all_to_all_connector':
+    return AllToAllConnector.from_json(j, *args, **kwargs)
+  elif j['type'] == 'all_to_one_available_connector':
+    return AllToOneAvailableConnector.from_json(j, *args, **kwargs)
+  else:
+    raise errors.InternalError(f"Unrecognized connector type {j['type']}.")
+
+
+def new_connector(connector_type, left_configurations, right_configurations, computation_node):
+  if connector_type['type'] == 'all_to_all_connector':
+    return AllToAllConnector(
+        height=computation_node.height,
+        left_configurations=left_configurations,
+        right_configurations=right_configurations,
+        left_is_data=computation_node.left_is_data,
+        right_is_data=computation_node.right_is_data,
+        max_outputs=computation_node.system_config['SUM_NODE_RECEIVER_LIMIT'],
+        max_inputs=computation_node.system_config['SUM_NODE_SENDER_LIMIT'],
+    )
+  elif connector_type['type'] == 'all_to_one_available_connector':
+    # FIXME(KK): Not Yet Implemented
+    import ipdb
+    ipdb.set_trace()
+  else:
+    raise errors.InternalError(f'Unrecognized connector type "{connector_type["type"]}"')
+
+
+class AllToAllConnector(object):
   def __init__(self, height, left_configurations, left_is_data, right_configurations, right_is_data, max_outputs,
                max_inputs):
     self._height = height
@@ -52,6 +80,7 @@ class Connector(object):
           graph.add_edge(node_id, receiver_id)
 
     return {
+        'type': 'all_to_all_connector',
         'layers': self._layers[1:],
         'right_to_parent_ids': self._right_to_parent_ids,
         'left_node_to_picker_left_node': None,
@@ -71,6 +100,7 @@ class Connector(object):
       graph.add_edge(node_id, receiver_id)
 
     return {
+        'type': 'all_to_all_connector',
         'layers': self._layers[:1],
         'right_to_parent_ids': {node_id: [parent_id]
                                 for node_id in self._layers[1]},
@@ -82,7 +112,7 @@ class Connector(object):
   @staticmethod
   def from_json(j, height, left_configurations, left_is_data, right_configurations, right_is_data, max_outputs,
                 max_inputs):
-    connector = Connector(
+    connector = AllToAllConnector(
         height=height,
         left_configurations=left_configurations,
         left_is_data=left_is_data,

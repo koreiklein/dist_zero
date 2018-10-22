@@ -8,6 +8,7 @@ def computation_node_config(node_id,
                             senders,
                             receiver_ids,
                             migrator,
+                            connector_type,
                             is_mid_node=False,
                             connector=None):
   '''
@@ -27,6 +28,7 @@ def computation_node_config(node_id,
   :param list[str] receiver_ids: A list of ids of the nodes that should receive from self, or `None` if that list should
     be determined based on the right_configurations received by the node as it starts up.
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
+  :param object connector_type: One of the connector_type messages, defining which type of connector to use.
   :param object connector: Serializable json object representing the `Connector` instance of the newly spawned
     `ComputationNode`.
   '''
@@ -43,5 +45,14 @@ def computation_node_config(node_id,
       'configure_right_parent_ids': configure_right_parent_ids,
       'receiver_ids': receiver_ids,
       'migrator': migrator,
+      'connector_type': connector_type,
       'connector': connector,
   }
+
+
+def all_to_all_connector_type():
+  return {'type': 'all_to_all_connector'}
+
+
+def all_to_one_available_connector_type():
+  return {'type': 'all_to_one_available_connector'}

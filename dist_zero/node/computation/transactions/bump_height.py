@@ -71,15 +71,11 @@ class BumpHeightTransaction(object):
     }]
     left_configuration['height'] += 1
 
-    self._node._connector = connector.Connector(
-        height=self._node.height,
+    self._node._connector = connector.new_connector(
+        self._node._connector_type,
         left_configurations={left_root: left_configuration},
-        left_is_data=self._node.left_is_data,
-        right_is_data=self._node.right_is_data,
         right_configurations=self._node._connector._right_configurations,
-        max_outputs=self._node.system_config['SUM_NODE_RECEIVER_LIMIT'],
-        max_inputs=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
-    )
+        computation_node=self._node)
     self._node._connector.fill_in(new_node_ids=[self._proxy_adjacent_id, self._proxy_id])
     self._node.height = self._node._connector.max_height()
     self._node.kids = {self._proxy_id: self._proxy, self._proxy_adjacent_id: self._proxy_adjacent}
@@ -125,6 +121,7 @@ class BumpHeightTransaction(object):
                 left_ids=left_ids,
                 senders=senders,
                 receiver_ids=[], # Make sure not actually send based on the right config for a differently layered parent.
+                connector_type=self._node._connector_type,
                 migrator=None)))
 
   def start(self):
@@ -170,4 +167,5 @@ class BumpHeightTransaction(object):
                 connector=self._node._connector.left_part_json(parent_id=self._proxy_id),
                 senders=senders,
                 receiver_ids=None,
+                connector_type=self._node._connector_type,
                 migrator=None)))

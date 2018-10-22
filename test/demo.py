@@ -221,6 +221,7 @@ class Demo(object):
                     left_ids=[input_handle_for_migration['id']],
                     receiver_ids=None,
                     migrator=messages.migration.insertion_migrator_config(),
+                    connector_type=messages.computation.all_to_all_connector_type(),
                 )
             ]))
     return root_computation_node_id

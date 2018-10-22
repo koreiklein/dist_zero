@@ -31,6 +31,7 @@ class ComputationNode(Node):
       left_ids,
       receiver_ids,
       migrator_config,
+      connector_type,
       connector_json,
       height,
   ):
@@ -40,6 +41,7 @@ class ComputationNode(Node):
 
     self._is_mid_node = is_mid_node
 
+    self._connector_type = connector_type
     self._initial_connector_json = connector_json
 
     self._added_sender_respond_tos = {}
@@ -156,6 +158,7 @@ class ComputationNode(Node):
         left_ids=node_config['left_ids'],
         is_mid_node=node_config['is_mid_node'],
         receiver_ids=node_config['receiver_ids'],
+        connector_type=node_config['connector_type'],
         connector_json=node_config['connector'],
         migrator_config=node_config['migrator'],
         controller=controller)
@@ -237,6 +240,7 @@ class ComputationNode(Node):
             and bool(self._connector.right_to_parent_ids[node_id]),
             senders=senders,
             receiver_ids=None,
+            connector_type=self._connector_type,
             migrator=migrator))
 
   def _get_new_layers_edges_and_hourglasses(self, is_left, new_layers, last_edges, hourglasses):
@@ -344,22 +348,18 @@ class ComputationNode(Node):
       self._current_state = total_state
       self._send_configure_left_to_right()
     elif not self._kids_are_adopted:
-      self._connector = connector.Connector(
-          height=self.height,
+      self._connector = connector.new_connector(
+          self._connector_type,
           left_configurations=left_configurations,
-          left_is_data=self.left_is_data,
-          right_is_data=self.right_is_data,
           right_configurations=right_configurations,
-          max_outputs=self.system_config['SUM_NODE_RECEIVER_LIMIT'],
-          max_inputs=self.system_config['SUM_NODE_SENDER_LIMIT'],
-      )
+          computation_node=self)
       self.height = self._connector.max_height()
       self._connector.fill_in()
       self.start_transaction(transactions.SpawnerTransaction(node=self, connector=self._connector))
     else:
       # Since this node was adopting, all its eventual kids are already up and running and do not need spawning.
       # We should have received an appropriate Connector instance in the config.
-      self._connector = connector.Connector.from_json(
+      self._connector = connector.from_json(
           self._initial_connector_json,
           height=self.height,
           left_configurations=left_configurations,
