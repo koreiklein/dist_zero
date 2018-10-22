@@ -531,13 +531,10 @@ class ComputationNode(Node):
 
   def _receiver_to_kids(self):
     if self._connector is not None:
-      result = {}
+      result = {parent_id: [] for parent_id in self._connector._right_configurations.keys()}
       for right_node_id, receiver_ids in self._connector.right_to_parent_ids.items():
         for receiver_id in receiver_ids:
-          if receiver_id not in result:
-            result[receiver_id] = [right_node_id]
-          else:
-            result[receiver_id].append(right_node_id)
+          result[receiver_id].append(right_node_id)
       return result
     else:
       return {receiver_id: [] for receiver_id in self._receivers.keys()}
