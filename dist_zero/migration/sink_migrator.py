@@ -144,6 +144,7 @@ class SinkMigrator(migrator.Migrator):
                               parent_handle=self._node.new_handle(sender['id']),
                               height=self._node.height,
                               connection_limit=connection_limit,
+                              availability=self._node.availability(),
                               is_data=self._node.is_data(),
                           )
                       ]))
@@ -241,6 +242,7 @@ class SinkMigrator(migrator.Migrator):
                               height=self._node.height,
                               is_data=self._node.is_data(),
                               n_kids=len(self._node._kids),
+                              availability=self._node.availability(),
                               connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
                           )
                       ]))

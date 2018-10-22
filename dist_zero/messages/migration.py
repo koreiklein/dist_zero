@@ -413,7 +413,7 @@ def configure_new_flow_right(migration_id, right_configurations):
   }
 
 
-def right_configuration(parent_handle, is_data, height, n_kids, connection_limit):
+def right_configuration(parent_handle, is_data, height, n_kids, connection_limit, availability=None):
   '''
 
   :param parent_handle: The :ref:`handle` of the sender. A sibling node to the right of the node receiving the message.
@@ -422,6 +422,7 @@ def right_configuration(parent_handle, is_data, height, n_kids, connection_limit
   :param n_kids: If the right node is a data node with a set number of kids, n_kids will give that number.
     Otherwise, n_kids will be `None`
   :type n_kids: int or None
+  :param int availability: (optional) The number of nodes that the sending node has space to add.
   :param int connection_limit: The maximum number of connections the receiving node is allowed to add to all kids of its
     right parent.
   '''
@@ -429,6 +430,7 @@ def right_configuration(parent_handle, is_data, height, n_kids, connection_limit
       'parent_handle': parent_handle,
       'is_data': is_data,
       'height': height,
+      'availability': availability,
       'n_kids': n_kids,
       'connection_limit': connection_limit
   }

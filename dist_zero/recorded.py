@@ -22,6 +22,10 @@ class RecordedUser(object):
       if self._time_action_pairs[i - 1][0] > self._time_action_pairs[i][0]:
         raise errors.InternalError('Times are not in order.')
 
+  @property
+  def actions(self):
+    return [action for (t, action) in self._time_action_pairs]
+
   def simulate(self, controller, deliver):
     '''
     Start an asyncio task to simulate the messages recorded is self.

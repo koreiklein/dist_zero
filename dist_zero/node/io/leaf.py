@@ -51,6 +51,16 @@ class SumLeaf(Leaf):
 
 
 class CollectLeaf(Leaf):
+  def __init__(self):
+    self._items = []
+
   def update_current_state(self, message):
+    self._items.append(message['number'])
+
+  @property
+  def state(self):
+    return self._items
+
+  def set_state(self, state):
     import ipdb
     ipdb.set_trace()

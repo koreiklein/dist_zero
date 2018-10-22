@@ -497,6 +497,7 @@ class DataNode(Node):
                         parent_handle=self.new_handle(node['id']),
                         height=self._height,
                         is_data=True,
+                        availability=self.availability(),
                         connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'] if self._height >= 0 else 1,
                     )
                 ]))
@@ -590,6 +591,10 @@ class DataNode(Node):
   @property
   def _kid_capacity_limit(self):
     return self._branching_factor**self._height
+
+  def availability(self):
+    total_kid_size = sum(kid_summary['size'] for kid_summary in self._kid_summaries.values())
+    return self._kid_capacity_limit * self._branching_factor - total_kid_size
 
   def _get_capacity(self):
     # find the best kid

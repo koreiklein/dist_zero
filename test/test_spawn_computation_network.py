@@ -9,7 +9,7 @@ from dist_zero import messages
 from .common import Utils
 
 
-class TestSpawnComputationNetwork(Utils):
+class TestSpawnSumComputationNetwork(Utils):
   async def _connect_and_test_io_trees(self, n_input_leaves, n_output_leaves):
     root_input = await self.root_io_tree(
         machine=self.machine_ids[0], variant='input', leaf_config=messages.io.sum_leaf_config(0))

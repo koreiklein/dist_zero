@@ -76,7 +76,6 @@ class ComputationNode(Node):
         node=self, configure_right_parent_ids=configure_right_parent_ids, left_ids=self.left_ids)
     self._configure_right_parent_ids = configure_right_parent_ids
     self._right_configurations_are_sent = False
-    self._left_configurations_are_sent = False
 
     # FIXME(KK): Move this into a class specific to summing.
     self._current_state = 0
@@ -201,8 +200,6 @@ class ComputationNode(Node):
     self._exporters[receiver['id']] = self.linker.new_exporter(receiver=receiver)
 
   def _send_configure_left_to_right(self):
-    self._left_configurations_are_sent = True
-
     self.logger.info("Sending configure_new_flow_left", extra={'receiver_ids': list(self._receivers.keys())})
 
     receiver_to_kids = self._receiver_to_kids()
