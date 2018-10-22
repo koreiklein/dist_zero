@@ -214,8 +214,6 @@ class SpawnerTransaction(object):
 
         if self._node._left_gap and self._node._right_gap:
           raise errors.InternalError("There may not be both a left and a right gap.")
-        if self._left_configurations_are_sent:
-          raise errors.InternalError("all_kids_are_spawned should only be called before left_configurations are sent.")
 
         self._node._send_configure_left_to_right()
         if self._node.parent:

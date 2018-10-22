@@ -6,6 +6,7 @@ from dist_zero.migration.right_configuration import ConfigurationReceiver
 
 from ..node import Node
 from . import transactions
+from . import computation_leaf
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class ComputationNode(Node):
       migrator_config,
       connector_type,
       connector_json,
+      leaf_config,
       height,
   ):
 
@@ -43,6 +45,7 @@ class ComputationNode(Node):
 
     self._connector_type = connector_type
     self._initial_connector_json = connector_json
+    self._leaf_config = leaf_config
 
     self._added_sender_respond_tos = {}
 
@@ -120,17 +123,19 @@ class ComputationNode(Node):
     self._configuration_receiver.initialize()
 
     if self.height == -1:
+      self._leaf = computation_leaf.from_config(leaf_config=self._leaf_config, node=self)
       self._controller.periodically(ComputationNode.SEND_INTERVAL_MS,
                                     lambda: self._maybe_send_forward_messages(ComputationNode.SEND_INTERVAL_MS))
       self._send_configure_right_to_left()
     else:
+      self._leaf = None
       if not self._is_mid_node:
         self._send_configure_right_to_left()
 
     self.linker.initialize()
 
   def _maybe_send_forward_messages(self, ms):
-    '''Called peridocillay to give leaf nodes an opportunity to send their messages.'''
+    '''Called periodically to give leaf nodes an opportunity to send their messages.'''
     if not self.deltas_only and \
         self._deltas.has_data():
 
@@ -150,6 +155,7 @@ class ComputationNode(Node):
         node_id=node_config['id'],
         left_is_data=node_config['left_is_data'],
         right_is_data=node_config['right_is_data'],
+        leaf_config=node_config['leaf_config'],
         configure_right_parent_ids=node_config['configure_right_parent_ids'],
         parent=node_config['parent'],
         height=node_config['height'],
@@ -168,31 +174,14 @@ class ComputationNode(Node):
   def deliver(self, message, sequence_number, sender_id):
     self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
 
-  def _send_increment(self, increment, sequence_number):
-    if self.right_is_data:
-      exporter, = self._exporters.values()
-      exporter.export_message(
-          message=messages.io.output_action(increment),
-          sequence_number=sequence_number,
-      )
-    else:
-      for exporter in self._exporters.values():
-        exporter.export_message(
-            message=messages.sum.increment(amount=increment),
-            sequence_number=sequence_number,
-        )
-
   def send_forward_messages(self, before=None):
-    new_state, increment, updated = self._deltas.pop_deltas(state=self._current_state, before=before)
+    delta_messages = self._deltas.pop_deltas(before=before)
 
-    if not updated:
+    if not delta_messages:
       return self.least_unused_sequence_number
     else:
-      self.logger.debug("Sending new increment of {increment} from {cur_node_id}.", extra={'increment': increment})
-      self._current_state = new_state
-      sequence_number = self.linker.advance_sequence_number()
-      self._send_increment(increment=increment, sequence_number=sequence_number)
-      return sequence_number + 1
+      self._current_state = self._leaf.process_increment(self._current_state, delta_messages)
+      return self.least_unused_sequence_number
 
   def export_to_node(self, receiver):
     if receiver['id'] in self._exporters:
@@ -226,6 +215,7 @@ class ComputationNode(Node):
         messages.computation.computation_node_config(
             node_id=node_id,
             configure_right_parent_ids=configure_right_parent_ids,
+            leaf_config=self._leaf_config,
             parent=self.new_handle(node_id),
             left_ids=left_ids,
             is_mid_node=is_mid_node,

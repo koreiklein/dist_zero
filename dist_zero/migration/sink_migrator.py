@@ -323,8 +323,7 @@ class SinkMigrator(migrator.Migrator):
         # Discard deltas before _new_sender_id_to_first_swapped_sequence_number, as they were exactly
         # what was represented from the old flow as of the above call to send_forward_messages.
         if self._node._height == -1:
-          self._deltas.pop_deltas(
-              state=self._node._leaf.state, before=self._new_sender_id_to_first_swapped_sequence_number)
+          self._deltas.pop_deltas(before=self._new_sender_id_to_first_swapped_sequence_number)
         self._node.checkpoint(before=self._old_sender_id_to_first_swapped_sequence_number)
 
         self._node.sink_swap(

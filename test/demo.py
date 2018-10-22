@@ -189,6 +189,7 @@ class Demo(object):
         root_input_id=root_input_id,
         root_output_id=root_output_id,
         machine=machine,
+        leaf_config=messages.computation.forward_to_any_leaf(),
         connector_type=messages.computation.all_to_one_available_connector_type())
 
   def connect_trees_with_sum_network(self, root_input_id, root_output_id, machine):
@@ -206,9 +207,11 @@ class Demo(object):
         root_input_id=root_input_id,
         root_output_id=root_output_id,
         machine=machine,
+        leaf_config=messages.computation.sum_leaf(),
         connector_type=messages.computation.all_to_all_connector_type())
 
-  def _connect_trees_with_computation_network(self, node_id, root_input_id, root_output_id, machine, connector_type):
+  def _connect_trees_with_computation_network(self, node_id, root_input_id, root_output_id, machine, leaf_config,
+                                              connector_type):
     root_computation_node_id = dist_zero.ids.new_id('ComputationNode_root')
     input_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_id)
     output_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_output_id)
@@ -238,6 +241,7 @@ class Demo(object):
                     left_ids=[input_handle_for_migration['id']],
                     receiver_ids=None,
                     migrator=messages.migration.insertion_migrator_config(),
+                    leaf_config=leaf_config,
                     connector_type=connector_type,
                 )
             ]))
