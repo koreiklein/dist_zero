@@ -1,4 +1,4 @@
-from dist_zero import errors, messages, deltas, linker, settings
+from dist_zero import errors, messages, deltas, linker, settings, connector
 
 from . import migrator
 
@@ -264,7 +264,7 @@ class SinkMigrator(migrator.Migrator):
 
   def _maybe_has_left_configurations(self):
     if all(val is not None for val in self._left_configurations.values()):
-      my_unmatched_kids = list(self._node._kids.values())
+      my_unmatched_kids = list(self._node._kids.keys())
       if not my_unmatched_kids:
         for left_config in self._left_configurations.values():
           for left_kid in left_config['kids']:
@@ -272,25 +272,27 @@ class SinkMigrator(migrator.Migrator):
             self._node.send(left_kid['handle'],
                             messages.migration.configure_right_parent(migration_id=self.migration_id, kid_ids=[]))
       else:
-        for left_config in self._left_configurations.values():
-          left_kids = left_config['kids']
-          if len(left_kids) > len(my_unmatched_kids):
-            raise errors.InternalError("Sink node does not have enough unmatched kids to pair with adjacents.")
-          matched_kids, my_unmatched_kids = my_unmatched_kids[:len(left_kids)], my_unmatched_kids[len(left_kids):]
+        left_kids = {
+            kid['handle']['id']: kid['handle']
+            for left_config in self._left_configurations.values() for kid in left_config['kids']
+        }
+        left_kid_to_my_kid = connector.weighted_rr(
+            kids=list(left_kids.keys()),
+            parents=my_unmatched_kids,
+            weights={
+                kid_id: (self._node._leaf_availability if kid_id not in self._node._kid_summaries else
+                         self._node._kid_summaries[kid_id]['availability'])
+                for kid_id in my_unmatched_kids
+            })
+        for left_kid_id, my_kid_id in left_kid_to_my_kid.items():
+          left_kid, my_kid = left_kids[left_kid_id], self._node._kids[my_kid_id]
+          self._node.send(left_kid,
+                          messages.migration.configure_right_parent(
+                              migration_id=self.migration_id, kid_ids=[my_kid_id]))
 
-          for adjacent_to_kid_config, kid in zip(left_kids, matched_kids):
-            adjacent_to_kid = adjacent_to_kid_config['handle']
-
-            self._node.send(adjacent_to_kid,
-                            messages.migration.configure_right_parent(
-                                migration_id=self.migration_id, kid_ids=[kid['id']]))
-
-            self._node.send(kid,
-                            messages.migration.set_new_flow_adjacent(self.migration_id,
-                                                                     self._node.transfer_handle(
-                                                                         adjacent_to_kid, kid['id'])))
-        if len(my_unmatched_kids) != 0:
-          raise errors.InternalError("sink migrator has additional unmatched kids")
+          self._node.send(my_kid,
+                          messages.migration.set_new_flow_adjacent(self.migration_id,
+                                                                   self._node.transfer_handle(left_kid, my_kid_id)))
 
   def _maybe_flow_is_started(self):
     if all(val is not None for val in self._left_configurations.values()) and \

@@ -16,7 +16,7 @@ class SpawnerTransaction(object):
     self._node._left_gap = False
     self._node._right_gap = False
 
-    self._current_spawning_layer = None
+    self._current_spawning_layer = 0
     self.finished = False
 
     # When the subgraph has a gap on the left, this will be the id of the unique leftmost node of the subgraph
@@ -144,24 +144,25 @@ class SpawnerTransaction(object):
     self._spawn_layer(1)
 
   def _spawn_layer(self, layer_index):
-    self._node.logger.info(
-        "Insertion migrator is spawning layer {layer_index} of {n_nodes_to_spawn} nodes",
-        extra={
-            'layer_index': layer_index,
-            'n_nodes_to_spawn': len(self._connector.layers[layer_index])
-        })
-    self._current_spawning_layer = layer_index
+    if layer_index < len(self._connector.layers):
+      self._node.logger.info(
+          "Insertion migrator is spawning layer {layer_index} of {n_nodes_to_spawn} nodes",
+          extra={
+              'layer_index': layer_index,
+              'n_nodes_to_spawn': len(self._connector.layers[layer_index])
+          })
+      self._current_spawning_layer = layer_index
 
-    if self._connector._left_configurations and self._connector._right_configurations:
-      if layer_index == 1 and self._connector.max_left_height() < self._connector.max_right_height():
-        self._spawn_layer_with_left_gap(layer_index)
-      elif layer_index == len(self._connector.layers) - 1 and \
-          self._connector.max_left_height() > self._connector.max_right_height():
-        self._spawn_layer_with_right_gap(layer_index)
+      if self._connector._left_configurations and self._connector._right_configurations:
+        if layer_index == 1 and self._connector.max_left_height() < self._connector.max_right_height():
+          self._spawn_layer_with_left_gap(layer_index)
+        elif layer_index == len(self._connector.layers) - 1 and \
+            self._connector.max_left_height() > self._connector.max_right_height():
+          self._spawn_layer_with_right_gap(layer_index)
+        else:
+          self._spawn_layer_without_gap(layer_index)
       else:
         self._spawn_layer_without_gap(layer_index)
-    else:
-      self._spawn_layer_without_gap(layer_index)
 
     self._maybe_spawned_kids()
 
@@ -188,6 +189,7 @@ class SpawnerTransaction(object):
                       messages.migration.configure_new_flow_right(self._node.migration_id, [
                           messages.migration.right_configuration(
                               parent_handle=self._node.transfer_handle(right_config['parent_handle'], node['id']),
+                              availability=right_config['availability'],
                               height=right_config['height'],
                               is_data=right_config['is_data'],
                               n_kids=right_config['n_kids'],

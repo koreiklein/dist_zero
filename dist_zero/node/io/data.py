@@ -228,7 +228,8 @@ class DataNode(Node):
     else:
       node_id = ids.new_id("DataNode_kid")
       self._pending_spawned_kids.add(node_id)
-      self._kid_summaries[node_id] = messages.io.kid_summary(size=0, n_kids=0)
+      self._kid_summaries[node_id] = messages.io.kid_summary(
+          size=0, n_kids=0, availability=self._leaf_availability * self._kid_capacity_limit)
       self._updated_summary = True
       self.logger.info("DataNode is spawning a new kid", extra={'new_kid_id': node_id})
       self._controller.spawn_node(
@@ -579,7 +580,8 @@ class DataNode(Node):
       message = messages.io.kid_summary(
           size=(sum(kid_summary['size'] for kid_summary in self._kid_summaries.values())
                 if self._height > 0 else len(self._kids)),
-          n_kids=len(self._kids))
+          n_kids=len(self._kids),
+          availability=self.availability())
       if (self._parent['id'], message) != self._last_kid_summary:
         self._last_kid_summary = (self._parent['id'], message)
         self.send(self._parent, message)
@@ -592,9 +594,19 @@ class DataNode(Node):
   def _kid_capacity_limit(self):
     return self._branching_factor**self._height
 
+  @property
+  def _leaf_availability(self):
+    return self.system_config['SUM_NODE_SENDER_LIMIT']
+
   def availability(self):
-    total_kid_size = sum(kid_summary['size'] for kid_summary in self._kid_summaries.values())
-    return self._kid_capacity_limit * self._branching_factor - total_kid_size
+    if self._height == -1:
+      # FIXME(KK): Remove availability based on how many nodes are sending to self.
+      return self._leaf_availability
+    else:
+      from_spawned_kids = sum(kid_summary['availability'] for kid_summary in self._kid_summaries.values())
+      from_space_to_spawn_new_kids = self._leaf_availability * self._kid_capacity_limit * (
+          self._branching_factor - len(self._kid_summaries))
+      return from_spawned_kids + from_space_to_spawn_new_kids
 
   def _get_capacity(self):
     # find the best kid

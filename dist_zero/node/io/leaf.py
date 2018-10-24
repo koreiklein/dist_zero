@@ -62,5 +62,4 @@ class CollectLeaf(Leaf):
     return self._items
 
   def set_state(self, state):
-    import ipdb
-    ipdb.set_trace()
+    self._items = []

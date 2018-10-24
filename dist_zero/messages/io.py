@@ -149,7 +149,7 @@ def goodbye_parent():
   return {'type': 'goodbye_parent'}
 
 
-def kid_summary(size, n_kids):
+def kid_summary(size, n_kids, availability):
   '''
   Periodically sent by `DataNode` kids to their parents to give generally summary information
   that the parent needs to know about that kid.
@@ -158,8 +158,9 @@ def kid_summary(size, n_kids):
     It need not be perfectly accurate, but should be fairly close, especially if new descendents haven't been
     added in a while.
   :param n_kids: The number of immediate kids of the sender.
+  :param int availability: The availability to add new senders to a collect network.
   '''
-  return {'type': 'kid_summary', 'size': size, 'n_kids': n_kids}
+  return {'type': 'kid_summary', 'size': size, 'n_kids': n_kids, 'availability': availability}
 
 
 def bumped_height(proxy, kid_ids, variant):
