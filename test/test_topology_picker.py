@@ -63,7 +63,7 @@ def test_no_picker_errors_on_empty_left_and_right_lists(n_lefts, n_rights):
       rights=[ids.new_id("TestNode_{}".format(i)) for i in range(n_rights)],
       max_outputs=3,
       max_inputs=3,
-      name_prefix="TestInternalNode")
+      name_prefix="TestDataNode")
   picker.fill_in()
 
 
@@ -75,7 +75,7 @@ def test_append_left_right(side):
       rights=[ids.new_id("TestNode_{}".format(i)) for i in range(10)],
       max_outputs=4 if side == 'left' else 3,
       max_inputs=3 if side == 'left' else 4,
-      name_prefix="TestInternalNode")
+      name_prefix="TestDataNode")
   picker.fill_in()
 
   append = picker.append_left if side == 'left' else picker.append_right
@@ -139,7 +139,7 @@ def test_unique_path():
       rights=[ids.new_id("edge_right_{}".format(i)) for i in range(30)],
       max_outputs=3,
       max_inputs=4,
-      name_prefix="TestInternalNode")
+      name_prefix="TestDataNode")
   picker.fill_in()
   _assert_unique_paths(picker)
 

@@ -7,7 +7,7 @@ class Importer(object):
   a source of input messages to that node.
 
   As messages arrive from the sender, the underlying `Node` should pass them to the `Importer.import_message` method.
-  Internally, the `Importer` will de-duplicate and re-order messages, and eventually call `SumNode.deliver` on
+  Internally, the `Importer` will de-duplicate and re-order messages, and eventually call `deliver` on
   each message, exactly once, and in the right order.
   '''
 
@@ -16,7 +16,7 @@ class Importer(object):
     :param linker: The linker associated with this importer
     :type linker: `Linker`
 
-    :param sender: The :ref:`handle` of the node sending to this internal node.
+    :param sender: The :ref:`handle` of the node sending to this data node.
     :type sender: :ref:`handle`
 
     :param int first_sequence_number: The first sequence number this importer should expect to receive.

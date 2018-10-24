@@ -10,8 +10,6 @@ from random import Random
 from dist_zero import errors, messages, dns, settings
 
 from .node import io
-from .node.io import leaf
-from .node.sum import SumNode
 from .node.computation import ComputationNode
 from .migration.migration_node import MigrationNode
 
@@ -58,6 +56,25 @@ class MachineController(object):
     :type on_machine: :ref:`handle`
     :return: The id of the newly created node.
     :rtype: str
+    '''
+    raise RuntimeError("Abstract Superclass")
+
+  def change_node(self, node_id, node):
+    '''
+    Stop sending messages to the node currently identified node_id, and send them instead to a new node.
+    Do not try to initialize the node.
+
+    :param str node_id: The id of a running node.
+    :param node: A `Node` instance with the same id.
+    :type node: `Node`
+    '''
+    raise RuntimeError("Abstract Superclass")
+
+  def parse_node(self, node_config):
+    '''
+    Generate a node from any node_config, but do not add on initialize it.
+
+    :param object node_config: Any node configuration message.
     '''
     raise RuntimeError("Abstract Superclass")
 
@@ -140,6 +157,30 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
+  def periodically(self, interval_ms, f):
+    '''
+    Run a function periodically until it is cancelled.
+
+    :param int interval_ms: The number of milliseconds between calls to f().
+    :param f: Any function taking no arguments.
+
+    :return: A function to cancel the periodic calls.
+    '''
+    cancelled = [False]
+
+    async def _loop():
+      if not cancelled[0]:
+        f()
+        await self.sleep_ms(interval_ms)
+        asyncio.get_event_loop().create_task(_loop())
+
+    asyncio.get_event_loop().create_task(_loop())
+
+    def _cancel():
+      cancelled[0] = True
+
+    return _cancel
+
 
 class NodeManager(MachineController):
   '''
@@ -206,7 +247,8 @@ class NodeManager(MachineController):
 
     self._send_to_machine = send_to_machine
 
-    asyncio.get_event_loop().create_task(self._elapse_time_periodically())
+    ELAPSE_TIME_MS = 220
+    self._stop_elapse_nodes = self.periodically(ELAPSE_TIME_MS, lambda: self.elapse_nodes(ELAPSE_TIME_MS))
 
   @property
   def random(self):
@@ -283,6 +325,16 @@ class NodeManager(MachineController):
 
     return node_config['id']
 
+  def change_node(self, node_id, node):
+    if node_id not in self._node_by_id:
+      raise errors.InternalError(f"Can't change_node for {node_id}, as no node by that id is currently running.")
+
+    if node_id != node.id:
+      raise errors.InternalError(f"Can't change_node for {node_id}, as the new node has a different id {node.id}")
+
+    node.set_fernet(self._node_by_id[node_id])
+    self._node_by_id[node_id] = node
+
   def terminate_node(self, node_id):
     self._node_by_id.pop(node_id)
 
@@ -299,6 +351,18 @@ class NodeManager(MachineController):
   def n_nodes(self):
     return len(self._node_by_id)
 
+  def parse_node(self, node_config):
+    if node_config['type'] == 'DataNode':
+      return io.DataNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'AdopterNode':
+      return io.AdopterNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'MigrationNode':
+      return MigrationNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'ComputationNode':
+      return ComputationNode.from_config(node_config, controller=self)
+    else:
+      raise RuntimeError("Unrecognized type {}".format(node_config['type']))
+
   def start_node(self, node_config):
     logger.info(
         "Starting new '{node_type}' node {node_id} on machine '{machine_name}'",
@@ -307,18 +371,7 @@ class NodeManager(MachineController):
             'node_id': self._format_node_id_for_logs(node_config['id']),
             'machine_name': self.name,
         })
-    if node_config['type'] == 'LeafNode':
-      node = io.LeafNode.from_config(node_config=node_config, controller=self)
-    elif node_config['type'] == 'InternalNode':
-      node = io.InternalNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'SumNode':
-      node = SumNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'MigrationNode':
-      node = MigrationNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'ComputationNode':
-      node = ComputationNode.from_config(node_config, controller=self)
-    else:
-      raise RuntimeError("Unrecognized type {}".format(node_config['type']))
+    node = self.parse_node(node_config)
 
     self._node_by_id[node.id] = node
     node.initialize()
@@ -330,8 +383,8 @@ class NodeManager(MachineController):
     :return: The API response to the message
     :rtype: object
     '''
-    logger.info("API Message of type {message_type}", extra={'message_type': message['type']})
     if message['type'] == 'api_node_message':
+      logger.info("API Message of type {message_type}", extra={'message_type': message['message']['type']})
       if message['node_id'] not in self._node_by_id:
         raise errors.NoNodeForId("Can't find {} for api message of type {}".format(
             message['node_id'],
@@ -429,12 +482,6 @@ class NodeManager(MachineController):
 
   def clean_all(self):
     self._running = False
-
-  async def _elapse_time_periodically(self):
-    ELAPSE_TIME_MS = 220
-    while self._running:
-      await self.sleep_ms(ELAPSE_TIME_MS)
-      self.elapse_nodes(ELAPSE_TIME_MS)
 
   def elapse_nodes(self, ms):
     '''

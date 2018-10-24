@@ -12,8 +12,8 @@ class NetworkGraph(object):
   def to_json(self):
     return {
         'nodes': list(self._nodes),
-        'outgoing_edges': self._outgoing_edges,
-        'incomming_edges': self._incomming_edges,
+        'outgoing_edges': dict(self._outgoing_edges),
+        'incomming_edges': dict(self._incomming_edges),
         'edges': list(self._edges),
     }
 
@@ -21,9 +21,10 @@ class NetworkGraph(object):
   def from_json(j):
     g = NetworkGraph()
     g._nodes = set(j['nodes'])
-    g._outgoing_edges = j['outgoing_edges']
-    g._incomming_edges = j['incomming_edges']
+    g._outgoing_edges = {src: [tuple(edge) for edge in edges] for src, edges in j['outgoing_edges'].items()}
+    g._incomming_edges = {tgt: [tuple(edge) for edge in edges] for tgt, edges in j['incomming_edges'].items()}
     g._edges = set([(src, tgt) for src, tgt in j['edges']]) # Need to cast the pairs to tuples in order to hash.
+
     return g
 
   def transitive_incomming_with_duplicates(self, node):

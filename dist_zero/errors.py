@@ -15,6 +15,14 @@ class InternalError(DistZeroError):
   pass
 
 
+class NoRemainingAvailability(DistZeroError):
+  '''
+  For when there is not enough weight in the available nodes in a weighted round robin to
+  assign kids to any of them.
+  '''
+  pass
+
+
 class NoTransportError(DistZeroError):
   def __init__(self, sender_id, receiver_id):
     msg = 'No transport has been initialized between sender {} and receiver {}'.format(sender_id, receiver_id)

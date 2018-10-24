@@ -4,9 +4,8 @@ import logging
 import pytest
 
 import dist_zero.ids
-from dist_zero import messages, errors, spawners
-from dist_zero.node.sum import SumNode
-from dist_zero.node.io import InternalNode
+from dist_zero import messages, errors
+from dist_zero.node.io import DataNode
 from dist_zero.recorded import RecordedUser
 
 logger = logging.getLogger(__name__)
@@ -27,100 +26,6 @@ def test_times_in_order():
 
 
 @pytest.mark.asyncio
-async def test_add_one_leaf_to_empty_input_tree(demo):
-  system_config = messages.machine.std_system_config()
-  system_config['INTERNAL_NODE_KIDS_LIMIT'] = 3
-  system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 0
-  machine, = await demo.new_machine_controllers(
-      1,
-      base_config={
-          'system_config': system_config,
-          'network_errors_config': messages.machine.std_simulated_network_errors_config(),
-      },
-      random_seed='test_add_one_leaf_to_empty_input_tree')
-  await demo.run_for(ms=200)
-  root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
-  demo.system.spawn_node(
-      on_machine=machine,
-      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, height=1, variant='input'))
-  await demo.run_for(ms=2000)
-
-  leaves = demo.all_io_kids(root_input_node_id)
-  assert 0 == len(leaves)
-
-  leaf_ids = []
-
-  create_new_leaf = lambda name: leaf_ids.append(demo.system.create_descendant(
-      internal_node_id=root_input_node_id,
-      new_node_name=name,
-      machine_id=machine,
-      recorded_user=RecordedUser('user b', [
-          (330, messages.io.input_action(2)),
-          (660, messages.io.input_action(1)),
-      ]),
-      ))
-
-  create_new_leaf('LeafNode_test')
-  await demo.run_for(ms=2000)
-
-  leaves = demo.all_io_kids(root_input_node_id)
-  assert 1 == len(leaves)
-
-
-def test_scale_unconnected_io_tree(demo):
-  system_config = messages.machine.std_system_config()
-  system_config['INTERNAL_NODE_KIDS_LIMIT'] = 3
-  system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 0
-  machine, = demo.new_machine_controllers(
-      1,
-      base_config={
-          'system_config': system_config,
-          'network_errors_config': messages.machine.std_simulated_network_errors_config(),
-      },
-      random_seed='test_scale_unconnected_io_tree')
-  demo.run_for(ms=200)
-  root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
-  demo.system.spawn_node(
-      on_machine=machine,
-      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, height=1, variant='input'))
-  demo.run_for(ms=2000)
-
-  leaf_ids = []
-
-  create_new_leaf = lambda name: leaf_ids.append(demo.system.create_descendant(
-      internal_node_id=root_input_node_id,
-      new_node_name=name,
-      machine_id=machine))
-
-  assert 1 == demo.system.get_capacity(root_input_node_id)['height']
-
-  n_new_leaves = 9
-  for i in range(n_new_leaves):
-    create_new_leaf(name='test_leaf_{}'.format(i))
-    demo.run_for(ms=1000)
-
-  demo.run_for(ms=4000)
-
-  assert 2 == demo.system.get_capacity(root_input_node_id)['height']
-
-  n_new_leaves = 27 - 9
-  for i in range(n_new_leaves):
-    create_new_leaf(name='test_leaf_{}'.format(i))
-    demo.run_for(ms=1000)
-
-  demo.run_for(ms=4000)
-
-  assert 3 == demo.system.get_capacity(root_input_node_id)['height']
-
-  for i in range(27):
-    demo.system.kill_node(leaf_ids.pop())
-    demo.run_for(ms=400)
-
-  demo.run_for(ms=30 * 1000)
-
-  assert 1 == demo.system.get_capacity(root_input_node_id)['height']
-
-
 @pytest.mark.parametrize('error_regexp,drop_rate,network_error_type,seed', [
     ('.*increment.*', 0.0, 'drop', 'a'),
     ('.*increment.*', 0.02, 'drop', 'a'),
@@ -135,18 +40,18 @@ def test_scale_unconnected_io_tree(demo):
     ('.*input_action.*', 0.4, 'drop', 'h'),
     ('.*output_action.*', 0.4, 'drop', 'h'),
 ])
-def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, seed, error_regexp):
+async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, seed, error_regexp):
   # Create node controllers (each simulates the behavior of a separate machine.
   network_errors_config = messages.machine.std_simulated_network_errors_config()
   network_errors_config['outgoing'][network_error_type]['rate'] = drop_rate
   network_errors_config['outgoing'][network_error_type]['regexp'] = error_regexp
   system_config = messages.machine.std_system_config()
-  system_config['INTERNAL_NODE_KIDS_LIMIT'] = 30
+  system_config['DATA_NODE_KIDS_LIMIT'] = 30
   system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 0
   system_config['SUM_NODE_SENDER_LIMIT'] = 30
   system_config['SUM_NODE_RECEIVER_LIMIT'] = 30
 
-  machine_a, machine_b, machine_c = demo.new_machine_controllers(
+  machine_a, machine_b, machine_c = await demo.new_machine_controllers(
       3,
       base_config={
           'system_config': system_config,
@@ -155,26 +60,27 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
       random_seed=seed,
   )
 
-  demo.run_for(ms=200)
+  await demo.run_for(ms=200)
 
   # Configure the starting network topology
-  root_input_node_id = dist_zero.ids.new_id('InternalNode_input')
+  root_input_node_id = dist_zero.ids.new_id('DataNode_input')
   demo.system.spawn_node(
       on_machine=machine_a,
-      node_config=messages.io.internal_node_config(root_input_node_id, parent=None, height=1, variant='input'))
+      node_config=messages.io.data_node_config(
+          root_input_node_id, parent=None, height=1, state_updater='sum', variant='input'))
 
-  root_output_node_id = dist_zero.ids.new_id('InternalNode_output')
+  root_output_node_id = dist_zero.ids.new_id('DataNode_output')
   demo.system.spawn_node(
       on_machine=machine_c,
-      node_config=messages.io.internal_node_config(
-          root_output_node_id, parent=None, height=1, variant='output', initial_state=0))
+      node_config=messages.io.data_node_config(
+          root_output_node_id, parent=None, height=1, variant='output', state_updater='sum', initial_state=0))
 
-  demo.run_for(ms=200)
+  await demo.run_for(ms=200)
 
   # Set up the sum computation with a migration:
   root_computation_node_id = demo.connect_trees_with_sum_network(root_input_node_id, root_output_node_id, machine_b)
 
-  demo.run_for(ms=1000)
+  await demo.run_for(ms=2000)
 
   assert root_computation_node_id == demo.system.get_adjacent(root_input_node_id)
   assert root_computation_node_id == demo.system.get_adjacent(root_output_node_id)
@@ -233,7 +139,7 @@ def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_type, se
           (2073, messages.io.input_action(1)),
       ]))
 
-  demo.run_for(ms=5000)
+  await demo.run_for(ms=5000)
 
   # Smoke test that at least one message was acknowledged by sum node in the middle.
   if network_error_type == 'duplicate':

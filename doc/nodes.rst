@@ -40,10 +40,12 @@ are sent on any importer for any message M once all the messages exporter becaus
 IO trees
 -----------------
 
-User input and output are modeled by trees of nodes.
-Each `LeafNode` instance represents a particular input device or output device.
-The `LeafNode` instances are organized into a tree of `InternalNode` instances, culminating in a root
-`InternalNode` .
+User input and output are modeled by trees of nodes, each of which is in instance of `DataNode`.
+The nodes with height >= 0 are for managing child nodes, and the nodes of height -1 do the "actual work",
+manage no kids, and are referred to as "leaf nodes".
+Each leaf node represents a particular input device or output device.
+The leaf nodes are organized into a tree of `DataNode` instances, culminating in a root
+`DataNode` .
 
 These trees are designed to grow and shrink as devices enter and leave the network.
 As devices enter, two operations will increase the size of the tree:
@@ -55,13 +57,13 @@ These two rules will function according to constraints that prevent any one node
 overly burdened.  Node limits (see limits in `std_system_config`) prevent nodes from having too many kids,
 senders or receivers.
 
-Any mechanism for adding leaf nodes is expected to only ever add them to internal nodes
-of height 0 that have excess capacity.  The two scaling rules above ensure that such an internal node should always
+Any mechanism for adding leaf nodes is expected to only ever add them to data nodes
+of height 0 that have excess capacity.  The two scaling rules above ensure that such an data node should always
 exist.
 
 Two operations will decrease the size of the tree:
 
-- Parent internal nodes will monitor their children to check whether any two children both have very few kids.
+- Parent data nodes will monitor their children to check whether any two children both have very few kids.
   In the event that two children have very few kids for long enough, those two children nodes will be merged.
 - If the root node has a single kid for long enough, then that kid effectively functions as a proxy for the root,
   managing the kids that the root could be managing instead.  In this case, the root node will merge with the kid,
@@ -70,7 +72,7 @@ Two operations will decrease the size of the tree:
 These rules ensure that no io tree will be overly provisioned for very long after the number of leaf nodes has
 dropped.
 
-.. automodule:: dist_zero.node.io.internal
+.. automodule:: dist_zero.node.io.data
    :members:
 
 .. automodule:: dist_zero.node.io.leaf
@@ -79,5 +81,3 @@ dropped.
 Node classes for performing computations
 --------------------------------------------
 
-.. automodule:: dist_zero.node.sum
-   :members:

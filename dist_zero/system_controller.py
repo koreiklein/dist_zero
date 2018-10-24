@@ -47,7 +47,7 @@ class SystemController(object):
 
   def route_dns(self, node_id, domain_name):
     '''
-    :param str node_id: The id of a root input `InternalNode` instance.
+    :param str node_id: The id of a root input `DataNode` instance.
     :param str domain_name: The domain name to map.
     '''
     self.send_api_message(node_id, messages.io.route_dns(domain_name=domain_name))
@@ -94,28 +94,28 @@ class SystemController(object):
     if handle['id'] not in self._node_id_to_machine_id:
       self._node_id_to_machine_id[handle['id']] = handle['controller_id']
 
-  def create_kid_config(self, internal_node_id, new_node_name, machine_id):
+  def create_kid_config(self, data_node_id, new_node_name, machine_id):
     '''
-    :param internal_node_id: The id of the parent `InternalNode`.
+    :param data_node_id: The id of the parent `DataNode`.
     :param str new_node_name: The name to use for the new node.
     :param str machine_id: The id of the machine on which the new node will run.
 
     :return: A node_config for creating the new kid node.
     :rtype: :ref:`message`
     '''
-    return self.send_api_message(internal_node_id,
+    return self.send_api_message(data_node_id,
                                  messages.machine.create_kid_config(
                                      new_node_name=new_node_name,
                                      machine_id=machine_id,
                                  ))
 
-  def create_descendant(self, internal_node_id, new_node_name, machine_id, recorded_user=None):
+  def create_descendant(self, data_node_id, new_node_name, machine_id, recorded_user=None):
     '''
-    Create a new descendant of an `InternalNode` in this system.
-    The kid will be added at a height 0 `InternalNode` with capacity, that is descended from the node
-    identified by ``internal_node_id``.
+    Create a new descendant of an `DataNode` in this system.
+    The kid will be added at a height 0 `DataNode` with capacity, that is descended from the node
+    identified by ``data_node_id``.
 
-    :param str internal_node_id: The id of the ancestor node.
+    :param str data_node_id: The id of the ancestor node.
     :param str new_node_name: The name to use for the new node.
     :param str machine_id: The id of the `MachineController` that should run the new node.
     :param recorded_user: An optional recording of a user to be played back on the new node.
@@ -123,19 +123,19 @@ class SystemController(object):
 
     :return: The id of the newly created node
 
-    One of the nodes involved will raise a `NoCapacityError` if the subtree identified by ``internal_node_id`` has no
+    One of the nodes involved will raise a `NoCapacityError` if the subtree identified by ``data_node_id`` has no
       capacity to accomodate new nodes.
     '''
-    capacity = self.get_capacity(internal_node_id)
+    capacity = self.get_capacity(data_node_id)
     kid_id = capacity['highest_capacity_kid']
     if kid_id is None:
-      return self.create_kid(internal_node_id, new_node_name, machine_id, recorded_user=recorded_user)
+      return self.create_kid(data_node_id, new_node_name, machine_id, recorded_user=recorded_user)
     else:
       return self.create_descendant(kid_id, new_node_name, machine_id, recorded_user=recorded_user)
 
   def create_kid(self, parent_node_id, new_node_name, machine_id, recorded_user=None):
     '''
-    Create a new kid of a height 0 `InternalNode` in this system.
+    Create a new kid of a height 0 `DataNode` in this system.
 
     :param str parent_node_id: The id of the parent node.
     :param str new_node_name: The name to use for the new node.
@@ -146,7 +146,7 @@ class SystemController(object):
     :return: The id of the newly created node
     '''
     node_config = self.create_kid_config(
-        internal_node_id=parent_node_id,
+        data_node_id=parent_node_id,
         new_node_name=new_node_name,
         machine_id=machine_id,
     )

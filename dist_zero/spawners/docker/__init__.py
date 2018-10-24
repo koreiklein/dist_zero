@@ -6,7 +6,7 @@ import os
 import docker
 import docker.errors
 
-from dist_zero import machine, settings, errors, messages, spawners
+from dist_zero import machine, settings, errors, messages, spawners, transport
 from .. import spawner
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,10 @@ class DockerSpawner(spawner.Spawner):
     self._docker_client = None
     self._system_id = system_id
     self._inside_container = inside_container
+
+    self._host_tcp_port = {} # machine_controller_id to the bound tcp port on the host
+    self._host_udp_port = {} # machine_controller_id to the bound udp port on the host
+    self._current_port = 12334 # Try not to interfere with other processes that might bind ports on this host
 
     self._dir = os.path.dirname(os.path.realpath(__file__))
     self._root_dir = os.path.realpath(os.path.join(self._dir, '../../..'))
@@ -95,6 +99,21 @@ class DockerSpawner(spawner.Spawner):
       If sock_type == 'tcp', then return the response from the `MachineController` tcp API.
     :rtype: object
     '''
+    return self._send_to_container_from_host_by_writing_message_to_volume(
+        machine_id=machine_id, message=message, sock_type=sock_type)
+    # self._send_to_container_from_host_on_the_mapped_host_port(machine_id=machine_id, message=message, sock_type=sock_type)
+
+  def _send_to_container_from_host_on_the_mapped_host_port(self, machine_id, message, sock_type='udp'):
+    if sock_type == 'udp':
+      dst = ('host.docker.internal', self._host_udp_port[machine_id])
+      return transport.send_udp(message, dst)
+    elif sock_type == 'tcp':
+      dst = ('host.docker.internal', self._host_tcp_port[machine_id])
+      return transport.send_tcp(message, dst)
+    else:
+      raise errors.InternalError("Unrecognized sock_type {}".format(sock_type))
+
+  def _send_to_container_from_host_by_writing_message_to_volume(self, machine_id, message, sock_type='udp'):
     host_msg_dir = self._container_msg_dir_on_host(machine_id)
     filename = "message_{}.json".format(self._n_sent_messages)
     self._n_sent_messages += 1
@@ -138,6 +157,8 @@ class DockerSpawner(spawner.Spawner):
         os.remove(os.path.join(root, name))
       for name in dirs:
         os.rmdir(os.path.join(root, name))
+
+    os.rmdir(self._all_containers_msg_dir)
 
   def start(self):
     if self._started:
@@ -200,6 +221,10 @@ class DockerSpawner(spawner.Spawner):
   async def create_machines(self, machine_configs):
     return [ await self.create_machine(machine_config) for machine_config in machine_configs]
 
+  def _new_port(self):
+    self._current_port += 1
+    return self._current_port
+
   async def create_machine(self, machine_config):
     machine_name = machine_config['machine_name']
     machine_controller_id = machine_config['id']
@@ -216,6 +241,11 @@ class DockerSpawner(spawner.Spawner):
     config_filename = 'machine_config.json'
     with open(os.path.join(host_msg_dir, config_filename), 'w') as f:
       json.dump(machine_config_with_spawner, f)
+
+    host_tcp_port = self._new_port()
+    host_udp_port = self._new_port()
+    self._host_tcp_port[machine_controller_id] = host_tcp_port
+    self._host_udp_port[machine_controller_id] = host_udp_port
 
     container = self._docker.containers.run(
         image=self.image,
@@ -234,6 +264,10 @@ class DockerSpawner(spawner.Spawner):
             DockerSpawner.LABEL_CONTAINER_UUID: machine_controller_id,
         },
         auto_remove=False,
+        ports={
+            f'{settings.MACHINE_CONTROLLER_DEFAULT_TCP_PORT}/tcp': host_tcp_port,
+            f'{settings.MACHINE_CONTROLLER_DEFAULT_UDP_PORT}/udp': host_udp_port,
+        },
         volumes={
             self._root_dir: {
                 'bind': DockerSpawner.CONTAINER_WORKING_DIR,
@@ -252,6 +286,7 @@ class DockerSpawner(spawner.Spawner):
     self._network.connect(container)
 
     self._container_by_id[machine_controller_id] = container
+
     return machine_controller_id
 
   def _get_containers_from_docker(self):

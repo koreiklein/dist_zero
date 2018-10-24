@@ -21,18 +21,18 @@ def std_system_config():
   '''
   Miscellaneous configuration for the overall system.
 
-  **INTERNAL_NODE_KIDS_LIMIT**
+  **DATA_NODE_KIDS_LIMIT**
 
-  When an `InternalNode` has this many kids, it will trigger a split.
+  When an `DataNode` has this many kids, it will trigger a split.
 
   **KID_SUMMARY_INTERVAL**
 
-  Every time this many milliseconds pass on an internal node, it should send a kid_summary message
+  Every time this many milliseconds pass on an data node, it should send a kid_summary message
   to its parent.
 
   **TOTAL_KID_CAPACITY_TRIGGER**
 
-  When all the kids of an internal node have less than this much capacity,
+  When all the kids of an data node have less than this much capacity,
   it should spawn a new kid
 
   **SUM_NODE_SENDER_LIMIT, SUM_NODE_RECEIVER_LIMIT**
@@ -51,14 +51,14 @@ def std_system_config():
   it will trigger a migration to excise the sum node.
   '''
   return {
-      # When an `InternalNode` has this many kids, it will trigger a split.
-      'INTERNAL_NODE_KIDS_LIMIT': 200,
+      # When an `DataNode` has this many kids, it will trigger a split.
+      'DATA_NODE_KIDS_LIMIT': 200,
 
-      # Every time this many milliseconds pass on an internal node, it should send a kid_summary message
+      # Every time this many milliseconds pass on an data node, it should send a kid_summary message
       # to its parent.
       'KID_SUMMARY_INTERVAL': 200,
 
-      # When all the kids of an internal node have less than this much capacity,
+      # When all the kids of an data node have less than this much capacity,
       # it should spawn a new kid
       'TOTAL_KID_CAPACITY_TRIGGER': 5,
 
@@ -149,7 +149,7 @@ def machine_config(
       'network_errors_config': network_errors_config or std_simulated_network_errors_config(),
       'system_config': system_config or std_system_config(),
       'random_seed': random_seed,
-      'spawner': spawner,
+      'spawner': None,
       'ip_address': ip_address,
   }
 
@@ -239,13 +239,13 @@ def get_capacity():
 
 
 def get_adjacent_handle():
-  '''API message to a node to get the handle of its adjacent (for internal and leaf nodes).'''
+  '''API message to a node to get the handle of its adjacent (for data and leaf nodes).'''
   return {'type': 'get_adjacent_handle'}
 
 
 def create_kid_config(new_node_name, machine_id):
   '''
-  Create a node_config for a new kid node of an internal io node.
+  Create a node_config for a new kid node of an data io node.
 
   :param str new_node_name: The name to use for the new node.
   :param str machine_id: The id of the machine on which the new node will run.

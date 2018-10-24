@@ -73,6 +73,8 @@ class Demo(object):
     self.mode = mode
     self.nodes = 0
 
+    self._recorded_users = []
+
     self.system = None
     self.spawner = None
     self.simulated_spawner = None
@@ -181,6 +183,15 @@ class Demo(object):
     controllers = await self.new_machine_controllers(1)
     return controllers[0]
 
+  def connect_trees_with_collect_network(self, root_input_id, root_output_id, machine):
+    return self._connect_trees_with_computation_network(
+        node_id=dist_zero.ids.new_id('MigrationNode_add_collect_computation'),
+        root_input_id=root_input_id,
+        root_output_id=root_output_id,
+        machine=machine,
+        leaf_config=messages.computation.forward_to_any_leaf(),
+        connector_type=messages.computation.all_to_one_available_connector_type())
+
   def connect_trees_with_sum_network(self, root_input_id, root_output_id, machine):
     '''
     Create a sum network between input and output trees.
@@ -191,7 +202,16 @@ class Demo(object):
     :return: The id of the root computation node for the newly spawned network.
     :rtype: str
     '''
-    node_id = dist_zero.ids.new_id('MigrationNode_add_sum_computation')
+    return self._connect_trees_with_computation_network(
+        node_id=dist_zero.ids.new_id('MigrationNode_add_sum_computation'),
+        root_input_id=root_input_id,
+        root_output_id=root_output_id,
+        machine=machine,
+        leaf_config=messages.computation.sum_leaf(),
+        connector_type=messages.computation.all_to_all_connector_type())
+
+  def _connect_trees_with_computation_network(self, node_id, root_input_id, root_output_id, machine, leaf_config,
+                                              connector_type):
     root_computation_node_id = dist_zero.ids.new_id('ComputationNode_root')
     input_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_id)
     output_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_output_id)
@@ -221,17 +241,17 @@ class Demo(object):
                     left_ids=[input_handle_for_migration['id']],
                     receiver_ids=None,
                     migrator=messages.migration.insertion_migrator_config(),
+                    leaf_config=leaf_config,
+                    connector_type=connector_type,
                 )
             ]))
     return root_computation_node_id
 
-  def all_io_kids(self, internal_node_id):
-    if self.system.get_stats(internal_node_id)['height'] == 0:
-      return self.system.get_kids(internal_node_id)
+  def all_io_kids(self, data_node_id):
+    if self.system.get_stats(data_node_id)['height'] == 0:
+      return self.system.get_kids(data_node_id)
     else:
-      return [
-          descendant for kid_id in self.system.get_kids(internal_node_id) for descendant in self.all_io_kids(kid_id)
-      ]
+      return [descendant for kid_id in self.system.get_kids(data_node_id) for descendant in self.all_io_kids(kid_id)]
 
   def new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms, send_after=0):
     time_message_pairs = []
@@ -243,7 +263,12 @@ class Demo(object):
       self.total_simulated_amount += amount_to_send
       time_message_pairs.append((t, messages.io.input_action(amount_to_send)))
 
-    return RecordedUser(name, time_message_pairs)
+    result = RecordedUser(name, time_message_pairs)
+    self._recorded_users.append(result)
+    return result
+
+  def all_recorded_actions(self):
+    return [action for user in self._recorded_users for action in user.actions]
 
   def render_network(self, start_node_id, filename='network', view=False):
     from graphviz import Digraph
@@ -258,7 +283,7 @@ class Demo(object):
     def _add_node(graph, node_id):
       if node_id not in nodes:
         nodes.add(node_id)
-        if node_id.startswith('InternalNode') or node_id.startswith('LeafNode'):
+        if node_id.startswith('DataNode') or node_id.startswith('LeafNode'):
           kwargs = {'shape': 'ellipse', 'color': 'black', 'fillcolor': '#c7faff', 'style': 'filled'}
         else:
           kwargs = {'shape': 'diamond', 'color': 'black'}

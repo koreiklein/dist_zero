@@ -19,7 +19,7 @@ class Exporter(object):
 
   '''
 
-  PENDING_EXPIRATION_TIME_MS = 1 * 500
+  PENDING_EXPIRATION_TIME_MS = 2 * 1000
   '''
   When a message has been sent, it will be put into a pending state.
   PENDING_EXPIRATION_TIME_MS milliseconds after a message is sent, if it still hasn't been acknowledged,
@@ -30,7 +30,7 @@ class Exporter(object):
 
   def __init__(self, receiver, linker, migration_id):
     '''
-    :param receiver: The :ref:`handle` of the node receiving from this internal node.
+    :param receiver: The :ref:`handle` of the node receiving from this data node.
     :type receiver: :ref:`handle`
 
     :param linker: The linker associated with this exporter

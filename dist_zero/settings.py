@@ -14,7 +14,7 @@ from dotenv import load_dotenv, find_dotenv
 
 USE_UV_LOOP = os.environ.get('USE_UV_LOOP', '')
 use_uv_loop = USE_UV_LOOP.strip().lower() == 'true'
-if USE_UV_LOOP:
+if use_uv_loop:
   asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 ENCRYPT_ALL_MESSAGES = os.environ.get('ENCRYPT_ALL_MESSAGES', 'true')

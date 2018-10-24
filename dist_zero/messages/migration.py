@@ -88,13 +88,12 @@ def insertion_migrator_config(migration=None):
   return {'type': 'insertion_migrator', 'migration': migration}
 
 
-def added_sender(node, respond_to=None):
+def added_sender(node, respond_to):
   '''
   Informs an already fully configured receiver when a new sender is being added and needs a right_configuration.
   :param node: The :ref:`handle` of the new sender node to add.
   :type node: :ref:`handle`
-  :param respond_to: An optional :ref:`handle` of a node.  If provided, once the sender is added, we should
-    send an finished_adding_sender message to it.
+  :param respond_to: If provided, once the sender is added, we should send an finished_adding_sender message to it.
   :type respond_to: :ref:`handle`
   '''
   return {'type': 'added_sender', 'node': node, 'respond_to': respond_to}
@@ -414,7 +413,7 @@ def configure_new_flow_right(migration_id, right_configurations):
   }
 
 
-def right_configuration(parent_handle, is_data, height, n_kids, connection_limit):
+def right_configuration(parent_handle, is_data, height, n_kids, connection_limit, availability=None):
   '''
 
   :param parent_handle: The :ref:`handle` of the sender. A sibling node to the right of the node receiving the message.
@@ -423,6 +422,7 @@ def right_configuration(parent_handle, is_data, height, n_kids, connection_limit
   :param n_kids: If the right node is a data node with a set number of kids, n_kids will give that number.
     Otherwise, n_kids will be `None`
   :type n_kids: int or None
+  :param int availability: (optional) The number of nodes that the sending node has space to add.
   :param int connection_limit: The maximum number of connections the receiving node is allowed to add to all kids of its
     right parent.
   '''
@@ -430,6 +430,7 @@ def right_configuration(parent_handle, is_data, height, n_kids, connection_limit
       'parent_handle': parent_handle,
       'is_data': is_data,
       'height': height,
+      'availability': availability,
       'n_kids': n_kids,
       'connection_limit': connection_limit
   }
@@ -551,7 +552,7 @@ def set_new_flow_adjacent(migration_id, adjacent):
 
 def adopt(new_parent):
   '''
-  Sent by newly spawner `InternalNode` instances to each of the kids they are meant to steal,
+  Sent by newly spawner `DataNode` instances to each of the kids they are meant to steal,
   letting them know to change parents.
 
   :param new_parent: The :ref:`handle` of the new parent node.
