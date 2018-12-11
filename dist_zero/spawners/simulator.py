@@ -58,10 +58,9 @@ class SimulatedSpawner(spawner.Spawner):
       controller.clean_all()
 
   def _random_ms_for_send(self):
-    return max(1,
-               int(
-                   self._random.gauss(
-                       mu=SimulatedSpawner.AVERAGE_SEND_TIME_MS, sigma=SimulatedSpawner.SEND_TIME_STDDEV_MS)))
+    return max(
+        1, int(
+            self._random.gauss(mu=SimulatedSpawner.AVERAGE_SEND_TIME_MS, sigma=SimulatedSpawner.SEND_TIME_STDDEV_MS)))
 
   def start(self):
     '''Begin the simulation'''
@@ -146,7 +145,7 @@ class SimulatedSpawner(spawner.Spawner):
     }
 
   async def create_machines(self, machine_configs):
-    return [ await self.create_machine(machine_config) for machine_config in machine_configs]
+    return [await self.create_machine(machine_config) for machine_config in machine_configs]
 
   async def create_machine(self, machine_config):
     result = machine.NodeManager(
@@ -185,7 +184,7 @@ class SimulatedSpawner(spawner.Spawner):
     '''
     # Simulate the serializing and deserializing that happens in other Spawners.
     # This behavior is important so that simulated tests don't accidentally share data.
-    message = json.loads(json.dumps(message))
+    message = simulate_message_sent_and_received(message)
 
     if self._elapsed_time_ms is None:
       raise RuntimeError('The simulation must be started before it can send messages.')
@@ -239,3 +238,18 @@ class _Event(object):
 
   def tuple(self):
     return (self.t, self.value)
+
+
+def _deep_copy(message):
+  if message.__class__ == list:
+    return [deep_copy(x) for x in message]
+  elif message.__class__ == dict:
+    return {key: deep_copy(value) for key, value in message.items()}
+  else:
+    return message
+
+
+def simulate_message_sent_and_received(message):
+  # Note: Using _deep_copy instead doesn't appear to help with overall performance.
+  #return _deep_copy(message)
+  return json.loads(json.dumps(message))
