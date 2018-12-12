@@ -18,8 +18,8 @@ def test_cgen_basics():
   F_i = cgen.Var("i", cgen.Int32)
   F = prog.AddExternalFunction("F", [F_i])
   F_result = cgen.Var("result", cgen.Int32)
-  F.AddAssignment(cgen.CreateVar(F_result), cgen.Call(f, [F_i]))
-  F.AddReturn(cgen.Call(cgen.PyLong_FromLong, [F_result]))
+  F.AddAssignment(cgen.CreateVar(F_result), f(F_i))
+  F.AddReturn(cgen.PyLong_FromLong(F_result))
 
   mod = prog.build_and_import()
   assert 16 == mod.F(4)
@@ -70,7 +70,7 @@ def test_cgen_break():
 
   whileblock.AddAssignment(y, y + cgen.Constant(1))
 
-  f.AddReturn(cgen.Call(cgen.PyLong_FromLong, [y]))
+  f.AddReturn(cgen.PyLong_FromLong(y))
 
   c_f = prog.build_and_import().f
 
@@ -111,7 +111,7 @@ def test_cgen_while():
   second_if.consequent.AddAssignment(y, y + x / cgen.Constant(3))
   second_if.alternate.AddAssignment(y, y + x / cgen.Constant(5))
 
-  f.AddReturn(cgen.Call(cgen.PyLong_FromLong, [y]))
+  f.AddReturn(cgen.PyLong_FromLong(y))
 
   c_f = prog.build_and_import().f
 
@@ -135,7 +135,7 @@ def test_cgen_binops():
     a = cgen.Var("a", cgen.Int32)
     b = cgen.Var("b", cgen.Int32)
     f = prog.AddExternalFunction(f"F_{i}", [a, b])
-    f.AddReturn(cgen.Call(cgen.PyLong_FromLong, [op(a, b)]))
+    f.AddReturn(cgen.PyLong_FromLong(op(a, b)))
 
   mod = prog.build_and_import()
 
