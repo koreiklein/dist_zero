@@ -26,6 +26,20 @@ def test_cgen_basics():
 
 
 @pytest.mark.cgen
+def test_cgen_emptyif():
+  prog = cgen.Program('test_emptyif')
+  x = cgen.Var('x', cgen.Int32)
+  f = prog.AddExternalFunction("f", [x])
+  empty_if = f.AddIf(x == cgen.Constant(1))
+  f.AddReturn(cgen.PyLong_FromLong(cgen.Constant(3)))
+
+  c_f = prog.build_and_import().f
+
+  assert 3 == c_f(2)
+  assert 3 == c_f(0)
+
+
+@pytest.mark.cgen
 def test_cgen_break():
   def python_f(x):
     y = 0
@@ -46,8 +60,9 @@ def test_cgen_break():
   f.AddAssignment(cgen.CreateVar(y), cgen.Constant(0))
   whileblock = f.AddWhile(cgen.true)
 
-  first_if = whileblock.AddIf(x == cgen.Constant(1))
-  first_if.consequent.AddBreak()
+  # It's good to try an if statement with no consequent, but an alternate.
+  first_if = whileblock.AddIf((x == cgen.Constant(1)).Negate())
+  first_if.alternate.AddBreak()
 
   second_if = whileblock.AddIf(x % cgen.Constant(2) == cgen.Constant(0))
   second_if.consequent.AddAssignment(x, x / cgen.Constant(2))
