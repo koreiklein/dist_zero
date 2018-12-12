@@ -2,9 +2,8 @@ import shutil
 import os
 import tempfile
 import importlib
-import sys
 
-from . import expression, statement
+from . import expression, statement, type, lvalue
 from .common import INDENT, escape_c
 
 
@@ -24,11 +23,23 @@ class Function(expression.Expression):
   def add_includes(self, program):
     pass
 
+  def AddWhile(self, *args, **kwargs):
+    return self._block.AddWhile(*args, **kwargs)
+
+  def AddSwitch(self, *args, **kwargs):
+    return self._block.AddSwitch(*args, **kwargs)
+
   def AddReturn(self, *args, **kwargs):
     return self._block.AddReturn(*args, **kwargs)
 
   def AddIf(self, *args, **kwargs):
     return self._block.AddIf(*args, **kwargs)
+
+  def AddContinue(self, *args, **kwargs):
+    return self._block.AddContinue(*args, **kwargs)
+
+  def AddBreak(self, *args, **kwargs):
+    return self._block.AddBreak(*args, **kwargs)
 
   def AddDeclaration(self, *args, **kwargs):
     return self._block.AddDeclaration(*args, **kwargs)
@@ -75,6 +86,8 @@ class Program(object):
     # Generate the c file
     cfilename = os.path.join(tempdir, self.cfilename())
     with open(cfilename, 'w') as f:
+      # Uncomment the below line for some simple debugging
+      #print(self.to_c_string())
       f.write(self.to_c_string())
 
     # Write a quick distutils file that describes how to compile the c file into a python extension
@@ -118,6 +131,20 @@ class Program(object):
     if len(contents) != 1:
       raise RuntimeError(f"Expected exactly one file in the architecture directory.  Got {len(contents)}.")
     return contents[0]
+
+  def AddExternalFunction(self, name, args, docstring=''):
+    fself = expression.Var('self', type.PyObject.Star())
+    fargs = expression.Var('args', type.PyObject.Star())
+    f = self.AddFunction(name, type.PyObject.Star(), [fself, fargs], export=True, docstring=docstring)
+    for arg in args:
+      f.AddDeclaration(lvalue.CreateVar(arg))
+
+    format_string = expression.StrConstant(''.join(arg.type.parsing_format_string() for arg in args))
+    fif = f.AddIf(
+        expression.Call(expression.PyArg_ParseTuple, [fargs, format_string] + [arg.Address() for arg in args]).Negate())
+    fif.consequent.AddReturn(expression.NULL)
+
+    return f
 
   def AddFunction(self, name, retType, args, docstring='', export=False):
     if name in self._function_names:

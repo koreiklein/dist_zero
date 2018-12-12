@@ -8,11 +8,23 @@ class Expression(object):
   def to_c_string(self, root=False):
     raise NotImplementedError()
 
+  def __call__(self, *args):
+    return Call(self, args)
+
   def Address(self):
     return UnOp(self, op="&")
 
   def Negate(self):
     return UnOp(self, op="!")
+
+  def __and__(self, other):
+    return BinOp(And, self, other)
+
+  def __or__(self, other):
+    return BinOp(Or, self, other)
+
+  def __xor__(self, other):
+    return BinOp(Xor, self, other)
 
   def __add__(self, other):
     return BinOp(Plus, self, other)
@@ -47,6 +59,9 @@ class Expression(object):
   def __truediv__(self, other):
     return BinOp(Div, self, other)
 
+  def __floordiv__(self, other):
+    return BinOp(Div, self, other)
+
 
 class UnOp(Expression):
   def __init__(self, base_expression, op):
@@ -63,6 +78,21 @@ class UnOp(Expression):
       return f"{self.op}{self.base_expression.to_c_string()}"
     else:
       return f"({self.op}{self.base_expression.to_c_string()})"
+
+
+class Constant(Expression):
+  def __init__(self, s):
+    self.s = str(s)
+
+  def add_includes(self, program):
+    pass
+
+  def to_c_string(self, root=False):
+    return self.s
+
+
+true = Constant(1)
+false = Constant(0)
 
 
 class StrConstant(Expression):
@@ -125,6 +155,9 @@ class Operation(object):
     return self.s
 
 
+And = Operation("&&")
+Or = Operation("||")
+Xor = Operation("^")
 Plus = Operation("+")
 Minus = Operation("-")
 Times = Operation("*")
