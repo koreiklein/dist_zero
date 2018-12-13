@@ -28,6 +28,24 @@ runs in that container under the illusion that it controls the whole OS.
 #### cloud Mode
 In this mode, each machine is provisioned in the cloud.  It may be either physical or virtual.
 
+## Installation / Setup
+
+DistZero requires a few steps to get it up and running.
+
+- Create a virtual python environment and install python packages (see the section below on Python Packages)
+- Set up env variables (see the section below on environment setup)
+- Install the [capnproto](https://capnproto.org/) compiler.
+  - Instructions can be found [here](https://capnproto.org/install.html).
+- Install the c plugin for the capnproto compiler
+  - On a Mac
+    - Install the build tools
+      - brew install libtool
+      - brew install automake
+      - If stuck, you may want to check out the discussions at
+        - [stackoverflow](https://stackoverflow.com/questions/9575989/install-autoreconf-on-osx-lion).
+        - [the github issue](https://github.com/maxmind/libmaxminddb/issues/9).
+    - Install the [capnpc c plugin](https://github.com/opensourcerouting/c-capnproto)
+
 ## Python Packages
 
 Python packages are managed by [pipenv](https://docs.pipenv.org/).
@@ -39,6 +57,7 @@ and add packages to that virtual environment with `pipenv install --dev`.
 
 Python commands that use the environment should be run inside the virtual environment.  You can either run
 `pipenv shell` to get a shell in that environment, or prefix each command with `pipenv run`
+
 
 ## Environment Variables
 
