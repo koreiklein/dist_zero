@@ -23,6 +23,8 @@ X = types.Product([
         ('left', types.Three),
         ('right', types.List(types.Two).Discrete()),
     ]).Discrete().With('indiscrete', 'simultaneous'),
+    types.List(types.List(types.Two).With('append', 'indiscrete', 'onIndex')).With('append', 'remove', 'onIndex',
+                                                                                   'indiscrete'),
     X,
 ])
 def test_type_to_capnp(t):
