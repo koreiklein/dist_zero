@@ -8,6 +8,25 @@ class DistZeroError(Exception):
   pass
 
 
+class CapnpError(DistZeroError):
+  '''For errors relating to capnproto.'''
+  pass
+
+
+class CapnpFormatError(CapnpError):
+  '''
+  For errors involving a badly structured capnproto file.
+  '''
+  pass
+
+
+class CapnpCompileError(CapnpError):
+  '''
+  For errors compiling capnproto files.
+  '''
+  pass
+
+
 class InternalError(DistZeroError):
   '''
   For errors internal to dist zero.
