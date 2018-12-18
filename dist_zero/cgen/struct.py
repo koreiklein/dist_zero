@@ -24,9 +24,9 @@ class Structure(CType):
   def to_c_string_definition(self):
     yield f'{self.to_c_string()} {{\n'
     if self.is_pyobject:
-      yield f"{' ' * INDENT}PyObject_HEAD\n"
+      yield f"{INDENT}PyObject_HEAD\n"
     for name, type in self.fields:
-      yield f"{' ' * INDENT}{type.wrap_variable(name)};\n"
+      yield f"{INDENT}{type.wrap_variable(name)};\n"
     yield '};\n'
 
   def AddField(self, name, type):
@@ -59,7 +59,7 @@ class Enum(CType):
       return
     yield f'{self.to_c_string()} {{\n'
     for i, name in enumerate(self.options):
-      yield f"{' ' * INDENT}{self.name}_option_{name} = {i},\n"
+      yield f"{INDENT}{self.name}_option_{name} = {i},\n"
     yield '};\n'
 
   def wrap_variable(self, varname):
@@ -94,7 +94,7 @@ class Union(CType):
 
     yield f'{self.to_c_string()} {{\n'
     for name, type in self.fields:
-      yield f"{' ' * INDENT}{type.wrap_variable(name)};\n"
+      yield f"{INDENT}{type.wrap_variable(name)};\n"
     yield '};\n'
 
   def wrap_variable(self, varname):
