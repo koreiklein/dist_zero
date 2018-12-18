@@ -63,6 +63,17 @@ class Expression(object):
     return BinOp(Div, self, other)
 
 
+class Sizeof(Expression):
+  def __init__(self, base_type):
+    self.base_type = base_type
+
+  def add_includes(self, program):
+    self.base_type.add_includes(program)
+
+  def to_c_string(self, root=False):
+    return f"sizeof({self.base_type.to_c_string()})"
+
+
 class UnOp(Expression):
   def __init__(self, base_expression, op):
     if not isinstance(base_expression, Expression):

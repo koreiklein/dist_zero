@@ -13,6 +13,7 @@ class Program(object):
   def __init__(self, name, docstring=''):
     self.name = name
     self.docstring = docstring
+    self._python_types = []
     self._function_names = set()
     self._functions = []
     self._exported_functions = []
@@ -26,9 +27,15 @@ class Program(object):
   def cfilename(self):
     return f"{self.name}.c"
 
+  def _package_name(self):
+    return f"cextensions.{self.name}"
+
+  def _module_name(self):
+    return f"cextensions.{self.name}.{self.name}"
+
   def build_and_import(self):
     full_name = self.build_so("./cextensions")
-    return importlib.import_module(f"cextensions.{self.name}", self.name)
+    return importlib.import_module(self._package_name(), self.name)
 
   def build_so(self, dirname):
     '''
@@ -42,6 +49,10 @@ class Program(object):
     with open(cfilename, 'w') as f:
       # Uncomment the below line for some simple debugging
       #print(self.to_c_string())
+      f.write(self.to_c_string())
+
+    # FIXME(KK): Remove
+    with open('example.c', 'w') as f:
       f.write(self.to_c_string())
 
     # Write a quick distutils file that describes how to compile the c file into a python extension
@@ -94,15 +105,15 @@ class Program(object):
     fself = expression.Var('self', type.PyObject.Star())
     fargs = expression.Var('args', type.PyObject.Star())
     f = self.AddFunction(name, type.PyObject.Star(), [fself, fargs], export=True, docstring=docstring)
-    for arg in args:
-      f.AddDeclaration(lvalue.CreateVar(arg))
 
-    format_string = expression.StrConstant(''.join(arg.type.parsing_format_string() for arg in args))
-    fif = f.AddIf(
-        expression.Call(expression.PyArg_ParseTuple, [fargs, format_string] + [arg.Address() for arg in args]).Negate())
-    fif.consequent.AddReturn(expression.NULL)
+    f.generate_parse_external_args(args=args, mainArg=fargs)
 
     return f
+
+  def AddPythonType(self, name, docstring=''):
+    result = PythonType(program=self, name=name, docstring=docstring)
+    self._python_types.append(result)
+    return result
 
   def AddFunction(self, name, retType, args, docstring='', export=False):
     if name in self._function_names:
@@ -155,6 +166,10 @@ class Program(object):
       structure.to_c_string_definition(lines)
       lines.append('\n')
 
+    for python_type in self._python_types:
+      python_type.to_c_string_definition(lines)
+      lines.append('\n')
+
     lines.append("\n")
 
     for func in self._functions:
@@ -173,7 +188,21 @@ class Program(object):
   def add_py_module_init(self, lines):
     lines.append("PyMODINIT_FUNC\n")
     lines.append(f"PyInit_{self.name}(void) {{\n")
-    lines.append(f"{' ' * INDENT}return PyModule_Create(&{self.module_name()});\n")
+
+    lines.append(f"{' ' * INDENT}PyObject *module;\n\n")
+    for python_type in self._python_types:
+      lines.append(f"{' ' * INDENT}if (PyType_Ready(&{python_type._type_definition_name()}) < 0) return NULL;\n")
+
+    lines.append(f"\n{' ' * INDENT}module = PyModule_Create(&{self.module_name()});\n")
+    lines.append(f"{' ' * INDENT}if (module == NULL) return NULL;\n\n")
+
+    for python_type in self._python_types:
+      t = python_type._type_definition_name()
+      lines.append(f"{' ' * INDENT}Py_INCREF(&{t});\n")
+      lines.append(f"{' ' * INDENT}PyModule_AddObject(module, \"{python_type.name}\", (PyObject *) &{t});\n")
+
+    lines.append(f"\n{' ' * INDENT}return module;\n")
+
     lines.append("}\n\n")
 
   def add_py_module_def(self, lines):
@@ -208,6 +237,16 @@ class Function(expression.Expression):
     self.retType = retType
     self.args = args
     self._block = statement.Block(self.program, root=True)
+
+  def generate_parse_external_args(self, args, mainArg):
+    for arg in args:
+      self.AddDeclaration(lvalue.CreateVar(arg))
+
+    format_string = expression.StrConstant(''.join(arg.type.parsing_format_string() for arg in args))
+    fif = self.AddIf(
+        expression.Call(expression.PyArg_ParseTuple,
+                        [mainArg, format_string] + [arg.Address() for arg in args]).Negate())
+    fif.consequent.AddReturn(expression.NULL)
 
   def to_c_string(self, root=False):
     return self.name
@@ -248,3 +287,89 @@ class Function(expression.Expression):
     lines.append(self.header_string())
 
     self._block.to_c_string(lines, 0)
+
+
+class PythonType(object):
+  def __init__(self, program, name, docstring):
+    self.program = program
+    self.name = name
+    self.docstring = docstring
+
+    self.struct = struct.Structure(name, is_pyobject=True)
+
+    self.methods = []
+
+    self._init = None
+
+  def _init_function_name(self):
+    return f"{self.name}_init"
+
+  def _self_arg(self):
+    return expression.Var("self", self.struct.Star())
+
+  def _args_arg(self):
+    return expression.Var('args', type.PyObject.Star())
+
+  def _static_method_array_name(self):
+    return f"{self.name}_methods"
+
+  def _emit_methods_and_static_method_array(self, lines):
+    for method in self.methods:
+      method.function_to_c_string(lines)
+      lines.append("\n")
+
+    lines.append("\n")
+    lines.append(f"static PyMethodDef {self._static_method_array_name()}[] = {{\n")
+    for method in self.methods:
+      lines.append(
+          f'{" " * INDENT}{{"{method.name}", (PyCFunction) {method.name}, METH_VARARGS, "{escape_c(method.docstring)}"}},\n'
+      )
+    lines.append(f"{' ' * INDENT}{{NULL}}\n")
+    lines.append("};\n")
+
+  def _type_definition_name(self):
+    return f"{self.name}Type"
+
+  def _emit_type_definition(self, lines):
+    lines.append(f"static PyTypeObject {self._type_definition_name()} = {{\n")
+    lines.append(f"{' ' * INDENT}PyVarObject_HEAD_INIT(NULL, 0)\n")
+    lines.append(f"{' ' * INDENT}.tp_name = \"{self.program._module_name()}.{self.name}\",\n")
+    lines.append(f"{' ' * INDENT}.tp_doc = \"{self.docstring}\",\n")
+    lines.append(f"{' ' * INDENT}.tp_basicsize = sizeof({self.struct.to_c_string()}),\n")
+
+    lines.append(f"{' ' * INDENT}.tp_itemsize = 0,\n")
+    lines.append(f"{' ' * INDENT}.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,\n")
+    lines.append(f"{' ' * INDENT}.tp_new = PyType_GenericNew,\n")
+    if self._init:
+      lines.append(f"{' ' * INDENT}.tp_init = (initproc) {self._init_function_name()},\n")
+    lines.append(f"{' ' * INDENT}.tp_methods = {self._static_method_array_name()},\n")
+
+    lines.append("};\n")
+
+  def to_c_string_definition(self, lines):
+    self.struct.to_c_string_definition(lines)
+    lines.append("\n")
+    if self._init:
+      self._init.function_to_c_string(lines)
+      lines.append("\n")
+    self._emit_methods_and_static_method_array(lines)
+    lines.append("\n")
+    self._emit_type_definition(lines)
+    lines.append("\n")
+
+  def AddMethod(self, name, args):
+    mainArg = self._args_arg()
+    result = Function(self.program, name, type.PyObject.Star(), [self._self_arg(), mainArg], export=True)
+
+    result.generate_parse_external_args(args=args, mainArg=mainArg)
+
+    self.methods.append(result)
+    return result
+
+  def AddInit(self):
+    arg_kwargs = expression.Var('kwargs', type.PyObject.Star())
+
+    args = [self._self_arg(), self._args_arg(), arg_kwargs]
+    result = Function(self.program, self._init_function_name(), type.MachineInt, args, export=True)
+    self._init = result
+    return result

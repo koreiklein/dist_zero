@@ -1,4 +1,5 @@
 from dist_zero import cgen, errors, expression, capnpgen, types, primitive
+from dist_zero import type_compiler
 
 
 class ReactiveCompiler(object):
@@ -11,7 +12,8 @@ class ReactiveCompiler(object):
     self.docstring = docstring
 
     self.program = cgen.Program(self.name, docstring=self.docstring)
-    self.types = types.TypeCompiler(program=self.program)
+    self.c_types = type_compiler.CTypeCompiler(self.program)
+    self.capnp_types = type_compiler.CapnpTypeCompiler()
 
     self.output_key_to_norm_expr = None
 
@@ -50,13 +52,8 @@ class ReactiveCompiler(object):
   def _generate_structs(self):
     '''Generate the graph struct in self.program.'''
     graph_struct = self.program.AddStruct('graph')
-    graph_struct.AddField('current_states_data', cgen.Int8.Array(self._states_data_n_bytes()))
-    graph_struct.AddField('current_states', cgen.Void.Star().Array(len(self._top_exprs)))
-
-    # FIXME(KK): Finish this
-    self.program.build_and_import()
-    import ipdb
-    ipdb.set_trace()
+    graph_struct.AddField('current_states', cgen.Void.Star().Array(cgen.Constant(len(self._top_exprs))))
+    graph_struct.AddField('n_missing_inputs', cgen.Int32.Array(cgen.Constant(len(self._top_exprs))))
 
   def _generate_initialize_root_graph(self):
     '''Generate code in self.program defining the InitializeRootGraph function.'''
@@ -65,19 +62,26 @@ class ReactiveCompiler(object):
     initialize = self.program.AddExternalFunction(
         'InitializeRootGraph', [], docstring="Initialize and return a root graph object.")
 
-  def _states_data_n_bytes(self):
-    # FIXME(KK): This is not correct.  Figure out the sizes of each nodelet's state structure and sum them!
-    return 666
-
   def compile(self, output_key_to_norm_expr):
     self._output_key_to_norm_expr = output_key_to_norm_expr
     self._top_exprs = _Topsorter(list(output_key_to_norm_expr.values())).topsort()
 
     self._state_types = [self._get_type_for_expr(expr) for expr in self._top_exprs]
-    for t in self._state_types:
-      self.types.ensure_root_type(t)
 
-    self.protos = self.types.build_capnp()
+    # Add c types for all
+    for t in self._state_types:
+      self.c_types.ensure_root_type(t)
+
+    # Add capnproto types for outputs
+    for output in self._output_key_to_norm_expr.values():
+      self.capnp_types.ensure_root_type(self._get_type_for_expr(output))
+
+    # Add capnproto types for inputs
+    for expr in self._top_exprs:
+      if expr.__class__ == expression.Input:
+        self.capnp_types.ensure_root_type(self._get_type_for_expr(expr))
+
+    self.protos = self.capnp_types.capnp
 
     self._generate_initialize_root_graph()
     import ipdb

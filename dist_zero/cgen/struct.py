@@ -3,9 +3,10 @@ from .common import INDENT
 
 
 class Structure(CType):
-  def __init__(self, name):
+  def __init__(self, name, is_pyobject=False):
     self.name = name
     self.fields = []
+    self.is_pyobject = is_pyobject
 
   def add_includes(self, program):
     for name, type in self.fields:
@@ -22,6 +23,8 @@ class Structure(CType):
 
   def to_c_string_definition(self, lines):
     lines.append(f'{self.to_c_string()} {{\n')
+    if self.is_pyobject:
+      lines.append(f"{' ' * INDENT}PyObject_HEAD\n")
     for name, type in self.fields:
       lines.append(f"{' ' * INDENT}{type.wrap_variable(name)};\n")
     lines.append('};\n')

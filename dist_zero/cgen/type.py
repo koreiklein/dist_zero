@@ -1,3 +1,6 @@
+from . import expression
+
+
 class CType(object):
   def add_includes(self, program):
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
@@ -7,6 +10,12 @@ class CType(object):
 
   def parsing_format_string(self):
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
+  def to_c_string(self):
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
+  def Sizeof(self):
+    return expression.Sizeof(self)
 
   def Star(self):
     return Star(self)
@@ -47,7 +56,7 @@ class Array(CType):
     if self.n is None:
       return '[]'
     else:
-      return f'[{self.n}]'
+      return f'[{self.n.to_c_string(root=True)}]'
 
   def wrap_variable(self, varname):
     return self.base_type.wrap_variable(f"({varname}){self._bracket()}")
@@ -145,6 +154,7 @@ class BasicType(CType):
 
 Void = BasicType('void')
 Bool = BasicType('bool')
+MachineInt = BasicType('int')
 
 Int8 = Int(8)
 Int16 = Int(16, format_string='h')

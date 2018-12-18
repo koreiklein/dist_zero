@@ -137,15 +137,19 @@ class BasicType(Type):
 
     super(BasicType, self).__init__()
 
+  def _write_c_transitions_definition(self, compiler):
+    return self.c_transition_type
+
   def _write_c_state_definition(self, compiler):
     return self.c_state_type
 
   def _capnp_transitions_structure_name(self):
-    return f"{self.name}Transition"
+    return self.capnp_transition_type
 
   def equivalent(self, other):
     return other.__class__ == BasicType and \
-        self.name == other.name and \
+        self.capnp_state == other.capnp_state and \
+        self.c_state_type == other.c_state_type and \
         self.capnp_transition_type == other.capnp_transition_type and \
         self.c_transition_type == other.c_transition_type
 
@@ -156,7 +160,7 @@ class BasicType(Type):
     pass
 
   def _write_capnp_state_definition(self, compiler):
-    return self.name
+    return self.capnp_state
 
 
 Int8 = BasicType('Int8', c_state_type=cgen.Int8, capnp_transition_type='Int8', c_transition_type=cgen.Int8)
