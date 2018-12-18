@@ -47,6 +47,9 @@ class Structure(object):
 
     self.count = 0
 
+  def __str__(self):
+    return self.name
+
   def next_count(self):
     result = self.count
     self.count += 1

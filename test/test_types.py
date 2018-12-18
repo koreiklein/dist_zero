@@ -4,7 +4,7 @@ import tempfile
 
 import pytest
 
-from dist_zero import types
+from dist_zero import types, type_compiler, cgen
 
 TwoByThree = types.Product([
     ('left', types.Two),
@@ -27,14 +27,19 @@ X = types.Product([
                                                                                    'indiscrete'),
     X,
 ])
-def test_type_to_capnp(t):
-  f = types.TypeCompiler()
+def test_type_to_capnp_and_c(t):
+  f = type_compiler.CapnpTypeCompiler()
 
   f.ensure_root_type(t)
 
   dirname = os.path.join('.tmp', 'capnp')
   os.makedirs(dirname, exist_ok=True)
-  f.build_capnp().build_in(dirname=dirname, filename='example.capnp')
+  f.capnp.build_in(dirname=dirname, filename='example.capnp')
+
+  cf = type_compiler.CTypeCompiler(cgen.Program(name="test_program"))
+  cf.ensure_root_type(t)
+
+  cf.cprogram.build_and_import()
 
 
 def test_type_cardinalities():

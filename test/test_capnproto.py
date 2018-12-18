@@ -33,7 +33,7 @@ def test_capnproto_generator():
 
   person = f.AddStructure('Person')
   person.AddField('name', capnpgen.Text)
-  person.AddField('bithday', 'Date')
+  person.AddField('bithday', date)
 
   employment = person.AddUnion('employment')
   employment.AddField('unemployed', capnpgen.Void)
