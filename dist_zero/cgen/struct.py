@@ -21,13 +21,13 @@ class Structure(CType):
   def to_c_string(self):
     return f"struct {self.name}"
 
-  def to_c_string_definition(self, lines):
-    lines.append(f'{self.to_c_string()} {{\n')
+  def to_c_string_definition(self):
+    yield f'{self.to_c_string()} {{\n'
     if self.is_pyobject:
-      lines.append(f"{' ' * INDENT}PyObject_HEAD\n")
+      yield f"{' ' * INDENT}PyObject_HEAD\n"
     for name, type in self.fields:
-      lines.append(f"{' ' * INDENT}{type.wrap_variable(name)};\n")
-    lines.append('};\n')
+      yield f"{' ' * INDENT}{type.wrap_variable(name)};\n"
+    yield '};\n'
 
   def AddField(self, name, type):
     self.fields.append((name, type))
@@ -54,13 +54,13 @@ class Enum(CType):
   def to_c_string(self):
     return f"enum {self.name}"
 
-  def to_c_string_definition(self, lines):
+  def to_c_string_definition(self):
     if self.removed:
       return
-    lines.append(f'{self.to_c_string()} {{\n')
+    yield f'{self.to_c_string()} {{\n'
     for i, name in enumerate(self.options):
-      lines.append(f"{' ' * INDENT}{self.name}_option_{name} = {i},\n")
-    lines.append('};\n')
+      yield f"{' ' * INDENT}{self.name}_option_{name} = {i},\n"
+    yield '};\n'
 
   def wrap_variable(self, varname):
     return f"enum {self.name} {varname}"
@@ -88,14 +88,14 @@ class Union(CType):
   def to_c_string(self):
     return f"union {self.name}"
 
-  def to_c_string_definition(self, lines):
+  def to_c_string_definition(self):
     if self.removed:
       return
 
-    lines.append(f'{self.to_c_string()} {{\n')
+    yield f'{self.to_c_string()} {{\n'
     for name, type in self.fields:
-      lines.append(f"{' ' * INDENT}{type.wrap_variable(name)};\n")
-    lines.append('};\n')
+      yield f"{' ' * INDENT}{type.wrap_variable(name)};\n"
+    yield '};\n'
 
   def wrap_variable(self, varname):
     return f"union {self.name} {varname}"

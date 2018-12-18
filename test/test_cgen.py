@@ -5,7 +5,7 @@ from dist_zero import cgen
 
 @pytest.mark.cgen
 def test_cgen_python_type():
-  prog = cgen.Program("test_program", docstring='Dummy program exporting a new type')
+  prog = cgen.Program("type_test_program", docstring='Dummy program exporting a new type')
 
   new_type = prog.AddPythonType('MyNewType', docstring='For testing adding types via a c extension.')
 

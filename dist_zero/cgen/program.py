@@ -48,12 +48,9 @@ class Program(object):
     cfilename = os.path.join(tempdir, self.cfilename())
     with open(cfilename, 'w') as f:
       # Uncomment the below line for some simple debugging
-      #print(self.to_c_string())
-      f.write(self.to_c_string())
-
-    # FIXME(KK): Remove
-    with open('example.c', 'w') as f:
-      f.write(self.to_c_string())
+      #print(str(self))
+      for line in self.to_c_string():
+        f.write(line)
 
     # Write a quick distutils file that describes how to compile the c file into a python extension
     distutilsfilename = os.path.join(tempdir, "setup.py")
@@ -141,78 +138,76 @@ class Program(object):
     return result
 
   def __str__(self):
-    return self.to_c_string()
+    return ''.join(self.to_c_string())
 
   def to_c_string(self):
-    lines = []
     for x in itertools.chain(self._structures, self._unions):
       x.add_includes(self)
+
     for include in self.includes:
-      lines.append(f"#include {include}\n")
-    lines.append("\n")
+      yield f"#include {include}\n"
+    yield "\n"
 
     for enum in self._enums:
-      enum.to_c_string_definition(lines)
-      lines.append('\n')
+      yield from enum.to_c_string_definition()
+      yield '\n'
 
     for x in itertools.chain(self._structures, self._unions):
-      lines.append(f"{x.to_c_string()};\n")
+      yield f"{x.to_c_string()};\n"
 
     for union in self._unions:
-      union.to_c_string_definition(lines)
-      lines.append('\n')
+      yield from union.to_c_string_definition()
+      yield '\n'
 
     for structure in self._structures:
-      structure.to_c_string_definition(lines)
-      lines.append('\n')
+      yield from structure.to_c_string_definition()
+      yield '\n'
 
     for python_type in self._python_types:
-      python_type.to_c_string_definition(lines)
-      lines.append('\n')
+      yield from python_type.to_c_string_definition()
+      yield '\n'
 
-    lines.append("\n")
+    yield '\n'
 
     for func in self._functions:
-      func.function_to_c_string(lines)
-      lines.append('\n')
+      yield from func.function_to_c_string()
+      yield '\n'
 
-    self.add_python_c_extension_boilerplate(lines)
+    yield from self.add_python_c_extension_boilerplate()
 
-    return ''.join(lines)
+  def add_python_c_extension_boilerplate(self):
+    yield from self.add_c_extension_exported_methods()
+    yield from self.add_py_module_def()
+    yield from self.add_py_module_init()
 
-  def add_python_c_extension_boilerplate(self, lines):
-    self.add_c_extension_exported_methods(lines)
-    self.add_py_module_def(lines)
-    self.add_py_module_init(lines)
+  def add_py_module_init(self):
+    yield "PyMODINIT_FUNC\n"
+    yield f"PyInit_{self.name}(void) {{\n"
 
-  def add_py_module_init(self, lines):
-    lines.append("PyMODINIT_FUNC\n")
-    lines.append(f"PyInit_{self.name}(void) {{\n")
-
-    lines.append(f"{' ' * INDENT}PyObject *module;\n\n")
+    yield f"{' ' * INDENT}PyObject *module;\n\n"
     for python_type in self._python_types:
-      lines.append(f"{' ' * INDENT}if (PyType_Ready(&{python_type._type_definition_name()}) < 0) return NULL;\n")
+      yield f"{' ' * INDENT}if (PyType_Ready(&{python_type._type_definition_name()}) < 0) return NULL;\n"
 
-    lines.append(f"\n{' ' * INDENT}module = PyModule_Create(&{self.module_name()});\n")
-    lines.append(f"{' ' * INDENT}if (module == NULL) return NULL;\n\n")
+    yield f"\n{' ' * INDENT}module = PyModule_Create(&{self.module_name()});\n"
+    yield f"{' ' * INDENT}if (module == NULL) return NULL;\n\n"
 
     for python_type in self._python_types:
       t = python_type._type_definition_name()
-      lines.append(f"{' ' * INDENT}Py_INCREF(&{t});\n")
-      lines.append(f"{' ' * INDENT}PyModule_AddObject(module, \"{python_type.name}\", (PyObject *) &{t});\n")
+      yield f"{' ' * INDENT}Py_INCREF(&{t});\n"
+      yield f"{' ' * INDENT}PyModule_AddObject(module, \"{python_type.name}\", (PyObject *) &{t});\n"
 
-    lines.append(f"\n{' ' * INDENT}return module;\n")
+    yield f"\n{' ' * INDENT}return module;\n"
 
-    lines.append("}\n\n")
+    yield "}\n\n"
 
-  def add_py_module_def(self, lines):
-    lines.append(f"static struct PyModuleDef {self.module_name()} = {{\n")
-    lines.append(f"{' ' * INDENT}PyModuleDef_HEAD_INIT,\n")
-    lines.append(f'{" " * INDENT}"{self.name}",\n')
-    lines.append(f'{" " * INDENT}"{escape_c(self.docstring)}",\n')
-    lines.append(f"{' ' * INDENT}-1,\n")
-    lines.append(f"{' ' * INDENT}{self.method_array_name()}\n")
-    lines.append("};\n\n")
+  def add_py_module_def(self):
+    yield f"static struct PyModuleDef {self.module_name()} = {{\n"
+    yield f"{' ' * INDENT}PyModuleDef_HEAD_INIT,\n"
+    yield f'{" " * INDENT}"{self.name}",\n'
+    yield f'{" " * INDENT}"{escape_c(self.docstring)}",\n'
+    yield f"{' ' * INDENT}-1,\n"
+    yield f"{' ' * INDENT}{self.method_array_name()}\n"
+    yield "};\n\n"
 
   def method_array_name(self):
     return f"{self.name}_Methods"
@@ -220,12 +215,12 @@ class Program(object):
   def module_name(self):
     return f"{self.name}_Module"
 
-  def add_c_extension_exported_methods(self, lines):
-    lines.append(f"static struct PyMethodDef {self.method_array_name()}[] = {{\n")
+  def add_c_extension_exported_methods(self):
+    yield f"static struct PyMethodDef {self.method_array_name()}[] = {{\n"
     for func in self._exported_functions:
-      lines.append(f'{" " * INDENT}{{"{func.name}", {func.name}, METH_VARARGS, "{escape_c(func.docstring)}"}},\n')
-    lines.append(f"{' ' * INDENT}{{NULL, NULL, 0, NULL}},\n")
-    lines.append("};\n\n")
+      yield f'{" " * INDENT}{{"{func.name}", {func.name}, METH_VARARGS, "{escape_c(func.docstring)}"}},\n'
+    yield f"{' ' * INDENT}{{NULL, NULL, 0, NULL}},\n"
+    yield "};\n\n"
 
 
 class Function(expression.Expression):
@@ -283,10 +278,10 @@ class Function(expression.Expression):
     static = 'static ' if self.export else ''
     return f"{static}{self.retType.wrap_variable(self.name)} ({args})\n"
 
-  def function_to_c_string(self, lines):
-    lines.append(self.header_string())
+  def function_to_c_string(self):
+    yield self.header_string()
 
-    self._block.to_c_string(lines, 0)
+    yield from self._block.to_c_string(0)
 
 
 class PythonType(object):
@@ -313,49 +308,47 @@ class PythonType(object):
   def _static_method_array_name(self):
     return f"{self.name}_methods"
 
-  def _emit_methods_and_static_method_array(self, lines):
+  def _emit_methods_and_static_method_array(self):
     for method in self.methods:
-      method.function_to_c_string(lines)
-      lines.append("\n")
+      yield from method.function_to_c_string()
+      yield "\n"
 
-    lines.append("\n")
-    lines.append(f"static PyMethodDef {self._static_method_array_name()}[] = {{\n")
+    yield "\n"
+    yield f"static PyMethodDef {self._static_method_array_name()}[] = {{\n"
     for method in self.methods:
-      lines.append(
-          f'{" " * INDENT}{{"{method.name}", (PyCFunction) {method.name}, METH_VARARGS, "{escape_c(method.docstring)}"}},\n'
-      )
-    lines.append(f"{' ' * INDENT}{{NULL}}\n")
-    lines.append("};\n")
+      yield f'{" " * INDENT}{{"{method.name}", (PyCFunction) {method.name}, METH_VARARGS, "{escape_c(method.docstring)}"}},\n'
+    yield f"{' ' * INDENT}{{NULL}}\n"
+    yield "};\n"
 
   def _type_definition_name(self):
     return f"{self.name}Type"
 
-  def _emit_type_definition(self, lines):
-    lines.append(f"static PyTypeObject {self._type_definition_name()} = {{\n")
-    lines.append(f"{' ' * INDENT}PyVarObject_HEAD_INIT(NULL, 0)\n")
-    lines.append(f"{' ' * INDENT}.tp_name = \"{self.program._module_name()}.{self.name}\",\n")
-    lines.append(f"{' ' * INDENT}.tp_doc = \"{self.docstring}\",\n")
-    lines.append(f"{' ' * INDENT}.tp_basicsize = sizeof({self.struct.to_c_string()}),\n")
+  def _emit_type_definition(self):
+    yield f"static PyTypeObject {self._type_definition_name()} = {{\n"
+    yield f"{' ' * INDENT}PyVarObject_HEAD_INIT(NULL, 0)\n"
+    yield f"{' ' * INDENT}.tp_name = \"{self.program._module_name()}.{self.name}\",\n"
+    yield f"{' ' * INDENT}.tp_doc = \"{self.docstring}\",\n"
+    yield f"{' ' * INDENT}.tp_basicsize = sizeof({self.struct.to_c_string()}),\n"
 
-    lines.append(f"{' ' * INDENT}.tp_itemsize = 0,\n")
-    lines.append(f"{' ' * INDENT}.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,\n")
-    lines.append(f"{' ' * INDENT}.tp_new = PyType_GenericNew,\n")
+    yield f"{' ' * INDENT}.tp_itemsize = 0,\n"
+    yield f"{' ' * INDENT}.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,\n"
+    yield f"{' ' * INDENT}.tp_new = PyType_GenericNew,\n"
     if self._init:
-      lines.append(f"{' ' * INDENT}.tp_init = (initproc) {self._init_function_name()},\n")
-    lines.append(f"{' ' * INDENT}.tp_methods = {self._static_method_array_name()},\n")
+      yield f"{' ' * INDENT}.tp_init = (initproc) {self._init_function_name()},\n"
+    yield f"{' ' * INDENT}.tp_methods = {self._static_method_array_name()},\n"
 
-    lines.append("};\n")
+    yield "};\n"
 
-  def to_c_string_definition(self, lines):
-    self.struct.to_c_string_definition(lines)
-    lines.append("\n")
+  def to_c_string_definition(self):
+    yield from self.struct.to_c_string_definition()
+    yield "\n"
     if self._init:
-      self._init.function_to_c_string(lines)
-      lines.append("\n")
-    self._emit_methods_and_static_method_array(lines)
-    lines.append("\n")
-    self._emit_type_definition(lines)
-    lines.append("\n")
+      yield from self._init.function_to_c_string()
+      yield "\n"
+    yield from self._emit_methods_and_static_method_array()
+    yield "\n"
+    yield from self._emit_type_definition()
+    yield "\n"
 
   def AddMethod(self, name, args):
     mainArg = self._args_arg()
