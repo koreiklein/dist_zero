@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from dist_zero import cgen, errors, expression, capnpgen, types, primitive
 from dist_zero import type_compiler
 
@@ -19,6 +21,17 @@ class ReactiveCompiler(object):
 
     self._type_by_expr = {}
 
+    self._graph_struct = None
+    self._cached_n_exprs = None
+
+    self._top_exprs = None
+    self.expr_to_inputs = None
+    self.expr_to_outputs = None
+    self.expr_index = None
+    self.expr_type = None
+    self._state_types = None
+    self._net = None
+
   def _get_type_for_expr(self, expr):
     if expr not in self._type_by_expr:
       t = self._compute_type(expr)
@@ -26,6 +39,17 @@ class ReactiveCompiler(object):
       return t
     else:
       return self._type_by_expr[expr]
+
+  def state_lvalue(self, vGraph, expr):
+    index = self.expr_index[expr]
+    return cgen.UpdateVar(vGraph).Arrow(self._state_key_in_graph(index))
+
+  def state_rvalue(self, vGraph, expr):
+    index = self.expr_index[expr]
+    return vGraph.Arrow(self._state_key_in_graph(index))
+
+  def get_c_state_type(self, expr):
+    return self.c_types.type_to_state_ctype[self._get_type_for_expr(expr)]
 
   def _compute_type(self, expr):
     if expr.__class__ == expression.Applied:
@@ -51,22 +75,119 @@ class ReactiveCompiler(object):
 
   def _generate_structs(self):
     '''Generate the graph struct in self.program.'''
-    graph_struct = self.program.AddStruct('graph')
-    graph_struct.AddField('current_states', cgen.Void.Star().Array(cgen.Constant(len(self._top_exprs))))
-    graph_struct.AddField('n_missing_inputs', cgen.Int32.Array(cgen.Constant(len(self._top_exprs))))
+    self._graph_struct = self._net.struct
+    self._graph_struct.AddField('n_missing_inputs', cgen.Int32.Array(self._n_exprs()))
+
+    for i, expr in enumerate(self._top_exprs):
+      c_state_type = self.get_c_state_type(expr)
+      self._graph_struct.AddField(self._state_key_in_graph(i), c_state_type)
+
+  def _state_key_in_graph(self, index):
+    return f'state_{index}'
+
+  def _n_exprs(self):
+    if self._cached_n_exprs is None:
+      self._cached_n_exprs = cgen.Constant(len(self._top_exprs))
+
+    return self._cached_n_exprs
 
   def _generate_initialize_root_graph(self):
     '''Generate code in self.program defining the InitializeRootGraph function.'''
     self._generate_structs()
 
-    initialize = self.program.AddExternalFunction(
-        'InitializeRootGraph', [], docstring="Initialize and return a root graph object.")
+    init = self._net.AddInit()
+
+    for i, expr in enumerate(self._top_exprs):
+      init.AddAssignment(cgen.UpdateVar(init.SelfArg()).Arrow('n_missing_inputs').Sub(cgen.Constant(i)), cgen.MinusOne)
+
+    init.AddReturn(cgen.PyLong_FromLong(cgen.Constant(0)))
+
+  def _initialize_state_function_name(self, index):
+    return f"initialize_state_{index}"
+
+  def _subscribe_function_name(self, index):
+    return f"subscribe_to_{index}"
+
+  def _generate_initialize_state(self, index):
+    '''
+    Generate the state initialization function for this index.
+
+    It should be called once all the input states have already been populated.
+    '''
+
+    expr = self._top_exprs[index]
+    if expr.__class__ == expression.Input:
+      return # Input expressions do not require an ordinary state initialization function
+
+    vGraph = cgen.Var('graph', self._graph_struct.Star())
+    initialize_state = self.program.AddFunction(
+        name=self._initialize_state_function_name(index), retType=cgen.Void, args=[vGraph])
+
+    expr.generate_initialize_state(self, initialize_state, vGraph)
+
+  def _generate_subscribe(self, index):
+    '''
+    Generate the function to subscribe on this index.
+
+    It will return true iff the expression at this index has a state.
+    '''
+    expr = self._top_exprs[index]
+    if expr.__class__ == expression.Input:
+      self._generate_subscribe_input(index, expr)
+    else:
+      self._generate_subscribe_noninput(index, expr)
+
+  def _generate_subscribe_input(self, index, expr):
+    vGraph = cgen.Var('graph', self._graph_struct.Star())
+    subscribe = self.program.AddFunction(name=self._subscribe_function_name(index), retType=cgen.Int32, args=[vGraph])
+
+    # Inputs will have their n_missing_inputs value set to 0 only after they have been initialized.
+    subscribe.AddReturn(vGraph.Arrow('n_missing_inputs').Sub(cgen.Constant(index)) == cgen.Zero)
+
+  def _generate_subscribe_noninput(self, index, expr):
+    vGraph = cgen.Var('graph', self._graph_struct.Star())
+    subscribe = self.program.AddFunction(name=self._subscribe_function_name(index), retType=cgen.Int32, args=[vGraph])
+
+    missingInputsI = vGraph.Arrow('n_missing_inputs').Sub(cgen.Constant(index))
+    updateMissingInputsI = cgen.UpdateVar(vGraph).Arrow('n_missing_inputs').Sub(cgen.Constant(index))
+
+    ifAlreadySubscribed = subscribe.AddIf(missingInputsI >= cgen.Zero)
+    ifAlreadySubscribed.consequent.AddReturn(missingInputsI == cgen.Zero)
+    whenNotAlreadySubscribed = ifAlreadySubscribed.alternate
+
+    nMissingInputs = cgen.Var('n_missing_inputs', cgen.Int32)
+    whenNotAlreadySubscribed.AddAssignment(
+        cgen.CreateVar(nMissingInputs), cgen.Constant(len(self.expr_to_inputs[expr])))
+
+    for inputExpr in self.expr_to_inputs[expr]:
+      inputSubscribeFunction = cgen.Var(self._subscribe_function_name(self.expr_index[inputExpr]), None)
+      ifInputIsReady = whenNotAlreadySubscribed.AddIf(inputSubscribeFunction(vGraph))
+      ifInputIsReady.consequent.AddAssignment(cgen.UpdateVar(nMissingInputs), nMissingInputs - cgen.One)
+
+    whenNotAlreadySubscribed.AddAssignment(updateMissingInputsI, nMissingInputs)
+
+    ifInputsAreSubscribed = whenNotAlreadySubscribed.AddIf(nMissingInputs == cgen.Zero)
+    ifInputsAreSubscribed.alternate.AddReturn(cgen.false)
+    whenInputsAreSubscribed = ifInputsAreSubscribed.consequent
+
+    initializeFunction = cgen.Var(self._initialize_state_function_name(self.expr_index[expr]), None)
+    whenInputsAreSubscribed.AddAssignment(None, initializeFunction(vGraph))
+    whenInputsAreSubscribed.AddReturn(cgen.true)
 
   def compile(self, output_key_to_norm_expr):
     self._output_key_to_norm_expr = output_key_to_norm_expr
-    self._top_exprs = _Topsorter(list(output_key_to_norm_expr.values())).topsort()
+    topsorter = _Topsorter(list(output_key_to_norm_expr.values()))
+    self._top_exprs = topsorter.topsort()
+    self.expr_to_inputs = topsorter.expr_to_inputs
+    self.expr_to_outputs = topsorter.expr_to_outputs
+    self.expr_index = {}
+    for i, expr in enumerate(self._top_exprs):
+      self.expr_index[expr] = i
 
     self._state_types = [self._get_type_for_expr(expr) for expr in self._top_exprs]
+    self.expr_type = dict(zip(self._top_exprs, self._state_types))
+
+    self._net = self.program.AddPythonType(name='Net', docstring=f"For running the {self.name} reactive network.")
 
     # Add c types for all
     for t in self._state_types:
@@ -84,10 +205,16 @@ class ReactiveCompiler(object):
     self.protos = self.capnp_types.capnp
 
     self._generate_initialize_root_graph()
+
+    for i in range(0, len(self._top_exprs)):
+      self._generate_initialize_state(i)
+
+    for i in range(0, len(self._top_exprs)):
+      self._generate_subscribe(i)
+
+    print(self.program)
     import ipdb
     ipdb.set_trace()
-
-    print(self.program.to_c_string())
 
     module = self.program.build_and_import()
     return module.InitializeRootGraph()
@@ -102,9 +229,16 @@ class _Topsorter(object):
     self.active = set()
     self.result = []
 
+    self.expr_to_inputs = {}
+    self.expr_to_outputs = defaultdict(list)
+
   def topsort(self):
     for expr in self.root_exprs:
       self._visit(expr)
+
+    for expr, inputExprs in self.expr_to_inputs.items():
+      for inputExpr in inputExprs:
+        self.expr_to_outputs[inputExpr].append(expr)
 
     return self.result
 
@@ -124,11 +258,14 @@ class _Topsorter(object):
 
   def _visit_all_kids(self, expr):
     if expr.__class__ == expression.Applied:
+      self.expr_to_inputs[expr] = [expr.arg]
       self._visit(expr.arg)
     elif expr.__class__ == expression.Product:
+      self.expr_to_inputs[expr] = []
       for key, kid in expr.items:
+        self.expr_to_inputs[expr].append(kid)
         self._visit(kid)
-    elif expr.__class__ in [expression.Input, expression.Prim]:
-      pass
+    elif expr.__class__ == expression.Input:
+      self.expr_to_inputs[expr] = []
     else:
       raise errors.InternalError(f"Unrecognized type of normalized expression {expr.__class__}.")

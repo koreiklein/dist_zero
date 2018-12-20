@@ -1,4 +1,5 @@
 from .common import INDENT, escape_c
+from . import lvalue
 
 
 class Expression(object):
@@ -7,6 +8,24 @@ class Expression(object):
 
   def to_c_string(self, root=False):
     raise NotImplementedError()
+
+  def Cast(self, type):
+    return Cast(self, type)
+
+  def Deref(self):
+    return self.to_component_rvalue().Deref()
+
+  def Dot(self, name):
+    return self.to_component_rvalue().Dot(name)
+
+  def Arrow(self, name):
+    return self.to_component_rvalue().Arrow(name)
+
+  def Sub(self, i):
+    return self.to_component_rvalue().Sub(i)
+
+  def to_component_rvalue(self):
+    return ComponentRvalue(self, [])
 
   def __call__(self, *args):
     return Call(self, args)
@@ -74,6 +93,39 @@ class Sizeof(Expression):
     return f"sizeof({self.base_type.to_c_string()})"
 
 
+class ComponentRvalue(Expression):
+  def __init__(self, base, accessors):
+    self.base = base
+    self.accessors = accessors
+
+  def _extend(self, accessor):
+    accessors = list(self.accessors)
+    accessors.append(accessor)
+    return ComponentRvalue(base=self.base, accessors=accessors)
+
+  def Deref(self):
+    return self._extend(lvalue.Deref)
+
+  def Dot(self, name):
+    return self._extend(lvalue.Dot(name))
+
+  def Arrow(self, name):
+    return self._extend(lvalue.Arrow(name))
+
+  def Sub(self, i):
+    return self._extend(lvalue.Sub(i))
+
+  def add_includes(self, program):
+    self.base.add_includes(program)
+
+  def to_c_string(self, root=False):
+    result = self.base.to_c_string(root=True)
+    for accessor in self.accessors:
+      result = accessor.access_variable(result)
+
+    return result
+
+
 class UnOp(Expression):
   def __init__(self, base_expression, op):
     if not isinstance(base_expression, Expression):
@@ -104,6 +156,9 @@ class Constant(Expression):
 
 true = Constant(1)
 false = Constant(0)
+
+Zero, One, Two, Three, Four, Five = [Constant(i) for i in range(6)]
+MinusOne = Constant(-1)
 
 
 class StrConstant(Expression):
@@ -193,13 +248,30 @@ class _NULL(Expression):
 NULL = _NULL()
 
 
+class Cast(Expression):
+  def __init__(self, base, type):
+    self.base = base
+    self.type = type
+
+  def add_includes(self, program):
+    self.base.add_includes(program)
+    self.type.add_includes(program)
+
+  def to_c_string(self, root=False):
+    if root:
+      return f"({self.type.to_c_string()}) {self.base.to_c_string(root=False)}"
+    else:
+      return f"(({self.type.to_c_string()}) {self.base.to_c_string(root=False)})"
+
+
 class Var(Expression):
   def __init__(self, name, type):
     self.name = name
     self.type = type
 
   def add_includes(self, program):
-    self.type.add_includes(program)
+    if self.type is not None:
+      self.type.add_includes(program)
 
   def to_c_string(self, root=False):
     return self.name
@@ -207,3 +279,6 @@ class Var(Expression):
 
 PyArg_ParseTuple = Var("PyArg_ParseTuple", None)
 PyLong_FromLong = Var("PyLong_FromLong", None)
+PyBool_FromLong = Var("PyBool_FromLong", None)
+
+calloc = Var("calloc", None)

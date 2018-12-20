@@ -233,6 +233,12 @@ class Function(expression.Expression):
     self.args = args
     self._block = statement.Block(self.program, root=True)
 
+  def SelfArg(self):
+    if len(self.args) >= 1 and self.args[0].name == 'self':
+      return self.args[0]
+    else:
+      raise RuntimeError("Function does not have a first 'self' argument")
+
   def generate_parse_external_args(self, args, mainArg):
     for arg in args:
       self.AddDeclaration(lvalue.CreateVar(arg))
@@ -258,6 +264,9 @@ class Function(expression.Expression):
   def AddReturn(self, *args, **kwargs):
     return self._block.AddReturn(*args, **kwargs)
 
+  def AddReturnVoid(self, *args, **kwargs):
+    return self._block.AddReturnVoid(*args, **kwargs)
+
   def AddIf(self, *args, **kwargs):
     return self._block.AddIf(*args, **kwargs)
 
@@ -281,7 +290,7 @@ class Function(expression.Expression):
   def function_to_c_string(self):
     yield self.header_string()
 
-    yield from self._block.to_c_string(INDENT)
+    yield from self._block.to_c_string('')
 
 
 class PythonType(object):
@@ -361,8 +370,9 @@ class PythonType(object):
 
   def AddInit(self):
     arg_kwargs = expression.Var('kwargs', type.PyObject.Star())
+    mainArg = self._args_arg()
 
-    args = [self._self_arg(), self._args_arg(), arg_kwargs]
-    result = Function(self.program, self._init_function_name(), type.MachineInt, args, export=True)
+    result = Function(
+        self.program, self._init_function_name(), type.MachineInt, [self._self_arg(), mainArg, arg_kwargs], export=True)
     self._init = result
     return result

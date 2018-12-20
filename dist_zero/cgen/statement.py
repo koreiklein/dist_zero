@@ -10,15 +10,27 @@ class Block(object):
 
   def to_c_string(self, indent):
     if len(self._statements) == 1 and not self.root:
-      yield from self._statements[0].to_c_string(indent + INDENT)
+      if isinstance(self._statements[0], str):
+        yield indent + INDENT + self._statements[0]
+      else:
+        yield from self._statements[0].to_c_string(indent + INDENT)
     else:
       yield f"{indent}{{\n"
       for statement in self._statements:
-        yield from statement.to_c_string(indent + INDENT)
+        if isinstance(statement, str):
+          yield indent + INDENT + statement
+        else:
+          yield from statement.to_c_string(indent + INDENT)
       yield f"{indent}}}\n"
+
+  def AddCString(self, s):
+    self._statements.append(s)
 
   def AddReturn(self, rvalue):
     self._statements.append(Return(rvalue))
+
+  def AddReturnVoid(self):
+    self._statements.append('return;\n')
 
   def AddSwitch(self, switch_on):
     result = Switch(switch_on, program=self.program)
@@ -46,7 +58,8 @@ class Block(object):
     self._statements.append(Declaration(lvalue))
 
   def AddAssignment(self, lvalue, rvalue):
-    lvalue.add_includes(self.program)
+    if lvalue is not None:
+      lvalue.add_includes(self.program)
     rvalue.add_includes(self.program)
     self._statements.append(Assignment(lvalue, rvalue))
 
@@ -135,7 +148,7 @@ class If(Statement):
     return self._alternate
 
   def to_c_string(self, indent):
-    yield f"{indent}if {self.condition.to_c_string()}\n"
+    yield f"{indent}if ({self.condition.to_c_string(root=True)})\n"
     if self._consequent is not None:
       yield from self._consequent.to_c_string(indent)
 
@@ -166,4 +179,7 @@ class Assignment(Statement):
     self.rvalue = rvalue
 
   def to_c_string(self, indent):
-    yield f"{indent}{self.lvalue.to_c_string()} = {self.rvalue.to_c_string(root=True)};\n"
+    if self.lvalue is None:
+      yield f"{indent}{self.rvalue.to_c_string(root=True)};\n"
+    else:
+      yield f"{indent}{self.lvalue.to_c_string()} = {self.rvalue.to_c_string(root=True)};\n"
