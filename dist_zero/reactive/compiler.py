@@ -30,6 +30,8 @@ class ReactiveCompiler(object):
     self.expr_index = None
     self.expr_type = None
     self._state_types = None
+    self._input_exprs = None
+    self.protos = None
     self._net = None
 
   def _get_type_for_expr(self, expr):
@@ -92,7 +94,7 @@ class ReactiveCompiler(object):
     return self._cached_n_exprs
 
   def _generate_initialize_root_graph(self):
-    '''Generate code in self.program defining the InitializeRootGraph function.'''
+    '''Generate code in self.program defining the Net type.'''
     self._generate_structs()
 
     init = self._net.AddInit()
@@ -107,6 +109,15 @@ class ReactiveCompiler(object):
 
   def _subscribe_function_name(self, index):
     return f"subscribe_to_{index}"
+
+  def _produce_function_name(self, index):
+    return f"produce_on_{index}"
+
+  def _on_input_function_name(self, expr):
+    return f"OnInput_{expr.name}"
+
+  def _on_output_function_name(self, key):
+    return f"OnOutput_{key}"
 
   def _generate_initialize_state(self, index):
     '''
@@ -125,9 +136,60 @@ class ReactiveCompiler(object):
 
     expr.generate_initialize_state(self, initialize_state, vGraph)
 
+  def _generate_produce(self, index):
+    '''
+    Generate the produce function in c for this expression index.
+    This function will only be called after the state for the expression has been initialized and its
+      n_missing_inputs variable set to zero.
+    Calling it ensures that any expression enabled by the setting of this state will be initialized and its
+    produced function will be called.
+    '''
+    vGraph = cgen.Var('graph', self._graph_struct.Star())
+    produce = self.program.AddFunction(name=self._produce_function_name(index), retType=cgen.Void, args=[vGraph])
+
+    expr = self._top_exprs[index]
+    for output_expr in self.expr_to_outputs[expr]:
+      output_index = self.expr_index[output_expr]
+
+      vNMissingInputs = vGraph.Arrow('n_missing_inputs').Sub(cgen.Constant(output_index))
+      whenSubscribed = produce.AddIf(vNMissingInputs >= cgen.Zero).consequent
+
+      whenSubscribed.AddAssignment(
+          cgen.UpdateVar(vGraph).Arrow('n_missing_inputs').Sub(cgen.Constant(output_index)), vNMissingInputs - cgen.One)
+
+      whenReady = whenSubscribed.AddIf(vNMissingInputs == cgen.Zero).consequent
+      initializeFunction = cgen.Var(self._initialize_state_function_name(output_index), None)
+      produceFunction = cgen.Var(self._produce_function_name(output_index), None)
+      whenReady.AddAssignment(None, initializeFunction(vGraph))
+      whenReady.AddAssignment(None, produceFunction(vGraph))
+
+  def _generate_on_output(self, key, expr):
+    '''
+    Generate the OnOutput_{key} function in c for ``expr``.
+    '''
+    on_output = self._net.AddMethod(name=self._on_output_function_name(key), args=None)
+
+  def _generate_on_input(self, expr):
+    '''
+    Generate the OnInput_{name} function in c for ``expr``.
+    '''
+    vBuf = cgen.Var('buf', cgen.Char.Star())
+    vBuflen = cgen.Var('buflen', cgen.MachineInt)
+
+    on_input = self._net.AddMethod(name=self._on_input_function_name(expr), args=None) # We'll do our own arg parsing
+    vGraph = on_input.SelfArg()
+    vArgsArg = on_input.ArgsArg()
+
+    on_input.AddDeclaration(cgen.CreateVar(vBuf))
+    on_input.AddDeclaration(cgen.CreateVar(vBuflen))
+
+    whenParseFail = on_input.AddIf(
+        cgen.PyArg_ParseTuple(vArgsArg, cgen.StrConstant("s#"), vBuf.Address(), vBuflen.Address()).Negate()).consequent
+    whenParseFail.AddReturn(cgen.NULL)
+
   def _generate_subscribe(self, index):
     '''
-    Generate the function to subscribe on this index.
+    Generate the function to subscribe on this index when one of its outputs is subscribed to.
 
     It will return true iff the expression at this index has a state.
     '''
@@ -194,12 +256,14 @@ class ReactiveCompiler(object):
       self.c_types.ensure_root_type(t)
 
     # Add capnproto types for outputs
-    for output in self._output_key_to_norm_expr.values():
-      self.capnp_types.ensure_root_type(self._get_type_for_expr(output))
+    for expr in self._output_key_to_norm_expr.values():
+      self.capnp_types.ensure_root_type(self._get_type_for_expr(expr))
 
     # Add capnproto types for inputs
+    self._input_exprs = []
     for expr in self._top_exprs:
       if expr.__class__ == expression.Input:
+        self._input_exprs.append(expr)
         self.capnp_types.ensure_root_type(self._get_type_for_expr(expr))
 
     self.protos = self.capnp_types.capnp
@@ -212,12 +276,17 @@ class ReactiveCompiler(object):
     for i in range(0, len(self._top_exprs)):
       self._generate_subscribe(i)
 
-    print(self.program)
-    import ipdb
-    ipdb.set_trace()
+    for i in range(len(self._top_exprs) - 1, -1, -1):
+      self._generate_produce(i)
+
+    for expr in self._input_exprs:
+      self._generate_on_input(expr)
+
+    for key, expr in self._output_key_to_norm_expr.items():
+      self._generate_on_output(key, expr)
 
     module = self.program.build_and_import()
-    return module.InitializeRootGraph()
+    return module.Net()
 
 
 class _Topsorter(object):

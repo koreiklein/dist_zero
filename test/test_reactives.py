@@ -5,7 +5,8 @@ from dist_zero import recorded, types, expression, reactive, primitive
 
 class TestMultiplicativeReactive(object):
   def test_produce_inputs(self):
-    net = reactive.ReactiveCompiler(name='test_simple_addition').compile({
+    compiler = reactive.ReactiveCompiler(name='test_simple_addition')
+    net = compiler.compile({
         'output':
         expression.Applied(
             func=primitive.Plus(types.Int32),
@@ -16,16 +17,15 @@ class TestMultiplicativeReactive(object):
         )
     })
 
-    null_output = net.Desire_output()
-    assert null_output.IsNull()
+    null_output = net.OnOutput_output()
+    assert not null_output
 
-    null_output = net.Produce_a(2)
-    assert null_output.IsNull()
+    null_output = net.OnInput_a(2)
+    assert not null_output
 
-    first_output = net.Produce_b(3)
-    assert not (first_output.IsNull())
+    first_output = net.OnInput_b(3)
 
-    assert 5 == first_output.Get_output()
+    assert 5 == first_output['output']
 
     # FIXME(KK): Continue by submitting transitions to net
 

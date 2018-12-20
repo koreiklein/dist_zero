@@ -1,3 +1,7 @@
+from dist_zero import errors
+from . import expression
+
+
 class Lvalue(object):
   def add_includes(self, program):
     raise RuntimeError(f"Abstract superclass {self.__class__}")
@@ -12,6 +16,8 @@ class Lvalue(object):
     return self.to_component_lvalue().Arrow(name)
 
   def Sub(self, i):
+    if not isinstance(i, expression.Expression):
+      raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
     return self.to_component_lvalue().Sub(i)
 
   def to_component_lvalue(self):
@@ -47,8 +53,10 @@ class ComponentLvalue(Lvalue):
   def Arrow(self, name):
     return self._extend(Arrow(name))
 
-  def Sub(self, name):
-    return self._extend(Sub(name))
+  def Sub(self, i):
+    if not isinstance(i, expression.Expression):
+      raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
+    return self._extend(Sub(i))
 
 
 class Accessor(object):

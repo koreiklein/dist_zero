@@ -239,15 +239,21 @@ class Function(expression.Expression):
     else:
       raise RuntimeError("Function does not have a first 'self' argument")
 
+  def ArgsArg(self):
+    if len(self.args) >= 2 and self.args[1].name == 'args':
+      return self.args[1]
+    else:
+      raise RuntimeError("Function does not have a second 'args' argument")
+
   def generate_parse_external_args(self, args, mainArg):
     for arg in args:
       self.AddDeclaration(lvalue.CreateVar(arg))
 
     format_string = expression.StrConstant(''.join(arg.type.parsing_format_string() for arg in args))
-    fif = self.AddIf(
+    whenParseFail = self.AddIf(
         expression.Call(expression.PyArg_ParseTuple,
-                        [mainArg, format_string] + [arg.Address() for arg in args]).Negate())
-    fif.consequent.AddReturn(expression.NULL)
+                        [mainArg, format_string] + [arg.Address() for arg in args]).Negate()).consequent
+    whenParseFail.AddReturn(expression.NULL)
 
   def to_c_string(self, root=False):
     return self.name
@@ -363,7 +369,8 @@ class PythonType(object):
     mainArg = self._args_arg()
     result = Function(self.program, name, type.PyObject.Star(), [self._self_arg(), mainArg], export=True)
 
-    result.generate_parse_external_args(args=args, mainArg=mainArg)
+    if args is not None:
+      result.generate_parse_external_args(args=args, mainArg=mainArg)
 
     self.methods.append(result)
     return result

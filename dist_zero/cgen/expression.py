@@ -1,3 +1,5 @@
+from dist_zero import errors
+
 from .common import INDENT, escape_c
 from . import lvalue
 
@@ -22,6 +24,8 @@ class Expression(object):
     return self.to_component_rvalue().Arrow(name)
 
   def Sub(self, i):
+    if not isinstance(i, Expression):
+      raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
     return self.to_component_rvalue().Sub(i)
 
   def to_component_rvalue(self):
@@ -113,6 +117,8 @@ class ComponentRvalue(Expression):
     return self._extend(lvalue.Arrow(name))
 
   def Sub(self, i):
+    if not isinstance(i, Expression):
+      raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
     return self._extend(lvalue.Sub(i))
 
   def add_includes(self, program):
