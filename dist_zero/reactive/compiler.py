@@ -190,6 +190,9 @@ class ReactiveCompiler(object):
 
     init.AddReturn(cgen.Constant(0))
 
+  def _write_output_state_function_name(self, index):
+    return f"write_output_state{index}"
+
   def _initialize_state_function_name(self, index):
     return f"initialize_state_{index}"
 
@@ -252,6 +255,19 @@ class ReactiveCompiler(object):
   def _pyerr_from_string(self, s):
     return cgen.PyErr_SetString(cgen.PyExc_RuntimeError, cgen.StrConstant(s))
 
+  def _generate_write_output_state(self, key, expr):
+    '''
+    Generate the write_output_state_{key} function in c for ``expr``.
+    '''
+    index = self.expr_index[expr]
+    exprType = self._state_types[index]
+    vGraph = cgen.Var('graph', self._graph_struct.Star())
+    write_output_state = self.program.AddFunction(
+        name=self._write_output_state_function_name(index), retType=cgen.PyObject.Star(), args=[vGraph])
+
+    vPythonBytes = exprType.generate_c_state_to_capnp(self, write_output_state, self.state_rvalue(vGraph, expr))
+    write_output_state.AddReturn(vPythonBytes)
+
   def _generate_on_output(self, key, expr):
     '''
     Generate the OnOutput_{key} function in c for ``expr``.
@@ -273,7 +289,12 @@ class ReactiveCompiler(object):
     whenHasState = ifHasState.consequent
 
     outputState = self.state_rvalue(vGraph, expr)
-    vBytes = outputType.generate_c_state_to_capnp(self, whenHasState, outputState)
+
+    vBytes = cgen.Var('result_bytes', cgen.PyObject.Star())
+    getBytes = cgen.Var(self._write_output_state_function_name(output_index), None)
+    whenHasState.AddAssignment(cgen.CreateVar(vBytes), getBytes(vGraph))
+
+    whenHasState.AddIf(getBytes == cgen.NULL).consequent.AddReturn(cgen.NULL)
 
     whenHasState.Newline().AddIf(
         cgen.MinusOne == cgen.PyDict_SetItemString(vResult, cgen.StrConstant(key), vBytes)).consequent.AddReturn(
@@ -419,6 +440,9 @@ class ReactiveCompiler(object):
 
     for i in range(0, len(self._top_exprs)):
       self._generate_subscribe(i)
+
+    for key, expr in self._output_key_to_norm_expr.items():
+      self._generate_write_output_state(key, expr)
 
     for i in range(len(self._top_exprs) - 1, -1, -1):
       self._generate_produce(i)
