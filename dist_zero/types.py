@@ -171,8 +171,6 @@ class BasicType(Type):
     block.Newline()
 
     block.AddDeclaration(cgen.CreateVar(myStructure))
-    # FIXME(KK): Look into whether this really works for every kind of BasicType we might use.
-    #   This assigment has the same issue as the corresponding assignment in generate_capnp_to_c_state below.
     block.AddAssignment(cgen.UpdateVar(myStructure).Dot('basicState'), stateRvalue)
 
     writeStructure = compiler.type_to_capnp_state_write_function(self)
@@ -183,40 +181,12 @@ class BasicType(Type):
     block.AddAssignment(None, writeStructure(myStructure.Address(), ptr))
 
     (block.AddIf(cgen.Zero != cgen.capn_setp(vCapnPtr, cgen.Zero, ptr.Dot('p'))).consequent.AddAssignment(
-        None, compiler._pyerr_from_string("Failed to capn_setp for root when producing output.")).AddReturn(cgen.NULL))
+        None, compiler.pyerr_from_string("Failed to capn_setp for root when producing output.")).AddReturn(cgen.NULL))
 
     block.Newline()
 
-    vSize = cgen.Var('n_bytes', cgen.MachineInt)
-    vBuf = cgen.Var('result_buf', cgen.UInt8.Star())
-    vWroteBytes = cgen.Var('wrote_bytes', cgen.MachineInt)
-    pyBuffer = cgen.Var('py_buffer_result', cgen.PyObject.Star())
-
-    block.AddDeclaration(cgen.CreateVar(vBuf))
-    block.AddDeclaration(cgen.CreateVar(vWroteBytes))
-    block.AddDeclaration(cgen.CreateVar(pyBuffer))
-    block.AddAssignment(cgen.CreateVar(vSize), cgen.Constant(4096))
-
-    block.Newline()
-
-    loop = block.AddWhile(cgen.true)
-
-    loop.AddAssignment(vBuf, cgen.malloc(vSize).Cast(vBuf.type))
-    (loop.AddIf(vBuf == cgen.NULL).consequent.AddAssignment(
-        None, compiler._pyerr_from_string("malloc failed")).AddReturn(cgen.NULL))
-    loop.AddAssignment(vWroteBytes, cgen.capn_write_mem(vCapn.Address(), vBuf, vSize, cgen.Zero))
-
-    ifsuccess = loop.AddIf(vSize > vWroteBytes)
-    ifsuccess.consequent.AddAssignment(pyBuffer, cgen.PyBytes_FromStringAndSize(vBuf, vWroteBytes))
-    (ifsuccess.consequent.AddIf(pyBuffer == cgen.NULL).consequent.AddAssignment(
-        None, compiler._pyerr_from_string("Could not allocate a python bytes object.")).AddReturn(cgen.NULL))
-    ifsuccess.consequent.AddAssignment(None, cgen.free(vBuf))
-    ifsuccess.consequent.AddBreak()
-
-    loop.AddAssignment(None, cgen.free(vBuf))
-    loop.AddAssignment(cgen.UpdateVar(vSize), vSize * vSize)
-
-    return pyBuffer
+    pythonBytesFromCapn = cgen.Var(compiler._python_bytes_from_capn_function_name(), None)
+    return pythonBytesFromCapn(vCapn.Address())
 
   def generate_capnp_to_c_state(self, compiler, block, capn_ptr_input, output_lvalue):
     ptr = cgen.Var('ptr', compiler.type_to_capnp_state_ptr(self))
@@ -231,7 +201,6 @@ class BasicType(Type):
     block.AddAssignment(cgen.UpdateVar(ptr).Dot('p'), capn_ptr_input)
     block.AddAssignment(None, readStructure(structure.Address(), ptr))
 
-    # FIXME(KK): Look into whether this really works for every kind of BasicType we might use.
     block.AddAssignment(output_lvalue, structure.Dot('basicState'))
 
     block.Newline()

@@ -59,6 +59,7 @@ class ReactiveCompiler(object):
     self.expr_type = None
     self._state_types = None
     self._input_exprs = None
+    self._output_exprs = None # Dictionary from output expression to its list of keys
     self._net = None
 
     self._built_capnp = False
@@ -166,6 +167,10 @@ class ReactiveCompiler(object):
     self._graph_struct = self._net.struct
     self._graph_struct.AddField('n_missing_inputs', cgen.Int32.Array(self._n_exprs()))
 
+    # To hold a python dict of outputs.  This variable is used by chained produce* calls starting
+    # from an OnInput call.
+    self._graph_struct.AddField('turn_outputs', cgen.PyObject.Star())
+
     for i, expr in enumerate(self._top_exprs):
       c_state_type = self.get_c_state_type(expr)
       self._graph_struct.AddField(self._state_key_in_graph(i), c_state_type)
@@ -189,6 +194,9 @@ class ReactiveCompiler(object):
       init.AddAssignment(cgen.UpdateVar(init.SelfArg()).Arrow('n_missing_inputs').Sub(cgen.Constant(i)), cgen.MinusOne)
 
     init.AddReturn(cgen.Constant(0))
+
+  def _python_bytes_from_capn_function_name(self):
+    return "python_bytes_from_capn"
 
   def _write_output_state_function_name(self, index):
     return f"write_output_state{index}"
@@ -237,6 +245,16 @@ class ReactiveCompiler(object):
     produce = self.program.AddFunction(name=self._produce_function_name(index), retType=cgen.Void, args=[vGraph])
 
     expr = self._top_exprs[index]
+
+    if expr in self._output_exprs:
+      getBytes = cgen.Var(self._write_output_state_function_name(index), None)
+      vBytes = cgen.Var('result_bytes', cgen.PyObject.Star())
+      produce.AddAssignment(cgen.CreateVar(vBytes), getBytes(vGraph))
+      produce.AddIf(vBytes == cgen.NULL).consequent.AddReturnVoid()
+      for key in self._output_exprs[expr]:
+        (produce.AddIf(cgen.MinusOne == cgen.PyDict_SetItemString(
+            vGraph.Arrow('turn_outputs'), cgen.StrConstant(key), vBytes)).consequent.AddReturnVoid())
+
     for output_expr in self.expr_to_outputs[expr]:
       output_index = self.expr_index[output_expr]
 
@@ -252,7 +270,9 @@ class ReactiveCompiler(object):
       whenReady.AddAssignment(None, initializeFunction(vGraph))
       whenReady.AddAssignment(None, produceFunction(vGraph))
 
-  def _pyerr_from_string(self, s):
+    produce.AddReturnVoid()
+
+  def pyerr_from_string(self, s):
     return cgen.PyErr_SetString(cgen.PyExc_RuntimeError, cgen.StrConstant(s))
 
   def _generate_write_output_state(self, key, expr):
@@ -282,7 +302,7 @@ class ReactiveCompiler(object):
     on_output.AddAssignment(cgen.CreateVar(vResult), cgen.PyDict_New())
 
     (on_output.AddIf(vResult == cgen.NULL).consequent.AddAssignment(
-        None, self._pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
+        None, self.pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
 
     subscribeFunction = cgen.Var(self._subscribe_function_name(output_index), None)
     ifHasState = on_output.AddIf(subscribeFunction(vGraph))
@@ -294,7 +314,7 @@ class ReactiveCompiler(object):
     getBytes = cgen.Var(self._write_output_state_function_name(output_index), None)
     whenHasState.AddAssignment(cgen.CreateVar(vBytes), getBytes(vGraph))
 
-    whenHasState.AddIf(getBytes == cgen.NULL).consequent.AddReturn(cgen.NULL)
+    whenHasState.AddIf(vBytes == cgen.NULL).consequent.AddReturn(cgen.NULL)
 
     whenHasState.Newline().AddIf(
         cgen.MinusOne == cgen.PyDict_SetItemString(vResult, cgen.StrConstant(key), vBytes)).consequent.AddReturn(
@@ -330,12 +350,13 @@ class ReactiveCompiler(object):
     (on_input.AddIf(
         cgen.Zero != cgen.capn_init_mem(vCapn.Address(), vBuf, vBuflen, cgen.Zero)).consequent.AddAssignment(
             None,
-            self._pyerr_from_string("Failed to initialize struct capn when parsing a message.")).AddReturn(cgen.NULL))
+            self.pyerr_from_string("Failed to initialize struct capn when parsing a message.")).AddReturn(cgen.NULL))
 
     on_input.Newline()
 
     vResult = cgen.Var('result', cgen.PyObject.Star())
     on_input.AddAssignment(cgen.CreateVar(vResult), cgen.PyDict_New())
+    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn_outputs'), vResult)
 
     vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
     on_input.AddAssignment(
@@ -349,7 +370,7 @@ class ReactiveCompiler(object):
     produceState = cgen.Var(self._produce_function_name(index), None)
     on_input.AddAssignment(None, produceState(vGraph))
 
-    # FIXME(KK): Come up with a mechanism whereby the result dictionary is actually populated.
+    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn_outputs'), cgen.NULL)
     on_input.AddReturn(vResult)
 
   def _generate_subscribe(self, index):
@@ -401,6 +422,40 @@ class ReactiveCompiler(object):
     whenInputsAreSubscribed.AddAssignment(None, initializeFunction(vGraph))
     whenInputsAreSubscribed.AddReturn(cgen.true)
 
+  def _generate_python_bytes_from_capnp(self):
+    vCapn = cgen.Var('capn', cgen.Capn.Star())
+    python_bytes_from_capn = self.program.AddFunction(
+        name=self._python_bytes_from_capn_function_name(), retType=cgen.PyObject.Star(), args=[vCapn])
+
+    vSize = cgen.Var('n_bytes', cgen.MachineInt)
+    vBuf = cgen.Var('result_buf', cgen.UInt8.Star())
+    vWroteBytes = cgen.Var('wrote_bytes', cgen.MachineInt)
+    pyBuffer = cgen.Var('py_buffer_result', cgen.PyObject.Star())
+
+    python_bytes_from_capn.AddDeclaration(cgen.CreateVar(vBuf))
+    python_bytes_from_capn.AddDeclaration(cgen.CreateVar(vWroteBytes))
+    python_bytes_from_capn.AddDeclaration(cgen.CreateVar(pyBuffer))
+    python_bytes_from_capn.AddAssignment(cgen.CreateVar(vSize), cgen.Constant(4096))
+
+    python_bytes_from_capn.Newline()
+
+    loop = python_bytes_from_capn.AddWhile(cgen.true)
+
+    loop.AddAssignment(vBuf, cgen.malloc(vSize).Cast(vBuf.type))
+    (loop.AddIf(vBuf == cgen.NULL).consequent.AddAssignment(None, self.pyerr_from_string("malloc failed")).AddReturn(
+        cgen.NULL))
+    loop.AddAssignment(vWroteBytes, cgen.capn_write_mem(vCapn, vBuf, vSize, cgen.Zero))
+
+    ifsuccess = loop.AddIf(vSize > vWroteBytes)
+    ifsuccess.consequent.AddAssignment(pyBuffer, cgen.PyBytes_FromStringAndSize(vBuf, vWroteBytes))
+    (ifsuccess.consequent.AddIf(pyBuffer == cgen.NULL).consequent.AddAssignment(
+        None, self.pyerr_from_string("Could not allocate a python bytes object.")).AddReturn(cgen.NULL))
+    ifsuccess.consequent.AddAssignment(None, cgen.free(vBuf))
+    ifsuccess.consequent.AddReturn(pyBuffer)
+
+    loop.AddAssignment(None, cgen.free(vBuf))
+    loop.AddAssignment(cgen.UpdateVar(vSize), vSize * vSize)
+
   def compile(self, output_key_to_norm_expr):
     self._output_key_to_norm_expr = output_key_to_norm_expr
     topsorter = _Topsorter(list(output_key_to_norm_expr.values()))
@@ -421,7 +476,9 @@ class ReactiveCompiler(object):
       self.c_types.ensure_root_type(t)
 
     # Add capnproto types for outputs
-    for expr in self._output_key_to_norm_expr.values():
+    self._output_exprs = defaultdict(list)
+    for key, expr in self._output_key_to_norm_expr.items():
+      self._output_exprs[expr].append(key)
       self.capnp_types.ensure_root_type(self._get_type_for_expr(expr))
 
     # Add capnproto types for inputs
@@ -434,6 +491,8 @@ class ReactiveCompiler(object):
     self._build_capnp()
 
     self._generate_initialize_root_graph()
+
+    self._generate_python_bytes_from_capnp()
 
     for i in range(0, len(self._top_exprs)):
       self._generate_initialize_state(i)
