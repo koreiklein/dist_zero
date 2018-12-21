@@ -93,6 +93,9 @@ class SimpleCType(CType):
     self.name = name
     self.format_string = format_string
 
+  def __str__(self):
+    return self.name
+
   def wrap_variable(self, varname):
     return f"{self.name} {varname}"
 
@@ -112,6 +115,8 @@ class SimpleCType(CType):
 Void = SimpleCType('void')
 PyObject = SimpleCType('PyObject')
 Char = SimpleCType('char', format_string='c')
+Capn = SimpleCType('struct capn')
+Capn_Ptr = SimpleCType('capn_ptr')
 
 
 class Int(CType):

@@ -4,27 +4,43 @@ from dist_zero import recorded, types, expression, reactive, primitive
 
 
 class TestMultiplicativeReactive(object):
-  def test_produce_inputs(self):
-    compiler = reactive.ReactiveCompiler(name='test_simple_addition')
-    net = compiler.compile({
-        'output':
-        expression.Applied(
-            func=primitive.Plus(types.Int32),
-            arg=expression.Product([
-                ('left', expression.Input('a', types.Int32)),
-                ('right', expression.Input('b', types.Int32)),
-            ]),
-        )
-    })
+  def make_net(self):
+    if not hasattr(self, 'module'):
+      self.inputA = expression.Input('a', types.Int32)
+      self.inputB = expression.Input('b', types.Int32)
+      self.outputExpr = expression.Applied(
+          func=primitive.Plus(types.Int32),
+          arg=expression.Product([
+              ('left', self.inputA),
+              ('right', self.inputB),
+          ]),
+      )
 
-    null_output = net.OnOutput_output()
-    assert not null_output
+      self.compiler = reactive.ReactiveCompiler(name='test_simple_addition')
+      self.module = self.compiler.compile({'output': self.outputExpr})
 
-    null_output = net.OnInput_a(2)
-    assert not null_output
+      self.capnpForA = self.compiler.capnp_state_module(self.inputA)
+      self.capnpForB = self.compiler.capnp_state_module(self.inputB)
+      self.capnpForOutput = self.compiler.capnp_state_module(self.outputExpr)
 
-    first_output = net.OnInput_b(3)
+    return self.module.Net()
 
+  def test_output_then_input(self):
+    net = self.make_net()
+
+    assert not net.OnOutput_output()
+    assert not net.OnInput_a(self.capnpForA.new_message(basicState=2).to_bytes())
+    first_output = net.OnInput_b(self.capnpForA.new_message(basicState=3).to_bytes())
+    assert 5 == first_output['output']
+
+    # FIXME(KK): Continue by submitting transitions to net
+
+  def test_input_then_output(self):
+    net = self.make_net()
+
+    assert not net.OnInput_a(self.capnpForA.new_message(basicState=2).to_bytes())
+    assert not net.OnInput_b(self.capnpForA.new_message(basicState=3).to_bytes())
+    first_output = net.OnOutput_output()
     assert 5 == first_output['output']
 
     # FIXME(KK): Continue by submitting transitions to net

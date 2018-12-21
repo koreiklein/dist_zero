@@ -11,6 +11,9 @@ class Expression(object):
   def to_c_string(self, root=False):
     raise NotImplementedError()
 
+  def __repr__(self):
+    return str(self)
+
   def Cast(self, type):
     return Cast(self, type)
 
@@ -275,6 +278,9 @@ class Var(Expression):
     self.name = name
     self.type = type
 
+  def __str__(self):
+    return f"Var(\"{self.name}\": {self.type})"
+
   def add_includes(self, program):
     if self.type is not None:
       self.type.add_includes(program)
@@ -287,4 +293,16 @@ PyArg_ParseTuple = Var("PyArg_ParseTuple", None)
 PyLong_FromLong = Var("PyLong_FromLong", None)
 PyBool_FromLong = Var("PyBool_FromLong", None)
 
+PyDict_New = Var('PyDict_New', None)
+PyDict_SetItemString = Var('PyDict_SetItemString', None)
+
+PyBytes_FromString = Var('PyBytes_FromString', None)
+
+PyExc_RuntimeError = Var('PyExc_RuntimeError', None)
+PyErr_SetString = Var('PyErr_SetString', None)
+
 calloc = Var("calloc", None)
+capn_init_mem = Var("capn_init_mem", None)
+capn_getp = Var("capn_getp", None)
+capn_root = Var("capn_root", None)
+capn_init_malloc = Var("capn_init_malloc", None)

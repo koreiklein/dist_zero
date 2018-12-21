@@ -56,12 +56,14 @@ class Block(object):
   def AddDeclaration(self, lvalue):
     lvalue.add_includes(self.program)
     self._statements.append(Declaration(lvalue))
+    return self
 
   def AddAssignment(self, lvalue, rvalue):
     if lvalue is not None:
       lvalue.add_includes(self.program)
     rvalue.add_includes(self.program)
     self._statements.append(Assignment(lvalue, rvalue))
+    return self
 
 
 class Statement(object):

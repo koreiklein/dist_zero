@@ -10,7 +10,14 @@ from .common import INDENT, INDENT_TWO, escape_c
 
 
 class Program(object):
-  def __init__(self, name, docstring=''):
+  def __init__(self,
+               name,
+               docstring='',
+               include_dirs=None,
+               libraries=None,
+               library_dirs=None,
+               sources=None,
+               includes=None):
     self.name = name
     self.docstring = docstring
     self._python_types = []
@@ -22,7 +29,18 @@ class Program(object):
     self._unions = []
     self.includes = set()
 
+    self._library_dirs = [] if library_dirs is None else library_dirs
+    self._libraries = [] if libraries is None else libraries
+    self._sources = [] if sources is None else sources
+
     self.includes.add("<Python.h>")
+    if includes is not None:
+      for include in includes:
+        self.includes.add(include)
+
+    self._include_dirs = ['include']
+    if include_dirs is not None:
+      self._include_dirs += include_dirs
 
   def cfilename(self):
     return f"{self.name}.c"
@@ -57,11 +75,29 @@ class Program(object):
     with open(distutilsfilename, 'w') as f:
       f.write("from distutils.core import setup, Extension\n")
       f.write(f'module = Extension("{self.name}",\n')
+
       f.write(f'{INDENT}sources=[\n')
       f.write(f'{INDENT_TWO}"{cfilename}",\n')
+      for source in self._sources:
+        f.write(f'{INDENT_TWO}"{source}",\n')
       f.write(f'{INDENT}],\n')
+
+      f.write(f'{INDENT}library_dirs=[\n')
+      for lib in self._library_dirs:
+        f.write(f'{INDENT_TWO}"{lib}",\n')
+      f.write(f'{INDENT}],\n')
+
+      f.write(f'{INDENT}libraries=[\n')
+      for lib in self._libraries:
+        f.write(f'{INDENT_TWO}"{lib}",\n')
+      f.write(f'{INDENT}],\n')
+
       f.write(f'{INDENT}include_dirs=[\n')
-      f.write(f'{INDENT_TWO}"{os.path.realpath(".")}/include/",\n')
+
+      for include_dir in self._include_dirs:
+        path = os.path.join(os.path.realpath("."), include_dir)
+        f.write(f'{INDENT_TWO}"{path}",\n')
+
       f.write(f'{INDENT}],\n')
       f.write(f')\n\n')
       f.write(
@@ -164,13 +200,17 @@ class Program(object):
       yield '\n'
 
     for python_type in self._python_types:
-      yield from python_type.to_c_string_definition()
+      yield from python_type.upper_part_to_c_string_definition()
       yield '\n'
 
     yield '\n'
 
     for func in self._functions:
       yield from func.function_to_c_string()
+      yield '\n'
+
+    for python_type in self._python_types:
+      yield from python_type.lower_part_to_c_string_definition()
       yield '\n'
 
     yield from self.add_python_c_extension_boilerplate()
@@ -354,9 +394,10 @@ class PythonType(object):
 
     yield "};\n"
 
-  def to_c_string_definition(self):
+  def upper_part_to_c_string_definition(self):
     yield from self.struct.to_c_string_definition()
-    yield "\n"
+
+  def lower_part_to_c_string_definition(self):
     if self._init:
       yield from self._init.function_to_c_string()
       yield "\n"

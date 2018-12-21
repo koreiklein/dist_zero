@@ -1,7 +1,11 @@
+import os
 from collections import defaultdict
 
+import capnp
+capnp.remove_import_hook()
+
 from dist_zero import cgen, errors, expression, capnpgen, types, primitive
-from dist_zero import type_compiler
+from dist_zero import type_compiler, settings
 
 
 class ReactiveCompiler(object):
@@ -13,7 +17,29 @@ class ReactiveCompiler(object):
     self.name = name
     self.docstring = docstring
 
-    self.program = cgen.Program(self.name, docstring=self.docstring)
+    self.program = cgen.Program(
+        name=self.name,
+        docstring=self.docstring,
+        includes=[
+            '"capnp_c.h"',
+            #f'"{self._capnp_header_filename()}"',
+            #"<capnp/message.h>",
+            #"<capnp/serialize-packed.h>",
+        ],
+        library_dirs=[
+            settings.CAPNP_INCLUDE_DIR,
+        ],
+        sources=[
+            # FIXME(KK): Surely there must be a better way to set up linkage for the c extension?!
+            os.path.join(settings.CAPNP_INCLUDE_DIR, "capn.c"),
+            os.path.join(settings.CAPNP_INCLUDE_DIR, "capn-malloc.c"),
+            os.path.join(settings.CAPNP_INCLUDE_DIR, "capn-stream.c"),
+        ],
+        libraries=[],
+        include_dirs=[
+            self._capnp_dirname(),
+            settings.CAPNP_INCLUDE_DIR,
+        ])
     self.c_types = type_compiler.CTypeCompiler(self.program)
     self.capnp_types = type_compiler.CapnpTypeCompiler()
 
@@ -33,6 +59,34 @@ class ReactiveCompiler(object):
     self._input_exprs = None
     self.protos = None
     self._net = None
+
+    self._pycapnp_module = None
+
+  def _capnp_filename(self):
+    return f"{self.name}"
+
+  def _capnp_header_filename(self):
+    return f"{self.name}.capnp.h"
+
+  def _capnp_dirname(self):
+    return os.path.join(os.path.realpath('.'), '.tmp', 'capnp')
+
+  def get_pycapnp_module(self):
+    if self._pycapnp_module is None:
+      dirname = self._capnp_dirname()
+      os.makedirs(dirname, exist_ok=True)
+      filename = self._capnp_filename()
+      self.protos.build_in(dirname=dirname, filename=filename)
+
+      self._pycapnp_module = capnp.load(os.path.join(dirname, filename))
+
+    return self._pycapnp_module
+
+  def capnp_state_module(self, expr):
+    t = self._type_by_expr[expr]
+    capnp_module = self.get_pycapnp_module()
+    name = self.capnp_types.type_to_state_ref[t]
+    return capnp_module.__dict__[name]
 
   def _get_type_for_expr(self, expr):
     if expr not in self._type_by_expr:
@@ -102,7 +156,7 @@ class ReactiveCompiler(object):
     for i, expr in enumerate(self._top_exprs):
       init.AddAssignment(cgen.UpdateVar(init.SelfArg()).Arrow('n_missing_inputs').Sub(cgen.Constant(i)), cgen.MinusOne)
 
-    init.AddReturn(cgen.PyLong_FromLong(cgen.Constant(0)))
+    init.AddReturn(cgen.Constant(0))
 
   def _initialize_state_function_name(self, index):
     return f"initialize_state_{index}"
@@ -163,17 +217,46 @@ class ReactiveCompiler(object):
       whenReady.AddAssignment(None, initializeFunction(vGraph))
       whenReady.AddAssignment(None, produceFunction(vGraph))
 
+  def _pyerr_from_string(self, s):
+    return cgen.PyErr_SetString(cgen.PyExc_RuntimeError, cgen.StrConstant(s))
+
   def _generate_on_output(self, key, expr):
     '''
     Generate the OnOutput_{key} function in c for ``expr``.
     '''
     on_output = self._net.AddMethod(name=self._on_output_function_name(key), args=None)
+    outputType = self.expr_type[expr]
+    output_index = self.expr_index[expr]
+
+    vGraph = on_output.SelfArg()
+
+    vResult = cgen.Var('result', cgen.PyObject.Star())
+    on_output.AddAssignment(cgen.CreateVar(vResult), cgen.PyDict_New())
+
+    (on_output.AddIf(vResult == cgen.NULL).consequent.AddAssignment(
+        None, self._pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
+
+    subscribeFunction = cgen.Var(self._subscribe_function_name(output_index), None)
+    ifHasState = on_output.AddIf(subscribeFunction(vGraph))
+    whenHasState = ifHasState.consequent
+
+    outputState = self.state_rvalue(vGraph, expr)
+    vBytes = outputType.generate_c_state_to_capnp(whenHasState, outputState)
+
+    whenHasState.AddIf(
+        cgen.MinusOne == cgen.PyDict_SetItemString(vResult, cgen.StrConstant(key), vBytes)).consequent.AddReturn(
+            cgen.NULL)
+
+    on_output.AddReturn(vResult)
 
   def _generate_on_input(self, expr):
     '''
     Generate the OnInput_{name} function in c for ``expr``.
     '''
-    vBuf = cgen.Var('buf', cgen.Char.Star())
+    index = self.expr_index[expr]
+    inputType = self.expr_type[expr]
+
+    vBuf = cgen.Var('buf', cgen.UInt8.Star())
     vBuflen = cgen.Var('buflen', cgen.MachineInt)
 
     on_input = self._net.AddMethod(name=self._on_input_function_name(expr), args=None) # We'll do our own arg parsing
@@ -186,6 +269,15 @@ class ReactiveCompiler(object):
     whenParseFail = on_input.AddIf(
         cgen.PyArg_ParseTuple(vArgsArg, cgen.StrConstant("s#"), vBuf.Address(), vBuflen.Address()).Negate()).consequent
     whenParseFail.AddReturn(cgen.NULL)
+
+    vResult = cgen.Var('result', cgen.PyObject.Star())
+    on_input.AddAssignment(cgen.CreateVar(vResult), cgen.PyDict_New())
+
+    #inputType.generate_capnp_to_c_state(on_input, vCapnPtr, self.state_lvalue(vGraph, expr))
+
+    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('n_missing_inputs').Sub(cgen.Constant(index)), cgen.Zero)
+    # FIXME(KK): Come up with a mechanism whereby the result dictionary is actually populated.
+    on_input.AddReturn(vResult)
 
   def _generate_subscribe(self, index):
     '''
@@ -286,7 +378,7 @@ class ReactiveCompiler(object):
       self._generate_on_output(key, expr)
 
     module = self.program.build_and_import()
-    return module.Net()
+    return module
 
 
 class _Topsorter(object):

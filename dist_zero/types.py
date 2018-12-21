@@ -41,7 +41,21 @@ class Type(object):
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
   def equivalent(self, other):
-    raise RuntimeError('Abstract Superclass')
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
+  def generate_c_state_to_capnp(self, block, stateRvalue):
+    '''
+    Generate code in ``block`` to write the capnp data from ``stateRValue``.
+    Return the c variable with the capnp data.
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
+  def generate_capnp_to_c_state(self, block, capn_ptr_input, output_lvalue):
+    '''
+    Generate code in ``block`` to write to the ``output_lvalue`` state using the ``capn_ptr_input``
+    capn_ptr variable containing the input capnp buffer.
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
   def __init__(self):
     self.transition_identifiers = set(['standard'])
@@ -130,12 +144,24 @@ class FunctionType(Type):
 
 class BasicType(Type):
   def __init__(self, capnp_state, c_state_type, capnp_transition_type, c_transition_type):
+    self.name = f"Basic{_gen_name()}"
     self.capnp_state = capnp_state
     self.c_state_type = c_state_type
     self.capnp_transition_type = capnp_transition_type
     self.c_transition_type = c_transition_type
 
+    self._wrote_capnp_transition_definition = False
+    self._wrote_capnp_state_definition = False
+
     super(BasicType, self).__init__()
+
+  def generate_c_state_to_capnp(self, block, stateRvalue):
+    # FIXME(KK): Implement this
+    return cgen.PyBytes_FromString(cgen.StrConstant("NOT YET IMPLEMENTED"))
+
+  def generate_capnp_to_c_state(self, block, capn_ptr_input, output_lvalue):
+    # FIXME(KK): Implement this
+    pass
 
   def _write_c_transitions_definition(self, compiler):
     return self.c_transition_type
@@ -144,7 +170,7 @@ class BasicType(Type):
     return self.c_state_type
 
   def _capnp_transitions_structure_name(self):
-    return self.capnp_transition_type
+    return f"{self.name}Transitions"
 
   def equivalent(self, other):
     return other.__class__ == BasicType and \
@@ -153,14 +179,18 @@ class BasicType(Type):
         self.capnp_transition_type == other.capnp_transition_type and \
         self.c_transition_type == other.c_transition_type
 
-  def _write_capnp_transition_definition(self, compiler, ident, union):
-    pass
-
   def _write_c_transition_definition(self, compiler, ident, union, enum):
     pass
 
+  def _write_capnp_transition_definition(self, compiler, ident, union):
+    union.AddField('basicTransition', self.capnp_transition_type)
+
   def _write_capnp_state_definition(self, compiler):
-    return self.capnp_state
+    if not self._wrote_capnp_state_definition:
+      self._wrote_capnp_state_definition = True
+      struct = compiler.capnp.AddStructure(self.name)
+      struct.AddField('basicState', self.capnp_state)
+    return self.name
 
 
 Int8 = BasicType('Int8', c_state_type=cgen.Int8, capnp_transition_type='Int8', c_transition_type=cgen.Int8)
