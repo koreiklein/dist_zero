@@ -185,6 +185,8 @@ class BasicType(Type):
     (block.AddIf(cgen.Zero != cgen.capn_setp(vCapnPtr, cgen.Zero, ptr.Dot('p'))).consequent.AddAssignment(
         None, compiler._pyerr_from_string("Failed to capn_setp for root when producing output.")).AddReturn(cgen.NULL))
 
+    block.Newline()
+
     vSize = cgen.Var('n_bytes', cgen.MachineInt)
     vBuf = cgen.Var('result_buf', cgen.UInt8.Star())
     vWroteBytes = cgen.Var('wrote_bytes', cgen.MachineInt)
@@ -195,15 +197,20 @@ class BasicType(Type):
     block.AddDeclaration(cgen.CreateVar(pyBuffer))
     block.AddAssignment(cgen.CreateVar(vSize), cgen.Constant(4096))
 
+    block.Newline()
+
     loop = block.AddWhile(cgen.true)
 
-    loop.AddAssignment(vBuf, cgen.malloc(vSize))
+    loop.AddAssignment(vBuf, cgen.malloc(vSize).Cast(vBuf.type))
+    (loop.AddIf(vBuf == cgen.NULL).consequent.AddAssignment(
+        None, compiler._pyerr_from_string("malloc failed")).AddReturn(cgen.NULL))
     loop.AddAssignment(vWroteBytes, cgen.capn_write_mem(vCapn.Address(), vBuf, vSize, cgen.Zero))
 
     ifsuccess = loop.AddIf(vSize > vWroteBytes)
     ifsuccess.consequent.AddAssignment(pyBuffer, cgen.PyBytes_FromStringAndSize(vBuf, vWroteBytes))
     (ifsuccess.consequent.AddIf(pyBuffer == cgen.NULL).consequent.AddAssignment(
         None, compiler._pyerr_from_string("Could not allocate a python bytes object.")).AddReturn(cgen.NULL))
+    ifsuccess.consequent.AddAssignment(None, cgen.free(vBuf))
     ifsuccess.consequent.AddBreak()
 
     loop.AddAssignment(None, cgen.free(vBuf))

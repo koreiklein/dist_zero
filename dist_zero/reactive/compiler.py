@@ -275,11 +275,11 @@ class ReactiveCompiler(object):
     outputState = self.state_rvalue(vGraph, expr)
     vBytes = outputType.generate_c_state_to_capnp(self, whenHasState, outputState)
 
-    whenHasState.AddIf(
+    whenHasState.Newline().AddIf(
         cgen.MinusOne == cgen.PyDict_SetItemString(vResult, cgen.StrConstant(key), vBytes)).consequent.AddReturn(
             cgen.NULL)
 
-    on_output.AddReturn(vResult)
+    on_output.Newline().AddReturn(vResult)
 
   def _generate_on_input(self, expr):
     '''
@@ -430,9 +430,6 @@ class ReactiveCompiler(object):
       self._generate_on_output(key, expr)
 
     module = self.program.build_and_import()
-    print(self.program)
-    import ipdb
-    ipdb.set_trace()
     return module
 
 
