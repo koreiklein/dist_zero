@@ -117,6 +117,7 @@ PyObject = SimpleCType('PyObject')
 Char = SimpleCType('char', format_string='c')
 Capn = SimpleCType('struct capn')
 Capn_Ptr = SimpleCType('capn_ptr')
+Capn_Segment = SimpleCType('struct capn_segment')
 
 
 class Int(CType):

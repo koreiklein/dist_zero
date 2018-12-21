@@ -23,6 +23,10 @@ class Block(object):
           yield from statement.to_c_string(indent + INDENT)
       yield f"{indent}}}\n"
 
+  def Newline(self):
+    self._statements.append('\n')
+    return self
+
   def AddCString(self, s):
     self._statements.append(s)
 

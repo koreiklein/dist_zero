@@ -22,6 +22,7 @@ class ReactiveCompiler(object):
         docstring=self.docstring,
         includes=[
             '"capnp_c.h"',
+            f'"{self._capnp_header_filename()}"',
             #f'"{self._capnp_header_filename()}"',
             #"<capnp/message.h>",
             #"<capnp/serialize-packed.h>",
@@ -30,7 +31,8 @@ class ReactiveCompiler(object):
             settings.CAPNP_INCLUDE_DIR,
         ],
         sources=[
-            # FIXME(KK): Surely there must be a better way to set up linkage for the c extension?!
+            os.path.join(self._capnp_dirname(), self._capnp_source_filename()),
+            # NOTE(KK): We must compile all these files into each extension.
             os.path.join(settings.CAPNP_INCLUDE_DIR, "capn.c"),
             os.path.join(settings.CAPNP_INCLUDE_DIR, "capn-malloc.c"),
             os.path.join(settings.CAPNP_INCLUDE_DIR, "capn-stream.c"),
@@ -57,26 +59,56 @@ class ReactiveCompiler(object):
     self.expr_type = None
     self._state_types = None
     self._input_exprs = None
-    self.protos = None
     self._net = None
 
+    self._built_capnp = False
     self._pycapnp_module = None
 
+  def type_to_capnp_state_type(self, type):
+    state_ref = self.capnp_types.type_to_state_ref[type]
+    return cgen.BasicType(f"struct {state_ref}")
+
+  def type_to_capnp_state_ptr(self, type):
+    state_ref = self.capnp_types.type_to_state_ref[type]
+    return cgen.BasicType(f"{state_ref}_ptr")
+
+  def type_to_capnp_state_write_function(self, type):
+    state_ref = self.capnp_types.type_to_state_ref[type]
+    return cgen.Var(f"write_{state_ref}", None)
+
+  def type_to_capnp_state_new_ptr_function(self, type):
+    state_ref = self.capnp_types.type_to_state_ref[type]
+    return cgen.Var(f"new_{state_ref}", None)
+
+  def type_to_capnp_state_read_function(self, type):
+    state_ref = self.capnp_types.type_to_state_ref[type]
+    return cgen.Var(f"read_{state_ref}", None)
+
   def _capnp_filename(self):
-    return f"{self.name}"
+    return f"{self.name}.capnp"
+
+  def _capnp_source_filename(self):
+    return f"{self._capnp_filename()}.c"
 
   def _capnp_header_filename(self):
-    return f"{self.name}.capnp.h"
+    return f"{self._capnp_filename()}.h"
 
   def _capnp_dirname(self):
     return os.path.join(os.path.realpath('.'), '.tmp', 'capnp')
 
-  def get_pycapnp_module(self):
-    if self._pycapnp_module is None:
+  def _build_capnp(self):
+    if not self._built_capnp:
       dirname = self._capnp_dirname()
       os.makedirs(dirname, exist_ok=True)
       filename = self._capnp_filename()
-      self.protos.build_in(dirname=dirname, filename=filename)
+      self.capnp_types.capnp.build_in(dirname=dirname, filename=filename)
+      self._built_capnp = True
+
+  def get_pycapnp_module(self):
+    if self._pycapnp_module is None:
+      self._build_capnp()
+      dirname = self._capnp_dirname()
+      filename = self._capnp_filename()
 
       self._pycapnp_module = capnp.load(os.path.join(dirname, filename))
 
@@ -241,7 +273,7 @@ class ReactiveCompiler(object):
     whenHasState = ifHasState.consequent
 
     outputState = self.state_rvalue(vGraph, expr)
-    vBytes = outputType.generate_c_state_to_capnp(whenHasState, outputState)
+    vBytes = outputType.generate_c_state_to_capnp(self, whenHasState, outputState)
 
     whenHasState.AddIf(
         cgen.MinusOne == cgen.PyDict_SetItemString(vResult, cgen.StrConstant(key), vBytes)).consequent.AddReturn(
@@ -258,6 +290,7 @@ class ReactiveCompiler(object):
 
     vBuf = cgen.Var('buf', cgen.UInt8.Star())
     vBuflen = cgen.Var('buflen', cgen.MachineInt)
+    vCapn = cgen.Var('capn', cgen.Capn)
 
     on_input = self._net.AddMethod(name=self._on_input_function_name(expr), args=None) # We'll do our own arg parsing
     vGraph = on_input.SelfArg()
@@ -265,17 +298,36 @@ class ReactiveCompiler(object):
 
     on_input.AddDeclaration(cgen.CreateVar(vBuf))
     on_input.AddDeclaration(cgen.CreateVar(vBuflen))
+    on_input.AddDeclaration(cgen.CreateVar(vCapn))
 
     whenParseFail = on_input.AddIf(
         cgen.PyArg_ParseTuple(vArgsArg, cgen.StrConstant("s#"), vBuf.Address(), vBuflen.Address()).Negate()).consequent
     whenParseFail.AddReturn(cgen.NULL)
 
+    on_input.Newline()
+
+    (on_input.AddIf(
+        cgen.Zero != cgen.capn_init_mem(vCapn.Address(), vBuf, vBuflen, cgen.Zero)).consequent.AddAssignment(
+            None,
+            self._pyerr_from_string("Failed to initialize struct capn when parsing a message.")).AddReturn(cgen.NULL))
+
+    on_input.Newline()
+
     vResult = cgen.Var('result', cgen.PyObject.Star())
     on_input.AddAssignment(cgen.CreateVar(vResult), cgen.PyDict_New())
 
-    #inputType.generate_capnp_to_c_state(on_input, vCapnPtr, self.state_lvalue(vGraph, expr))
+    vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
+    on_input.AddAssignment(
+        cgen.CreateVar(vCapnPtr), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
+
+    inputType.generate_capnp_to_c_state(self, on_input, vCapnPtr, self.state_lvalue(vGraph, expr))
 
     on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('n_missing_inputs').Sub(cgen.Constant(index)), cgen.Zero)
+    on_input.AddAssignment(None, cgen.capn_free(vCapn.Address()))
+
+    produceState = cgen.Var(self._produce_function_name(index), None)
+    on_input.AddAssignment(None, produceState(vGraph))
+
     # FIXME(KK): Come up with a mechanism whereby the result dictionary is actually populated.
     on_input.AddReturn(vResult)
 
@@ -358,7 +410,7 @@ class ReactiveCompiler(object):
         self._input_exprs.append(expr)
         self.capnp_types.ensure_root_type(self._get_type_for_expr(expr))
 
-    self.protos = self.capnp_types.capnp
+    self._build_capnp()
 
     self._generate_initialize_root_graph()
 
@@ -378,6 +430,9 @@ class ReactiveCompiler(object):
       self._generate_on_output(key, expr)
 
     module = self.program.build_and_import()
+    print(self.program)
+    import ipdb
+    ipdb.set_trace()
     return module
 
 

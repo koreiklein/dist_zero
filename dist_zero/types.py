@@ -43,14 +43,14 @@ class Type(object):
   def equivalent(self, other):
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
-  def generate_c_state_to_capnp(self, block, stateRvalue):
+  def generate_c_state_to_capnp(self, compiler, block, stateRvalue):
     '''
     Generate code in ``block`` to write the capnp data from ``stateRValue``.
-    Return the c variable with the capnp data.
+    Return the c expression with the capnp bytes data.
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
-  def generate_capnp_to_c_state(self, block, capn_ptr_input, output_lvalue):
+  def generate_capnp_to_c_state(self, compiler, block, capn_ptr_input, output_lvalue):
     '''
     Generate code in ``block`` to write to the ``output_lvalue`` state using the ``capn_ptr_input``
     capn_ptr variable containing the input capnp buffer.
@@ -155,13 +155,79 @@ class BasicType(Type):
 
     super(BasicType, self).__init__()
 
-  def generate_c_state_to_capnp(self, block, stateRvalue):
-    # FIXME(KK): Implement this
-    return cgen.PyBytes_FromString(cgen.StrConstant("NOT YET IMPLEMENTED"))
+  def generate_c_state_to_capnp(self, compiler, block, stateRvalue):
+    vCapn = cgen.Var('capn', cgen.Capn)
+    vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
+    vSegment = cgen.Var('seg', cgen.Capn_Segment.Star())
 
-  def generate_capnp_to_c_state(self, block, capn_ptr_input, output_lvalue):
-    # FIXME(KK): Implement this
-    pass
+    stateStructureType = compiler.type_to_capnp_state_type(self)
+    myStructure = cgen.Var('structure', stateStructureType)
+
+    block.AddDeclaration(cgen.CreateVar(vCapn))
+    block.AddAssignment(None, cgen.capn_init_malloc(vCapn.Address()))
+    block.AddAssignment(cgen.CreateVar(vCapnPtr), cgen.capn_root(vCapn.Address()))
+    block.AddAssignment(cgen.CreateVar(vSegment), vCapnPtr.Dot('seg'))
+
+    block.Newline()
+
+    block.AddDeclaration(cgen.CreateVar(myStructure))
+    # FIXME(KK): Look into whether this really works for every kind of BasicType we might use.
+    #   This assigment has the same issue as the corresponding assignment in generate_capnp_to_c_state below.
+    block.AddAssignment(cgen.UpdateVar(myStructure).Dot('basicState'), stateRvalue)
+
+    writeStructure = compiler.type_to_capnp_state_write_function(self)
+    newPtr = compiler.type_to_capnp_state_new_ptr_function(self)
+    ptr = cgen.Var('ptr', compiler.type_to_capnp_state_ptr(self))
+
+    block.AddAssignment(cgen.CreateVar(ptr), newPtr(vSegment))
+    block.AddAssignment(None, writeStructure(myStructure.Address(), ptr))
+
+    (block.AddIf(cgen.Zero != cgen.capn_setp(vCapnPtr, cgen.Zero, ptr.Dot('p'))).consequent.AddAssignment(
+        None, compiler._pyerr_from_string("Failed to capn_setp for root when producing output.")).AddReturn(cgen.NULL))
+
+    vSize = cgen.Var('n_bytes', cgen.MachineInt)
+    vBuf = cgen.Var('result_buf', cgen.UInt8.Star())
+    vWroteBytes = cgen.Var('wrote_bytes', cgen.MachineInt)
+    pyBuffer = cgen.Var('py_buffer_result', cgen.PyObject.Star())
+
+    block.AddDeclaration(cgen.CreateVar(vBuf))
+    block.AddDeclaration(cgen.CreateVar(vWroteBytes))
+    block.AddDeclaration(cgen.CreateVar(pyBuffer))
+    block.AddAssignment(cgen.CreateVar(vSize), cgen.Constant(4096))
+
+    loop = block.AddWhile(cgen.true)
+
+    loop.AddAssignment(vBuf, cgen.malloc(vSize))
+    loop.AddAssignment(vWroteBytes, cgen.capn_write_mem(vCapn.Address(), vBuf, vSize, cgen.Zero))
+
+    ifsuccess = loop.AddIf(vSize > vWroteBytes)
+    ifsuccess.consequent.AddAssignment(pyBuffer, cgen.PyBytes_FromStringAndSize(vBuf, vWroteBytes))
+    (ifsuccess.consequent.AddIf(pyBuffer == cgen.NULL).consequent.AddAssignment(
+        None, compiler._pyerr_from_string("Could not allocate a python bytes object.")).AddReturn(cgen.NULL))
+    ifsuccess.consequent.AddBreak()
+
+    loop.AddAssignment(None, cgen.free(vBuf))
+    loop.AddAssignment(cgen.UpdateVar(vSize), vSize * vSize)
+
+    return pyBuffer
+
+  def generate_capnp_to_c_state(self, compiler, block, capn_ptr_input, output_lvalue):
+    ptr = cgen.Var('ptr', compiler.type_to_capnp_state_ptr(self))
+
+    structure = cgen.Var('parsed_structure', compiler.type_to_capnp_state_type(self))
+    block.AddDeclaration(cgen.CreateVar(structure))
+    block.AddDeclaration(cgen.CreateVar(ptr))
+    block.Newline()
+
+    readStructure = compiler.type_to_capnp_state_read_function(self)
+
+    block.AddAssignment(cgen.UpdateVar(ptr).Dot('p'), capn_ptr_input)
+    block.AddAssignment(None, readStructure(structure.Address(), ptr))
+
+    # FIXME(KK): Look into whether this really works for every kind of BasicType we might use.
+    block.AddAssignment(output_lvalue, structure.Dot('basicState'))
+
+    block.Newline()
 
   def _write_c_transitions_definition(self, compiler):
     return self.c_transition_type

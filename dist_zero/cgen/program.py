@@ -301,6 +301,9 @@ class Function(expression.Expression):
   def add_includes(self, program):
     pass
 
+  def Newline(self):
+    return self._block.Newline()
+
   def AddWhile(self, *args, **kwargs):
     return self._block.AddWhile(*args, **kwargs)
 

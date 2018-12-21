@@ -31,7 +31,9 @@ class TestMultiplicativeReactive(object):
     assert not net.OnOutput_output()
     assert not net.OnInput_a(self.capnpForA.new_message(basicState=2).to_bytes())
     first_output = net.OnInput_b(self.capnpForA.new_message(basicState=3).to_bytes())
-    assert 5 == first_output['output']
+
+    result = self.capnpForOutput.from_bytes(first_output['output'])
+    assert 5 == result.basicState
 
     # FIXME(KK): Continue by submitting transitions to net
 
@@ -41,7 +43,9 @@ class TestMultiplicativeReactive(object):
     assert not net.OnInput_a(self.capnpForA.new_message(basicState=2).to_bytes())
     assert not net.OnInput_b(self.capnpForA.new_message(basicState=3).to_bytes())
     first_output = net.OnOutput_output()
-    assert 5 == first_output['output']
+
+    result = self.capnpForOutput.from_bytes(first_output['output'])
+    assert 5 == result.basicState
 
     # FIXME(KK): Continue by submitting transitions to net
 

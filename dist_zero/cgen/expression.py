@@ -297,12 +297,18 @@ PyDict_New = Var('PyDict_New', None)
 PyDict_SetItemString = Var('PyDict_SetItemString', None)
 
 PyBytes_FromString = Var('PyBytes_FromString', None)
+PyBytes_FromStringAndSize = Var('PyBytes_FromStringAndSize', None)
 
 PyExc_RuntimeError = Var('PyExc_RuntimeError', None)
 PyErr_SetString = Var('PyErr_SetString', None)
 
 calloc = Var("calloc", None)
+malloc = Var("malloc", None)
+free = Var("free", None)
 capn_init_mem = Var("capn_init_mem", None)
+capn_write_mem = Var("capn_write_mem", None)
 capn_getp = Var("capn_getp", None)
+capn_setp = Var("capn_setp", None)
 capn_root = Var("capn_root", None)
 capn_init_malloc = Var("capn_init_malloc", None)
+capn_free = Var("capn_free", None)
