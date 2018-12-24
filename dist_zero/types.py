@@ -43,10 +43,10 @@ class Type(object):
   def equivalent(self, other):
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
-  def generate_c_state_to_capnp(self, compiler, block, stateRvalue):
+  def generate_c_state_to_capnp(self, compiler, block, stateRvalue, result):
     '''
     Generate code in ``block`` to write the capnp data from ``stateRValue``.
-    Return the c expression with the capnp bytes data.
+    :param result: The c lvalue to assign the result to
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
@@ -150,12 +150,9 @@ class BasicType(Type):
     self.capnp_transition_type = capnp_transition_type
     self.c_transition_type = c_transition_type
 
-    self._wrote_capnp_transition_definition = False
-    self._wrote_capnp_state_definition = False
-
     super(BasicType, self).__init__()
 
-  def generate_c_state_to_capnp(self, compiler, block, stateRvalue):
+  def generate_c_state_to_capnp(self, compiler, block, stateRvalue, result):
     vCapn = cgen.Var('capn', cgen.Capn)
     vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
     vSegment = cgen.Var('seg', cgen.Capn_Segment.Star())
@@ -181,12 +178,14 @@ class BasicType(Type):
     block.AddAssignment(None, writeStructure(myStructure.Address(), ptr))
 
     (block.AddIf(cgen.Zero != cgen.capn_setp(vCapnPtr, cgen.Zero, ptr.Dot('p'))).consequent.AddAssignment(
-        None, compiler.pyerr_from_string("Failed to capn_setp for root when producing output.")).AddReturn(cgen.NULL))
+        None, compiler.pyerr_from_string("Failed to capn_setp for root when producing output.")).AddAssignment(
+            None, cgen.capn_free(vCapn.Address())).AddReturn(cgen.NULL))
 
     block.Newline()
 
     pythonBytesFromCapn = cgen.Var(compiler._python_bytes_from_capn_function_name(), None)
-    return pythonBytesFromCapn(vCapn.Address())
+    block.AddAssignment(result, pythonBytesFromCapn(vCapn.Address()))
+    block.AddAssignment(None, cgen.capn_free(vCapn.Address()))
 
   def generate_capnp_to_c_state(self, compiler, block, capn_ptr_input, output_lvalue):
     ptr = cgen.Var('ptr', compiler.type_to_capnp_state_ptr(self))
@@ -228,10 +227,8 @@ class BasicType(Type):
     union.AddField('basicTransition', self.capnp_transition_type)
 
   def _write_capnp_state_definition(self, compiler):
-    if not self._wrote_capnp_state_definition:
-      self._wrote_capnp_state_definition = True
-      struct = compiler.capnp.AddStructure(self.name)
-      struct.AddField('basicState', self.capnp_state)
+    struct = compiler.capnp.AddStructure(self.name)
+    struct.AddField('basicState', self.capnp_state)
     return self.name
 
 
@@ -253,11 +250,6 @@ class Product(Type):
       raise RuntimeError("Duplicate key detected in Product.")
     self.name = name if name is not None else f"Product{_gen_name()}"
 
-    self._wrote_capnp_simulatenous = False
-    self._wrote_capnp_individual = False
-    self._wrote_c_simultaneous = False
-    self._wrote_c_individual = False
-
     super(Product, self).__init__()
 
   def equivalent(self, other):
@@ -274,35 +266,27 @@ class Product(Type):
     return f"{self.name}Transition"
 
   def _write_c_simultaneous_components_transition_definitions(self, compiler, union, enum):
-    if not self._wrote_c_simultaneous:
-      self._wrote_c_simultaneous = True
-      struct = compiler.cprogram.AddStruct(f"{self.name}_simultaneous")
-      union.AddField('simultaneous', struct.Star())
-      enum.AddOption('simultaneous')
-      for key, value in self.items:
-        struct.AddField(key, compiler.c_transitions_ref(value).Star())
+    struct = compiler.cprogram.AddStruct(f"{self.name}_simultaneous")
+    union.AddField('simultaneous', struct.Star())
+    enum.AddOption('simultaneous')
+    for key, value in self.items:
+      struct.AddField(key, compiler.c_transitions_ref(value).Star())
 
   def _write_capnp_simultaneous_components_transition_definitions(self, compiler, union):
-    if not self._wrote_capnp_simulatenous:
-      self._wrote_capnp_simulatenous = True
-      struct = compiler.capnp.AddStructure(f"{self.name}Simultaneous")
-      union.AddField("simultaneous", struct)
+    struct = compiler.capnp.AddStructure(f"{self.name}Simultaneous")
+    union.AddField("simultaneous", struct)
 
-      for key, value in self.items:
-        struct.AddField(key, compiler.capnp_transitions_ref(value))
+    for key, value in self.items:
+      struct.AddField(key, compiler.capnp_transitions_ref(value))
 
   def _write_c_individual_components_transition_definitions(self, compiler, union, enum):
-    if not self._wrote_capnp_individual:
-      self._wrote_capnp_individual = True
-      for key, value in self.items:
-        union.AddField(f'product_on_{key}', compiler.c_transitions_ref(value).Star())
-        enum.AddOption(f'product_on_{key}')
+    for key, value in self.items:
+      union.AddField(f'product_on_{key}', compiler.c_transitions_ref(value).Star())
+      enum.AddOption(f'product_on_{key}')
 
   def _write_capnp_individual_components_transition_definitions(self, compiler, union):
-    if not self._wrote_capnp_individual:
-      self._wrote_capnp_individual = True
-      for key, value in self.items:
-        union.AddField(f"productOn{key}", compiler.capnp_transitions_ref(value))
+    for key, value in self.items:
+      union.AddField(f"productOn{key}", compiler.capnp_transitions_ref(value))
 
   def _write_capnp_transition_definition(self, compiler, ident, union):
     if ident == 'standard':

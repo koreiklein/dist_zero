@@ -109,7 +109,12 @@ class Program(object):
       subprocess.check_output(['bash', '-c', f'cd {tempdir} && python setup.py build > /dev/null'],
                               stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
-      raise RuntimeError(f"Error building c extension:\n{e.output.decode()}")
+      try:
+        with open(f'.tmp/{self.name}.errorfile.c', 'w') as f:
+          for line in self.to_c_string():
+            f.write(line)
+      finally:
+        raise RuntimeError(f"Error building c extension:\n{e.output.decode()}")
 
     # Copy the resulting so file into the desired output directory.
     builddir = os.path.join(tempdir, "build")

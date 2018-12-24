@@ -23,9 +23,6 @@ class ReactiveCompiler(object):
         includes=[
             '"capnp_c.h"',
             f'"{self._capnp_header_filename()}"',
-            #f'"{self._capnp_header_filename()}"',
-            #"<capnp/message.h>",
-            #"<capnp/serialize-packed.h>",
         ],
         library_dirs=[
             settings.CAPNP_INCLUDE_DIR,
@@ -176,6 +173,7 @@ class ReactiveCompiler(object):
       self._graph_struct.AddField(self._state_key_in_graph(i), c_state_type)
 
   def _state_key_in_graph(self, index):
+    expr = self._top_exprs[index]
     return f'state_{index}'
 
   def _n_exprs(self):
@@ -285,7 +283,10 @@ class ReactiveCompiler(object):
     write_output_state = self.program.AddFunction(
         name=self._write_output_state_function_name(index), retType=cgen.PyObject.Star(), args=[vGraph])
 
-    vPythonBytes = exprType.generate_c_state_to_capnp(self, write_output_state, self.state_rvalue(vGraph, expr))
+    vPythonBytes = cgen.Var('resulting_python_bytes', cgen.PyObject.Star())
+    write_output_state.AddDeclaration(cgen.CreateVar(vPythonBytes))
+    exprType.generate_c_state_to_capnp(self, write_output_state, self.state_rvalue(vGraph, expr), vPythonBytes)
+
     write_output_state.AddReturn(vPythonBytes)
 
   def _generate_on_output(self, key, expr):
@@ -314,11 +315,12 @@ class ReactiveCompiler(object):
     getBytes = cgen.Var(self._write_output_state_function_name(output_index), None)
     whenHasState.AddAssignment(cgen.CreateVar(vBytes), getBytes(vGraph))
 
-    whenHasState.AddIf(vBytes == cgen.NULL).consequent.AddReturn(cgen.NULL)
+    (whenHasState.AddIf(vBytes == cgen.NULL).consequent.AddAssignment(None,
+                                                                      cgen.Py_DECREF(vResult)).AddReturn(cgen.NULL))
 
-    whenHasState.Newline().AddIf(
-        cgen.MinusOne == cgen.PyDict_SetItemString(vResult, cgen.StrConstant(key), vBytes)).consequent.AddReturn(
-            cgen.NULL)
+    (whenHasState.Newline().AddIf(
+        cgen.MinusOne == cgen.PyDict_SetItemString(vResult, cgen.StrConstant(key), vBytes)).consequent.AddAssignment(
+            None, cgen.Py_DECREF(vResult)).AddAssignment(None, cgen.Py_DECREF(vBytes)).AddReturn(cgen.NULL))
 
     on_output.Newline().AddReturn(vResult)
 
@@ -364,8 +366,8 @@ class ReactiveCompiler(object):
 
     inputType.generate_capnp_to_c_state(self, on_input, vCapnPtr, self.state_lvalue(vGraph, expr))
 
-    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('n_missing_inputs').Sub(cgen.Constant(index)), cgen.Zero)
     on_input.AddAssignment(None, cgen.capn_free(vCapn.Address()))
+    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('n_missing_inputs').Sub(cgen.Constant(index)), cgen.Zero)
 
     produceState = cgen.Var(self._produce_function_name(index), None)
     on_input.AddAssignment(None, produceState(vGraph))
@@ -447,14 +449,15 @@ class ReactiveCompiler(object):
     loop.AddAssignment(vWroteBytes, cgen.capn_write_mem(vCapn, vBuf, vSize, cgen.Zero))
 
     ifsuccess = loop.AddIf(vSize > vWroteBytes)
-    ifsuccess.consequent.AddAssignment(pyBuffer, cgen.PyBytes_FromStringAndSize(vBuf, vWroteBytes))
+    ifsuccess.consequent.AddAssignment(pyBuffer, cgen.PyBytes_FromStringAndSize(
+        vBuf.Cast(cgen.Char.Star()), vWroteBytes))
     (ifsuccess.consequent.AddIf(pyBuffer == cgen.NULL).consequent.AddAssignment(
-        None, self.pyerr_from_string("Could not allocate a python bytes object.")).AddReturn(cgen.NULL))
+        None, self.pyerr_from_string("Could not allocate a python bytes object.")))
     ifsuccess.consequent.AddAssignment(None, cgen.free(vBuf))
     ifsuccess.consequent.AddReturn(pyBuffer)
 
     loop.AddAssignment(None, cgen.free(vBuf))
-    loop.AddAssignment(cgen.UpdateVar(vSize), vSize * vSize)
+    loop.AddAssignment(cgen.UpdateVar(vSize), vSize + vSize)
 
   def compile(self, output_key_to_norm_expr):
     self._output_key_to_norm_expr = output_key_to_norm_expr
@@ -513,6 +516,7 @@ class ReactiveCompiler(object):
       self._generate_on_output(key, expr)
 
     module = self.program.build_and_import()
+
     return module
 
 

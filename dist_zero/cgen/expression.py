@@ -289,6 +289,11 @@ class Var(Expression):
     return self.name
 
 
+Py_DECREF = Var("Py_DECREF", None)
+Py_XDECREF = Var("Py_XDECREF", None)
+Py_INCREF = Var("Py_INCREF", None)
+Py_XINCREF = Var("Py_XINCREF", None)
+
 PyArg_ParseTuple = Var("PyArg_ParseTuple", None)
 PyLong_FromLong = Var("PyLong_FromLong", None)
 PyBool_FromLong = Var("PyBool_FromLong", None)
