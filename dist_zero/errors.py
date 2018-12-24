@@ -34,6 +34,10 @@ class InternalError(DistZeroError):
   pass
 
 
+class AbstractSuperclass(InternalError):
+  pass
+
+
 class NoRemainingAvailability(DistZeroError):
   '''
   For when there is not enough weight in the available nodes in a weighted round robin to

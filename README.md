@@ -45,6 +45,9 @@ DistZero requires a few steps to get it up and running.
         - [stackoverflow](https://stackoverflow.com/questions/9575989/install-autoreconf-on-osx-lion).
         - [the github issue](https://github.com/maxmind/libmaxminddb/issues/9).
     - Install the [capnpc c plugin](https://github.com/opensourcerouting/c-capnproto)
+  - It may or may not also be necessary to install certain python packages needed by pycapnp
+    - pip install cython
+    - pip install setuptools
 
 ## Python Packages
 

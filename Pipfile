@@ -12,6 +12,7 @@ docker = "*"
 python-json-logger = "*"
 cryptography = "==2.3.1"
 uvloop = "*"
+pycapnp = {editable = true,git = "https://github.com/koreiklein/pycapnp.git",ref = "73d8cc81cce7847f63164d56116567ec76db7582"}
 
 [dev-packages]
 yapf = "*"

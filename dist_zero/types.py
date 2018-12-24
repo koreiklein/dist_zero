@@ -1,8 +1,7 @@
 import math
-import os
 import random
 
-from dist_zero import capnpgen, errors
+from dist_zero import capnpgen, errors, cgen
 
 rand = random.Random("types")
 
@@ -17,83 +16,46 @@ def _gen_name():
   return result
 
 
-class TypeCompiler(object):
-  def __init__(self):
-    self.added_types_states = set()
-    self.unadded_root_types_states = set()
-
-    self.added_types_transitions = set()
-    self.unadded_root_types_transitions = set()
-
-    self.capnp = capnpgen.CapnpFile(capnpgen.gen_capn_uid())
-
-  def ensure_root_type_transitions(self, t):
-    if t not in self.added_types_transitions:
-      self.unadded_root_types_transitions.add(t)
-
-    return self
-
-  def ensure_root_type(self, t):
-    self.ensure_root_type_states(t)
-    self.ensure_root_type_transitions(t)
-
-  def ensure_root_type_states(self, t):
-    '''
-    Guarantees that a definition of t will occur in the root of this file.
-    In case t is already included in the root, this method does nothing.
-    '''
-    if t not in self.added_types_states:
-      self.unadded_root_types_states.add(t)
-
-    return self
-
-  def build_capnp(self):
-    '''
-    Generate and return a CapnpFile instance defining all the states and transitions of the root types that are ensured.
-    '''
-    while self.unadded_root_types_states:
-      to_iterate = list(self.unadded_root_types_states)
-      self.unadded_root_types_states = set()
-      for t in to_iterate:
-        if t not in self.added_types_states:
-          self.added_types_states.add(t)
-          t._write_state_definition(self)
-
-    while self.unadded_root_types_transitions:
-      to_iterate = list(self.unadded_root_types_transitions)
-      self.unadded_root_types_transitions = set()
-      for t in to_iterate:
-        if t not in self.added_types_transitions:
-          self.added_types_transitions.add(t)
-          t._write_transitions_definition(self)
-
-    return self.capnp
-
-
 class Type(object):
-  def _write_state_definition(self, compiler):
-    '''Add a definition for the states of this type at the current spot in the capnp file.'''
+  def _write_c_state_definition(self, compiler):
+    '''Add a definition for the c states of this type.'''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
+  def _write_capnp_state_definition(self, compiler):
+    '''Add a definition for the capnp states of this type.'''
     raise RuntimeError("Abstract Superclass")
 
-  def _transitions_structure_name(self):
-    '''return the name to use for the structure with this type's transitions..'''
+  def _capnp_transitions_structure_name(self):
+    '''return the name to use for the capnp structure with this type's transitions..'''
     raise RuntimeError('Abstract Superclass')
 
-  def _write_transition_definition(self, compiler, ident, union):
-    '''Add a definition for the transitions of this type matching ``ident`` to the capnp union object.'''
+  def _c_transitions_structure_name(self):
+    return self._capnp_transitions_structure_name()
+
+  def _write_capnp_transition_definition(self, compiler, ident, union):
+    '''Add a definition for the capnp transitions of this type matching ``ident`` to the capnp union object.'''
     raise RuntimeError('Abstract Superclass')
 
-  def _reference_string(self, capnp):
-    '''return a string reference to this type's state structure.'''
-    raise RuntimeError('Abstract Superclass')
+  def _write_c_transition_definition(self, compiler, ident, union, enum):
+    '''Add a definition for the c transitions of this type matching ``ident`` to the c union and enum objects.'''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
-  def transition_reference(self, compiler):
-    compiler.ensure_root_type_transitions(self)
-    return self._transitions_structure_name()
+  def equivalent(self, other):
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
-  def state_reference(self, compiler):
-    compiler.ensure_root_type_states(self)
-    return self._reference_string(compiler)
+  def generate_c_state_to_capnp(self, compiler, block, stateRvalue, result):
+    '''
+    Generate code in ``block`` to write the capnp data from ``stateRValue``.
+    :param result: The c lvalue to assign the result to
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
+  def generate_capnp_to_c_state(self, compiler, block, capn_ptr_input, output_lvalue):
+    '''
+    Generate code in ``block`` to write to the ``output_lvalue`` state using the ``capn_ptr_input``
+    capn_ptr variable containing the input capnp buffer.
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
   def __init__(self):
     self.transition_identifiers = set(['standard'])
@@ -109,83 +71,242 @@ class Type(object):
     return self
 
   def _write_indiscrete_transition_definition(self, compiler, union):
-    union.AddField("jump", self.state_reference(compiler))
+    union.AddField("jump", compiler.capnp_state_ref(self))
 
-  def _write_transition_identifiers(self, compiler, union):
+  def _write_indiscrete_c_transition_definition(self, compiler, union, enum):
+    union.AddField("jump", compiler.c_state_ref(self).Star())
+    enum.AddOption('jump')
+
+  def _write_capnp_transition_identifiers(self, compiler, union):
     for ti in self.transition_identifiers:
       if ti == 'indiscrete':
         self._write_indiscrete_transition_definition(compiler, union)
       else:
-        self._write_transition_definition(compiler, ti, union)
+        self._write_capnp_transition_definition(compiler, ti, union)
 
-  def _write_transitions_definition(self, compiler):
+  def _write_c_transition_identifiers(self, compiler, union, enum):
+    for ti in self.transition_identifiers:
+      if ti == 'indiscrete':
+        self._write_indiscrete_c_transition_definition(compiler, union, enum)
+      else:
+        self._write_c_transition_definition(compiler, ti, union, enum)
+
+  def _write_c_transitions_definition(self, compiler):
     if len(self.transition_identifiers) == 0:
-      pass
+      return cgen.Void
     else:
-      struct = compiler.capnp.AddStructure(self._transitions_structure_name())
+      struct = compiler.cprogram.AddStruct(self._c_transitions_structure_name())
+      union = compiler.cprogram.AddUnion(self._c_transitions_structure_name() + '_union')
+      enum = compiler.cprogram.AddEnum(self._c_transitions_structure_name() + '_enum')
+      self._write_c_transition_identifiers(compiler, union, enum)
+
+      if union.RemoveIfEmpty():
+        enum.RemoveIfEmpty()
+      return struct
+
+  def _write_capnp_transitions_definition(self, compiler):
+    if len(self.transition_identifiers) == 0:
+      return capnpgen.Void
+    else:
+      struct = compiler.capnp.AddStructure(self._capnp_transitions_structure_name())
       union = struct.AddUnion()
-      self._write_transition_identifiers(compiler, union)
+      self._write_capnp_transition_identifiers(compiler, union)
 
       if union.RemoveIfTooSmall():
-        self._write_transition_identifiers(compiler, struct)
+        self._write_capnp_transition_identifiers(compiler, struct)
+
+      return self._capnp_transitions_structure_name()
+
+
+class FunctionType(Type):
+  def __init__(self, src, tgt):
+    self.src = src
+    self.tgt = tgt
+
+  def equivalent(self, other):
+    return other.__class__ == FunctionType and self.src.equivalent(other.src) and self.tgt.equivalent(other.tgt)
+
+  def _write_c_state_definition(self, compiler):
+    raise RuntimeError("FunctionType should be be compiled to a c state.")
+
+  def _write_capnp_transition_definition(self, compiler, ident, union):
+    raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+
+  def _write_c_transition_definition(self, compiler, ident, union, enum):
+    raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+
+  def _capnp_transitions_structure_name(self):
+    raise errors.InternalError("We should not be generating transitions from FunctionTypes.")
+
+  def _write_capnp_state_definition(self, compiler):
+    raise errors.InternalError("We should not be generating states from FunctionTypes.")
 
 
 class BasicType(Type):
-  def __init__(self, s):
-    self.s = s
+  def __init__(self, capnp_state, c_state_type, capnp_transition_type, c_transition_type):
+    self.name = f"Basic{_gen_name()}"
+    self.capnp_state = capnp_state
+    self.c_state_type = c_state_type
+    self.capnp_transition_type = capnp_transition_type
+    self.c_transition_type = c_transition_type
+
     super(BasicType, self).__init__()
 
-  def _transitions_structure_name(self):
-    return f"{self.s}Transition"
+  def generate_c_state_to_capnp(self, compiler, block, stateRvalue, result):
+    vCapn = cgen.Var('capn', cgen.Capn)
+    vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
+    vSegment = cgen.Var('seg', cgen.Capn_Segment.Star())
 
-  def _write_transition_definition(self, compiler, ident, union):
-    raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+    stateStructureType = compiler.type_to_capnp_state_type(self)
+    myStructure = cgen.Var('structure', stateStructureType)
 
-  def _write_state_definition(self, compiler):
+    block.AddDeclaration(cgen.CreateVar(vCapn))
+    block.AddAssignment(None, cgen.capn_init_malloc(vCapn.Address()))
+    block.AddAssignment(cgen.CreateVar(vCapnPtr), cgen.capn_root(vCapn.Address()))
+    block.AddAssignment(cgen.CreateVar(vSegment), vCapnPtr.Dot('seg'))
+
+    block.Newline()
+
+    block.AddDeclaration(cgen.CreateVar(myStructure))
+    block.AddAssignment(cgen.UpdateVar(myStructure).Dot('basicState'), stateRvalue)
+
+    writeStructure = compiler.type_to_capnp_state_write_function(self)
+    newPtr = compiler.type_to_capnp_state_new_ptr_function(self)
+    ptr = cgen.Var('ptr', compiler.type_to_capnp_state_ptr(self))
+
+    block.AddAssignment(cgen.CreateVar(ptr), newPtr(vSegment))
+    block.AddAssignment(None, writeStructure(myStructure.Address(), ptr))
+
+    (block.AddIf(cgen.Zero != cgen.capn_setp(vCapnPtr, cgen.Zero, ptr.Dot('p'))).consequent.AddAssignment(
+        None, compiler.pyerr_from_string("Failed to capn_setp for root when producing output.")).AddAssignment(
+            None, cgen.capn_free(vCapn.Address())).AddReturn(cgen.NULL))
+
+    block.Newline()
+
+    pythonBytesFromCapn = cgen.Var(compiler._python_bytes_from_capn_function_name(), None)
+    block.AddAssignment(result, pythonBytesFromCapn(vCapn.Address()))
+    block.AddAssignment(None, cgen.capn_free(vCapn.Address()))
+
+  def generate_capnp_to_c_state(self, compiler, block, capn_ptr_input, output_lvalue):
+    ptr = cgen.Var('ptr', compiler.type_to_capnp_state_ptr(self))
+
+    structure = cgen.Var('parsed_structure', compiler.type_to_capnp_state_type(self))
+    block.AddDeclaration(cgen.CreateVar(structure))
+    block.AddDeclaration(cgen.CreateVar(ptr))
+    block.Newline()
+
+    readStructure = compiler.type_to_capnp_state_read_function(self)
+
+    block.AddAssignment(cgen.UpdateVar(ptr).Dot('p'), capn_ptr_input)
+    block.AddAssignment(None, readStructure(structure.Address(), ptr))
+
+    block.AddAssignment(output_lvalue, structure.Dot('basicState'))
+
+    block.Newline()
+
+  def _write_c_transitions_definition(self, compiler):
+    return self.c_transition_type
+
+  def _write_c_state_definition(self, compiler):
+    return self.c_state_type
+
+  def _capnp_transitions_structure_name(self):
+    return f"{self.name}Transitions"
+
+  def equivalent(self, other):
+    return other.__class__ == BasicType and \
+        self.capnp_state == other.capnp_state and \
+        self.c_state_type == other.c_state_type and \
+        self.capnp_transition_type == other.capnp_transition_type and \
+        self.c_transition_type == other.c_transition_type
+
+  def _write_c_transition_definition(self, compiler, ident, union, enum):
     pass
 
-  def _reference_string(self, compiler):
-    return self.s
+  def _write_capnp_transition_definition(self, compiler, ident, union):
+    union.AddField('basicTransition', self.capnp_transition_type)
+
+  def _write_capnp_state_definition(self, compiler):
+    struct = compiler.capnp.AddStructure(self.name)
+    struct.AddField('basicState', self.capnp_state)
+    return self.name
+
+
+Int8 = BasicType('Int8', c_state_type=cgen.Int8, capnp_transition_type='Int8', c_transition_type=cgen.Int8)
+Int16 = BasicType('Int16', c_state_type=cgen.Int16, capnp_transition_type='Int16', c_transition_type=cgen.Int16)
+Int32 = BasicType('Int32', c_state_type=cgen.Int32, capnp_transition_type='Int32', c_transition_type=cgen.Int32)
+Int64 = BasicType('Int64', c_state_type=cgen.Int64, capnp_transition_type='Int64', c_transition_type=cgen.Int64)
+UInt8 = BasicType('UInt8', c_state_type=cgen.UInt8, capnp_transition_type='UInt8', c_transition_type=cgen.UInt8)
+UInt16 = BasicType('UInt16', c_state_type=cgen.UInt16, capnp_transition_type='UInt16', c_transition_type=cgen.UInt16)
+UInt32 = BasicType('UInt32', c_state_type=cgen.UInt32, capnp_transition_type='UInt32', c_transition_type=cgen.UInt32)
+UInt64 = BasicType('UInt64', c_state_type=cgen.UInt64, capnp_transition_type='UInt64', c_transition_type=cgen.UInt64)
 
 
 class Product(Type):
   def __init__(self, items, name=None):
     self.items = items
     self.d = dict(items)
+    if len(self.items) != len(self.d):
+      raise RuntimeError("Duplicate key detected in Product.")
     self.name = name if name is not None else f"Product{_gen_name()}"
-
-    self._wrote_simulatenous = False
-    self._wrote_individual = False
 
     super(Product, self).__init__()
 
-  def _transitions_structure_name(self):
+  def equivalent(self, other):
+    if other.__class__ != Product or len(self.items) != len(other.items):
+      return False
+
+    for k, v in self.items:
+      if not v.equivalent(other.d[k]):
+        return False
+
+    return True
+
+  def _capnp_transitions_structure_name(self):
     return f"{self.name}Transition"
 
-  def _write_simultaneous_components_transition_definitions(self, compiler, union):
-    if not self._wrote_simulatenous:
-      self._wrote_simulatenous = True
-      simultaneousStructName = f"{self.name}Simultaneous"
-      union.AddField("simultaneous", simultaneousStructName)
+  def _write_c_simultaneous_components_transition_definitions(self, compiler, union, enum):
+    struct = compiler.cprogram.AddStruct(f"{self.name}_simultaneous")
+    union.AddField('simultaneous', struct.Star())
+    enum.AddOption('simultaneous')
+    for key, value in self.items:
+      struct.AddField(key, compiler.c_transitions_ref(value).Star())
 
-      struct = compiler.capnp.AddStructure(simultaneousStructName)
-      for key, value in self.items:
-        struct.AddField(key, value.state_reference(compiler))
+  def _write_capnp_simultaneous_components_transition_definitions(self, compiler, union):
+    struct = compiler.capnp.AddStructure(f"{self.name}Simultaneous")
+    union.AddField("simultaneous", struct)
 
-  def _write_individual_components_transition_definitions(self, compiler, union):
-    if not self._wrote_individual:
-      self._wrote_individual = True
-      for key, value in self.items:
-        union.AddField(f"productOn{key}", value.transition_reference(compiler))
+    for key, value in self.items:
+      struct.AddField(key, compiler.capnp_transitions_ref(value))
 
-  def _write_transition_definition(self, compiler, ident, union):
+  def _write_c_individual_components_transition_definitions(self, compiler, union, enum):
+    for key, value in self.items:
+      union.AddField(f'product_on_{key}', compiler.c_transitions_ref(value).Star())
+      enum.AddOption(f'product_on_{key}')
+
+  def _write_capnp_individual_components_transition_definitions(self, compiler, union):
+    for key, value in self.items:
+      union.AddField(f"productOn{key}", compiler.capnp_transitions_ref(value))
+
+  def _write_capnp_transition_definition(self, compiler, ident, union):
     if ident == 'standard':
-      self._write_individual_components_transition_definitions(compiler, union)
-      self._write_simultaneous_components_transition_definitions(compiler, union)
+      self._write_capnp_individual_components_transition_definitions(compiler, union)
+      self._write_capnp_simultaneous_components_transition_definitions(compiler, union)
     elif ident == 'individual':
-      self._write_individual_components_transition_definitions(compiler, union)
+      self._write_capnp_individual_components_transition_definitions(compiler, union)
     elif ident == 'simultaneous':
-      self._write_simultaneous_components_transition_definitions(compiler, union)
+      self._write_capnp_simultaneous_components_transition_definitions(compiler, union)
+    else:
+      raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+
+  def _write_c_transition_definition(self, compiler, ident, union, enum):
+    if ident == 'standard':
+      self._write_c_individual_components_transition_definitions(compiler, union, enum)
+      self._write_c_simultaneous_components_transition_definitions(compiler, union, enum)
+    elif ident == 'individual':
+      self._write_c_individual_components_transition_definitions(compiler, union, enum)
+    elif ident == 'simultaneous':
+      self._write_c_simultaneous_components_transition_definitions(compiler, union, enum)
     else:
       raise RuntimeError(f"Unrecognized transition identifier {ident}.")
 
@@ -195,14 +316,19 @@ class Product(Type):
       result *= abs(x)
     return result
 
-  def _reference_string(self, compiler):
-    return self.name
-
-  def _write_state_definition(self, compiler):
-    struct = compiler.capnp.AddStructure(self.name)
-
+  def _write_c_state_definition(self, compiler):
+    struct = compiler.cprogram.AddStruct(self.name)
     for key, value in self.items:
-      struct.AddField(key, value.state_reference(compiler))
+      struct.AddField(key, compiler.c_state_ref(value).Star())
+
+    return struct
+
+  def _write_capnp_state_definition(self, compiler):
+    struct = compiler.capnp.AddStructure(self.name)
+    for key, value in self.items:
+      struct.AddField(key, compiler.capnp_state_ref(value))
+
+    return self.name
 
 
 class Sum(Type):
@@ -212,33 +338,60 @@ class Sum(Type):
     self.name = name if name is not None else f"Sum{_gen_name()}"
     super(Sum, self).__init__()
 
-  def _transitions_structure_name(self):
+  def _capnp_transitions_structure_name(self):
     return f"{self.name}Transition"
 
-  def _reference_string(self, compiler):
-    return self.name
-
-  def _write_individual_components_transition_definitions(self, compiler, union):
+  def _write_capnp_individual_components_transition_definitions(self, compiler, union):
     for key, value in self.items:
-      union.AddField(f"sumOn{key}", value.transition_reference(compiler))
+      union.AddField(f"sumOn{key}", compiler.capnp_transitions_ref(value))
 
-  def _write_transition_definition(self, compiler, ident, union):
+  def _write_c_individual_components_transition_definitions(self, compiler, union, enum):
+    for key, value in self.items:
+      union.AddField(f"sum_on_{key}", compiler.c_transitions_ref(value).Star())
+      enum.AddOption(f"sum_on_{key}")
+
+  def _write_capnp_transition_definition(self, compiler, ident, union):
     if ident == 'standard':
-      self._write_individual_components_transition_definitions(compiler, union)
+      self._write_capnp_individual_components_transition_definitions(compiler, union)
     else:
       raise RuntimeError(f"Unrecognized transition identifier {ident}.")
 
-  def _write_state_definition(self, compiler):
+  def _write_c_transition_definition(self, compiler, ident, union, enum):
+    if ident == 'standard':
+      self._write_c_individual_components_transition_definitions(compiler, union, enum)
+    else:
+      raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+
+  def _write_capnp_state_definition(self, compiler):
     struct = compiler.capnp.AddStructure(self.name)
     if len(self.items) == 0:
       pass
     elif len(self.items) == 0:
       for key, value in self.items:
-        struct.AddField(key, value.state_reference(compiler))
+        struct.AddField(key, compiler.capnp_state_ref(value))
     else:
       union = struct.AddUnion()
       for key, value in self.items:
-        union.AddField(key, value.state_reference(compiler))
+        union.AddField(key, compiler.capnp_state_ref(value))
+
+    return self.name
+
+  def _write_c_state_definition(self, compiler):
+    struct = compiler.cprogram.AddStruct(self.name)
+    if len(self.items) == 0:
+      pass
+    else:
+      union = compiler.cprogram.AddUnion(self.name + '_union')
+      enum = compiler.cprogram.AddEnum(self.name + '_enum')
+
+      struct.AddField('type', enum)
+      struct.AddField('value', union)
+
+      for key, value in self.items:
+        enum.AddOption(key)
+        union.AddField(key, compiler.c_state_ref(value).Star())
+
+    return struct
 
   def __abs__(self):
     return sum(abs(x) for k, x in self.items)
@@ -250,35 +403,54 @@ class List(Type):
     self.base = base
     super(List, self).__init__()
 
-  def _transitions_structure_name(self):
+  def _write_c_state_definition(self, compiler):
+    return compiler.c_state_ref(self.base).Star().KVec()
+
+  def _capnp_transitions_structure_name(self):
     return f"{self.name}Transition"
 
+  def _write_c_append_transition_definition(self, compiler, union, enum):
+    union.AddField('append', compiler.c_state_ref(self.base).Star())
+
+  def _write_c_insert_transition_definition(self, compiler, union, enum):
+    insertStruct = compiler.cprogram.AddStruct(f"insert_in_{self.name}")
+    insertStruct.AddField('index', cgen.UInt32)
+    insertStruct.AddField('value', compiler.c_state_ref(self.base))
+    union.AddField('insert', insertStruct.Star())
+    enum.AddOption('insert')
+
   def _write_append_transition_definition(self, compiler, union):
-    union.AddField('append', self.base.state_reference(compiler))
+    union.AddField('append', compiler.capnp_state_ref(self.base))
 
   def _write_insert_transition_definition(self, compiler, union):
-    insertTransitionTypeName = f"InsertIn{self.name}"
-
-    insertStruct = compiler.capnp.AddStructure(insertTransitionTypeName)
+    insertStruct = compiler.capnp.AddStructure(f"InsertIn{self.name}")
     insertStruct.AddField('index', capnpgen.UInt32)
-    insertStruct.AddField('value', self.base.state_reference(compiler))
+    insertStruct.AddField('value', compiler.capnp_state_ref(self.base))
 
-    union.AddField('insert', insertTransitionTypeName)
+    union.AddField('insert', insertStruct)
+
+  def _write_c_on_index_transition_definition(self, compiler, union, enum):
+    onIndexStruct = compiler.cprogram.AddStruct(f"on_index_{self.name}")
+    onIndexStruct.AddField('index', cgen.UInt32)
+    onIndexStruct.AddField('transition', compiler.c_transitions_ref(self.base).Star())
+
+    union.AddField('on_index', onIndexStruct.Star())
+    enum.AddOption('on_index')
 
   def _write_on_index_transition_definition(self, compiler, union):
-    onIndexTypeName = f"OnIndex{self.name}"
-
-    onIndexStruct = compiler.capnp.AddStructure(onIndexTypeName)
+    onIndexStruct = compiler.capnp.AddStructure(f"OnIndex{self.name}")
     onIndexStruct.AddField('index', capnpgen.UInt32)
-    onIndexStruct.AddField('transition', self.base.transition_reference(compiler))
+    onIndexStruct.AddField('transition', compiler.capnp_transitions_ref(self.base))
 
-    union.AddField('onIndex', onIndexTypeName)
+    union.AddField('onIndex', onIndexStruct)
+
+  def _write_c_remove_transition_definition(self, compiler, union, enum):
+    union.AddField('remove', cgen.UInt32)
 
   def _write_remove_transition_definition(self, compiler, union):
-    removeTransitionTypeName = f"RemoveFrom{self.name}"
     union.AddField('remove', capnpgen.UInt32)
 
-  def _write_transition_definition(self, compiler, ident, union):
+  def _write_capnp_transition_definition(self, compiler, ident, union):
     if ident == 'standard':
       pass
     elif ident == 'append':
@@ -292,11 +464,22 @@ class List(Type):
     else:
       raise RuntimeError(f"Unrecognized transition identifier {ident}.")
 
-  def _write_state_definition(self, compiler):
-    compiler.ensure_root_type_states(self.base)
+  def _write_c_transition_definition(self, compiler, ident, union, enum):
+    if ident == 'standard':
+      pass
+    elif ident == 'append':
+      self._write_c_append_transition_definition(compiler, union, enum)
+    elif ident == 'insert':
+      self._write_c_insert_transition_definition(compiler, union, enum)
+    elif ident == 'remove':
+      self._write_c_remove_transition_definition(compiler, union, enum)
+    elif ident == 'onIndex':
+      self._write_c_on_index_transition_definition(compiler, union, enum)
+    else:
+      raise RuntimeError(f"Unrecognized transition identifier {ident}.")
 
-  def _reference_string(self, compiler):
-    return f"List({self.base.state_reference(compiler)})"
+  def _write_capnp_state_definition(self, compiler):
+    return f"List({compiler.capnp_state_ref(self.base)})"
 
   def __abs__(self):
     if abs(self.base) == 0:

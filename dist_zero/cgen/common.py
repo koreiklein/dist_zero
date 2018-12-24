@@ -2,4 +2,6 @@ import json
 
 escape_c = lambda s: json.dumps(s).strip('"')
 
-INDENT = 2
+INDENT = '  '
+INDENT_TWO = INDENT + INDENT
+INDENT_THREE = INDENT + INDENT + INDENT

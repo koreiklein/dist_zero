@@ -4,6 +4,26 @@ from dist_zero import cgen
 
 
 @pytest.mark.cgen
+def test_cgen_python_type():
+  prog = cgen.Program("type_test_program", docstring='Dummy program exporting a new type')
+
+  new_type = prog.AddPythonType('MyNewType', docstring='For testing adding types via a c extension.')
+
+  init = new_type.AddInit()
+  init.AddReturn(cgen.Constant(0))
+
+  x = cgen.Var("x", cgen.Int32)
+  pair_f = new_type.AddMethod('f', [x])
+  pair_f.AddReturn(cgen.PyLong_FromLong(x + x))
+
+  mod = prog.build_and_import()
+
+  x = mod.MyNewType()
+  assert 2 == x.f(1)
+  assert 6 == x.f(3)
+
+
+@pytest.mark.cgen
 def test_cgen_basics():
   prog = cgen.Program("test_program", docstring='Dummy program for testing')
 

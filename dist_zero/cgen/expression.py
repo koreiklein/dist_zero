@@ -1,4 +1,7 @@
+from dist_zero import errors
+
 from .common import INDENT, escape_c
+from . import lvalue
 
 
 class Expression(object):
@@ -7,6 +10,29 @@ class Expression(object):
 
   def to_c_string(self, root=False):
     raise NotImplementedError()
+
+  def __repr__(self):
+    return str(self)
+
+  def Cast(self, type):
+    return Cast(self, type)
+
+  def Deref(self):
+    return self.to_component_rvalue().Deref()
+
+  def Dot(self, name):
+    return self.to_component_rvalue().Dot(name)
+
+  def Arrow(self, name):
+    return self.to_component_rvalue().Arrow(name)
+
+  def Sub(self, i):
+    if not isinstance(i, Expression):
+      raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
+    return self.to_component_rvalue().Sub(i)
+
+  def to_component_rvalue(self):
+    return ComponentRvalue(self, [])
 
   def __call__(self, *args):
     return Call(self, args)
@@ -63,6 +89,52 @@ class Expression(object):
     return BinOp(Div, self, other)
 
 
+class Sizeof(Expression):
+  def __init__(self, base_type):
+    self.base_type = base_type
+
+  def add_includes(self, program):
+    self.base_type.add_includes(program)
+
+  def to_c_string(self, root=False):
+    return f"sizeof({self.base_type.to_c_string()})"
+
+
+class ComponentRvalue(Expression):
+  def __init__(self, base, accessors):
+    self.base = base
+    self.accessors = accessors
+
+  def _extend(self, accessor):
+    accessors = list(self.accessors)
+    accessors.append(accessor)
+    return ComponentRvalue(base=self.base, accessors=accessors)
+
+  def Deref(self):
+    return self._extend(lvalue.Deref)
+
+  def Dot(self, name):
+    return self._extend(lvalue.Dot(name))
+
+  def Arrow(self, name):
+    return self._extend(lvalue.Arrow(name))
+
+  def Sub(self, i):
+    if not isinstance(i, Expression):
+      raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
+    return self._extend(lvalue.Sub(i))
+
+  def add_includes(self, program):
+    self.base.add_includes(program)
+
+  def to_c_string(self, root=False):
+    result = self.base.to_c_string(root=True)
+    for accessor in self.accessors:
+      result = accessor.access_variable(result)
+
+    return result
+
+
 class UnOp(Expression):
   def __init__(self, base_expression, op):
     if not isinstance(base_expression, Expression):
@@ -93,6 +165,9 @@ class Constant(Expression):
 
 true = Constant(1)
 false = Constant(0)
+
+Zero, One, Two, Three, Four, Five = [Constant(i) for i in range(6)]
+MinusOne = Constant(-1)
 
 
 class StrConstant(Expression):
@@ -182,17 +257,63 @@ class _NULL(Expression):
 NULL = _NULL()
 
 
+class Cast(Expression):
+  def __init__(self, base, type):
+    self.base = base
+    self.type = type
+
+  def add_includes(self, program):
+    self.base.add_includes(program)
+    self.type.add_includes(program)
+
+  def to_c_string(self, root=False):
+    if root:
+      return f"({self.type.to_c_string()}) {self.base.to_c_string(root=False)}"
+    else:
+      return f"(({self.type.to_c_string()}) {self.base.to_c_string(root=False)})"
+
+
 class Var(Expression):
   def __init__(self, name, type):
     self.name = name
     self.type = type
 
+  def __str__(self):
+    return f"Var(\"{self.name}\": {self.type})"
+
   def add_includes(self, program):
-    self.type.add_includes(program)
+    if self.type is not None:
+      self.type.add_includes(program)
 
   def to_c_string(self, root=False):
     return self.name
 
 
+Py_DECREF = Var("Py_DECREF", None)
+Py_XDECREF = Var("Py_XDECREF", None)
+Py_INCREF = Var("Py_INCREF", None)
+Py_XINCREF = Var("Py_XINCREF", None)
+
 PyArg_ParseTuple = Var("PyArg_ParseTuple", None)
 PyLong_FromLong = Var("PyLong_FromLong", None)
+PyBool_FromLong = Var("PyBool_FromLong", None)
+
+PyDict_New = Var('PyDict_New', None)
+PyDict_SetItemString = Var('PyDict_SetItemString', None)
+
+PyBytes_FromString = Var('PyBytes_FromString', None)
+PyBytes_FromStringAndSize = Var('PyBytes_FromStringAndSize', None)
+
+PyExc_RuntimeError = Var('PyExc_RuntimeError', None)
+PyErr_SetString = Var('PyErr_SetString', None)
+
+calloc = Var("calloc", None)
+malloc = Var("malloc", None)
+free = Var("free", None)
+capn_init_mem = Var("capn_init_mem", None)
+capn_write_mem = Var("capn_write_mem", None)
+capn_getp = Var("capn_getp", None)
+capn_setp = Var("capn_setp", None)
+capn_root = Var("capn_root", None)
+capn_init_malloc = Var("capn_init_malloc", None)
+capn_free = Var("capn_free", None)

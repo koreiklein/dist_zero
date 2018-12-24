@@ -8,17 +8,33 @@ class Block(object):
     self.program = program
     self._statements = []
 
-  def to_c_string(self, lines, indent):
+  def to_c_string(self, indent):
     if len(self._statements) == 1 and not self.root:
-      self._statements[0].to_c_string(lines, indent + INDENT)
+      if isinstance(self._statements[0], str):
+        yield indent + INDENT + self._statements[0]
+      else:
+        yield from self._statements[0].to_c_string(indent + INDENT)
     else:
-      lines.append(f"{indent * ' '}{{\n")
+      yield f"{indent}{{\n"
       for statement in self._statements:
-        statement.to_c_string(lines, indent + INDENT)
-      lines.append(f"{indent * ' '}}}\n")
+        if isinstance(statement, str):
+          yield indent + INDENT + statement
+        else:
+          yield from statement.to_c_string(indent + INDENT)
+      yield f"{indent}}}\n"
+
+  def Newline(self):
+    self._statements.append('\n')
+    return self
+
+  def AddCString(self, s):
+    self._statements.append(s)
 
   def AddReturn(self, rvalue):
     self._statements.append(Return(rvalue))
+
+  def AddReturnVoid(self):
+    self._statements.append('return;\n')
 
   def AddSwitch(self, switch_on):
     result = Switch(switch_on, program=self.program)
@@ -44,29 +60,32 @@ class Block(object):
   def AddDeclaration(self, lvalue):
     lvalue.add_includes(self.program)
     self._statements.append(Declaration(lvalue))
+    return self
 
   def AddAssignment(self, lvalue, rvalue):
-    lvalue.add_includes(self.program)
+    if lvalue is not None:
+      lvalue.add_includes(self.program)
     rvalue.add_includes(self.program)
     self._statements.append(Assignment(lvalue, rvalue))
+    return self
 
 
 class Statement(object):
-  def to_c_string(self, lines, indent):
+  def to_c_string(self, indent):
     raise NotImplementedError()
 
 
 class _Continue(Statement):
-  def to_c_string(self, lines, indent):
-    lines.append(f"{indent * ' '}continue;\n")
+  def to_c_string(self, indent):
+    yield f"{indent}continue;\n"
 
 
 Continue = _Continue()
 
 
 class _Break(Statement):
-  def to_c_string(self, lines, indent):
-    lines.append(f"{indent * ' '}break;\n")
+  def to_c_string(self, indent):
+    yield f"{indent}break;\n"
 
 
 Break = _Break()
@@ -93,17 +112,17 @@ class Switch(Statement):
     self._cases.append((value, case_block))
     return case_block
 
-  def to_c_string(self, lines, indent):
-    lines.append(f"{indent * ' '}switch ({self.switch_on.to_c_string(root=True)}) {{\n")
+  def to_c_string(self, indent):
+    yield f"{indent}switch ({self.switch_on.to_c_string(root=True)}) {{\n"
     big_indent = indent + INDENT + INDENT
     for value, case_block in self._cases:
-      lines.append(f"{(indent + INDENT) * ' '}case {value.to_c_string(root=True)}:\n")
-      case_block.to_c_string(lines, big_indent)
+      yield f"{indent + INDENT}case {value.to_c_string(root=True)}:\n"
+      yield from case_block.to_c_string(big_indent)
     if self._default_case_block is not None:
-      lines.append(f"{(indent + INDENT) * ' '}default:\n")
-      self._default_case_block.to_c_string(lines, big_indent)
+      yield f"{indent + INDENT}default:\n"
+      yield from self._default_case_block.to_c_string(big_indent)
 
-    lines.append(f"{indent * ' '}}}\n")
+    yield f"{indent}}}\n"
 
 
 class While(Statement):
@@ -112,9 +131,9 @@ class While(Statement):
     self.condition = condition
     self.block = Block(self.program)
 
-  def to_c_string(self, lines, indent):
-    lines.append(f"{indent * ' '}while ({self.condition.to_c_string(root=True)})\n")
-    self.block.to_c_string(lines, indent)
+  def to_c_string(self, indent):
+    yield f"{indent}while ({self.condition.to_c_string(root=True)})\n"
+    yield from self.block.to_c_string(indent)
 
 
 class If(Statement):
@@ -134,30 +153,30 @@ class If(Statement):
       self._alternate = Block(self.program)
     return self._alternate
 
-  def to_c_string(self, lines, indent):
-    lines.append(f"{indent * ' '}if {self.condition.to_c_string()}\n")
+  def to_c_string(self, indent):
+    yield f"{indent}if ({self.condition.to_c_string(root=True)})\n"
     if self._consequent is not None:
-      self._consequent.to_c_string(lines, indent)
+      yield from self._consequent.to_c_string(indent)
 
     if self._alternate is not None:
-      lines.append(f"{indent * ' '}else\n")
-      self._alternate.to_c_string(lines, indent)
+      yield f"{indent}else\n"
+      yield from self._alternate.to_c_string(indent)
 
 
 class Return(Statement):
   def __init__(self, rvalue):
     self.rvalue = rvalue
 
-  def to_c_string(self, lines, indent):
-    lines.append(f'{indent * " "}return {self.rvalue.to_c_string(root=True)};\n')
+  def to_c_string(self, indent):
+    yield f'{indent}return {self.rvalue.to_c_string(root=True)};\n'
 
 
 class Declaration(Statement):
   def __init__(self, lvalue):
     self.lvalue = lvalue
 
-  def to_c_string(self, lines, indent):
-    lines.append(f"{indent * ' '}{self.lvalue.to_c_string()};\n")
+  def to_c_string(self, indent):
+    yield f"{indent}{self.lvalue.to_c_string()};\n"
 
 
 class Assignment(Statement):
@@ -165,5 +184,8 @@ class Assignment(Statement):
     self.lvalue = lvalue
     self.rvalue = rvalue
 
-  def to_c_string(self, lines, indent):
-    lines.append(f"{indent * ' '}{self.lvalue.to_c_string()} = {self.rvalue.to_c_string(root=True)};\n")
+  def to_c_string(self, indent):
+    if self.lvalue is None:
+      yield f"{indent}{self.rvalue.to_c_string(root=True)};\n"
+    else:
+      yield f"{indent}{self.lvalue.to_c_string()} = {self.rvalue.to_c_string(root=True)};\n"
