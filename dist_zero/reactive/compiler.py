@@ -47,6 +47,7 @@ class ReactiveCompiler(object):
     self._type_by_expr = {}
 
     self._graph_struct = None
+    self._turn_struct = None
     self._cached_n_exprs = None
 
     self._top_exprs = None
@@ -66,9 +67,17 @@ class ReactiveCompiler(object):
     state_ref = self.capnp_types.type_to_state_ref[type]
     return cgen.BasicType(f"struct {state_ref}")
 
+  def type_to_capnp_transitions_type(self, type):
+    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
+    return cgen.BasicType(f"struct {transitions_ref}")
+
   def type_to_capnp_state_ptr(self, type):
     state_ref = self.capnp_types.type_to_state_ref[type]
     return cgen.BasicType(f"{state_ref}_ptr")
+
+  def type_to_capnp_transitions_ptr(self, type):
+    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
+    return cgen.BasicType(f"{transitions_ref}_ptr")
 
   def type_to_capnp_state_write_function(self, type):
     state_ref = self.capnp_types.type_to_state_ref[type]
@@ -81,6 +90,10 @@ class ReactiveCompiler(object):
   def type_to_capnp_state_read_function(self, type):
     state_ref = self.capnp_types.type_to_state_ref[type]
     return cgen.Var(f"read_{state_ref}", None)
+
+  def type_to_capnp_transitions_read_function(self, type):
+    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
+    return cgen.Var(f"read_{transitions_ref}", None)
 
   def _capnp_filename(self):
     return f"{self.name}.capnp"
@@ -137,6 +150,9 @@ class ReactiveCompiler(object):
   def get_c_state_type(self, expr):
     return self.c_types.type_to_state_ctype[self._get_type_for_expr(expr)]
 
+  def get_c_transition_type(self, expr):
+    return self.c_types.type_to_transitions_ctype[self._get_type_for_expr(expr)]
+
   def _compute_type(self, expr):
     if expr.__class__ == expression.Applied:
       arg_type = self._get_type_for_expr(expr.arg)
@@ -169,16 +185,26 @@ class ReactiveCompiler(object):
     # The number of output expressions (or graph outputs) that have yet to subscribe to the expr.
     self._graph_struct.AddField('n_missing_subscriptions', cgen.Int32.Array(self._n_exprs()))
 
+    self._turn_struct = self.program.AddStruct('turn')
+    self._graph_struct.AddField('turn', self._turn_struct)
+
     # To hold a python dict of outputs.  This variable is used by chained produce* calls starting
     # from an OnInput call.
-    self._graph_struct.AddField('turn_outputs', cgen.PyObject.Star())
+    self._turn_struct.AddField('result', cgen.PyObject.Star())
+
+    self._turn_struct.AddField('remaining', cgen.Queue)
 
     for i, expr in enumerate(self._top_exprs):
       c_state_type = self.get_c_state_type(expr)
       self._graph_struct.AddField(self._state_key_in_graph(i), c_state_type)
 
+      c_transition_type = self.get_c_transition_type(expr)
+      self._turn_struct.AddField(self._transition_key_in_turn(i), cgen.KVec(c_transition_type))
+
+  def _transition_key_in_turn(self, index):
+    return f'transitions_{index}'
+
   def _state_key_in_graph(self, index):
-    expr = self._top_exprs[index]
     return f'state_{index}'
 
   def _n_exprs(self):
@@ -204,6 +230,9 @@ class ReactiveCompiler(object):
           cgen.UpdateVar(init.SelfArg()).Arrow('n_missing_subscriptions').Sub(cgen.Constant(i)),
           cgen.Constant(n_expr_outputs + n_output_outputs))
 
+    for i, expr in enumerate(self._top_exprs):
+      init.AddAssignment(None, cgen.kv_init(init.SelfArg().Arrow('turn').Dot(self._transition_key_in_turn(i))))
+
     init.AddReturn(cgen.Constant(0))
 
   def _python_bytes_from_capn_function_name(self):
@@ -214,6 +243,9 @@ class ReactiveCompiler(object):
 
   def _initialize_state_function_name(self, index):
     return f"initialize_state_{index}"
+
+  def _deserialize_transitions_function_name(self, index):
+    return f"deserialize_transitions_{index}"
 
   def _subscribe_function_name(self, index):
     return f"subscribe_to_{index}"
@@ -264,7 +296,7 @@ class ReactiveCompiler(object):
       produce.AddIf(vBytes == cgen.NULL).consequent.AddReturnVoid()
       for key in self._output_exprs[expr]:
         (produce.AddIf(cgen.MinusOne == cgen.PyDict_SetItemString(
-            vGraph.Arrow('turn_outputs'), cgen.StrConstant(key), vBytes)).consequent.AddReturnVoid())
+            vGraph.Arrow('turn').Dot('result'), cgen.StrConstant(key), vBytes)).consequent.AddReturnVoid())
 
     for output_expr in self.expr_to_outputs[expr]:
       output_index = self.expr_index[output_expr]
@@ -372,7 +404,9 @@ class ReactiveCompiler(object):
 
     vResult = cgen.Var('result', cgen.PyObject.Star())
     on_input.AddAssignment(cgen.CreateVar(vResult), cgen.PyDict_New())
-    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn_outputs'), vResult)
+    (on_input.AddIf(vResult == cgen.NULL).consequent.AddAssignment(
+        None, self.pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
+    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn').Dot('result'), vResult)
 
     vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
     on_input.AddAssignment(
@@ -386,7 +420,7 @@ class ReactiveCompiler(object):
     produceState = cgen.Var(self._produce_function_name(index), None)
     on_input.AddAssignment(None, produceState(vGraph))
 
-    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn_outputs'), cgen.NULL)
+    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn').Dot('result'), cgen.NULL)
     on_input.AddReturn(vResult)
 
   def _generate_subscribe(self, index):
@@ -481,6 +515,102 @@ class ReactiveCompiler(object):
     loop.AddAssignment(None, cgen.free(vBuf))
     loop.AddAssignment(cgen.UpdateVar(vSize), vSize + vSize)
 
+  def _generate_on_transitions(self):
+    vTransitionsDict = cgen.Var('input_transitions_dict', cgen.PyObject.Star())
+    on_transitions = self._net.AddMethod(name='OnTransitions', args=[vTransitionsDict]) # We'll do our own arg parsing
+    vGraph = on_transitions.SelfArg()
+
+    # Create the result dictionary
+    vResult = cgen.Var('result', cgen.PyObject.Star())
+    on_transitions.Newline()
+    on_transitions.AddAssignment(cgen.CreateVar(vResult), cgen.PyDict_New())
+    (on_transitions.AddIf(vResult == cgen.NULL).consequent.AddAssignment(
+        None, self.pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
+    on_transitions.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn').Dot('result'), vResult)
+    on_transitions.Newline()
+
+    # Initialize the queue
+    on_transitions.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn').Dot('remaining').Dot('count'), cgen.Zero)
+    vRemainingData = cgen.Var('data', cgen.MachineInt.Array(cgen.Constant(len(self._top_exprs))))
+    on_transitions.AddDeclaration(cgen.CreateVar(vRemainingData))
+    on_transitions.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn').Dot('remaining').Dot('data'), vRemainingData)
+
+    on_transitions.Newline()
+
+    vKey, vValue = cgen.Var('input_key', cgen.PyObject.Star()), cgen.Var('input_value', cgen.PyObject.Star())
+    vPos = cgen.Var('loop_pos', cgen.Py_ssize_t)
+    on_transitions.AddDeclaration(cgen.CreateVar(vKey))
+    on_transitions.AddDeclaration(cgen.CreateVar(vValue))
+    on_transitions.AddAssignment(cgen.CreateVar(vPos), cgen.Zero)
+
+    dictLoop = on_transitions.AddWhile(
+        cgen.PyDict_Next(vTransitionsDict, vPos.Address(), vKey.Address(), vValue.Address()))
+
+    condition = dictLoop
+    for inputExpr in self._input_exprs:
+      key = inputExpr.name
+      input_index = self.expr_index[inputExpr]
+      ifMatch = condition.AddIf(cgen.Zero == cgen.PyUnicode_CompareWithASCIIString(vKey, cgen.StrConstant(key)))
+      ifMatch.consequent.AddAssignment(
+          None, cgen.queue_push(vGraph.Arrow('turn').Dot('remaining').Address(), cgen.Constant(input_index)))
+      deserializeTransitions = cgen.Var(self._deserialize_transitions_function_name(input_index), None)
+      ifMatch.consequent.AddAssignment(None, deserializeTransitions(vGraph, vValue))
+      condition = ifMatch.alternate
+
+    (condition.AddAssignment(
+        None, self.pyerr_from_string("keys of the argument OnTransition must correspond to inputs.")).AddReturn(
+            cgen.NULL))
+
+    on_transitions.Newline().AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn').Dot('result'), cgen.NULL)
+    on_transitions.AddReturn(vResult)
+
+  def _generate_deserialize_transitions(self, inputExpr):
+    index = self.expr_index[inputExpr]
+    vGraph = cgen.Var('graph', self._graph_struct.Star())
+    vPythonList = cgen.Var('user_input_list_of_bytes', cgen.PyObject.Star())
+    deserialize_transitions = self.program.AddFunction(
+        name=self._deserialize_transitions_function_name(index), retType=cgen.Void, args=[vGraph, vPythonList])
+
+    vKVec = vGraph.Arrow('turn').Dot(self._transition_key_in_turn(index))
+    deserialize_transitions.AddAssignment(None, cgen.kv_init(vKVec))
+
+    vNumber = cgen.Var('n_transitions', cgen.Py_ssize_t)
+    deserialize_transitions.AddAssignment(cgen.CreateVar(vNumber), cgen.PyList_Size(vPythonList))
+    vI = cgen.Var('i', cgen.Py_ssize_t)
+    deserialize_transitions.AddAssignment(cgen.CreateVar(vI), cgen.Zero)
+
+    listLoop = deserialize_transitions.Newline().AddWhile(vI < vNumber)
+
+    vPythonBytes = cgen.Var('python_bytes', cgen.PyObject.Star())
+    listLoop.AddAssignment(cgen.CreateVar(vPythonBytes), cgen.PyList_GetItem(vPythonList, vI))
+    listLoop.AddIf(cgen.NULL == vPythonBytes).consequent.AddReturnVoid()
+
+    listLoop.Newline()
+
+    vBuf = cgen.Var('buf', cgen.Char.Star())
+    vBuflen = cgen.Var('buflen', cgen.Py_ssize_t)
+    vCapn = cgen.Var('capn', cgen.Capn)
+    listLoop.AddDeclaration(cgen.CreateVar(vBuf))
+    listLoop.AddDeclaration(cgen.CreateVar(vBuflen))
+    listLoop.AddDeclaration(cgen.CreateVar(vCapn))
+    (listLoop.AddIf(cgen.MinusOne == cgen.PyBytes_AsStringAndSize(vPythonBytes, vBuf.Address(), vBuflen.Address())).
+     consequent.AddReturnVoid())
+
+    (listLoop.AddIf(
+        cgen.Zero != cgen.capn_init_mem(vCapn.Address(), vBuf.Cast(cgen.UInt8.Star()), vBuflen, cgen.Zero)
+    ).consequent.AddAssignment(
+        None,
+        self.pyerr_from_string("Failed to initialize struct capn when parsing a transitions message.")).AddReturnVoid())
+
+    vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
+    listLoop.AddAssignment(
+        cgen.CreateVar(vCapnPtr), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
+
+    inputExpr.type.generate_capnp_to_c_transition(self, listLoop, vCapnPtr, vKVec)
+    listLoop.AddAssignment(None, cgen.capn_free(vCapn.Address()))
+
+    listLoop.Newline().AddAssignment(cgen.UpdateVar(vI), vI + cgen.One)
+
   def compile(self, output_key_to_norm_expr):
     self._output_key_to_norm_expr = output_key_to_norm_expr
     topsorter = _Topsorter(list(output_key_to_norm_expr.values()))
@@ -533,16 +663,23 @@ class ReactiveCompiler(object):
 
     for expr in self._input_exprs:
       self._generate_on_input(expr)
+      self._generate_deserialize_transitions(expr)
 
     for key, expr in self._output_key_to_norm_expr.items():
       self._generate_on_output(key, expr)
 
-    module = self.program.build_and_import()
+    self._generate_on_transitions()
 
     # FIXME(KK): Remove
+    with open('msg.capnp', 'w') as f:
+      for line in self.capnp_types.capnp.lines():
+        f.write(line)
+
     with open('example.c', 'w') as f:
       for line in self.program.to_c_string():
         f.write(line)
+
+    module = self.program.build_and_import()
 
     return module
 

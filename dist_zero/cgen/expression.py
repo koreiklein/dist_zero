@@ -2,6 +2,7 @@ from dist_zero import errors
 
 from .common import INDENT, escape_c
 from . import lvalue
+from .type import CType
 
 
 class Expression(object):
@@ -186,8 +187,8 @@ class Call(Expression):
     if not isinstance(func, Expression):
       raise RuntimeError(f"Function argument in call was not an expression. Got {func}")
     for i, arg in enumerate(args):
-      if not isinstance(arg, Expression):
-        raise RuntimeError(f"Argument {i} in call was not an expression. Got {arg}")
+      if not isinstance(arg, Expression) and not isinstance(arg, CType):
+        raise RuntimeError(f"Argument {i} in call was not an expression or Type. Got {arg}")
     self.func = func
     self.args = args
 
@@ -197,7 +198,7 @@ class Call(Expression):
       arg.add_includes(program)
 
   def to_c_string(self, root=False):
-    args = [arg.to_c_string(root=True) for arg in self.args]
+    args = [arg.to_c_string() for arg in self.args]
     return f"{self.func.to_c_string()}({', '.join(args)})"
 
 
@@ -300,9 +301,16 @@ PyBool_FromLong = Var("PyBool_FromLong", None)
 
 PyDict_New = Var('PyDict_New', None)
 PyDict_SetItemString = Var('PyDict_SetItemString', None)
+PyDict_Next = Var('PyDict_Next', None)
+
+PyList_Size = Var('PyList_Size', None)
+PyList_GetItem = Var('PyList_GetItem', None)
 
 PyBytes_FromString = Var('PyBytes_FromString', None)
 PyBytes_FromStringAndSize = Var('PyBytes_FromStringAndSize', None)
+PyBytes_AsStringAndSize = Var('PyBytes_AsStringAndSize', None)
+
+PyUnicode_CompareWithASCIIString = Var('PyUnicode_CompareWithASCIIString', None)
 
 PyExc_RuntimeError = Var('PyExc_RuntimeError', None)
 PyErr_SetString = Var('PyErr_SetString', None)
@@ -317,3 +325,9 @@ capn_setp = Var("capn_setp", None)
 capn_root = Var("capn_root", None)
 capn_init_malloc = Var("capn_init_malloc", None)
 capn_free = Var("capn_free", None)
+
+kv_init = Var('kv_init', None)
+kv_push = Var('kv_push', None)
+
+queue_push = Var('queue_push', None)
+queue_pop = Var('queue_push', None)

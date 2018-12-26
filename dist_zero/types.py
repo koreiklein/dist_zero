@@ -57,6 +57,13 @@ class Type(object):
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
+  def generate_capnp_to_c_transition(self, compiler, block, capn_ptr_input, output_kvec):
+    '''
+    Generate code in ``block`` to append to the ``outptu_kvec`` list of transitions using the ``capn_ptr_input``
+    capn_ptr variable containing the input capnp buffer of the transitions.
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
   def __init__(self):
     self.transition_identifiers = set(['standard'])
 
@@ -203,6 +210,21 @@ class BasicType(Type):
     block.AddAssignment(output_lvalue, structure.Dot('basicState'))
 
     block.Newline()
+
+  def generate_capnp_to_c_transition(self, compiler, block, capn_ptr_input, output_kvec):
+    ptr = cgen.Var('ptr', compiler.type_to_capnp_transitions_ptr(self))
+    structure = cgen.Var('parsed_structure', compiler.type_to_capnp_transitions_type(self))
+
+    block.AddDeclaration(cgen.CreateVar(structure))
+    block.AddDeclaration(cgen.CreateVar(ptr))
+    block.Newline()
+
+    readStructure = compiler.type_to_capnp_transitions_read_function(self)
+    block.AddAssignment(cgen.UpdateVar(ptr).Dot('p'), capn_ptr_input)
+    block.AddAssignment(None, readStructure(structure.Address(), ptr))
+
+    t = compiler.c_types.type_to_transitions_ctype[self]
+    block.AddAssignment(None, cgen.kv_push(t, output_kvec, structure.Dot('basicTransition')))
 
   def _write_c_transitions_definition(self, compiler):
     return self.c_transition_type

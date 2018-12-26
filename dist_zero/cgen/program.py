@@ -76,6 +76,8 @@ class Program(object):
       f.write("from distutils.core import setup, Extension\n")
       f.write(f'module = Extension("{self.name}",\n')
 
+      f.write(f'{INDENT}extra_compile_args=["-Werror", "-Wall"],\n')
+
       f.write(f'{INDENT}sources=[\n')
       f.write(f'{INDENT_TWO}"{cfilename}",\n')
       for source in self._sources:

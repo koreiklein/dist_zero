@@ -44,6 +44,23 @@ class KVec(CType):
     return f'kvec_t({self.base_type.to_c_string()})'
 
 
+class _Queue(CType):
+  def add_includes(self, program):
+    program.includes.add('"queue.c"')
+
+  def wrap_variable(self, varname):
+    return f"struct queue {varname}"
+
+  def parsing_format_string(self):
+    raise RuntimeError(f"Unable to produce a PyArg_ParseTuple format string for {self.to_c_string()}")
+
+  def to_c_string(self):
+    return "struct queue"
+
+
+Queue = _Queue()
+
+
 class Array(CType):
   def __init__(self, base_type, n):
     self.base_type = base_type
@@ -81,6 +98,8 @@ class Star(CType):
   def parsing_format_string(self):
     if self.base_type == Char:
       return "w"
+    if self.base_type == PyObject:
+      return "o"
     else:
       raise RuntimeError(f"Unable to produce a PyArg_ParseTuple format string for {self.to_c_string()}")
 
@@ -114,6 +133,7 @@ class SimpleCType(CType):
 
 Void = SimpleCType('void')
 PyObject = SimpleCType('PyObject')
+Py_ssize_t = SimpleCType('Py_ssize_t')
 Char = SimpleCType('char', format_string='c')
 Capn = SimpleCType('struct capn')
 Capn_Ptr = SimpleCType('capn_ptr')
