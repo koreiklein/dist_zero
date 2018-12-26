@@ -162,7 +162,12 @@ class ReactiveCompiler(object):
   def _generate_structs(self):
     '''Generate the graph struct in self.program.'''
     self._graph_struct = self._net.struct
-    self._graph_struct.AddField('n_missing_inputs', cgen.Int32.Array(self._n_exprs()))
+
+    # -1 if the expr has not been subscribed to, otherwise the number of inputs that still need to be produced.
+    self._graph_struct.AddField('n_missing_productions', cgen.Int32.Array(self._n_exprs()))
+
+    # The number of output expressions (or graph outputs) that have yet to subscribe to the expr.
+    self._graph_struct.AddField('n_missing_subscriptions', cgen.Int32.Array(self._n_exprs()))
 
     # To hold a python dict of outputs.  This variable is used by chained produce* calls starting
     # from an OnInput call.
@@ -189,7 +194,15 @@ class ReactiveCompiler(object):
     init = self._net.AddInit()
 
     for i, expr in enumerate(self._top_exprs):
-      init.AddAssignment(cgen.UpdateVar(init.SelfArg()).Arrow('n_missing_inputs').Sub(cgen.Constant(i)), cgen.MinusOne)
+      init.AddAssignment(
+          cgen.UpdateVar(init.SelfArg()).Arrow('n_missing_productions').Sub(cgen.Constant(i)), cgen.MinusOne)
+
+    for i, expr in enumerate(self._top_exprs):
+      n_expr_outputs = len(self.expr_to_outputs[expr])
+      n_output_outputs = len(self._output_exprs.get(expr, []))
+      init.AddAssignment(
+          cgen.UpdateVar(init.SelfArg()).Arrow('n_missing_subscriptions').Sub(cgen.Constant(i)),
+          cgen.Constant(n_expr_outputs + n_output_outputs))
 
     init.AddReturn(cgen.Constant(0))
 
@@ -235,7 +248,7 @@ class ReactiveCompiler(object):
     '''
     Generate the produce function in c for this expression index.
     This function will only be called after the state for the expression has been initialized and its
-      n_missing_inputs variable set to zero.
+      n_missing_productions variable set to zero.
     Calling it ensures that any expression enabled by the setting of this state will be initialized and its
     produced function will be called.
     '''
@@ -256,11 +269,12 @@ class ReactiveCompiler(object):
     for output_expr in self.expr_to_outputs[expr]:
       output_index = self.expr_index[output_expr]
 
-      vNMissingInputs = vGraph.Arrow('n_missing_inputs').Sub(cgen.Constant(output_index))
+      vNMissingInputs = vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(output_index))
       whenSubscribed = produce.AddIf(vNMissingInputs >= cgen.Zero).consequent
 
       whenSubscribed.AddAssignment(
-          cgen.UpdateVar(vGraph).Arrow('n_missing_inputs').Sub(cgen.Constant(output_index)), vNMissingInputs - cgen.One)
+          cgen.UpdateVar(vGraph).Arrow('n_missing_productions').Sub(cgen.Constant(output_index)),
+          vNMissingInputs - cgen.One)
 
       whenReady = whenSubscribed.AddIf(vNMissingInputs == cgen.Zero).consequent
       initializeFunction = cgen.Var(self._initialize_state_function_name(output_index), None)
@@ -367,7 +381,7 @@ class ReactiveCompiler(object):
     inputType.generate_capnp_to_c_state(self, on_input, vCapnPtr, self.state_lvalue(vGraph, expr))
 
     on_input.AddAssignment(None, cgen.capn_free(vCapn.Address()))
-    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('n_missing_inputs').Sub(cgen.Constant(index)), cgen.Zero)
+    on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('n_missing_productions').Sub(cgen.Constant(index)), cgen.Zero)
 
     produceState = cgen.Var(self._produce_function_name(index), None)
     on_input.AddAssignment(None, produceState(vGraph))
@@ -391,21 +405,29 @@ class ReactiveCompiler(object):
     vGraph = cgen.Var('graph', self._graph_struct.Star())
     subscribe = self.program.AddFunction(name=self._subscribe_function_name(index), retType=cgen.Int32, args=[vGraph])
 
-    # Inputs will have their n_missing_inputs value set to 0 only after they have been initialized.
-    subscribe.AddReturn(vGraph.Arrow('n_missing_inputs').Sub(cgen.Constant(index)) == cgen.Zero)
+    subscribe.AddAssignment(
+        cgen.UpdateVar(vGraph).Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)),
+        vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)) - cgen.One)
+
+    # Inputs will have their n_missing_productions value set to 0 only after they have been initialized.
+    subscribe.AddReturn(vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(index)) == cgen.Zero)
 
   def _generate_subscribe_noninput(self, index, expr):
     vGraph = cgen.Var('graph', self._graph_struct.Star())
     subscribe = self.program.AddFunction(name=self._subscribe_function_name(index), retType=cgen.Int32, args=[vGraph])
 
-    missingInputsI = vGraph.Arrow('n_missing_inputs').Sub(cgen.Constant(index))
-    updateMissingInputsI = cgen.UpdateVar(vGraph).Arrow('n_missing_inputs').Sub(cgen.Constant(index))
+    subscribe.AddAssignment(
+        cgen.UpdateVar(vGraph).Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)),
+        vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)) - cgen.One)
+
+    missingInputsI = vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(index))
+    updateMissingInputsI = cgen.UpdateVar(vGraph).Arrow('n_missing_productions').Sub(cgen.Constant(index))
 
     ifAlreadySubscribed = subscribe.AddIf(missingInputsI >= cgen.Zero)
     ifAlreadySubscribed.consequent.AddReturn(missingInputsI == cgen.Zero)
     whenNotAlreadySubscribed = ifAlreadySubscribed.alternate
 
-    nMissingInputs = cgen.Var('n_missing_inputs', cgen.Int32)
+    nMissingInputs = cgen.Var('n_missing_productions', cgen.Int32)
     whenNotAlreadySubscribed.AddAssignment(
         cgen.CreateVar(nMissingInputs), cgen.Constant(len(self.expr_to_inputs[expr])))
 
@@ -516,6 +538,11 @@ class ReactiveCompiler(object):
       self._generate_on_output(key, expr)
 
     module = self.program.build_and_import()
+
+    # FIXME(KK): Remove
+    with open('example.c', 'w') as f:
+      for line in self.program.to_c_string():
+        f.write(line)
 
     return module
 
