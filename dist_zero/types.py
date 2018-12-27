@@ -43,6 +43,19 @@ class Type(object):
   def equivalent(self, other):
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
+  def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
+    '''
+    Generate code in ``block`` to update a state given a c expression for a transition on that state.
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
+  def generate_c_transitions_to_capnp(self, compiler, block, transitionsRvalue, result):
+    '''
+    Generate code in ``block`` to write the capnp data from ``transitionsRValue``.
+    :param result: The c lvalue to assign the result to
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
   def generate_c_state_to_capnp(self, compiler, block, stateRvalue, result):
     '''
     Generate code in ``block`` to write the capnp data from ``stateRValue``.
@@ -109,6 +122,9 @@ class Type(object):
 
       if union.RemoveIfEmpty():
         enum.RemoveIfEmpty()
+      else:
+        struct.AddField('type', enum)
+        struct.AddField('value', union)
       return struct
 
   def _write_capnp_transitions_definition(self, compiler):
@@ -150,22 +166,23 @@ class FunctionType(Type):
 
 
 class BasicType(Type):
-  def __init__(self, capnp_state, c_state_type, capnp_transition_type, c_transition_type):
+  def __init__(self, capnp_state, c_state_type, capnp_transition_type, c_transition_type, apply_transition,
+               nil_transition_c_expression):
     self.name = f"Basic{_gen_name()}"
     self.capnp_state = capnp_state
     self.c_state_type = c_state_type
     self.capnp_transition_type = capnp_transition_type
     self.c_transition_type = c_transition_type
+    self.nil_transition_c_expression = nil_transition_c_expression
+
+    self._apply_transition = apply_transition
 
     super(BasicType, self).__init__()
 
-  def generate_c_state_to_capnp(self, compiler, block, stateRvalue, result):
+  def _init_capn_mem(self, block):
     vCapn = cgen.Var('capn', cgen.Capn)
     vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
     vSegment = cgen.Var('seg', cgen.Capn_Segment.Star())
-
-    stateStructureType = compiler.type_to_capnp_state_type(self)
-    myStructure = cgen.Var('structure', stateStructureType)
 
     block.AddDeclaration(cgen.CreateVar(vCapn))
     block.AddAssignment(None, cgen.capn_init_malloc(vCapn.Address()))
@@ -174,16 +191,51 @@ class BasicType(Type):
 
     block.Newline()
 
+    return vCapn, vCapnPtr, vSegment
+
+  def generate_c_transitions_to_capnp(self, compiler, block, transitionsRvalue, result):
+    vCapn, vCapnPtr, vSegment = self._init_capn_mem(block)
+
+    transitionsStructureType = compiler.type_to_capnp_transitions_type(self)
+    myStructure = cgen.Var('structure', transitionsStructureType)
+    block.AddDeclaration(cgen.CreateVar(myStructure))
+    basicLValue = cgen.UpdateVar(myStructure).Dot('basicTransition')
+    basicRValue = myStructure.Dot('basicTransition')
+
+    block.AddAssignment(basicLValue, self.nil_transition_c_expression)
+
+    cTransitionsIndex = cgen.Var('c_transitions_i', cgen.MachineInt)
+    block.AddAssignment(cgen.CreateVar(cTransitionsIndex), cgen.Zero)
+    loop = block.AddWhile(cTransitionsIndex < cgen.kv_size(transitionsRvalue))
+    loop.AddAssignment(basicLValue, self._apply_transition(basicRValue, cgen.kv_A(transitionsRvalue,
+                                                                                  cTransitionsIndex)))
+    loop.AddAssignment(cgen.UpdateVar(cTransitionsIndex), cTransitionsIndex + cgen.One)
+
+    writeStructure = compiler.type_to_capnp_transitions_write_function(self)
+    newPtr = compiler.type_to_capnp_transitions_new_ptr_function(self)
+    ptr = cgen.Var('ptr', compiler.type_to_capnp_transitions_ptr(self))
+    block.AddAssignment(cgen.CreateVar(ptr), newPtr(vSegment))
+    block.AddAssignment(None, writeStructure(myStructure.Address(), ptr))
+
+    self._write_capn_to_python_bytes(compiler, block, vCapn, vCapnPtr, ptr, result)
+
+  def generate_c_state_to_capnp(self, compiler, block, stateRvalue, result):
+    vCapn, vCapnPtr, vSegment = self._init_capn_mem(block)
+
+    stateStructureType = compiler.type_to_capnp_state_type(self)
+    myStructure = cgen.Var('structure', stateStructureType)
     block.AddDeclaration(cgen.CreateVar(myStructure))
     block.AddAssignment(cgen.UpdateVar(myStructure).Dot('basicState'), stateRvalue)
 
     writeStructure = compiler.type_to_capnp_state_write_function(self)
     newPtr = compiler.type_to_capnp_state_new_ptr_function(self)
     ptr = cgen.Var('ptr', compiler.type_to_capnp_state_ptr(self))
-
     block.AddAssignment(cgen.CreateVar(ptr), newPtr(vSegment))
     block.AddAssignment(None, writeStructure(myStructure.Address(), ptr))
 
+    self._write_capn_to_python_bytes(compiler, block, vCapn, vCapnPtr, ptr, result)
+
+  def _write_capn_to_python_bytes(self, compiler, block, vCapn, vCapnPtr, ptr, result):
     (block.AddIf(cgen.Zero != cgen.capn_setp(vCapnPtr, cgen.Zero, ptr.Dot('p'))).consequent.AddAssignment(
         None, compiler.pyerr_from_string("Failed to capn_setp for root when producing output.")).AddAssignment(
             None, cgen.capn_free(vCapn.Address())).AddReturn(cgen.NULL))
@@ -253,15 +305,67 @@ class BasicType(Type):
     struct.AddField('basicState', self.capnp_state)
     return self.name
 
+  def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
+    block.AddAssignment(stateLvalue, self._apply_transition(transition, stateRvalue))
 
-Int8 = BasicType('Int8', c_state_type=cgen.Int8, capnp_transition_type='Int8', c_transition_type=cgen.Int8)
-Int16 = BasicType('Int16', c_state_type=cgen.Int16, capnp_transition_type='Int16', c_transition_type=cgen.Int16)
-Int32 = BasicType('Int32', c_state_type=cgen.Int32, capnp_transition_type='Int32', c_transition_type=cgen.Int32)
-Int64 = BasicType('Int64', c_state_type=cgen.Int64, capnp_transition_type='Int64', c_transition_type=cgen.Int64)
-UInt8 = BasicType('UInt8', c_state_type=cgen.UInt8, capnp_transition_type='UInt8', c_transition_type=cgen.UInt8)
-UInt16 = BasicType('UInt16', c_state_type=cgen.UInt16, capnp_transition_type='UInt16', c_transition_type=cgen.UInt16)
-UInt32 = BasicType('UInt32', c_state_type=cgen.UInt32, capnp_transition_type='UInt32', c_transition_type=cgen.UInt32)
-UInt64 = BasicType('UInt64', c_state_type=cgen.UInt64, capnp_transition_type='UInt64', c_transition_type=cgen.UInt64)
+
+apply_plus = lambda transition, stateRvalue: transition + stateRvalue
+Int8 = BasicType(
+    'Int8',
+    c_state_type=cgen.Int8,
+    capnp_transition_type='Int8',
+    c_transition_type=cgen.Int8,
+    apply_transition=apply_plus,
+    nil_transition_c_expression=cgen.Zero)
+Int16 = BasicType(
+    'Int16',
+    c_state_type=cgen.Int16,
+    capnp_transition_type='Int16',
+    c_transition_type=cgen.Int16,
+    apply_transition=apply_plus,
+    nil_transition_c_expression=cgen.Zero)
+Int32 = BasicType(
+    'Int32',
+    c_state_type=cgen.Int32,
+    capnp_transition_type='Int32',
+    c_transition_type=cgen.Int32,
+    apply_transition=apply_plus,
+    nil_transition_c_expression=cgen.Zero)
+Int64 = BasicType(
+    'Int64',
+    c_state_type=cgen.Int64,
+    capnp_transition_type='Int64',
+    c_transition_type=cgen.Int64,
+    apply_transition=apply_plus,
+    nil_transition_c_expression=cgen.Zero)
+UInt8 = BasicType(
+    'UInt8',
+    c_state_type=cgen.UInt8,
+    capnp_transition_type='UInt8',
+    c_transition_type=cgen.UInt8,
+    apply_transition=apply_plus,
+    nil_transition_c_expression=cgen.Zero)
+UInt16 = BasicType(
+    'UInt16',
+    c_state_type=cgen.UInt16,
+    capnp_transition_type='UInt16',
+    c_transition_type=cgen.UInt16,
+    apply_transition=apply_plus,
+    nil_transition_c_expression=cgen.Zero)
+UInt32 = BasicType(
+    'UInt32',
+    c_state_type=cgen.UInt32,
+    capnp_transition_type='UInt32',
+    c_transition_type=cgen.UInt32,
+    apply_transition=apply_plus,
+    nil_transition_c_expression=cgen.Zero)
+UInt64 = BasicType(
+    'UInt64',
+    c_state_type=cgen.UInt64,
+    capnp_transition_type='UInt64',
+    c_transition_type=cgen.UInt64,
+    apply_transition=apply_plus,
+    nil_transition_c_expression=cgen.Zero)
 
 
 class Product(Type):
@@ -273,6 +377,12 @@ class Product(Type):
     self.name = name if name is not None else f"Product{_gen_name()}"
 
     super(Product, self).__init__()
+
+  def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
+    # NOTE(KK): We assume that if we need to maintain the product state, then the components' states
+    # are also being maintained.  In that case, since the produce shares data with them, it doesn't actually
+    # need any updating at all.
+    pass
 
   def equivalent(self, other):
     if other.__class__ != Product or len(self.items) != len(other.items):

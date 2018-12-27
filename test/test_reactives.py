@@ -25,8 +25,11 @@ def program_X():
   self.module = self.compiler.compile({'output': self.outputExpr})
 
   self.capnpForA = self.compiler.capnp_state_module(self.inputA)
+  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
   self.capnpForB = self.compiler.capnp_state_module(self.inputB)
+  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
   self.capnpForOutput = self.compiler.capnp_state_module(self.outputExpr)
+  self.capnpForOutput_T = self.compiler.capnp_transitions_module(self.outputExpr)
 
   return self
 
@@ -89,6 +92,7 @@ def program_C():
 
 
 class TestMultiplicativeReactive(object):
+  @pytest.mark.skip
   def test_complex_initialization(self, program_C):
     net = program_C.module.Net()
 
@@ -126,6 +130,33 @@ class TestMultiplicativeReactive(object):
 
     result = program_X.capnpForOutput.from_bytes(first_output['output'])
     assert 5 == result.basicState
+
+    transition_output = net.OnTransitions({
+        'a': [program_X.capnpForA_T.new_message(basicTransition=2).to_bytes()],
+    })
+    assert 1 == len(transition_output)
+    output = program_X.capnpForOutput_T.from_bytes(transition_output['output'])
+    assert 2 == output.basicTransition
+
+    transition_output = net.OnTransitions({
+        'b': [program_X.capnpForB_T.new_message(basicTransition=3).to_bytes()],
+    })
+    assert 1 == len(transition_output)
+    output = program_X.capnpForOutput_T.from_bytes(transition_output['output'])
+    assert 3 == output.basicTransition
+
+    transition_output = net.OnTransitions({
+        'a': [
+            program_X.capnpForA_T.new_message(basicTransition=2).to_bytes(),
+        ],
+        'b': [
+            program_X.capnpForA_T.new_message(basicTransition=2).to_bytes(),
+            program_X.capnpForA_T.new_message(basicTransition=6).to_bytes(),
+        ],
+    })
+    assert 1 == len(transition_output)
+    output = program_X.capnpForOutput_T.from_bytes(transition_output['output'])
+    assert 10 == output.basicTransition
 
     # FIXME(KK): Continue by submitting transitions to net
 

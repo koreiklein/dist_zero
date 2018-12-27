@@ -12,6 +12,9 @@ class Expression(object):
   def to_c_string(self, root=False):
     raise NotImplementedError()
 
+  def __str__(self):
+    return self.to_c_string()
+
   def __repr__(self):
     return str(self)
 
@@ -88,6 +91,33 @@ class Expression(object):
 
   def __floordiv__(self, other):
     return BinOp(Div, self, other)
+
+
+class UnionLiteral(Expression):
+  def __init__(self, union, key, value):
+    self.union = union
+    self.key = key
+    self.value = value
+
+  def add_includes(self, program):
+    self.value.add_includes(program)
+
+  def to_c_string(self, root=False):
+    return f"(({self.union.to_c_string()}){{ .{self.key}={self.value.to_c_string()} }})"
+
+
+class StructureLiteral(Expression):
+  def __init__(self, struct, key_to_expr):
+    self.struct = struct
+    self.key_to_expr = key_to_expr
+
+  def add_includes(self, program):
+    for expr in self.key_to_expr.values():
+      expr.add_includes(program)
+
+  def to_c_string(self, root=False):
+    assignments = ", ".join(f".{key}={expr.to_c_string()}" for key, expr in self.key_to_expr.items())
+    return f"(({self.struct.to_c_string()}){{ {assignments} }})"
 
 
 class Sizeof(Expression):
@@ -326,8 +356,13 @@ capn_root = Var("capn_root", None)
 capn_init_malloc = Var("capn_init_malloc", None)
 capn_free = Var("capn_free", None)
 
+printf = Var("printf", None)
+
 kv_init = Var('kv_init', None)
 kv_push = Var('kv_push', None)
+kv_size = Var('kv_size', None)
+kv_A = Var('kv_A', None)
+kv_destroy = Var('kv_destroy', None)
 
 queue_push = Var('queue_push', None)
-queue_pop = Var('queue_push', None)
+queue_pop = Var('queue_pop', None)

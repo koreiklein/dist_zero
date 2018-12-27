@@ -1,5 +1,6 @@
 from .type import CType
 from .common import INDENT
+from . import expression
 
 
 class Structure(CType):
@@ -7,6 +8,11 @@ class Structure(CType):
     self.name = name
     self.fields = []
     self.is_pyobject = is_pyobject
+
+    self.field_by_id = {}
+
+  def literal(self, **kwargs):
+    return expression.StructureLiteral(struct=self, key_to_expr=kwargs)
 
   def add_includes(self, program):
     for name, type in self.fields:
@@ -30,6 +36,9 @@ class Structure(CType):
     yield '};\n'
 
   def AddField(self, name, type):
+    if name in self.field_by_id:
+      raise RuntimeError("Field was already added to structure.")
+    self.field_by_id[name] = type
     self.fields.append((name, type))
 
 
@@ -38,9 +47,11 @@ class Enum(CType):
     self.name = name
     self.options = []
     self.removed = False
+    self.options_set = set()
 
   def AddOption(self, key):
     self.options.append(key)
+    self.options_set.add(key)
 
   def RemoveIfEmpty(self):
     if not self.options:
@@ -53,6 +64,11 @@ class Enum(CType):
 
   def to_c_string(self):
     return f"enum {self.name}"
+
+  def literal(self, key):
+    if key not in self.options_set:
+      raise RuntimeError(f"Could not construct union literal for missing key {key}.")
+    return expression.Constant(f"{self.name}_option_{key}")
 
   def to_c_string_definition(self):
     if self.removed:
@@ -74,6 +90,9 @@ class Union(CType):
     self.name = name
     self.fields = []
     self.removed = False
+
+  def literal(self, key, value):
+    return expression.UnionLiteral(union=self, key=key, value=value)
 
   def add_includes(self, program):
     for name, type in self.fields:

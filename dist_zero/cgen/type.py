@@ -27,6 +27,27 @@ class CType(object):
     return KVec(self)
 
 
+class Function(CType):
+  def __init__(self, retType, argTypes):
+    self.retType = retType
+    self.argTypes = argTypes
+
+  def add_includes(self, program):
+    pass
+
+  def wrap_variable(self, varname):
+    return self.retType.wrap_variable(f"({varname})({self._args_string()})")
+
+  def parsing_format_string(self):
+    raise RuntimeError(f"Unable to produce a PyArg_ParseTuple format string for {self.to_c_string()}")
+
+  def _args_string(self):
+    return ", ".join(arg.to_c_string() for arg in self.argTypes)
+
+  def to_c_string(self):
+    return f'{self.retType.to_c_string()} ({self._args_string()})'
+
+
 class KVec(CType):
   def __init__(self, base_type):
     self.base_type = base_type
@@ -99,7 +120,7 @@ class Star(CType):
     if self.base_type == Char:
       return "w"
     if self.base_type == PyObject:
-      return "o"
+      return "O"
     else:
       raise RuntimeError(f"Unable to produce a PyArg_ParseTuple format string for {self.to_c_string()}")
 
