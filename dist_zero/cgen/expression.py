@@ -2,6 +2,7 @@ from dist_zero import errors
 
 from .common import INDENT, escape_c
 from . import lvalue
+from .type import CType
 
 
 class Expression(object):
@@ -10,6 +11,9 @@ class Expression(object):
 
   def to_c_string(self, root=False):
     raise NotImplementedError()
+
+  def __str__(self):
+    return self.to_c_string()
 
   def __repr__(self):
     return str(self)
@@ -87,6 +91,33 @@ class Expression(object):
 
   def __floordiv__(self, other):
     return BinOp(Div, self, other)
+
+
+class UnionLiteral(Expression):
+  def __init__(self, union, key, value):
+    self.union = union
+    self.key = key
+    self.value = value
+
+  def add_includes(self, program):
+    self.value.add_includes(program)
+
+  def to_c_string(self, root=False):
+    return f"(({self.union.to_c_string()}){{ .{self.key}={self.value.to_c_string()} }})"
+
+
+class StructureLiteral(Expression):
+  def __init__(self, struct, key_to_expr):
+    self.struct = struct
+    self.key_to_expr = key_to_expr
+
+  def add_includes(self, program):
+    for expr in self.key_to_expr.values():
+      expr.add_includes(program)
+
+  def to_c_string(self, root=False):
+    assignments = ", ".join(f".{key}={expr.to_c_string()}" for key, expr in self.key_to_expr.items())
+    return f"(({self.struct.to_c_string()}){{ {assignments} }})"
 
 
 class Sizeof(Expression):
@@ -178,7 +209,7 @@ class StrConstant(Expression):
     pass
 
   def to_c_string(self, root=False):
-    return f'"{escape_c(self.s)}"'
+    return escape_c(self.s)
 
 
 class Call(Expression):
@@ -186,8 +217,8 @@ class Call(Expression):
     if not isinstance(func, Expression):
       raise RuntimeError(f"Function argument in call was not an expression. Got {func}")
     for i, arg in enumerate(args):
-      if not isinstance(arg, Expression):
-        raise RuntimeError(f"Argument {i} in call was not an expression. Got {arg}")
+      if not isinstance(arg, Expression) and not isinstance(arg, CType):
+        raise RuntimeError(f"Argument {i} in call was not an expression or Type. Got {arg}")
     self.func = func
     self.args = args
 
@@ -197,7 +228,7 @@ class Call(Expression):
       arg.add_includes(program)
 
   def to_c_string(self, root=False):
-    args = [arg.to_c_string(root=True) for arg in self.args]
+    args = [arg.to_c_string() for arg in self.args]
     return f"{self.func.to_c_string()}({', '.join(args)})"
 
 
@@ -300,12 +331,20 @@ PyBool_FromLong = Var("PyBool_FromLong", None)
 
 PyDict_New = Var('PyDict_New', None)
 PyDict_SetItemString = Var('PyDict_SetItemString', None)
+PyDict_Next = Var('PyDict_Next', None)
+
+PyList_Size = Var('PyList_Size', None)
+PyList_GetItem = Var('PyList_GetItem', None)
 
 PyBytes_FromString = Var('PyBytes_FromString', None)
 PyBytes_FromStringAndSize = Var('PyBytes_FromStringAndSize', None)
+PyBytes_AsStringAndSize = Var('PyBytes_AsStringAndSize', None)
+
+PyUnicode_CompareWithASCIIString = Var('PyUnicode_CompareWithASCIIString', None)
 
 PyExc_RuntimeError = Var('PyExc_RuntimeError', None)
 PyErr_SetString = Var('PyErr_SetString', None)
+PyErr_Format = Var('PyErr_Format', None)
 
 calloc = Var("calloc", None)
 malloc = Var("malloc", None)
@@ -317,3 +356,14 @@ capn_setp = Var("capn_setp", None)
 capn_root = Var("capn_root", None)
 capn_init_malloc = Var("capn_init_malloc", None)
 capn_free = Var("capn_free", None)
+
+printf = Var("printf", None)
+
+kv_init = Var('kv_init', None)
+kv_push = Var('kv_push', None)
+kv_size = Var('kv_size', None)
+kv_A = Var('kv_A', None)
+kv_destroy = Var('kv_destroy', None)
+
+queue_push = Var('queue_push', None)
+queue_pop = Var('queue_pop', None)
