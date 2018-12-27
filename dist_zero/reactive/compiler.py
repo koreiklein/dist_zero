@@ -42,6 +42,8 @@ class ReactiveCompiler(object):
     self.c_types = type_compiler.CTypeCompiler(self.program)
     self.capnp_types = type_compiler.CapnpTypeCompiler()
 
+    self.BadInputError = self.program.AddException('BadReactiveInput')
+
     self.output_key_to_norm_expr = None
 
     self._type_by_expr = {}
@@ -354,8 +356,14 @@ class ReactiveCompiler(object):
 
     produce.AddReturnVoid()
 
-  def pyerr_from_string(self, s):
-    return cgen.PyErr_SetString(cgen.PyExc_RuntimeError, cgen.StrConstant(s))
+  def pyerr(self, err_type, s, *args):
+    if len(args) == 0:
+      return cgen.PyErr_SetString(err_type, cgen.StrConstant(s))
+    else:
+      return cgen.PyErr_Format(err_type, cgen.StrConstant(s), *args)
+
+  def pyerr_from_string(self, s, *args):
+    return self.pyerr(cgen.PyExc_RuntimeError, s, *args)
 
   def _generate_write_output_transitions(self, key, expr):
     '''
@@ -452,8 +460,7 @@ class ReactiveCompiler(object):
 
     (on_input.AddIf(
         cgen.Zero != cgen.capn_init_mem(vCapn.Address(), vBuf, vBuflen, cgen.Zero)).consequent.AddAssignment(
-            None,
-            self.pyerr_from_string("Failed to initialize struct capn when parsing a message.")).AddReturn(cgen.NULL))
+            None, self.pyerr(self.BadInputError, "Failed to parse message input.")).AddReturn(cgen.NULL))
 
     on_input.Newline()
 
@@ -642,8 +649,9 @@ class ReactiveCompiler(object):
       (ifMatch.consequent.AddIf(
           vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(input_index)) != cgen.Zero).consequent.AddAssignment(
               None,
-              self.pyerr_from_string("Transitions were given for a key that has not been initialized.")).AddReturn(
-                  cgen.NULL))
+              self.pyerr(self.BadInputError,
+                         f'Transitions were given for a key "{key}" that has not been initialized.')).AddReturn(
+                             cgen.NULL))
       ifMatch.consequent.AddAssignment(
           None, cgen.queue_push(vGraph.Arrow('turn').Dot('remaining').Address(), cgen.Constant(input_index)))
       deserializeTransitions = cgen.Var(self._deserialize_transitions_function_name(input_index), None)
@@ -651,8 +659,9 @@ class ReactiveCompiler(object):
       condition = ifMatch.alternate
 
     (condition.AddAssignment(
-        None, self.pyerr_from_string("keys of the argument OnTransition must correspond to inputs.")).AddReturn(
-            cgen.NULL))
+        None,
+        self.pyerr(self.BadInputError, 'keys of the argument OnTransition must correspond to inputs. Got "%S"',
+                   vKey)).AddReturn(cgen.NULL))
 
     queueLoop = on_transitions.Newline().AddWhile(cgen.Zero != vGraph.Arrow('turn').Dot('remaining').Dot('count'))
 
@@ -756,11 +765,10 @@ class ReactiveCompiler(object):
     (listLoop.AddIf(cgen.MinusOne == cgen.PyBytes_AsStringAndSize(vPythonBytes, vBuf.Address(), vBuflen.Address())).
      consequent.AddReturnVoid())
 
-    (listLoop.AddIf(
-        cgen.Zero != cgen.capn_init_mem(vCapn.Address(), vBuf.Cast(cgen.UInt8.Star()), vBuflen, cgen.Zero)
-    ).consequent.AddAssignment(
-        None,
-        self.pyerr_from_string("Failed to initialize struct capn when parsing a transitions message.")).AddReturnVoid())
+    (listLoop.AddIf(cgen.Zero != cgen.capn_init_mem(vCapn.Address(), vBuf.Cast(cgen.UInt8.Star()), vBuflen, cgen.Zero)).
+     consequent.AddAssignment(
+         None, self.pyerr(self.BadInputError,
+                          "Failed to initialize struct capn when parsing a transitions message.")).AddReturnVoid())
 
     vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
     listLoop.AddAssignment(

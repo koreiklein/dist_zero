@@ -4,6 +4,36 @@ from dist_zero import recorded, types, expression, reactive, primitive
 
 
 class TestMultiplicativeReactive(object):
+  def test_reactive_errors(self, program_X):
+    net = program_X.module.Net()
+
+    for weird in [[], 7, None]:
+      with pytest.raises(TypeError):
+        net.OnInput_a(weird)
+
+    with pytest.raises(program_X.module.BadReactiveInput):
+      net.OnInput_a('this can definitely not be parsed into a proper network message')
+
+    with pytest.raises(program_X.module.BadReactiveInput):
+      net.OnInput_a(b'this can definitely not be parsed into a proper network message')
+
+    assert not net.OnInput_a(program_X.capnpForA.new_message(basicState=4).to_bytes())
+    assert not net.OnInput_b(program_X.capnpForB.new_message(basicState=1).to_bytes())
+
+    assert 1 == len(net.OnOutput_output())
+
+    assert not net.OnTransitions({})
+    with pytest.raises(program_X.module.BadReactiveInput):
+      net.OnTransitions({'not a valid key': []})
+
+    # Empty transitions for "a" succeeds
+    net.OnTransitions({'a': []})
+
+    net = program_X.module.Net()
+    with pytest.raises(program_X.module.BadReactiveInput):
+      # Empty transitions for "a" fails since "a" has not been initialized.
+      net.OnTransitions({'a': []})
+
   def test_update_product_state(self, program_Z):
     net = program_Z.module.Net()
 

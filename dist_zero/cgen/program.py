@@ -23,6 +23,7 @@ class Program(object):
     self._python_types = []
     self._function_names = set()
     self._functions = []
+    self._exceptions = []
     self._exported_functions = []
     self._structures = []
     self._enums = []
@@ -141,6 +142,11 @@ class Program(object):
       raise RuntimeError(f"Expected exactly one file in the architecture directory.  Got {len(contents)}.")
     return contents[0]
 
+  def AddException(self, name):
+    exc = PythonException(name)
+    self._exceptions.append(exc)
+    return exc.var
+
   def AddExternalFunction(self, name, args, docstring=''):
     fself = expression.Var('self', type.PyObject.Star())
     fargs = expression.Var('args', type.PyObject.Star())
@@ -211,6 +217,8 @@ class Program(object):
       yield '\n'
 
     yield '\n'
+    yield from self.add_exception_declarations()
+    yield '\n'
 
     for func in self._functions:
       yield from func.function_to_c_string()
@@ -227,6 +235,10 @@ class Program(object):
     yield from self.add_py_module_def()
     yield from self.add_py_module_init()
 
+  def add_exception_declarations(self):
+    for exc in self._exceptions:
+      yield f"static PyObject *{exc.name};\n"
+
   def add_py_module_init(self):
     yield "PyMODINIT_FUNC\n"
     yield f"PyInit_{self.name}(void) {{\n"
@@ -241,7 +253,12 @@ class Program(object):
     for python_type in self._python_types:
       t = python_type._type_definition_name()
       yield f"{INDENT}Py_INCREF(&{t});\n"
-      yield f"{INDENT}PyModule_AddObject(module, \"{python_type.name}\", (PyObject *) &{t});\n"
+      yield f"{INDENT}if (PyModule_AddObject(module, \"{python_type.name}\", (PyObject *) &{t})) return NULL;\n"
+
+    for exc in self._exceptions:
+      yield f'\n{INDENT}{exc.name} = PyErr_NewException("{self._module_name()}.{exc.base_name}", NULL, NULL);\n'
+      yield f'{INDENT}Py_INCREF({exc.name});\n'
+      yield f'{INDENT}if (PyModule_AddObject(module, "{exc.base_name}", {exc.name})) return NULL;\n'
 
     yield f"\n{INDENT}return module;\n"
 
@@ -268,6 +285,14 @@ class Program(object):
       yield f'{INDENT}{{"{func.name}", {func.name}, METH_VARARGS, "{escape_c(func.docstring)}"}},\n'
     yield f"{INDENT}{{NULL, NULL, 0, NULL}},\n"
     yield "};\n\n"
+
+
+class PythonException(object):
+  def __init__(self, base_name):
+    self.base_name = base_name
+
+    self.name = f"{base_name}Error"
+    self.var = expression.Var(self.name, None)
 
 
 class Function(expression.Expression):

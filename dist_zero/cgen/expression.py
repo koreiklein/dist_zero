@@ -209,7 +209,7 @@ class StrConstant(Expression):
     pass
 
   def to_c_string(self, root=False):
-    return f'"{escape_c(self.s)}"'
+    return escape_c(self.s)
 
 
 class Call(Expression):
@@ -344,6 +344,7 @@ PyUnicode_CompareWithASCIIString = Var('PyUnicode_CompareWithASCIIString', None)
 
 PyExc_RuntimeError = Var('PyExc_RuntimeError', None)
 PyErr_SetString = Var('PyErr_SetString', None)
+PyErr_Format = Var('PyErr_Format', None)
 
 calloc = Var("calloc", None)
 malloc = Var("malloc", None)
