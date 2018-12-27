@@ -152,7 +152,7 @@ class TestMultiplicativeReactive(object):
 
     thesum = op_plus.from_parts(indiscrete_int, changing_number)
 
-    result = 'FIXME(KK): Finish this!'
+    # FIXME(KK): Finish this!
 
   def test_complex_initialization(self, program_C):
     net = program_C.module.Net()
@@ -164,11 +164,21 @@ class TestMultiplicativeReactive(object):
     first_output = net.OnInput_b(program_C.capnpForB.new_message(basicState=3).to_bytes())
     assert 2 == len(first_output)
     assert 5 == program_C.capnpForX.from_bytes(first_output['x']).basicState
-    assert 15 == program_C.capnpForY.from_bytes(first_output['y']).basicState
+    assert 8 == program_C.capnpForY.from_bytes(first_output['y']).basicState
 
     second_output = net.OnInput_c(program_C.capnpForC.new_message(basicState=7).to_bytes())
     assert len(second_output) == 1
     assert 12 == program_C.capnpForZ.from_bytes(second_output['z']).basicState
+
+    output = net.OnTransitions({
+        'b': [program_C.capnpForB_T.new_message(basicTransition=6).to_bytes()],
+    })
+
+    assert 3 == len(output)
+
+    assert 6 == program_C.capnpForX_T.from_bytes(output['x']).basicTransition
+    assert 12 == program_C.capnpForY_T.from_bytes(output['y']).basicTransition
+    assert 6 == program_C.capnpForZ_T.from_bytes(output['z']).basicTransition
 
 
 class _ProgramData(object):
@@ -283,7 +293,7 @@ def program_C():
   )
 
   self.outputY = expression.Applied(
-      func=primitive.Times(types.Int32),
+      func=primitive.Plus(types.Int32),
       arg=expression.Product([
           ('left', self.outputX),
           ('right', self.inputB),
@@ -316,8 +326,16 @@ def program_C():
   self.capnpForB = self.compiler.capnp_state_module(self.inputB)
   self.capnpForC = self.compiler.capnp_state_module(self.inputC)
 
+  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
+  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
+  self.capnpForC_T = self.compiler.capnp_transitions_module(self.inputC)
+
   self.capnpForX = self.compiler.capnp_state_module(self.outputX)
   self.capnpForY = self.compiler.capnp_state_module(self.outputY)
   self.capnpForZ = self.compiler.capnp_state_module(self.outputZ)
+
+  self.capnpForX_T = self.compiler.capnp_transitions_module(self.outputX)
+  self.capnpForY_T = self.compiler.capnp_transitions_module(self.outputY)
+  self.capnpForZ_T = self.compiler.capnp_transitions_module(self.outputZ)
 
   return self

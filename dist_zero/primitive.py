@@ -31,10 +31,26 @@ class BinOp(PrimitiveOp):
     return self.s
 
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState, arg, expr):
-    if self.s != '+':
-      # FIXME(KK): Test and implement these
-      raise RuntimeError("Not Yet Implemented: BinOp reactions to transitions for BinOps other than '+'")
+    raise RuntimeError(f'BinOp of type "{self.s}" have not (yet) been programmed to react to transitions.')
 
+  def generate_primitive_initialize_state(self, cFunction, argRvalue, resultLvalue):
+    cFunction.AddAssignment(resultLvalue,
+                            cgen.BinOp(self.c_operation,
+                                       argRvalue.Dot('left').Deref(),
+                                       argRvalue.Dot('right').Deref()))
+
+  def get_input_type(self):
+    return self.input_type
+
+  def get_output_type(self):
+    return self.output_type
+
+  def get_type(self):
+    return self.type
+
+
+class PlusBinOp(BinOp):
+  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState, arg, expr):
     outputTransitions = compiler.transitions_rvalue(vGraph, expr)
     output_transition_ctype = compiler.get_c_transition_type(expr)
 
@@ -66,23 +82,8 @@ class BinOp(PrimitiveOp):
 
     loop.AddAssignment(cgen.UpdateVar(argTransitionIndex), argTransitionIndex + cgen.One)
 
-  def generate_primitive_initialize_state(self, cFunction, argRvalue, resultLvalue):
-    cFunction.AddAssignment(resultLvalue,
-                            cgen.BinOp(self.c_operation,
-                                       argRvalue.Dot('left').Deref(),
-                                       argRvalue.Dot('right').Deref()))
 
-  def get_input_type(self):
-    return self.input_type
-
-  def get_output_type(self):
-    return self.output_type
-
-  def get_type(self):
-    return self.type
-
-
-Plus = lambda t: BinOp('+', t, c_operation=cgen.Plus)
+Plus = lambda t: PlusBinOp('+', t, c_operation=cgen.Plus)
 Minus = lambda t: BinOp('-', t, c_operation=cgen.Minus)
 Times = lambda t: BinOp('*', t, c_operation=cgen.Times)
 Div = lambda t: BinOp('/', t, c_operation=cgen.Div)
