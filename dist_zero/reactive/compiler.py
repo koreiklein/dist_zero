@@ -843,14 +843,14 @@ class ReactiveCompiler(object):
 
     self._generate_on_transitions()
 
-    # FIXME(KK): Remove
-    #    with open('msg.capnp', 'w') as f:
-    #      for line in self.capnp_types.capnp.lines():
-    #        f.write(line)
+    ## For writing intermediate files to disk for inspection.
+    #with open('msg.capnp', 'w') as f:
+    #  for line in self.capnp_types.capnp.lines():
+    #    f.write(line)
     #
-    with open('example.c', 'w') as f:
-      for line in self.program.to_c_string():
-        f.write(line)
+    #with open('example.c', 'w') as f:
+    #  for line in self.program.to_c_string():
+    #    f.write(line)
 
     module = self.program.build_and_import()
 
