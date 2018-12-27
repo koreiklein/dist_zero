@@ -243,11 +243,16 @@ class ReactiveCompiler(object):
           cgen.UpdateVar(init.SelfArg()).Arrow('n_missing_productions').Sub(cgen.Constant(i)), cgen.MinusOne)
 
     for i, expr in enumerate(self._top_exprs):
-      n_expr_outputs = len(self.expr_to_outputs[expr])
-      n_output_outputs = len(self._output_exprs.get(expr, []))
+      n_outputs = len(self._output_exprs.get(expr, []))
+      for outputExpr in self.expr_to_outputs[expr]:
+        if outputExpr.__class__ == expression.Product:
+          n_outputs += 2
+        else:
+          n_outputs += 1
+
       init.AddAssignment(
           cgen.UpdateVar(init.SelfArg()).Arrow('n_missing_subscriptions').Sub(cgen.Constant(i)),
-          cgen.Constant(n_expr_outputs + n_output_outputs))
+          cgen.Constant(n_outputs))
 
     for expr in self._top_exprs:
       init.AddAssignment(None, cgen.kv_init(self.transitions_rvalue(init.SelfArg(), expr)))
@@ -503,6 +508,15 @@ class ReactiveCompiler(object):
     subscribe.AddAssignment(
         cgen.UpdateVar(vGraph).Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)),
         vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)) - cgen.One)
+
+    if expr.__class__ == expression.Product:
+      ifZero = subscribe.AddIf(vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)) == cgen.Zero)
+      for inputExpr in self.expr_to_inputs[expr]:
+        ifZero.consequent.AddAssignment(
+            cgen.UpdateVar(vGraph).Arrow('n_missing_subscriptions').Sub(cgen.Constant(self.expr_index[inputExpr])),
+            vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(self.expr_index[inputExpr])) - cgen.One)
+
+    subscribe.Newline()
 
     missingInputsI = vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(index))
     updateMissingInputsI = cgen.UpdateVar(vGraph).Arrow('n_missing_productions').Sub(cgen.Constant(index))
@@ -821,10 +835,10 @@ class ReactiveCompiler(object):
     self._generate_on_transitions()
 
     # FIXME(KK): Remove
-    with open('msg.capnp', 'w') as f:
-      for line in self.capnp_types.capnp.lines():
-        f.write(line)
-
+    #    with open('msg.capnp', 'w') as f:
+    #      for line in self.capnp_types.capnp.lines():
+    #        f.write(line)
+    #
     with open('example.c', 'w') as f:
       for line in self.program.to_c_string():
         f.write(line)

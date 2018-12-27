@@ -379,9 +379,11 @@ class Product(Type):
     super(Product, self).__init__()
 
   def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
-    # NOTE(KK): We assume that if we need to maintain the product state, then the components' states
+    # NOTE(KK): When we need to maintain the product state, then the components' states
     # are also being maintained.  In that case, since the produce shares data with them, it doesn't actually
     # need any updating at all.
+    # The generated c code should be specifically designed to treat products differently so as to ensure
+    # that when a product is maintaining its state, so are all its components.
     pass
 
   def equivalent(self, other):
