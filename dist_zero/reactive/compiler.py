@@ -650,8 +650,8 @@ class ReactiveCompiler(object):
           vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(input_index)) != cgen.Zero).consequent.AddAssignment(
               None,
               self.pyerr(self.BadInputError,
-                         f'Transitions were given for a key "{key}" that has not been initialized.')).AddReturn(
-                             cgen.NULL))
+                         f'Transitions were given for a key "{key}" that has not been initialized.')).AddAssignment(
+                             None, cgen.Py_DECREF(vResult)).AddReturn(cgen.NULL))
       ifMatch.consequent.AddAssignment(
           None, cgen.queue_push(vGraph.Arrow('turn').Dot('remaining').Address(), cgen.Constant(input_index)))
       deserializeTransitions = cgen.Var(self._deserialize_transitions_function_name(input_index), None)
@@ -661,14 +661,15 @@ class ReactiveCompiler(object):
     (condition.AddAssignment(
         None,
         self.pyerr(self.BadInputError, 'keys of the argument OnTransition must correspond to inputs. Got "%S"',
-                   vKey)).AddReturn(cgen.NULL))
+                   vKey)).AddAssignment(None, cgen.Py_DECREF(vResult)).AddReturn(cgen.NULL))
 
     queueLoop = on_transitions.Newline().AddWhile(cgen.Zero != vGraph.Arrow('turn').Dot('remaining').Dot('count'))
 
     nextIndex = cgen.Var('next_index', cgen.MachineInt)
     queueLoop.AddAssignment(cgen.CreateVar(nextIndex), cgen.queue_pop(vGraph.Arrow('turn').Dot('remaining').Address()))
 
-    queueLoop.AddIf(vGraph.Arrow('react_to_transitions').Sub(nextIndex)(vGraph)).consequent.AddReturn(cgen.NULL)
+    (queueLoop.AddIf(vGraph.Arrow('react_to_transitions').Sub(nextIndex)(vGraph)).consequent.AddAssignment(
+        None, cgen.Py_DECREF(vResult)).AddAssignment(cgen.UpdateVar(vResult), cgen.NULL).AddBreak())
 
     freeIndex = cgen.Var('free_index', cgen.MachineInt)
     on_transitions.Newline().AddAssignment(cgen.CreateVar(freeIndex), cgen.Zero)

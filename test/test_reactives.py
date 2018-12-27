@@ -154,7 +154,6 @@ class TestMultiplicativeReactive(object):
 
     result = 'FIXME(KK): Finish this!'
 
-  @pytest.mark.skip
   def test_complex_initialization(self, program_C):
     net = program_C.module.Net()
 
