@@ -23,6 +23,7 @@ class Program(object):
     self._python_types = []
     self._function_names = set()
     self._functions = []
+    self._declarations = []
     self._exceptions = []
     self._exported_functions = []
     self._structures = []
@@ -142,6 +143,9 @@ class Program(object):
       raise RuntimeError(f"Expected exactly one file in the architecture directory.  Got {len(contents)}.")
     return contents[0]
 
+  def AddDeclaration(self, lvalue):
+    self._declarations.append(statement.Declaration(lvalue))
+
   def AddException(self, name):
     exc = PythonException(name)
     self._exceptions.append(exc)
@@ -152,7 +156,8 @@ class Program(object):
     fargs = expression.Var('args', type.PyObject.Star())
     f = self.AddFunction(name, type.PyObject.Star(), [fself, fargs], export=True, docstring=docstring)
 
-    f.generate_parse_external_args(args=args, mainArg=fargs)
+    if args is not None:
+      f.generate_parse_external_args(args=args, mainArg=fargs)
 
     return f
 
@@ -220,6 +225,10 @@ class Program(object):
     yield from self.add_exception_declarations()
     yield '\n'
 
+    yield '\n'
+    yield from self.add_declarations()
+    yield '\n'
+
     for func in self._functions:
       yield from func.function_to_c_string()
       yield '\n'
@@ -238,6 +247,10 @@ class Program(object):
   def add_exception_declarations(self):
     for exc in self._exceptions:
       yield f"static PyObject *{exc.name};\n"
+
+  def add_declarations(self):
+    for dcl in self._declarations:
+      yield from dcl.to_c_string('')
 
   def add_py_module_init(self):
     yield "PyMODINIT_FUNC\n"
