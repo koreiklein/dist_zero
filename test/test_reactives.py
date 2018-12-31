@@ -34,6 +34,25 @@ class TestMultiplicativeReactive(object):
       # Empty transitions for "a" fails since "a" has not been initialized.
       net.OnTransitions({'a': []})
 
+  def test_product_output(self, program_W):
+    net = program_W.module.Net()
+
+    assert not net.OnOutput_output()
+    assert not net.OnInput_a(program_W.capnpForA.new_message(basicState=3).to_bytes())
+    outputs = net.OnInput_b(program_W.capnpForA.new_message(basicState=5).to_bytes())
+    assert 1 == len(outputs)
+    msg = program_W.capnpForOutput.from_bytes(outputs['output'])
+    assert 3 == msg.left.basicState
+    assert 5 == msg.right.basicState
+
+    outputs = net.OnTransitions({
+        'b': [program_W.capnpForB.new_message(basicState=4).to_bytes()],
+    })
+    assert 1 == len(outputs)
+    msg = program_W.capnpForOutput.from_bytes(outputs['output'])
+    import ipdb
+    ipdb.set_trace()
+
   def test_update_product_state(self, program_Z):
     net = program_Z.module.Net()
 
@@ -107,6 +126,8 @@ class TestMultiplicativeReactive(object):
     assert 0 == len(net.OnTransitions({}))
     transition_output = net.OnTransitions({'a': []})
     assert 1 == len(transition_output)
+    import ipdb
+    ipdb.set_trace()
     assert 0 == program_X.capnpForOutput_T.from_bytes(transition_output['output']).basicTransition
 
     transition_output = net.OnTransitions({
@@ -183,6 +204,31 @@ class TestMultiplicativeReactive(object):
 
 class _ProgramData(object):
   pass
+
+
+@pytest.fixture(scope='module')
+def program_W():
+  self = _ProgramData()
+
+  self.inputA = expression.Input('a', types.Int32)
+  self.inputB = expression.Input('b', types.Int32)
+
+  self.outputExpr = expression.Product([
+      ('left', self.inputA),
+      ('right', self.inputB),
+  ])
+
+  self.compiler = reactive.ReactiveCompiler(name='program_W')
+  self.module = self.compiler.compile({'output': self.outputExpr})
+
+  self.capnpForA = self.compiler.capnp_state_module(self.inputA)
+  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
+  self.capnpForB = self.compiler.capnp_state_module(self.inputB)
+  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
+  self.capnpForOutput = self.compiler.capnp_state_module(self.outputExpr)
+  self.capnpForOutput_T = self.compiler.capnp_transitions_module(self.outputExpr)
+
+  return self
 
 
 @pytest.fixture(scope='module')
