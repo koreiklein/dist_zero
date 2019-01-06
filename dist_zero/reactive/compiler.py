@@ -4,7 +4,7 @@ from collections import defaultdict
 import capnp
 capnp.remove_import_hook()
 
-from dist_zero import cgen, errors, expression, capnpgen, types, primitive
+from dist_zero import cgen, errors, expression, capnpgen, types, primitive, settings
 from dist_zero import type_compiler, settings
 
 
@@ -17,6 +17,8 @@ class ReactiveCompiler(object):
     self.name = name
     self.docstring = docstring
 
+    capnp_lib_dir = os.path.join(settings.CAPNP_DIR, 'c-capnproto', 'lib')
+
     self.program = cgen.Program(
         name=self.name,
         docstring=self.docstring,
@@ -25,19 +27,21 @@ class ReactiveCompiler(object):
             f'"{self._capnp_header_filename()}"',
         ],
         library_dirs=[
-            settings.CAPNP_INCLUDE_DIR,
+            settings.CAPNP_DIR,
+            capnp_lib_dir,
         ],
         sources=[
             os.path.join(self._capnp_dirname(), self._capnp_source_filename()),
             # NOTE(KK): We must compile all these files into each extension.
-            os.path.join(settings.CAPNP_INCLUDE_DIR, "capn.c"),
-            os.path.join(settings.CAPNP_INCLUDE_DIR, "capn-malloc.c"),
-            os.path.join(settings.CAPNP_INCLUDE_DIR, "capn-stream.c"),
+            os.path.join(capnp_lib_dir, "capn.c"),
+            os.path.join(capnp_lib_dir, "capn-malloc.c"),
+            os.path.join(capnp_lib_dir, "capn-stream.c"),
         ],
         libraries=[],
         include_dirs=[
             self._capnp_dirname(),
-            settings.CAPNP_INCLUDE_DIR,
+            settings.CAPNP_DIR,
+            capnp_lib_dir,
         ])
     self.c_types = type_compiler.CTypeCompiler(self.program)
     self.capnp_types = type_compiler.CapnpTypeCompiler()
@@ -81,6 +85,18 @@ class ReactiveCompiler(object):
     transitions_ref = self.capnp_types.type_to_transitions_ref[type]
     return cgen.BasicType(f"{transitions_ref}_ptr")
 
+  def type_to_capnp_field_set_function(self, type, field):
+    state_ref = self.capnp_types.type_to_state_ref[type]
+    return cgen.Var(f"{state_ref}_set_{field}", None)
+
+  def type_to_capnp_transition_field_set_function(self, type, field):
+    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
+    return cgen.Var(f"{transitions_ref}_set_{field}", None)
+
+  def type_to_capnp_field_get_function(self, type, field):
+    state_ref = self.capnp_types.type_to_state_ref[type]
+    return cgen.Var(f"{state_ref}_get_{field}", None)
+
   def type_to_capnp_state_write_function(self, type):
     state_ref = self.capnp_types.type_to_state_ref[type]
     return cgen.Var(f"write_{state_ref}", None)
@@ -95,7 +111,11 @@ class ReactiveCompiler(object):
 
   def type_to_capnp_transitions_new_ptr_function(self, type):
     transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.Var(f"new_{transitions_ref}", None)
+    return cgen.Var(f"new_{transitions_ref}_list", None)
+
+  def type_to_capnp_transitions_list_type(self, type):
+    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
+    return cgen.BasicType(f"{transitions_ref}_list")
 
   def type_to_capnp_state_read_function(self, type):
     state_ref = self.capnp_types.type_to_state_ref[type]
@@ -131,7 +151,7 @@ class ReactiveCompiler(object):
       dirname = self._capnp_dirname()
       filename = self._capnp_filename()
 
-      self._pycapnp_module = capnp.load(os.path.join(dirname, filename))
+      self._pycapnp_module = capnp.load(os.path.join(dirname, filename), imports=[settings.CAPNP_DIR])
 
     return self._pycapnp_module
 
@@ -163,8 +183,11 @@ class ReactiveCompiler(object):
     index = self.expr_index[expr]
     return vGraph.Arrow(self._state_key_in_graph(index))
 
+  def type_to_c_state_type(self, type):
+    return self.c_types.type_to_state_ctype[type]
+
   def get_c_state_type(self, expr):
-    return self.c_types.type_to_state_ctype[self.get_type_for_expr(expr)]
+    return self.type_to_c_state_type(self.get_type_for_expr(expr))
 
   def get_c_transition_type(self, expr):
     return self.c_types.type_to_transitions_ctype[self.get_type_for_expr(expr)]
@@ -848,9 +871,9 @@ class ReactiveCompiler(object):
     #  for line in self.capnp_types.capnp.lines():
     #    f.write(line)
     #
-    #with open('example.c', 'w') as f:
-    #  for line in self.program.to_c_string():
-    #    f.write(line)
+    with open('example.c', 'w') as f:
+      for line in self.program.to_c_string():
+        f.write(line)
 
     module = self.program.build_and_import()
 
