@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from dist_zero import errors, settings
+from dist_zero import errors, settings, cgen
 
 INDENT = '  '
 
@@ -42,10 +42,17 @@ class Structure(object):
   def __init__(self, name):
     self.name = name
     self._fields = []
+    self._field_by_name = {}
     self._unions = []
     self._has_unnamed_union = False
 
     self.count = 0
+
+    self.c_new_ptr_function = cgen.Var(f"new_{self.name}", None)
+    self.c_ptr_type = cgen.BasicType(f"{self.name}_ptr")
+
+  def get_field(self, name):
+    return self._field_by_name[name]
 
   def __str__(self):
     return self.name
@@ -59,8 +66,8 @@ class Structure(object):
     yield f"{indent}struct {self.name} {{\n"
 
     extra_indent = indent + INDENT
-    for name, field_type in self._fields:
-      yield f"{extra_indent}{name} @{self.next_count()} :{field_type};\n"
+    for field in self._fields:
+      yield f"{extra_indent}{field.name} @{self.next_count()} :{field.type};\n"
 
     if self._fields:
       yield "\n"
@@ -72,7 +79,20 @@ class Structure(object):
     yield f"{indent}}}\n\n"
 
   def AddField(self, name, field_type):
-    self._fields.append((name, field_type))
+    result = Field(name=name, type=field_type, base=self)
+    self._fields.append(result)
+    if name in self._field_by_name:
+      raise errors.InternalError(f"Field name \"{name}\" was already added to this structure.")
+    self._field_by_name[name] = result
+    return result
+
+  def c_set_field(self, field_name):
+    field = self._field_by_name[field_name]
+    return field.c_set
+
+  def c_get_field(self, field_name):
+    field = self._field_by_name[field_name]
+    return field.c_get
 
   def AddUnion(self, name=None):
     if name is None:
@@ -84,6 +104,16 @@ class Structure(object):
     result = Union(structure=self, name=name)
     self._unions.append(result)
     return result
+
+
+class Field(object):
+  def __init__(self, name, type, base):
+    self.name = name
+    self.type = type
+    self._base = base
+
+    self.c_set = cgen.Var(f"{self._base.name}_set_{self.name}", None)
+    self.c_get = cgen.Var(f"{self._base.name}_get_{self.name}", None)
 
 
 Void = 'Void'

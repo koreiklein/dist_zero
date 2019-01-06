@@ -78,7 +78,7 @@ class Product(Expression):
 
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
     product_type = compiler.get_type_for_expr(self)
-    transition_ctype = compiler.get_c_transition_type(self)
+    transition_ctype = compiler.get_concrete_type_for_expr(self).c_transitions_type
     if 'standard' not in product_type.transition_identifiers and 'individual' not in product_type.transition_identifiers:
       raise errors.InternalError("Have not implemented the action of Product on transitions "
                                  "when the output type doesn't have individual transitions.")
@@ -113,7 +113,7 @@ class Product(Expression):
     return f"{{{items}}}"
 
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
-    my_c_type = compiler.get_c_state_type(self)
+    my_c_type = compiler.get_concrete_type_for_expr(self).c_state_type
 
     stateLvalue = compiler.state_lvalue(vGraph, self)
 

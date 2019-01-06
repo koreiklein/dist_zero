@@ -50,8 +50,8 @@ class TestMultiplicativeReactive(object):
     })
     assert 1 == len(outputs)
     msg = program_W.capnpForOutput.from_bytes(outputs['output'])
-    import ipdb
-    ipdb.set_trace()
+
+    # FIXME(KK): Finish this
 
   def test_update_product_state(self, program_Z):
     net = program_Z.module.Net()
@@ -126,8 +126,6 @@ class TestMultiplicativeReactive(object):
     assert 0 == len(net.OnTransitions({}))
     transition_output = net.OnTransitions({'a': []})
     assert 1 == len(transition_output)
-    import ipdb
-    ipdb.set_trace()
     assert 0 == program_X.capnpForOutput_T.from_bytes(transition_output['output']).basicTransition
 
     transition_output = net.OnTransitions({

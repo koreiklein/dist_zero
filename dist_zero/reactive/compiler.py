@@ -4,8 +4,9 @@ from collections import defaultdict
 import capnp
 capnp.remove_import_hook()
 
-from dist_zero import cgen, errors, expression, capnpgen, types, primitive, settings
+from dist_zero import cgen, errors, expression, capnpgen, primitive, settings
 from dist_zero import type_compiler, settings
+from dist_zero import types, concrete_types
 
 
 class ReactiveCompiler(object):
@@ -43,14 +44,17 @@ class ReactiveCompiler(object):
             settings.CAPNP_DIR,
             capnp_lib_dir,
         ])
-    self.c_types = type_compiler.CTypeCompiler(self.program)
+
+    self.type_to_concrete_type = {}
     self.capnp_types = type_compiler.CapnpTypeCompiler()
+    self.capnp = self.capnp_types.capnp
 
     self.BadInputError = self.program.AddException('BadReactiveInput')
 
     self.output_key_to_norm_expr = None
 
-    self._type_by_expr = {}
+    self._type_by_expr = {} # expr to dist_zero.types.Type
+    self._concrete_type_by_type = {} # type to dist_zero.concrete_types.ConcreteType
 
     self._graph_struct = None
     self._turn_struct = None
@@ -60,70 +64,12 @@ class ReactiveCompiler(object):
     self.expr_to_inputs = None
     self.expr_to_outputs = None
     self.expr_index = None
-    self.expr_type = None
-    self._state_types = None
     self._input_exprs = None
     self._output_exprs = None # Dictionary from output expression to its list of keys
     self._net = None
 
     self._built_capnp = False
     self._pycapnp_module = None
-
-  def type_to_capnp_state_type(self, type):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.BasicType(f"struct {state_ref}")
-
-  def type_to_capnp_transitions_type(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.BasicType(f"struct {transitions_ref}")
-
-  def type_to_capnp_state_ptr(self, type):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.BasicType(f"{state_ref}_ptr")
-
-  def type_to_capnp_transitions_ptr(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.BasicType(f"{transitions_ref}_ptr")
-
-  def type_to_capnp_field_set_function(self, type, field):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.Var(f"{state_ref}_set_{field}", None)
-
-  def type_to_capnp_transition_field_set_function(self, type, field):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.Var(f"{transitions_ref}_set_{field}", None)
-
-  def type_to_capnp_field_get_function(self, type, field):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.Var(f"{state_ref}_get_{field}", None)
-
-  def type_to_capnp_state_write_function(self, type):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.Var(f"write_{state_ref}", None)
-
-  def type_to_capnp_transitions_write_function(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.Var(f"write_{transitions_ref}", None)
-
-  def type_to_capnp_state_new_ptr_function(self, type):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.Var(f"new_{state_ref}", None)
-
-  def type_to_capnp_transitions_new_ptr_function(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.Var(f"new_{transitions_ref}_list", None)
-
-  def type_to_capnp_transitions_list_type(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.BasicType(f"{transitions_ref}_list")
-
-  def type_to_capnp_state_read_function(self, type):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.Var(f"read_{state_ref}", None)
-
-  def type_to_capnp_transitions_read_function(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.Var(f"read_{transitions_ref}", None)
 
   def _capnp_filename(self):
     return f"{self.name}.capnp"
@@ -156,16 +102,25 @@ class ReactiveCompiler(object):
     return self._pycapnp_module
 
   def capnp_state_module(self, expr):
-    t = self._type_by_expr[expr]
+    t = self.get_concrete_type_for_expr(expr).capnp_state_type
     capnp_module = self.get_pycapnp_module()
-    name = self.capnp_types.type_to_state_ref[t]
-    return capnp_module.__dict__[name]
+    return capnp_module.__dict__[t.name]
 
   def capnp_transitions_module(self, expr):
-    t = self._type_by_expr[expr]
+    t = self.get_concrete_type_for_expr(expr).capnp_transitions_type
     capnp_module = self.get_pycapnp_module()
-    name = self.capnp_types.type_to_transitions_ref[t]
-    return capnp_module.__dict__[name]
+    return capnp_module.__dict__[t.name]
+
+  def get_concrete_type_for_expr(self, expr):
+    return self.get_concrete_type_for_type(self.get_type_for_expr(expr))
+
+  def get_concrete_type_for_type(self, t):
+    if t not in self._concrete_type_by_type:
+      result = self._compute_concrete_type(t)
+      self._concrete_type_by_type[t] = result
+      return result
+    else:
+      return self._concrete_type_by_type[t]
 
   def get_type_for_expr(self, expr):
     if expr not in self._type_by_expr:
@@ -183,14 +138,25 @@ class ReactiveCompiler(object):
     index = self.expr_index[expr]
     return vGraph.Arrow(self._state_key_in_graph(index))
 
-  def type_to_c_state_type(self, type):
-    return self.c_types.type_to_state_ctype[type]
-
-  def get_c_state_type(self, expr):
-    return self.type_to_c_state_type(self.get_type_for_expr(expr))
-
-  def get_c_transition_type(self, expr):
-    return self.c_types.type_to_transitions_ctype[self.get_type_for_expr(expr)]
+  def _compute_concrete_type(self, t):
+    if t.__class__ == types.Product:
+      return concrete_types.ConcreteProductType(t).initialize(self)
+    elif t.__class__ == types.Sum:
+      # FIXME(KK): Implement this
+      import ipdb
+      ipdb.set_trace()
+    elif t.__class__ == types.List:
+      # FIXME(KK): Implement this
+      import ipdb
+      ipdb.set_trace()
+    elif t.__class__ == types.FunctionType:
+      # FIXME(KK): Implement this
+      import ipdb
+      ipdb.set_trace()
+    elif t.__class__ == types.BasicType:
+      return concrete_types.ConcreteBasicType(t).initialize(self)
+    else:
+      raise RuntimeError(f"Unrecognized dist_zero type {t.__class__}.")
 
   def _compute_type(self, expr):
     if expr.__class__ == expression.Applied:
@@ -239,11 +205,9 @@ class ReactiveCompiler(object):
     self._turn_struct.AddField('to_free', cgen.KVec(cgen.Void.Star()))
 
     for i, expr in enumerate(self._top_exprs):
-      c_state_type = self.get_c_state_type(expr)
-      self._graph_struct.AddField(self._state_key_in_graph(i), c_state_type)
-
-      c_transition_type = self.get_c_transition_type(expr)
-      self._turn_struct.AddField(self._transition_key_in_turn(i), cgen.KVec(c_transition_type))
+      ct = self.get_concrete_type_for_expr(expr)
+      self._graph_struct.AddField(self._state_key_in_graph(i), ct.c_state_type)
+      self._turn_struct.AddField(self._transition_key_in_turn(i), cgen.KVec(ct.c_transitions_type))
 
   def _transition_key_in_turn(self, index):
     return f'transitions_{index}'
@@ -393,7 +357,7 @@ class ReactiveCompiler(object):
     Generate the write_output_transitions_{key} function in c for ``expr``.
     '''
     index = self.expr_index[expr]
-    exprType = self._state_types[index]
+    exprType = self._concrete_types[index]
     vGraph = cgen.Var('graph', self._graph_struct.Star())
     write_output_transitions = self.program.AddFunction(
         name=self._write_output_transitions_function_name(index), retType=cgen.PyObject.Star(), args=[vGraph])
@@ -410,7 +374,7 @@ class ReactiveCompiler(object):
     Generate the write_output_state_{key} function in c for ``expr``.
     '''
     index = self.expr_index[expr]
-    exprType = self._state_types[index]
+    exprType = self._concrete_types[index]
     vGraph = cgen.Var('graph', self._graph_struct.Star())
     write_output_state = self.program.AddFunction(
         name=self._write_output_state_function_name(index), retType=cgen.PyObject.Star(), args=[vGraph])
@@ -426,7 +390,6 @@ class ReactiveCompiler(object):
     Generate the OnOutput_{key} function in c for ``expr``.
     '''
     on_output = self._net.AddMethod(name=self._on_output_function_name(key), args=None)
-    outputType = self.expr_type[expr]
     output_index = self.expr_index[expr]
 
     vGraph = on_output.SelfArg()
@@ -461,7 +424,7 @@ class ReactiveCompiler(object):
     Generate the OnInput_{name} function in c for ``expr``.
     '''
     index = self.expr_index[expr]
-    inputType = self.expr_type[expr]
+    inputType = self.get_concrete_type_for_expr(expr)
 
     vBuf = cgen.Var('buf', cgen.UInt8.Star())
     vBuflen = cgen.Var('buflen', cgen.MachineInt)
@@ -798,7 +761,7 @@ class ReactiveCompiler(object):
     listLoop.AddAssignment(
         cgen.CreateVar(vCapnPtr), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
 
-    inputExpr.type.generate_capnp_to_c_transition(self, listLoop, vCapnPtr, vKVec)
+    self.get_concrete_type_for_expr(inputExpr).generate_capnp_to_c_transition(self, listLoop, vCapnPtr, vKVec)
     listLoop.AddAssignment(None, cgen.capn_free(vCapn.Address()))
 
     listLoop.Newline().AddAssignment(cgen.UpdateVar(vI), vI + cgen.One)
@@ -813,27 +776,22 @@ class ReactiveCompiler(object):
     for i, expr in enumerate(self._top_exprs):
       self.expr_index[expr] = i
 
-    self._state_types = [self.get_type_for_expr(expr) for expr in self._top_exprs]
-    self.expr_type = dict(zip(self._top_exprs, self._state_types))
+    self._concrete_types = [self.get_concrete_type_for_expr(expr) for expr in self._top_exprs]
 
     self._net = self.program.AddPythonType(name='Net', docstring=f"For running the {self.name} reactive network.")
-
-    # Add c types for all
-    for t in self._state_types:
-      self.c_types.ensure_root_type(t)
 
     # Add capnproto types for outputs
     self._output_exprs = defaultdict(list)
     for key, expr in self._output_key_to_norm_expr.items():
       self._output_exprs[expr].append(key)
-      self.capnp_types.ensure_root_type(self.get_type_for_expr(expr))
+      self.get_concrete_type_for_expr(expr).initialize_capnp(self)
 
     # Add capnproto types for inputs
     self._input_exprs = []
     for expr in self._top_exprs:
       if expr.__class__ == expression.Input:
         self._input_exprs.append(expr)
-        self.capnp_types.ensure_root_type(self.get_type_for_expr(expr))
+        self.get_concrete_type_for_expr(expr).initialize_capnp(self)
 
     self._build_capnp()
 

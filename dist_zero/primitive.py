@@ -52,10 +52,10 @@ class BinOp(PrimitiveOp):
 class PlusBinOp(BinOp):
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState, arg, expr):
     outputTransitions = compiler.transitions_rvalue(vGraph, expr)
-    output_transition_ctype = compiler.get_c_transition_type(expr)
+    output_transition_ctype = compiler.get_concrete_type_for_expr(expr).c_transitions_type
 
     arg_type = compiler.get_type_for_expr(arg)
-    arg_c_transition_type = compiler.get_c_transition_type(arg)
+    arg_c_transition_type = compiler.get_concrete_type_for_expr(arg).c_transitions_type
     arg_enum = arg_c_transition_type.field_by_id['type']
     arg_union = arg_c_transition_type.field_by_id['value']
 
