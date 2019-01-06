@@ -2,74 +2,12 @@ import random
 import os
 import time
 
-#import matplotlib.pyplot as plt
-#import numpy as np
+import capnp
 
-from dist_zero import cgen, type_compiler, settings
+import matplotlib.pyplot as plt
+import numpy as np
 
-
-def test_capnp_parse():
-  types = type_compiler.CapnpTypeCompiler()
-  mainStruct = types.capnp.AddStructure('MainStruct')
-  mainStruct.AddField('values', 'List(Int32)')
-  dirname = '.tmp/.test/capnp_parse'
-  filename = 'types.capnp'
-  os.makedirs(dirname, exist_ok=True)
-  types.capnp.build_in(dirname=dirname, filename=filename)
-
-  program = cgen.Program(
-      name='test_capnp_parse',
-      includes=[
-          '"capnp_c.h"',
-          '"types.capnp.h"',
-      ],
-      library_dirs=[
-          settings.CAPNP_INCLUDE_DIR,
-      ],
-      sources=[
-          os.path.join(dirname, 'types.capnp.c'),
-          os.path.join(settings.CAPNP_INCLUDE_DIR, "capn.c"),
-          os.path.join(settings.CAPNP_INCLUDE_DIR, "capn-malloc.c"),
-          os.path.join(settings.CAPNP_INCLUDE_DIR, "capn-stream.c"),
-      ],
-      libraries=[],
-      include_dirs=[
-          '.tmp/.test/capnp_parse',
-          settings.CAPNP_INCLUDE_DIR,
-      ])
-
-  vArgs = cgen.Var('args', cgen.PyObject.Star())
-  f = program.AddExternalFunction(name='F', args=None)
-
-  vBuf = cgen.Var('buf', cgen.UInt8.Star())
-  vBuflen = cgen.Var('buflen', cgen.MachineInt)
-  vCapn = cgen.Var('capn', cgen.Capn)
-
-  f.AddDeclaration(cgen.CreateVar(vBuf))
-  f.AddDeclaration(cgen.CreateVar(vBuflen))
-
-  whenParseFail = f.AddIf(
-      cgen.PyArg_ParseTuple(vArgs, cgen.StrConstant("s#"), vBuf.Address(), vBuflen.Address()).Negate()).consequent
-  whenParseFail.AddReturn(cgen.PyLong_FromLong(cgen.Constant(0)))
-
-  f.AddDeclaration(cgen.CreateVar(vCapn))
-  (f.AddIf(cgen.Zero != cgen.capn_init_mem(vCapn.Address(), vBuf, vBuflen, cgen.Zero)).consequent.AddReturn(cgen.NULL))
-
-  f.Newline()
-
-  vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
-  f.AddAssignment(cgen.CreateVar(vCapnPtr), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
-
-  vMainPtr = cgen.Var('main_ptr', cgen.BasicType('MainStruct_ptr'))
-  f.AddDeclaration(cgen.CreateVar(vMainPtr))
-
-  f.AddAssignment(cgen.UpdateVar(vMainPtr).Dot('p'), vCapnPtr)
-
-  vValues = cgen.Var('values', cgen.BasicType('capn_list32'))
-  getValues = cgen.Var('MainStruct_get_values', None)
-  f.AddAssignment(cgen.CreateVar(vValues), getValues(vMainPtr))
-
-  mod = program.build_and_import()
+from dist_zero import cgen
 
 
 def test_pass_buffer_c_to_python():
@@ -97,8 +35,8 @@ def test_pass_buffer_c_to_python():
   vSize = cgen.Var('size', cgen.Int32)
   f = program.AddExternalFunction(name='F', args=[vSize])
 
-  #f.AddReturn(cgen.PyBytes_FromStringAndSize(globalBuf, vSize))
-  f.AddReturn(cgen.PyMemoryView_FromMemory(globalBuf, vSize, cgen.Zero))
+  f.AddReturn(cgen.PyBytes_FromStringAndSize(globalBuf, vSize))
+  #f.AddReturn(cgen.PyMemoryView_FromMemory(globalBuf, vSize, cgen.Zero))
 
   mod = program.build_and_import()
 
@@ -183,5 +121,4 @@ def test_pass_buffer_python_to_c():
 
 if __name__ == '__main__':
   #test_pass_buffer_python_to_c()
-  #test_pass_buffer_c_to_python()
-  test_capnp_parse()
+  test_pass_buffer_c_to_python()
