@@ -20,4 +20,4 @@ help:
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 buffer_movement_test:
-	python -m scripts.buffer_movement_test
+	python -m scripts.buffer_movement_test.test
