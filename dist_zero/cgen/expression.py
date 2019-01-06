@@ -342,6 +342,8 @@ PyBytes_AsStringAndSize = Var('PyBytes_AsStringAndSize', None)
 
 PyUnicode_CompareWithASCIIString = Var('PyUnicode_CompareWithASCIIString', None)
 
+PyMemoryView_FromMemory = Var('PyMemoryView_FromMemory', None)
+
 PyExc_RuntimeError = Var('PyExc_RuntimeError', None)
 PyErr_SetString = Var('PyErr_SetString', None)
 PyErr_Format = Var('PyErr_Format', None)

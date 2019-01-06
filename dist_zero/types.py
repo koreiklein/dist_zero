@@ -49,20 +49,6 @@ class Type(object):
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
-  def generate_c_transitions_to_capnp(self, compiler, block, transitionsRvalue, result):
-    '''
-    Generate code in ``block`` to write the capnp data from ``transitionsRValue``.
-    :param result: The c lvalue to assign the result to
-    '''
-    raise RuntimeError(f'Abstract Superclass {self.__class__}')
-
-  def generate_c_state_to_capnp(self, compiler, block, stateRvalue, result):
-    '''
-    Generate code in ``block`` to write the capnp data from ``stateRValue``.
-    :param result: The c lvalue to assign the result to
-    '''
-    raise RuntimeError(f'Abstract Superclass {self.__class__}')
-
   def generate_capnp_to_c_state(self, compiler, block, capn_ptr_input, output_lvalue):
     '''
     Generate code in ``block`` to write to the ``output_lvalue`` state using the ``capn_ptr_input``
@@ -77,8 +63,66 @@ class Type(object):
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
+  def _write_c_state_to_capnp_ptr(self, compiler, block, vSegment, stateRvalue, vPtr):
+    '''
+    Write the state associated with ``stateRvalue`` into the capnp pointer vPtr.
+
+    :param compiler: The compiler working on the current program.
+    :type compiler: `ReactiveCompiler`
+    :param block: The current code block in which to generate the code.
+    :type block: `Block`
+    :param stateRvalue: An expression for the rvalue giving a c state of the type of self.
+    :type stateRvalue: `dist_zero.cgen.Expression`
+    :param vPtr: The c variable defining the capnp pointer to which to write the result.
+    :type vPtr: `dist_zero.cgen.Var`
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
+  def _write_c_transitions_to_capnp_ptr(self, compiler, block, vSegment, transitionsRvalue, vPtr):
+    '''
+    Write the transitions associated with ``transitionsRvalue`` into the capnp pointer vPtr.
+
+    :param compiler: The compiler working on the current program.
+    :type compiler: `ReactiveCompiler`
+    :param block: The current code block in which to generate the code.
+    :type block: `Block`
+    :param transitionsRvalue: An expression for the rvalue giving the kvec of c transitions of the c transition type of self.
+    :type transitionsRvalue: `dist_zero.cgen.Expression`
+    :param vPtr: The c variable defining the capnp pointer to which to write the result.
+    :type vPtr: `dist_zero.cgen.Var`
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
   def __init__(self):
     self.transition_identifiers = set(['standard'])
+
+  def generate_c_transitions_to_capnp(self, compiler, block, transitionsRvalue, result):
+    '''
+    Generate code in ``block`` to write the capnp data from ``transitionsRValue``.
+    :param result: The c lvalue to assign the result to
+    '''
+    vCapn, vCapnPtr, vSegment = self._init_capn_mem(block)
+
+    vPtr = cgen.Var('ptr', compiler.type_to_capnp_transitions_list_type(self))
+
+    self._write_c_transitions_to_capnp_ptr(compiler, block, vSegment, transitionsRvalue, vPtr)
+
+    self._write_capn_to_python_bytes(compiler, block, vCapn, vCapnPtr, vPtr, result)
+
+  def generate_c_state_to_capnp(self, compiler, block, stateRvalue, result):
+    '''
+    Generate code in ``block`` to write the capnp data from ``stateRValue``.
+    :param result: The c lvalue to assign the result to
+    '''
+    vCapn, vCapnPtr, vSegment = self._init_capn_mem(block)
+
+    newPtr = compiler.type_to_capnp_state_new_ptr_function(self)
+    vPtr = cgen.Var('ptr', compiler.type_to_capnp_state_ptr(self))
+    block.AddAssignment(cgen.CreateVar(vPtr), newPtr(vSegment))
+
+    self._write_c_state_to_capnp_ptr(compiler, block, vSegment, stateRvalue, vPtr)
+
+    self._write_capn_to_python_bytes(compiler, block, vCapn, vCapnPtr, vPtr, result)
 
   def With(self, *transition_identifiers):
     for ti in transition_identifiers:
@@ -115,9 +159,9 @@ class Type(object):
     if len(self.transition_identifiers) == 0:
       return cgen.Void
     else:
-      struct = compiler.cprogram.AddStruct(self._c_transitions_structure_name())
-      union = compiler.cprogram.AddUnion(self._c_transitions_structure_name() + '_union')
-      enum = compiler.cprogram.AddEnum(self._c_transitions_structure_name() + '_enum')
+      struct = compiler.cprogram.AddStruct(self._c_transitions_structure_name() + '_c')
+      union = compiler.cprogram.AddUnion(self._c_transitions_structure_name() + '_c__union')
+      enum = compiler.cprogram.AddEnum(self._c_transitions_structure_name() + '_c__enum')
       self._write_c_transition_identifiers(compiler, union, enum)
 
       if union.RemoveIfEmpty():
@@ -139,6 +183,31 @@ class Type(object):
         self._write_capnp_transition_identifiers(compiler, struct)
 
       return self._capnp_transitions_structure_name()
+
+  def _init_capn_mem(self, block):
+    vCapn = cgen.Var('capn', cgen.Capn)
+    vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
+    vSegment = cgen.Var('seg', cgen.Capn_Segment.Star())
+
+    block.AddDeclaration(cgen.CreateVar(vCapn))
+    block.AddAssignment(None, cgen.capn_init_malloc(vCapn.Address()))
+    block.AddAssignment(cgen.CreateVar(vCapnPtr), cgen.capn_root(vCapn.Address()))
+    block.AddAssignment(cgen.CreateVar(vSegment), vCapnPtr.Dot('seg'))
+
+    block.Newline()
+
+    return vCapn, vCapnPtr, vSegment
+
+  def _write_capn_to_python_bytes(self, compiler, block, vCapn, vCapnPtr, ptr, result):
+    (block.AddIf(cgen.Zero != cgen.capn_setp(vCapnPtr, cgen.Zero, ptr.Dot('p'))).consequent.AddAssignment(
+        None, compiler.pyerr_from_string("Failed to capn_setp for root when producing output.")).AddAssignment(
+            None, cgen.capn_free(vCapn.Address())).AddReturn(cgen.NULL))
+
+    block.Newline()
+
+    pythonBytesFromCapn = cgen.Var(compiler._python_bytes_from_capn_function_name(), None)
+    block.AddAssignment(result, pythonBytesFromCapn(vCapn.Address()))
+    block.AddAssignment(None, cgen.capn_free(vCapn.Address()))
 
 
 class FunctionType(Type):
@@ -179,30 +248,17 @@ class BasicType(Type):
 
     super(BasicType, self).__init__()
 
-  def _init_capn_mem(self, block):
-    vCapn = cgen.Var('capn', cgen.Capn)
-    vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
-    vSegment = cgen.Var('seg', cgen.Capn_Segment.Star())
+  def _write_c_transitions_to_capnp_ptr(self, compiler, block, vSegment, transitionsRvalue, vPtr):
+    newPtr = compiler.type_to_capnp_transitions_new_ptr_function(self)
+    block.AddAssignment(cgen.CreateVar(vPtr), newPtr(vSegment, cgen.One))
+    singleTransition = cgen.Var('single_transition', compiler.type_to_capnp_transitions_ptr(self))
+    block.AddDeclaration(cgen.CreateVar(singleTransition))
+    block.AddAssignment(singleTransition.Dot('p'), cgen.capn_getp(vPtr.Dot('p'), cgen.Zero, cgen.Zero))
 
-    block.AddDeclaration(cgen.CreateVar(vCapn))
-    block.AddAssignment(None, cgen.capn_init_malloc(vCapn.Address()))
-    block.AddAssignment(cgen.CreateVar(vCapnPtr), cgen.capn_root(vCapn.Address()))
-    block.AddAssignment(cgen.CreateVar(vSegment), vCapnPtr.Dot('seg'))
-
-    block.Newline()
-
-    return vCapn, vCapnPtr, vSegment
-
-  def generate_c_transitions_to_capnp(self, compiler, block, transitionsRvalue, result):
-    vCapn, vCapnPtr, vSegment = self._init_capn_mem(block)
-
-    transitionsStructureType = compiler.type_to_capnp_transitions_type(self)
-    myStructure = cgen.Var('structure', transitionsStructureType)
-    block.AddDeclaration(cgen.CreateVar(myStructure))
-    basicLValue = cgen.UpdateVar(myStructure).Dot('basicTransition')
-    basicRValue = myStructure.Dot('basicTransition')
-
-    block.AddAssignment(basicLValue, self.nil_transition_c_expression)
+    vTotal = cgen.Var('combined_total', self.c_transition_type)
+    block.AddAssignment(cgen.CreateVar(vTotal), self.nil_transition_c_expression)
+    basicLValue = cgen.UpdateVar(vTotal)
+    basicRValue = vTotal
 
     cTransitionsIndex = cgen.Var('c_transitions_i', cgen.MachineInt)
     block.AddAssignment(cgen.CreateVar(cTransitionsIndex), cgen.Zero)
@@ -211,40 +267,12 @@ class BasicType(Type):
                                                                                   cTransitionsIndex)))
     loop.AddAssignment(cgen.UpdateVar(cTransitionsIndex), cTransitionsIndex + cgen.One)
 
-    writeStructure = compiler.type_to_capnp_transitions_write_function(self)
-    newPtr = compiler.type_to_capnp_transitions_new_ptr_function(self)
-    ptr = cgen.Var('ptr', compiler.type_to_capnp_transitions_ptr(self))
-    block.AddAssignment(cgen.CreateVar(ptr), newPtr(vSegment))
-    block.AddAssignment(None, writeStructure(myStructure.Address(), ptr))
+    setBasicTransition = compiler.type_to_capnp_transition_field_set_function(self, 'basicTransition')
+    block.AddAssignment(None, setBasicTransition(singleTransition, basicRValue))
 
-    self._write_capn_to_python_bytes(compiler, block, vCapn, vCapnPtr, ptr, result)
-
-  def generate_c_state_to_capnp(self, compiler, block, stateRvalue, result):
-    vCapn, vCapnPtr, vSegment = self._init_capn_mem(block)
-
-    stateStructureType = compiler.type_to_capnp_state_type(self)
-    myStructure = cgen.Var('structure', stateStructureType)
-    block.AddDeclaration(cgen.CreateVar(myStructure))
-    block.AddAssignment(cgen.UpdateVar(myStructure).Dot('basicState'), stateRvalue)
-
-    writeStructure = compiler.type_to_capnp_state_write_function(self)
-    newPtr = compiler.type_to_capnp_state_new_ptr_function(self)
-    ptr = cgen.Var('ptr', compiler.type_to_capnp_state_ptr(self))
-    block.AddAssignment(cgen.CreateVar(ptr), newPtr(vSegment))
-    block.AddAssignment(None, writeStructure(myStructure.Address(), ptr))
-
-    self._write_capn_to_python_bytes(compiler, block, vCapn, vCapnPtr, ptr, result)
-
-  def _write_capn_to_python_bytes(self, compiler, block, vCapn, vCapnPtr, ptr, result):
-    (block.AddIf(cgen.Zero != cgen.capn_setp(vCapnPtr, cgen.Zero, ptr.Dot('p'))).consequent.AddAssignment(
-        None, compiler.pyerr_from_string("Failed to capn_setp for root when producing output.")).AddAssignment(
-            None, cgen.capn_free(vCapn.Address())).AddReturn(cgen.NULL))
-
-    block.Newline()
-
-    pythonBytesFromCapn = cgen.Var(compiler._python_bytes_from_capn_function_name(), None)
-    block.AddAssignment(result, pythonBytesFromCapn(vCapn.Address()))
-    block.AddAssignment(None, cgen.capn_free(vCapn.Address()))
+  def _write_c_state_to_capnp_ptr(self, compiler, block, vSegment, stateRvalue, vPtr):
+    setBasicState = compiler.type_to_capnp_field_set_function(self, 'basicState')
+    block.AddAssignment(None, setBasicState(vPtr, stateRvalue))
 
   def generate_capnp_to_c_state(self, compiler, block, capn_ptr_input, output_lvalue):
     ptr = cgen.Var('ptr', compiler.type_to_capnp_state_ptr(self))
@@ -378,9 +406,40 @@ class Product(Type):
 
     super(Product, self).__init__()
 
+  def _write_c_transitions_to_capnp_ptr(self, compiler, block, vSegment, transitionsRvalue, vPtr):
+    newPtr = compiler.type_to_capnp_transitions_new_ptr_function(self)
+    nTransitions = cgen.kv_size(transitionsRvalue)
+    block.AddAssignment(cgen.CreateVar(vPtr), newPtr(vSegment, nTransitions))
+
+    cTransitionsIndex = cgen.Var('c_transitions_i', cgen.MachineInt)
+    block.AddAssignment(cgen.CreateVar(cTransitionsIndex), cgen.Zero)
+    loop = block.AddWhile(cTransitionsIndex < nTransitions)
+
+    transitionI = cgen.Var('transition_i', compiler.type_to_capnp_transitions_ptr(self))
+    loop.AddDeclaration(cgen.CreateVar(transitionI))
+    loop.AddAssignment(transitionI.Dot('p'), cgen.capn_getp(vPtr.Dot('p'), cTransitionsIndex, cgen.Zero))
+
+    # FIXME(KK): Finish this!
+    #loop.AddAssignment(basicLValue, self._apply_transition(basicRValue, cgen.kv_A(transitionsRvalue, cTransitionsIndex)))
+
+    loop.AddAssignment(cgen.UpdateVar(cTransitionsIndex), cTransitionsIndex + cgen.One)
+
+  def _write_c_state_to_capnp_ptr(self, compiler, block, vSegment, stateRvalue, vPtr):
+    for field, t in self.items:
+      setField = compiler.type_to_capnp_field_set_function(self, field)
+
+      newPtr = compiler.type_to_capnp_state_new_ptr_function(t)
+      itemPtr = cgen.Var(f'{field}_component_ptr', compiler.type_to_capnp_state_ptr(t))
+      block.AddAssignment(cgen.CreateVar(itemPtr), newPtr(vSegment))
+
+      itemValue = stateRvalue.Dot(field).Deref()
+      t._write_c_state_to_capnp_ptr(compiler, block, vSegment, itemValue, itemPtr)
+      block.AddAssignment(None, setField(vPtr, itemPtr))
+      block.Newline()
+
   def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
     # NOTE(KK): When we need to maintain the product state, then the components' states
-    # are also being maintained.  In that case, since the produce shares data with them, it doesn't actually
+    # are also being maintained.  In that case, since the product shares data with them, it doesn't actually
     # need any updating at all.
     # The generated c code should be specifically designed to treat products differently so as to ensure
     # that when a product is maintaining its state, so are all its components.
@@ -451,7 +510,7 @@ class Product(Type):
     return result
 
   def _write_c_state_definition(self, compiler):
-    struct = compiler.cprogram.AddStruct(self.name)
+    struct = compiler.cprogram.AddStruct(self.name + '_c')
     for key, value in self.items:
       struct.AddField(key, compiler.c_state_ref(value).Star())
 
@@ -511,7 +570,7 @@ class Sum(Type):
     return self.name
 
   def _write_c_state_definition(self, compiler):
-    struct = compiler.cprogram.AddStruct(self.name)
+    struct = compiler.cprogram.AddStruct(self.name + "_c")
     if len(self.items) == 0:
       pass
     else:

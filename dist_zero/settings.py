@@ -59,7 +59,7 @@ LOGSTASH_PORT = int(os.environ['LOGSTASH_PORT'])
 
 LOGZ_IO_TOKEN = os.environ.get('LOGZ_IO_TOKEN', '')
 
-CAPNP_INCLUDE_DIR = os.environ['CAPNP_INCLUDE_DIR']
+CAPNP_DIR = os.environ['CAPNP_DIR']
 
 TESTING = DIST_ZERO_ENV == "test"
 

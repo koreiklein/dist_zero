@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from dist_zero import errors
+from dist_zero import errors, settings
 
 INDENT = '  '
 
@@ -111,6 +111,11 @@ class CapnpFile(object):
 
   def lines(self):
     yield f"{self.id};\n\n"
+
+    imported_file = os.path.join('/', 'c-capnproto', 'compiler', 'c.capnp')
+    yield f'using C = import "{imported_file}";\n'
+    yield "$C.fieldgetset;\n\n"
+
     for struct in self._structures:
       for line in struct.lines(''):
         yield line
@@ -127,7 +132,7 @@ class CapnpFile(object):
         f.write(line)
 
     try:
-      subprocess.check_output(['capnpc', f'-oc', fullname], stderr=subprocess.STDOUT)
+      subprocess.check_output(['capnpc', '-I', settings.CAPNP_DIR, f'-oc', fullname], stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
       raise errors.CapnpCompileError(f"Error from capnpc:\n{e.output.decode()}")
 
