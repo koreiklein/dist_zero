@@ -4,7 +4,7 @@ import tempfile
 
 import pytest
 
-from dist_zero import types, type_compiler, cgen
+from dist_zero import types, cgen
 from dist_zero.reactive.compiler import ReactiveCompiler
 
 TwoByThree = types.Product([

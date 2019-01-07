@@ -5,7 +5,7 @@ import capnp
 capnp.remove_import_hook()
 
 from dist_zero import cgen, errors, expression, capnpgen, primitive, settings
-from dist_zero import type_compiler, settings
+from dist_zero import settings
 from dist_zero import types, concrete_types
 
 
@@ -46,8 +46,7 @@ class ReactiveCompiler(object):
         ])
 
     self.type_to_concrete_type = {}
-    self.capnp_types = type_compiler.CapnpTypeCompiler()
-    self.capnp = self.capnp_types.capnp
+    self.capnp = capnpgen.CapnpFile(capnpgen.gen_capn_uid())
 
     self.BadInputError = self.program.AddException('BadReactiveInput')
 
@@ -88,7 +87,7 @@ class ReactiveCompiler(object):
       dirname = self._capnp_dirname()
       os.makedirs(dirname, exist_ok=True)
       filename = self._capnp_filename()
-      self.capnp_types.capnp.build_in(dirname=dirname, filename=filename)
+      self.capnp.build_in(dirname=dirname, filename=filename)
       self._built_capnp = True
 
   def get_pycapnp_module(self):
@@ -821,7 +820,7 @@ class ReactiveCompiler(object):
 
     ## For writing intermediate files to disk for inspection.
     #with open('msg.capnp', 'w') as f:
-    #  for line in self.capnp_types.capnp.lines():
+    #  for line in self.capnp.lines():
     #    f.write(line)
     #
     with open('example.c', 'w') as f:
