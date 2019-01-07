@@ -13,6 +13,15 @@ class Union(object):
     self._options = []
     self._removed = False
 
+    self._c_enum_option_by_name = {}
+
+  def c_enum_option_by_name(self, name):
+    return self._c_enum_option_by_name[name]
+
+  def AddField(self, name, option_type):
+    self._c_enum_option_by_name[name] = cgen.Constant(f"{self.structure.name}_{name}")
+    self._options.append((name, option_type))
+
   def RemoveIfTooSmall(self):
     if len(self._options) <= 1:
       self._removed = True
@@ -32,10 +41,7 @@ class Union(object):
     extra_indent = indent + INDENT
     for name, option_type in self._options:
       yield f"{extra_indent}{name} @{self.structure.next_count()} :{option_type};\n"
-    yield f"{indent}}}\n\n"
-
-  def AddField(self, name, option_type):
-    self._options.append((name, option_type))
+    yield f"{indent}}}\n"
 
 
 class Structure(object):
@@ -49,7 +55,11 @@ class Structure(object):
     self.count = 0
 
     self.c_new_ptr_function = cgen.Var(f"new_{self.name}", None)
+    self.c_read_function = cgen.Var(f"read_{self.name}", None)
+
     self.c_ptr_type = cgen.BasicType(f"{self.name}_ptr")
+    self.c_list_type = cgen.BasicType(f"{self.name}_list")
+    self.c_structure_type = cgen.BasicType(f"struct {self.name}")
 
   def get_field(self, name):
     return self._field_by_name[name]
@@ -63,6 +73,7 @@ class Structure(object):
     return result
 
   def lines(self, indent):
+    self.count = 0
     yield f"{indent}struct {self.name} {{\n"
 
     extra_indent = indent + INDENT
@@ -70,9 +81,13 @@ class Structure(object):
       yield f"{extra_indent}{field.name} @{self.next_count()} :{field.type};\n"
 
     if self._fields:
-      yield "\n"
+      before_union = "\n"
+    else:
+      before_union = ""
 
     for union in self._unions:
+      yield before_union
+      before_union = "\n"
       for line in union.lines(extra_indent):
         yield line
 

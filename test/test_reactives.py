@@ -51,7 +51,23 @@ class TestMultiplicativeReactive(object):
     assert 1 == len(outputs)
     msg = program_W.capnpForOutput.from_bytes(outputs['output'])
 
-    # FIXME(KK): Finish this
+    # FIXME(KK): Finish this!
+
+  def test_product_input(self, program_V):
+    net = program_V.module.Net()
+
+    assert not net.OnOutput_output()
+    assert not net.OnInput_b(program_V.capnpForB.new_message(basicState=2).to_bytes())
+
+    product_msg = program_V.capnpForA.new_message(
+        left=program_V.capnpForInt32.new_message(basicState=4),
+        right=program_V.capnpForInt32.new_message(basicState=7),
+    )
+    outputs = net.OnInput_a(product_msg.to_bytes())
+    assert 1 == len(outputs)
+    assert 13 == program_V.capnpForOutput.from_bytes(outputs['output']).basicState
+
+    # FIXME(KK): Finish this!
 
   def test_update_product_state(self, program_Z):
     net = program_Z.module.Net()
@@ -200,8 +216,46 @@ class TestMultiplicativeReactive(object):
     assert 6 == program_C.capnpForZ_T.from_bytes(output['z']).basicTransition
 
 
+def program_plus(left, right):
+  return expression.Applied(
+      func=primitive.Plus(types.Int32),
+      arg=expression.Product([
+          ('left', left),
+          ('right', right),
+      ]),
+  )
+
+
 class _ProgramData(object):
   pass
+
+
+@pytest.fixture(scope='module')
+def program_V():
+  self = _ProgramData()
+
+  self.inputA = expression.Input('a', types.Product(items=[
+      ('left', types.Int32),
+      ('right', types.Int32),
+  ]))
+  self.inputB = expression.Input('b', types.Int32)
+  self.outputExpr = program_plus(self.inputB, expression.Applied(func=primitive.Plus(types.Int32), arg=self.inputA))
+
+  self.compiler = reactive.ReactiveCompiler(name='program_V')
+  self.module = self.compiler.compile({'output': self.outputExpr})
+
+  self.capnpForA = self.compiler.capnp_state_module(self.inputA)
+  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
+
+  self.capnpForInt32 = self.compiler.capnp_state_module_for_type(types.Int32)
+  self.capnpForInt32_T = self.compiler.capnp_transitions_module_for_type(types.Int32)
+
+  self.capnpForB = self.compiler.capnp_state_module(self.inputB)
+  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
+  self.capnpForOutput = self.compiler.capnp_state_module(self.outputExpr)
+  self.capnpForOutput_T = self.compiler.capnp_transitions_module(self.outputExpr)
+
+  return self
 
 
 @pytest.fixture(scope='module')
@@ -235,13 +289,7 @@ def program_X():
 
   self.inputA = expression.Input('a', types.Int32)
   self.inputB = expression.Input('b', types.Int32)
-  self.outputExpr = expression.Applied(
-      func=primitive.Plus(types.Int32),
-      arg=expression.Product([
-          ('left', self.inputA),
-          ('right', self.inputB),
-      ]),
-  )
+  self.outputExpr = program_plus(self.inputA, self.inputB)
 
   self.compiler = reactive.ReactiveCompiler(name='program_X')
   self.module = self.compiler.compile({'output': self.outputExpr})
@@ -262,18 +310,8 @@ def program_Y():
 
   self.inputA = expression.Input('a', types.Int32)
   self.inputB = expression.Input('b', types.Int32)
-  self.outputX = expression.Applied(
-      func=primitive.Plus(types.Int32),
-      arg=expression.Product([
-          ('left', self.inputA),
-          ('right', self.inputB),
-      ]),
-  )
-  self.outputY = expression.Applied(
-      func=primitive.Plus(types.Int32), arg=expression.Product([
-          ('left', self.inputB),
-          ('right', self.inputB),
-      ]))
+  self.outputX = program_plus(self.inputA, self.inputB)
+  self.outputY = program_plus(self.inputB, self.inputB)
 
   self.compiler = reactive.ReactiveCompiler(name='program_Y')
   self.module = self.compiler.compile({'x': self.outputX, 'y': self.outputY})
@@ -328,36 +366,11 @@ def program_C():
   self.inputB = expression.Input('b', types.Int32)
   self.inputC = expression.Input('c', types.Int32)
 
-  self.outputX = expression.Applied(
-      func=primitive.Plus(types.Int32),
-      arg=expression.Product([
-          ('left', self.inputA),
-          ('right', self.inputB),
-      ]),
-  )
+  self.outputX = program_plus(self.inputA, self.inputB)
 
-  self.outputY = expression.Applied(
-      func=primitive.Plus(types.Int32),
-      arg=expression.Product([
-          ('left', self.outputX),
-          ('right', self.inputB),
-      ]),
-  )
+  self.outputY = program_plus(self.outputX, self.inputB)
 
-  self.outputZ = expression.Applied(
-      func=primitive.Plus(types.Int32),
-      arg=expression.Product([
-          ('left', self.inputA),
-          ('right',
-           expression.Applied(
-               func=primitive.Plus(types.Int32),
-               arg=expression.Product([
-                   ('left', self.inputB),
-                   ('right', self.inputC),
-               ]),
-           )),
-      ]),
-  )
+  self.outputZ = program_plus(self.inputA, program_plus(self.inputB, self.inputC))
 
   self.compiler = reactive.ReactiveCompiler(name='program_C')
   self.module = self.compiler.compile({

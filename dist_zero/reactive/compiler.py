@@ -105,10 +105,18 @@ class ReactiveCompiler(object):
     capnp_module = self.get_pycapnp_module()
     return capnp_module.__dict__[t.name]
 
+  def capnp_state_module_for_type(self, t):
+    capnp_module = self.get_pycapnp_module()
+    return capnp_module.__dict__[self.get_concrete_type_for_type(t).name]
+
   def capnp_transitions_module(self, expr):
     t = self.get_concrete_type_for_expr(expr).capnp_transitions_type
     capnp_module = self.get_pycapnp_module()
     return capnp_module.__dict__[t.name]
+
+  def capnp_transitions_module_for_type(self, t):
+    capnp_module = self.get_pycapnp_module()
+    return capnp_module.__dict__[self.get_concrete_type_for_type(t).name]
 
   def get_concrete_type_for_expr(self, expr):
     return self.get_concrete_type_for_type(self.get_type_for_expr(expr))
@@ -450,11 +458,12 @@ class ReactiveCompiler(object):
         None, self.pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
     on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn').Dot('result'), vResult)
 
-    vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
+    ptr = cgen.Var(f'ptr', inputType.capnp_state_type.c_ptr_type)
+    on_input.AddDeclaration(cgen.CreateVar(ptr))
     on_input.AddAssignment(
-        cgen.CreateVar(vCapnPtr), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
+        cgen.UpdateVar(ptr).Dot('p'), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
 
-    inputType.generate_capnp_to_c_state(self, on_input, vCapnPtr, self.state_lvalue(vGraph, expr))
+    inputType.generate_capnp_to_c_state(self, on_input, ptr, self.state_lvalue(vGraph, expr))
 
     on_input.AddAssignment(None, cgen.capn_free(vCapn.Address()))
     on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('n_missing_productions').Sub(cgen.Constant(index)), cgen.Zero)
@@ -751,11 +760,17 @@ class ReactiveCompiler(object):
          None, self.pyerr(self.BadInputError,
                           "Failed to initialize struct capn when parsing a transitions message.")).AddReturnVoid())
 
-    vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
-    listLoop.AddAssignment(
-        cgen.CreateVar(vCapnPtr), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
+    listLoop.Newline()
 
-    self.get_concrete_type_for_expr(inputExpr).generate_capnp_to_c_transition(self, listLoop, vCapnPtr, vKVec)
+    concreteInputType = self.get_concrete_type_for_expr(inputExpr)
+    ptr = cgen.Var(f'ptr', concreteInputType.capnp_transitions_type.c_ptr_type)
+    listLoop.AddDeclaration(cgen.CreateVar(ptr))
+    listLoop.AddAssignment(
+        cgen.UpdateVar(ptr).Dot('p'), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
+
+    for cblock, cexp in concreteInputType.generate_capnp_to_c_transition(self, listLoop, ptr):
+      cblock.AddAssignment(None, cgen.kv_push(concreteInputType.c_transitions_type, vKVec, cexp))
+
     listLoop.AddAssignment(None, cgen.capn_free(vCapn.Address()))
 
     listLoop.Newline().AddAssignment(cgen.UpdateVar(vI), vI + cgen.One)
@@ -819,9 +834,9 @@ class ReactiveCompiler(object):
     self._generate_on_transitions()
 
     ## For writing intermediate files to disk for inspection.
-    #with open('msg.capnp', 'w') as f:
-    #  for line in self.capnp.lines():
-    #    f.write(line)
+    with open('msg.capnp', 'w') as f:
+      for line in self.capnp.lines():
+        f.write(line)
     #
     with open('example.c', 'w') as f:
       for line in self.program.to_c_string():

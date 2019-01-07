@@ -66,17 +66,17 @@ class ConcreteType(object):
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
-  def generate_capnp_to_c_state(self, compiler, block, capn_ptr_input, output_lvalue):
+  def generate_capnp_to_c_state(self, compiler, block, ptr, output_lvalue):
     '''
-    Generate code in ``block`` to write to the ``output_lvalue`` state using the ``capn_ptr_input``
-    capn_ptr variable containing the input capnp buffer.
+    Generate code in ``block`` to write to the ``output_lvalue`` state using the ``ptr``
+    capn_ptr variable containing the ptr variable for the matching capnproto type.
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
-  def generate_capnp_to_c_transition(self, compiler, block, capn_ptr_input, output_kvec):
+  def generate_capnp_to_c_transition(self, compiler, block, ptr):
     '''
-    Generate code in ``block`` to append to the ``outptu_kvec`` list of transitions using the ``capn_ptr_input``
-    capn_ptr variable containing the input capnp buffer of the transitions.
+    Generate code in ``block`` to compute expressions for c transitions from a capnp ptr,
+    yield the (block, expression) pairs as they are generated.
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
@@ -131,7 +131,7 @@ class ConcreteType(object):
     '''
     vCapn, vCapnPtr, vSegment = self._init_capn_mem(block)
 
-    vPtr = cgen.Var('ptr', self.capnp_transitions_type.c_ptr_type)
+    vPtr = cgen.Var(f'{self.name}_ptr', self.capnp_transitions_type.c_ptr_type)
 
     self._write_c_transitions_to_capnp_ptr(compiler, block, vSegment, transitionsRvalue, vPtr)
 
@@ -156,7 +156,7 @@ class ConcreteType(object):
     vCapn, vCapnPtr, vSegment = self._init_capn_mem(block)
 
     newPtr = self.capnp_state_type.c_new_ptr_function
-    vPtr = cgen.Var('ptr', self.capnp_state_type.c_ptr_type)
+    vPtr = cgen.Var(f'{self.name}_ptr', self.capnp_state_type.c_ptr_type)
     block.AddAssignment(cgen.CreateVar(vPtr), newPtr(vSegment))
 
     self._write_c_state_to_capnp_ptr(compiler, block, vSegment, stateRvalue, vPtr)
@@ -164,7 +164,7 @@ class ConcreteType(object):
     self._write_capn_to_python_bytes(compiler, block, vCapn, vCapnPtr, vPtr, result)
 
   def _c_transitions_structure_name(self):
-    return self._capnp_transitions_structure_name()
+    return f"{self._capnp_transitions_structure_name()}_c_transitions"
 
   def _write_c_transition_identifiers(self, compiler, union, enum):
     for ti in self.dz_type.transition_identifiers:
@@ -206,7 +206,8 @@ class ConcreteType(object):
     if len(self.dz_type.transition_identifiers) == 0:
       return capnpgen.Void
     else:
-      struct = compiler.capnp.AddStructure(self._capnp_transitions_structure_name())
+      name = self._capnp_transitions_structure_name()
+      struct = compiler.capnp.AddStructure(f"{name}Transition")
       union = struct.AddUnion()
       self._write_capnp_transition_identifiers(compiler, union)
 
@@ -214,6 +215,14 @@ class ConcreteType(object):
         self._write_capnp_transition_identifiers(compiler, struct)
 
       return struct
+
+
+global_i = [0]
+
+
+def inc_i():
+  global_i[0] += 1
+  return global_i[0]
 
 
 class ConcreteBasicType(ConcreteType):
@@ -226,21 +235,16 @@ class ConcreteBasicType(ConcreteType):
     self._capnp_transitions_type = None
     self._capnp_transitions_basicTransition_field = None
 
-  def generate_capnp_to_c_transition(self, compiler, block, capn_ptr_input, output_kvec):
-    ptr = cgen.Var('ptr', self._capnp_transitions_type.c_ptr_type)
-    block.AddDeclaration(cgen.CreateVar(ptr))
-    block.AddAssignment(cgen.UpdateVar(ptr).Dot('p'), capn_ptr_input)
-    block.AddAssignment(
-        None,
-        cgen.kv_push(self.c_transitions_type, output_kvec, self._capnp_transitions_basicTransition_field.c_get(ptr)))
+  def generate_capnp_to_c_transition(self, compiler, block, ptr):
+    yield block, self._capnp_transitions_basicTransition_field.c_get(ptr)
     block.Newline()
 
-  def generate_capnp_to_c_state(self, compiler, block, capn_ptr_input, output_lvalue):
-    ptr = cgen.Var('ptr', self._capnp_state_type.c_ptr_type)
-    block.AddDeclaration(cgen.CreateVar(ptr))
-    block.AddAssignment(cgen.UpdateVar(ptr).Dot('p'), capn_ptr_input)
+  def generate_capnp_to_c_state(self, compiler, block, ptr, output_lvalue):
+    vStructure = cgen.Var(f'{self.name}_structure_{inc_i()}', self._capnp_state_type.c_structure_type)
+    block.AddDeclaration(cgen.CreateVar(vStructure))
+    block.AddAssignment(None, self._capnp_state_type.c_read_function(vStructure.Address(), ptr))
 
-    block.AddAssignment(output_lvalue, self._basicState_field.c_get(ptr))
+    block.AddAssignment(output_lvalue, vStructure.Dot('basicState'))
 
     block.Newline()
 
@@ -276,7 +280,7 @@ class ConcreteBasicType(ConcreteType):
     return self._capnp_transitions_type
 
   def _capnp_transitions_structure_name(self):
-    return f"{self.name}Transitions"
+    return f"{self.name}"
 
   @property
   def c_state_type(self):
@@ -313,8 +317,13 @@ class ConcreteProductType(ConcreteType):
 
     self._c_state_type = None
     self._capnp_state_type = None
+    self._capnp_single_transition_type = None
     self._capnp_transitions_type = None
+    self._capnp_single_transition_union = None
     self._items = None
+
+    self._c_transition_union = None
+    self._c_transition_enum = None
 
   @property
   def capnp_transitions_type(self):
@@ -332,19 +341,19 @@ class ConcreteProductType(ConcreteType):
 
   def _write_capnp_simultaneous_components_transition_definitions(self, compiler, union):
     struct = compiler.capnp.AddStructure(f"{self.name}Simultaneous")
-    union.AddField("simultaneous", struct)
+    field = union.AddField("simultaneous", struct)
 
     for key, value in self._items:
       struct.AddField(key, value.capnp_transitions_type.name)
 
   def _write_capnp_individual_components_transition_definitions(self, compiler, union):
     for key, value in self._items:
-      union.AddField(f"productOn{key}", value.capnp_transitions_type.name)
+      field = union.AddField(f"productOn{key}", value.capnp_transitions_type.name)
 
   def _write_capnp_transition_definition(self, compiler, ident, union):
+    self._capnp_single_transition_union = union
     if ident == 'standard':
       self._write_capnp_individual_components_transition_definitions(compiler, union)
-      self._write_capnp_simultaneous_components_transition_definitions(compiler, union)
     elif ident == 'individual':
       self._write_capnp_individual_components_transition_definitions(compiler, union)
     elif ident == 'simultaneous':
@@ -393,7 +402,92 @@ class ConcreteProductType(ConcreteType):
       value.initialize_capnp(compiler)
       self._capnp_state_type.AddField(key, value.capnp_state_type)
 
-    self._capnp_transitions_type = self._write_capnp_transitions_definition(compiler)
+    self._capnp_single_transition_type = self._write_capnp_transitions_definition(compiler)
+    self._capnp_transitions_type = _wrap_struct_in_list(compiler, self._capnp_single_transition_type)
+
+  def generate_capnp_to_c_state(self, compiler, block, ptr, output_lvalue):
+    key_to_expr = {}
+
+    vProductStruct = cgen.Var(f'v_product_struct{self.name}', self._capnp_state_type.c_structure_type)
+    block.AddDeclaration(cgen.CreateVar(vProductStruct))
+    block.AddAssignment(None, self._capnp_state_type.c_read_function(vProductStruct.Address(), ptr))
+
+    for key, value in self._items:
+      vComponent = cgen.Var(f'component_{key}', value.c_state_type.Star())
+      # FIXME(KK): Be sure this malloc is eventually freed
+      block.AddAssignment(
+          cgen.CreateVar(vComponent),
+          cgen.malloc(value.c_state_type.Sizeof()).Cast(value.c_state_type.Star()))
+      value.generate_capnp_to_c_state(compiler, block, vProductStruct.Dot(key), vComponent.Deref())
+      key_to_expr[key] = vComponent
+
+    block.AddAssignment(output_lvalue, cgen.StructureLiteral(struct=self._c_state_type, key_to_expr=key_to_expr))
+
+  def generate_capnp_to_c_transition(self, compiler, block, ptr):
+    vList = cgen.Var('list', self._capnp_single_transition_type.c_list_type)
+    block.AddAssignment(cgen.CreateVar(vList), self._capnp_transitions_type.c_get_field('transitions')(ptr))
+
+    vItem = cgen.Var('list_item', self._capnp_single_transition_type.c_ptr_type)
+    block.AddDeclaration(cgen.CreateVar(vItem))
+    vIndex = cgen.Var('transition_index', cgen.MachineInt)
+
+    block.AddAssignment(cgen.CreateVar(vIndex), cgen.Zero)
+    loop = block.AddWhile(vIndex < vList.Dot('p').Dot('len'))
+
+    loop.AddAssignment(cgen.UpdateVar(vItem).Dot('p'), cgen.capn_getp(vList.Dot('p'), vIndex, cgen.Zero))
+
+    yield from self._generate_capnp_to_c_single_transition(compiler, loop, vItem)
+
+    loop.AddAssignment(cgen.UpdateVar(vIndex), vIndex + cgen.One)
+
+  def _generate_capnp_to_c_single_transition(self, compiler, block, singleTransitionPtr):
+    vSingleTransition = cgen.Var('transition_structure', self._capnp_single_transition_type.c_structure_type)
+    block.AddDeclaration(cgen.CreateVar(vSingleTransition))
+    block.AddAssignment(
+        None, self._capnp_single_transition_type.c_read_function(vSingleTransition.Address(), singleTransitionPtr))
+    switch = block.AddSwitch(vSingleTransition.Dot('which'))
+
+    for ident in self._product_type.transition_identifiers:
+      if ident == 'standard':
+        yield from self._generate_capnp_to_c_single_transition_individual_components(
+            compiler, switch, vSingleTransition)
+      elif ident == 'individual':
+        yield from self._generate_capnp_to_c_single_transition_individual_components(
+            compiler, switch, vSingleTransition)
+      elif ident == 'simultaneous':
+        yield from self._generate_capnp_to_c_single_transition_simultaneous(compiler, switch, vSingleTransition)
+      else:
+        raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+
+  def _generate_capnp_to_c_single_transition_individual_components(self, compiler, switch, vSingleTransition):
+    for key, value in self._items:
+      c_name = f'product_on_{key}'
+      name = f"productOn{key}"
+      block = switch.AddCase(self._capnp_single_transition_union.c_enum_option_by_name(name))
+      componentPtr = vSingleTransition.Dot(name)
+
+      i = 0
+      for cblock, cexpr in value.generate_capnp_to_c_transition(compiler, block, componentPtr):
+        vFromValue = cgen.Var(f'from_value_{key}_{i}', value.c_transitions_type.Star())
+        # FIXME(KK): Be sure this malloc is eventually freed
+        cblock.AddAssignment(
+            cgen.CreateVar(vFromValue),
+            cgen.malloc(value.c_transitions_type.Sizeof()).Cast(value.c_transitions_type.Star()))
+        cblock.AddAssignment(cgen.UpdateVar(vFromValue).Deref(), cexpr)
+        yield cblock, cgen.StructureLiteral(
+            struct=self._c_transitions_type,
+            key_to_expr={
+                'type': self._c_transition_enum.literal(c_name),
+                'value': self._c_transition_union.literal(c_name, vFromValue),
+            })
+        i += 1
+
+      block.AddBreak()
+
+  def _generate_capnp_to_c_single_transition_simultaneous(self, compiler, switch, vSingleTransition):
+    block = switch.AddCase(self._capnp_single_transition_union.c_enum_option_by_name('simultaneous'))
+    raise errors.InternalError("Not Yet Implemented")
+    block.AddBreak()
 
   @property
   def capnp_state_type(self):
@@ -412,9 +506,10 @@ class ConcreteProductType(ConcreteType):
       enum.AddOption(f'product_on_{key}')
 
   def _write_c_transition_definition(self, compiler, ident, union, enum):
+    self._c_transition_union = union
+    self._c_transition_enum = enum
     if ident == 'standard':
       self._write_c_individual_components_transition_definitions(compiler, union, enum)
-      self._write_c_simultaneous_components_transition_definitions(compiler, union, enum)
     elif ident == 'individual':
       self._write_c_individual_components_transition_definitions(compiler, union, enum)
     elif ident == 'simultaneous':
@@ -423,7 +518,7 @@ class ConcreteProductType(ConcreteType):
       raise RuntimeError(f"Unrecognized transition identifier {ident}.")
 
   def _capnp_transitions_structure_name(self):
-    return f"{self.name}Transition"
+    return f"{self.name}"
 
   @property
   def c_transitions_type(self):
@@ -459,7 +554,7 @@ class ConcreteSumType(ConcreteType):
     return self._c_state_type
 
   def _capnp_transitions_structure_name(self):
-    return f"{self.name}Transition"
+    return f"{self.name}"
 
   @property
   def dz_type(self):
@@ -541,7 +636,7 @@ class ConcreteList(ConcreteType):
     return self._c_transitions_type
 
   def _capnp_transitions_structure_name(self):
-    return f"{self.name}Transitions"
+    return f"{self.name}"
 
   @property
   def dz_type(self):
@@ -596,7 +691,7 @@ class ConcreteList(ConcreteType):
       self.base.initialize_capnp(compiler)
       self._initialized_capnp = True
 
-    self._capnp_transitions_type = self._write_capnp_transitions_definition(compiler)
+    self._capnp_transitions_type = _wrap_struct_in_list(compiler, self._write_capnp_transitions_definition(compiler))
 
   def _write_on_index_transition_definition(self, compiler, union):
     onIndexStruct = compiler.capnp.AddStructure(f"OnIndex{self.name}")
@@ -642,3 +737,9 @@ class ConcreteList(ConcreteType):
   @property
   def capnp_state_type(self):
     return f"List({self.base.capnp_state_type})"
+
+
+def _wrap_struct_in_list(compiler, struct):
+  many_struct = compiler.capnp.AddStructure(f"{struct.name}List")
+  many_struct.AddField('transitions', f"List({struct.name})")
+  return many_struct

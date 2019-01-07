@@ -356,6 +356,7 @@ capn_write_mem = Var("capn_write_mem", None)
 capn_getp = Var("capn_getp", None)
 capn_setp = Var("capn_setp", None)
 capn_root = Var("capn_root", None)
+capn_resolve = Var("capn_resolve", None)
 capn_init_malloc = Var("capn_init_malloc", None)
 capn_free = Var("capn_free", None)
 
