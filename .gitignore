@@ -1,5 +1,6 @@
 __pycache__
 example.c
+msg.capnp
 _build
 *.pyc
 .pytest_cache
