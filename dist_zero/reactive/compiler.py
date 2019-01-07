@@ -142,17 +142,12 @@ class ReactiveCompiler(object):
     if t.__class__ == types.Product:
       return concrete_types.ConcreteProductType(t).initialize(self)
     elif t.__class__ == types.Sum:
-      # FIXME(KK): Implement this
-      import ipdb
-      ipdb.set_trace()
+      return concrete_types.ConcreteSumType(t).initialize(self)
     elif t.__class__ == types.List:
-      # FIXME(KK): Implement this
-      import ipdb
-      ipdb.set_trace()
+      return concrete_types.ConcreteList(t).initialize(self)
     elif t.__class__ == types.FunctionType:
-      # FIXME(KK): Implement this
-      import ipdb
-      ipdb.set_trace()
+      raise errors.InternalError(
+          "Reactive compiler can't produce a concrete type for a function type. It should have been normalized away.")
     elif t.__class__ == types.BasicType:
       return concrete_types.ConcreteBasicType(t).initialize(self)
     else:

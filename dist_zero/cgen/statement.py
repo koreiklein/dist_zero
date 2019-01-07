@@ -1,5 +1,5 @@
 from . import expression
-from .common import INDENT, escape_c
+from .common import INDENT
 
 
 class Block(object):

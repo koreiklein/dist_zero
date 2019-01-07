@@ -107,6 +107,9 @@ class ConcreteType(object):
     '''return the name to use for the capnp structure with this type's transitions..'''
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
+  def _write_indiscrete_transition_definition(self, compiler, union):
+    union.AddField("jump", self.capnp_state_type.name)
+
   def _init_capn_mem(self, block):
     vCapn = cgen.Var('capn', cgen.Capn)
     vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
@@ -441,13 +444,70 @@ class ConcreteSumType(ConcreteType):
     self.name = self._sum_type.name
 
     self._c_state_type = None
+    self._c_transitions_type = None
     self._capnp_state_type = None
     self._items = None
+
+    self._capnp_state_type
+
+  @property
+  def c_transitions_type(self):
+    return self._c_transitions_type
+
+  @property
+  def c_state_type(self):
+    return self._c_state_type
+
+  def _capnp_transitions_structure_name(self):
+    return f"{self.name}Transition"
+
+  @property
+  def dz_type(self):
+    return self._sum_type
+
+  @property
+  def capnp_state_type(self):
+    return self._capnp_state_type
+
+  def initialize_capnp(self, compiler):
+    struct = compiler.capnp.AddStructure(self.name)
+    if len(self._items) == 0:
+      pass
+    elif len(self._items) == 1:
+      for key, value in self.items:
+        struct.AddField(key, value.capnp_state_type.name)
+    else:
+      union = struct.AddUnion()
+      for key, value in self._items:
+        union.AddField(key, value.capnp_state_type.name)
+
+    self._capnp_state_type = struct
+
+  def _write_c_individual_components_transition_definitions(self, compiler, union, enum):
+    for key, value in self._items:
+      union.AddField(f"sum_on_{key}", value.c_transitions_type.Star())
+      enum.AddOption(f"sum_on_{key}")
+
+  def _write_capnp_individual_components_transition_definitions(self, compiler, union):
+    for key, value in self.items:
+      union.AddField(f"sumOn{key}", value.capnp_transitions_type.name)
+
+  def _write_capnp_transition_definition(self, compiler, ident, union):
+    if ident == 'standard':
+      self._write_capnp_individual_components_transition_definitions(compiler, union)
+    else:
+      raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+
+  def _write_c_transition_definition(self, compiler, ident, union, enum):
+    if ident == 'standard':
+      self._write_c_individual_components_transition_definitions(compiler, union, enum)
+    else:
+      raise RuntimeError(f"Unrecognized transition identifier {ident}.")
 
   def initialize(self, compiler):
     self._c_state_type = compiler.program.AddStruct(f"{self.name}_c")
     self._items = []
-    for key, value in self._product_type.items:
+    for key, value in self._sum_type.items:
       self._items.append((key, compiler.get_concrete_type_for_type(value)))
 
     if len(self._items) > 0:
@@ -470,10 +530,22 @@ class ConcreteList(ConcreteType):
   def __init__(self, base_list_type):
     self._base_list_type = base_list_type
     self.base = None
+    self.name = None
 
     self._c_state_type = None
     self._c_transitions_type = None
     self._initialized_capnp = False
+
+  @property
+  def c_transitions_type(self):
+    return self._c_transitions_type
+
+  def _capnp_transitions_structure_name(self):
+    return f"{self.name}Transitions"
+
+  @property
+  def dz_type(self):
+    return self._base_list_type
 
   @property
   def c_state_type(self):
@@ -483,12 +555,9 @@ class ConcreteList(ConcreteType):
   def capnp_state_type(self):
     return self._capnp_state_type
 
-  @property
-  def dz_type(self):
-    raise RuntimeError(f"Abstract Superclass {self.__class__}")
-
   def initialize(self, compiler):
     self.base = compiler.get_concrete_type_for_type(self._base_list_type.base)
+    self.name = f"{self.base.name}List"
     self._c_state_type = self.base.c_state_type.Star().KVec()
     self._c_transitions_type = self._write_c_transitions_definition(compiler)
 
@@ -498,7 +567,7 @@ class ConcreteList(ConcreteType):
     union.AddField('append', self.base.c_state_type.Star())
 
   def _write_c_insert_transition_definition(self, compiler, union, enum):
-    insertStruct = compiler.cprogram.AddStruct(f"insert_in_{self.name}")
+    insertStruct = compiler.program.AddStruct(f"insert_in_{self.name}")
     insertStruct.AddField('index', cgen.UInt32)
     insertStruct.AddField('value', self.base.c_state_type)
     union.AddField('insert', insertStruct.Star())
@@ -515,7 +584,7 @@ class ConcreteList(ConcreteType):
     union.AddField('insert', insertStruct)
 
   def _write_c_on_index_transition_definition(self, compiler, union, enum):
-    onIndexStruct = compiler.cprogram.AddStruct(f"on_index_{self.name}")
+    onIndexStruct = compiler.program.AddStruct(f"on_index_{self.name}")
     onIndexStruct.AddField('index', cgen.UInt32)
     onIndexStruct.AddField('transition', self.base.c_transitions_type.Star())
 

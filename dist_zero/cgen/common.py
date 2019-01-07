@@ -1,7 +1,7 @@
 import json
 
 
-def escape_c(s):
+def escape_c_string(s):
   return json.dumps(s)
 
 

@@ -1,6 +1,6 @@
 from dist_zero import errors
 
-from .common import INDENT, escape_c
+from .common import INDENT, escape_c_string
 from . import lvalue
 from .type import CType
 
@@ -209,7 +209,7 @@ class StrConstant(Expression):
     pass
 
   def to_c_string(self, root=False):
-    return escape_c(self.s)
+    return escape_c_string(self.s)
 
 
 class Call(Expression):

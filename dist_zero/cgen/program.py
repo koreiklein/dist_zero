@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 
 from . import expression, statement, type, lvalue, struct
-from .common import INDENT, INDENT_TWO, escape_c
+from .common import INDENT, INDENT_TWO, escape_c_string
 
 
 class Program(object):
@@ -281,7 +281,7 @@ class Program(object):
     yield f"static struct PyModuleDef {self.module_name()} = {{\n"
     yield f"{INDENT}PyModuleDef_HEAD_INIT,\n"
     yield f'{INDENT}"{self.name}",\n'
-    yield f'{INDENT}"{escape_c(self.docstring)}",\n'
+    yield f'{INDENT}{escape_c_string(self.docstring)},\n'
     yield f"{INDENT}-1,\n"
     yield f"{INDENT}{self.method_array_name()}\n"
     yield "};\n\n"
@@ -295,7 +295,7 @@ class Program(object):
   def add_c_extension_exported_methods(self):
     yield f"static struct PyMethodDef {self.method_array_name()}[] = {{\n"
     for func in self._exported_functions:
-      yield f'{INDENT}{{"{func.name}", {func.name}, METH_VARARGS, "{escape_c(func.docstring)}"}},\n'
+      yield f'{INDENT}{{"{func.name}", {func.name}, METH_VARARGS, {escape_c_string(func.docstring)}}},\n'
     yield f"{INDENT}{{NULL, NULL, 0, NULL}},\n"
     yield "};\n\n"
 
@@ -419,7 +419,7 @@ class PythonType(object):
     yield "\n"
     yield f"static PyMethodDef {self._static_method_array_name()}[] = {{\n"
     for method in self.methods:
-      yield f'{INDENT}{{"{method.name}", (PyCFunction) {method.name}, METH_VARARGS, "{escape_c(method.docstring)}"}},\n'
+      yield f'{INDENT}{{"{method.name}", (PyCFunction) {method.name}, METH_VARARGS, {escape_c_string(method.docstring)}}},\n'
     yield f"{INDENT}{{NULL}}\n"
     yield "};\n"
 

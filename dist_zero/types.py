@@ -1,7 +1,7 @@
 import math
 import random
 
-from dist_zero import capnpgen, errors, cgen
+from dist_zero import errors, cgen
 
 rand = random.Random("types")
 
@@ -21,11 +21,6 @@ class Type(object):
     '''Add a definition for the c states of this type.'''
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
-  # FIXME(KK): Remove this
-  def _capnp_transitions_structure_name(self):
-    '''return the name to use for the capnp structure with this type's transitions..'''
-    raise RuntimeError('Abstract Superclass')
-
   def equivalent(self, other):
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
@@ -42,9 +37,6 @@ class Type(object):
     self.transition_identifiers = set()
     return self
 
-  def _write_indiscrete_transition_definition(self, compiler, union):
-    union.AddField("jump", compiler.capnp_state_ref(self))
-
 
 class FunctionType(Type):
   def __init__(self, src, tgt):
@@ -53,15 +45,6 @@ class FunctionType(Type):
 
   def equivalent(self, other):
     return other.__class__ == FunctionType and self.src.equivalent(other.src) and self.tgt.equivalent(other.tgt)
-
-  def _write_c_state_definition(self, compiler):
-    raise RuntimeError("FunctionType should be be compiled to a c state.")
-
-  def _write_capnp_transition_definition(self, compiler, ident, union):
-    raise RuntimeError(f"Unrecognized transition identifier {ident}.")
-
-  def _capnp_transitions_structure_name(self):
-    raise errors.InternalError("We should not be generating transitions from FunctionTypes.")
 
 
 class BasicType(Type):
@@ -77,12 +60,6 @@ class BasicType(Type):
     self._apply_transition = apply_transition
 
     super(BasicType, self).__init__()
-
-  def _write_c_transitions_definition(self, compiler):
-    return self.c_transition_type
-
-  def _capnp_transitions_structure_name(self):
-    return f"{self.name}Transitions"
 
   def equivalent(self, other):
     return other.__class__ == BasicType and \
@@ -182,9 +159,6 @@ class Product(Type):
 
     return True
 
-  def _capnp_transitions_structure_name(self):
-    return f"{self.name}Transition"
-
   def __abs__(self):
     result = 1
     for k, x in self.items:
@@ -198,44 +172,6 @@ class Sum(Type):
     self.d = dict(items)
     self.name = name if name is not None else f"Sum{_gen_name()}"
     super(Sum, self).__init__()
-
-  def _capnp_transitions_structure_name(self):
-    return f"{self.name}Transition"
-
-  def _write_capnp_individual_components_transition_definitions(self, compiler, union):
-    for key, value in self.items:
-      union.AddField(f"sumOn{key}", compiler.capnp_transitions_ref(value))
-
-  def _write_c_individual_components_transition_definitions(self, compiler, union, enum):
-    for key, value in self.items:
-      union.AddField(f"sum_on_{key}", compiler.c_transitions_ref(value).Star())
-      enum.AddOption(f"sum_on_{key}")
-
-  def _write_capnp_transition_definition(self, compiler, ident, union):
-    if ident == 'standard':
-      self._write_capnp_individual_components_transition_definitions(compiler, union)
-    else:
-      raise RuntimeError(f"Unrecognized transition identifier {ident}.")
-
-  def _write_c_transition_definition(self, compiler, ident, union, enum):
-    if ident == 'standard':
-      self._write_c_individual_components_transition_definitions(compiler, union, enum)
-    else:
-      raise RuntimeError(f"Unrecognized transition identifier {ident}.")
-
-  def _write_capnp_state_definition(self, compiler):
-    struct = compiler.capnp.AddStructure(self.name)
-    if len(self.items) == 0:
-      pass
-    elif len(self.items) == 0:
-      for key, value in self.items:
-        struct.AddField(key, compiler.capnp_state_ref(value))
-    else:
-      union = struct.AddUnion()
-      for key, value in self.items:
-        union.AddField(key, compiler.capnp_state_ref(value))
-
-    return self.name
 
   def __abs__(self):
     return sum(abs(x) for k, x in self.items)
