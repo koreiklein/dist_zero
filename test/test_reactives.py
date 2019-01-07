@@ -51,10 +51,10 @@ class TestMultiplicativeReactive(object):
     assert 1 == len(outputs)
     transitions = program_W.capnpForOutput_T.from_bytes(outputs['output']).transitions
 
-    import ipdb
-    ipdb.set_trace()
     assert 1 == len(transitions)
-    # FIXME(KK): Finish checking that the transitions look like they're supposed to
+    t = transitions[0]
+    assert 'productOnright' == str(t.which)
+    assert 4 == t.productOnright.basicTransition
 
   def test_product_input(self, program_V):
     net = program_V.module.Net()
