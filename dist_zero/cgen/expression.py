@@ -103,7 +103,7 @@ class UnionLiteral(Expression):
     self.value.add_includes(program)
 
   def to_c_string(self, root=False):
-    return f"(({self.union.to_c_string()}){{ .{self.key}={self.value.to_c_string()} }})"
+    return f"(({self.union.to_c_string()}) {{ .{self.key}={self.value.to_c_string()} }})"
 
 
 class StructureLiteral(Expression):
@@ -116,8 +116,8 @@ class StructureLiteral(Expression):
       expr.add_includes(program)
 
   def to_c_string(self, root=False):
-    assignments = ", ".join(f".{key}={expr.to_c_string()}" for key, expr in self.key_to_expr.items())
-    return f"(({self.struct.to_c_string()}){{ {assignments} }})"
+    assignments = ", ".join(f"\n    .{key}={expr.to_c_string()}" for key, expr in self.key_to_expr.items())
+    return f"(({self.struct.to_c_string()}) {{ {assignments} }})"
 
 
 class Sizeof(Expression):
