@@ -59,6 +59,9 @@ LOGSTASH_PORT = int(os.environ['LOGSTASH_PORT'])
 
 LOGZ_IO_TOKEN = os.environ.get('LOGZ_IO_TOKEN', '')
 
+C_DEBUG = os.environ.get('C_DEBUG', 'false')
+c_debug = C_DEBUG.lower() == 'true'
+
 CAPNP_DIR = os.environ['CAPNP_DIR']
 
 TESTING = DIST_ZERO_ENV == "test"

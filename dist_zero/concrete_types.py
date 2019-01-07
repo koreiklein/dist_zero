@@ -236,7 +236,12 @@ class ConcreteBasicType(ConcreteType):
     self._capnp_transitions_basicTransition_field = None
 
   def generate_capnp_to_c_transition(self, compiler, block, ptr):
-    yield block, self._capnp_transitions_basicTransition_field.c_get(ptr)
+    vStructure = cgen.Var(f'{self.name}_transition_structure', self._capnp_transitions_type.c_structure_type)
+    block.AddDeclaration(cgen.CreateVar(vStructure))
+    block.AddAssignment(None, self._capnp_transitions_type.c_read_function(vStructure.Address(), ptr))
+
+    yield block, vStructure.Dot('basicTransition')
+
     block.Newline()
 
   def generate_capnp_to_c_state(self, compiler, block, ptr, output_lvalue):
@@ -424,15 +429,20 @@ class ConcreteProductType(ConcreteType):
     block.AddAssignment(output_lvalue, cgen.StructureLiteral(struct=self._c_state_type, key_to_expr=key_to_expr))
 
   def generate_capnp_to_c_transition(self, compiler, block, ptr):
-    vList = cgen.Var('list', self._capnp_single_transition_type.c_list_type)
-    block.AddAssignment(cgen.CreateVar(vList), self._capnp_transitions_type.c_get_field('transitions')(ptr))
+    ptrStruct = cgen.Var('ptr_struct', self._capnp_transitions_type.c_structure_type)
+    block.AddDeclaration(cgen.CreateVar(ptrStruct))
+    block.AddAssignment(None, self._capnp_transitions_type.c_read_function(ptrStruct.Address(), ptr))
+
+    vList = ptrStruct.Dot('transitions')
 
     vItem = cgen.Var('list_item', self._capnp_single_transition_type.c_ptr_type)
     block.AddDeclaration(cgen.CreateVar(vItem))
     vIndex = cgen.Var('transition_index', cgen.MachineInt)
 
     block.AddAssignment(cgen.CreateVar(vIndex), cgen.Zero)
-    loop = block.AddWhile(vIndex < vList.Dot('p').Dot('len'))
+    nTransitions = cgen.capn_len(vList)
+    block.logf(f"Product is looping over %d capnp_transitions to deserialize them.\n", nTransitions)
+    loop = block.AddWhile(vIndex < nTransitions)
 
     loop.AddAssignment(cgen.UpdateVar(vItem).Dot('p'), cgen.capn_getp(vList.Dot('p'), vIndex, cgen.Zero))
 
@@ -474,6 +484,7 @@ class ConcreteProductType(ConcreteType):
             cgen.CreateVar(vFromValue),
             cgen.malloc(value.c_transitions_type.Sizeof()).Cast(value.c_transitions_type.Star()))
         cblock.AddAssignment(cgen.UpdateVar(vFromValue).Deref(), cexpr)
+        cblock.logf(f"Deserialized %d.\n", vFromValue.Deref())
         yield cblock, cgen.StructureLiteral(
             struct=self._c_transitions_type,
             key_to_expr={

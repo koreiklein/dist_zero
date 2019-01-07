@@ -63,6 +63,9 @@ class PlusBinOp(BinOp):
 
     argTransitionIndex = cgen.Var('arg_transition_index', cgen.MachineInt)
     block.AddAssignment(cgen.CreateVar(argTransitionIndex), cgen.Zero)
+
+    block.logf(f"\nPlus operation is reacting to %zu.\n", cgen.kv_size(argTransitions))
+
     loop = block.AddWhile(argTransitionIndex < cgen.kv_size(argTransitions))
 
     transition = cgen.kv_A(argTransitions, argTransitionIndex)
@@ -74,6 +77,7 @@ class PlusBinOp(BinOp):
       case = switch.AddCase(arg_enum.literal(product_on_key))
       nextValue = transition.Dot('value').Dot(product_on_key).Deref()
       case.AddAssignment(None, cgen.kv_push(output_transition_ctype, outputTransitions, nextValue))
+      case.logf(f"\nPlus operation in product_on_{key} case %d\n", nextValue)
       case.AddBreak()
 
     default = switch.AddDefault()

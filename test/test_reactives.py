@@ -49,9 +49,12 @@ class TestMultiplicativeReactive(object):
         'b': [program_W.capnpForB.new_message(basicState=4).to_bytes()],
     })
     assert 1 == len(outputs)
-    msg = program_W.capnpForOutput.from_bytes(outputs['output'])
+    transitions = program_W.capnpForOutput_T.from_bytes(outputs['output']).transitions
 
-    # FIXME(KK): Finish this!
+    import ipdb
+    ipdb.set_trace()
+    assert 1 == len(transitions)
+    # FIXME(KK): Finish checking that the transitions look like they're supposed to
 
   def test_product_input(self, program_V):
     net = program_V.module.Net()
@@ -67,7 +70,17 @@ class TestMultiplicativeReactive(object):
     assert 1 == len(outputs)
     assert 13 == program_V.capnpForOutput.from_bytes(outputs['output']).basicState
 
-    # FIXME(KK): Finish this!
+    aTransitions = program_V.capnpForA_T.new_message()
+    transition = aTransitions.init('transitions', 1)[0]
+    transition.init('productOnright').basicTransition = 12
+
+    outputs = net.OnTransitions({
+        'a': [aTransitions.to_bytes()],
+        'b': [program_V.capnpForB_T.new_message(basicTransition=1).to_bytes()],
+    })
+
+    assert 1 == len(outputs)
+    assert 12 + 1 == program_V.capnpForOutput_T.from_bytes(outputs['output']).basicTransition
 
   def test_update_product_state(self, program_Z):
     net = program_Z.module.Net()

@@ -376,6 +376,9 @@ class Function(expression.Expression):
   def AddAssignment(self, *args, **kwargs):
     return self._block.AddAssignment(*args, **kwargs)
 
+  def logf(self, *args, **kwargs):
+    return self._block.logf(*args, **kwargs)
+
   def header_string(self):
     args = ", ".join([arg.type.wrap_variable(arg.name) for arg in self.args])
     static = 'static ' if self.export else ''

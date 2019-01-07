@@ -86,6 +86,7 @@ class Product(Expression):
     vIndex = cgen.Var('component_transitions_index', cgen.MachineInt)
     block.AddDeclaration(cgen.CreateVar(vIndex))
     outputTransitions = compiler.transitions_rvalue(vGraph, self)
+    block.logf(f"Running product {product_type.name} react to transitions.\n")
 
     for key, expr in self.items:
       transitions = compiler.transitions_rvalue(vGraph, expr)
@@ -94,6 +95,9 @@ class Product(Expression):
       loop = block.Newline().AddWhile(vIndex < cgen.kv_size(transitions))
       product_on_key = f"product_on_{key}"
       innerValue = cgen.kv_A(transitions, vIndex)
+
+      loop.logf("\nInner value is %d\n", innerValue)
+
       loop.AddAssignment(
           None,
           cgen.kv_push(
