@@ -34,6 +34,67 @@ class TestMultiplicativeReactive(object):
       # Empty transitions for "a" fails since "a" has not been initialized.
       net.OnTransitions({'a': []})
 
+  def test_nested_products(self, program_U):
+    net = program_U.module.Net()
+
+    assert not net.OnOutput_output()
+    assert not net.OnInput_b(program_U.capnpForB.new_message(basicState=2).to_bytes())
+    aInput = program_U.capnpForA.new_message()
+    aInput.left.basicState = 5
+    aInput.right.x.basicState = 3
+    aInput.right.y.basicState = 1
+
+    result = net.OnInput_a(aInput.to_bytes())
+    assert 1 == len(result)
+    assert 8 == program_U.capnpForOutput.from_bytes(result['output']).basicState
+
+    result = net.OnOutput_combined_output()
+    assert 1 == len(result)
+    combined_msg = program_U.capnpForCombinedOutput.from_bytes(result['combined_output'])
+    assert 8 == combined_msg.a.basicState
+    assert 3 == combined_msg.b.c.x.basicState
+    assert 1 == combined_msg.b.c.y.basicState
+    assert 5 == combined_msg.b.d.basicState
+    assert 1 == combined_msg.b.e.basicState
+
+    inputT = program_U.capnpForA_T.new_message()
+    transition0, transition1 = inputT.init('transitions', 2)
+    right_transition = transition0.init('productOnright')
+
+    right_transition.init('transitions', 1)[0].init('productOny').basicTransition = 12
+
+    transition1.init('productOnleft').basicTransition = 3
+
+    result = net.OnTransitions({'a': [inputT.to_bytes()]})
+    assert 2 == len(result)
+    assert 15 == program_U.capnpForOutput_T.from_bytes(result['output']).basicTransition
+    combinedOutputT = program_U.capnpForCombinedOutput_T.from_bytes(result['combined_output'])
+
+    # There are MANY possible correct results for combinedOutputT.  Instead of checking for a specific one,
+    # we test for certain properties that should be true of combinedOutputT no matter which correct result we get.
+    aTotal, bcxTotal, bcyTotal, bdTotal, beTotal = 0, 0, 0, 0, 0
+    for transition in combinedOutputT.transitions:
+      if str(transition.which) == 'productOna':
+        aTotal += transition.productOna.basicTransition
+      elif str(transition.which) == 'productOnb':
+        for bTransition in transition.productOnb.transitions:
+          if str(bTransition.which) == 'productOnc':
+            for cTransition in bTransition.productOnc.transitions:
+              if str(cTransition.which) == 'productOnx':
+                bcxTotal += cTransition.productOnx.basicTransition
+              elif str(cTransition.which) == 'productOny':
+                bcyTotal += cTransition.productOny.basicTransition
+          elif str(bTransition.which) == 'productOnd':
+            bdTotal += bTransition.productOnd.basicTransition
+          elif str(bTransition.which) == 'productOne':
+            beTotal += bTransition.productOne.basicTransition
+
+    assert 15 == aTotal
+    assert 0 == bcxTotal
+    assert 12 == bcyTotal
+    assert 3 == bdTotal
+    assert 12 == beTotal
+
   def test_product_output(self, program_W):
     net = program_W.module.Net()
 
@@ -241,6 +302,57 @@ def program_plus(left, right):
 
 class _ProgramData(object):
   pass
+
+
+@pytest.fixture(scope='module')
+def program_U():
+  self = _ProgramData()
+
+  self.inputA = expression.Input(
+      'a',
+      types.Product(items=[
+          ('left', types.Int32),
+          ('right', types.Product(items=[
+              ('x', types.Int32),
+              ('y', types.Int32),
+          ])),
+      ]))
+  self.inputB = expression.Input('b', types.Int32)
+
+  self.left = expression.Project('left', self.inputA)
+  self.right = expression.Project('right', self.inputA)
+  self.right_y = expression.Project('y', self.right)
+  self.intermediate = program_plus(self.left, self.right_y)
+
+  self.output = program_plus(self.intermediate, self.inputB)
+
+  self.combined_output = expression.Product(items=[
+      ('a', self.output),
+      ('b', expression.Product(items=[
+          ('c', self.right),
+          ('d', self.left),
+          ('e', self.right_y),
+      ])),
+  ])
+
+  self.compiler = reactive.ReactiveCompiler(name='program_U')
+  self.module = self.compiler.compile({'output': self.output, 'combined_output': self.combined_output})
+
+  self.capnpForA = self.compiler.capnp_state_module(self.inputA)
+  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
+
+  self.capnpForInt32 = self.compiler.capnp_state_module_for_type(types.Int32)
+  self.capnpForInt32_T = self.compiler.capnp_transitions_module_for_type(types.Int32)
+
+  self.capnpForB = self.compiler.capnp_state_module(self.inputB)
+  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
+  self.capnpForOutput = self.compiler.capnp_state_module(self.output)
+  self.capnpForOutput_T = self.compiler.capnp_transitions_module(self.output)
+
+  self.capnpForCombinedOutput = self.compiler.capnp_state_module(self.combined_output)
+  self.capnpForCombinedOutput_T = self.compiler.capnp_transitions_module(self.combined_output)
+
+  return self
 
 
 @pytest.fixture(scope='module')

@@ -5,6 +5,12 @@ class Expression(object):
   def __repr__(self):
     return str(self)
 
+  def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
+    '''
+    Generate c code in ``stateInitFunction`` to initialize the state of this expression in ``vGraph``.
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
     '''
     Generate c code in ``block`` to:
@@ -47,6 +53,50 @@ class Expression(object):
     compiler.get_type_for_expr(self).generate_apply_transition(loop, compiler.state_lvalue(vGraph, self),
                                                                compiler.state_rvalue(vGraph, self), transition)
     loop.AddAssignment(cgen.UpdateVar(vIndex), vIndex + cgen.One)
+
+
+class Project(Expression):
+  def __init__(self, key, base):
+    self.key = key
+    self.base = base
+
+  def __str__(self):
+    return f"{self.base}.'{self.key}'"
+
+  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
+    outputTransitions = compiler.transitions_rvalue(vGraph, self)
+    baseTransitionsRvalue = compiler.transitions_rvalue(vGraph, self.base)
+
+    vIndex = cgen.Var('base_index', cgen.MachineInt)
+    block.AddAssignment(cgen.CreateVar(vIndex), cgen.Zero)
+    loop = block.AddWhile(vIndex < cgen.kv_size(baseTransitionsRvalue))
+
+    curTransition = cgen.kv_A(baseTransitionsRvalue, vIndex)
+    switch = loop.AddSwitch(curTransition.Dot('type'))
+
+    base_transitions_ctype = compiler.get_concrete_type_for_expr(self.base).c_transitions_type
+    output_transitions_ctype = compiler.get_concrete_type_for_expr(self).c_transitions_type
+    c_enum = base_transitions_ctype.field_by_id['type']
+    product_on_key = f"product_on_{self.key}"
+
+    onMe = switch.AddCase(c_enum.literal(product_on_key))
+    onMe.AddAssignment(
+        None,
+        cgen.kv_push(output_transitions_ctype, outputTransitions,
+                     curTransition.Dot('value').Dot(product_on_key).Deref()))
+
+    onMe.AddBreak()
+
+    default = switch.AddDefault()
+    default.AddBreak()
+
+    loop.AddAssignment(cgen.UpdateVar(vIndex), vIndex + cgen.One)
+
+    self._standard_update_state(compiler, block, vGraph, maintainState)
+
+  def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
+    stateLvalue = compiler.state_lvalue(vGraph, self)
+    stateInitFunction.AddAssignment(stateLvalue, compiler.state_rvalue(vGraph, self.base).Dot(self.key).Deref())
 
 
 class Applied(Expression):
@@ -95,8 +145,6 @@ class Product(Expression):
       loop = block.Newline().AddWhile(vIndex < cgen.kv_size(transitions))
       product_on_key = f"product_on_{key}"
       innerValue = cgen.kv_A(transitions, vIndex)
-
-      loop.logf("\nInner value is %d\n", innerValue)
 
       loop.AddAssignment(
           None,

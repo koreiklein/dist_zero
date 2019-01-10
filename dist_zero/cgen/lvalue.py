@@ -97,7 +97,7 @@ class Sub(Accessor):
 
 class _Deref(Accessor):
   def access_variable(self, var):
-    return f"*({var})"
+    return f"(*({var}))"
 
 
 Deref = _Deref()

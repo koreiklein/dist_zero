@@ -341,6 +341,31 @@ class ConcreteProductType(ConcreteType):
   def capnp_transitions_type(self):
     return self._capnp_transitions_type
 
+  def _write_single_c_transition_to_capnp_ptr(self, compiler, block, vSegment, transitionRvalue, vPtr):
+    vTransitions = cgen.Var(f"{self.name}_transitions_list", self._capnp_single_transition_type.c_list_type)
+    block.AddAssignment(
+        cgen.CreateVar(vTransitions), self._capnp_single_transition_type.c_new_list_function(vSegment, cgen.One))
+    block.AddAssignment(None, self._capnp_transitions_type.c_set_field('transitions')(vPtr, vTransitions))
+
+    transitionI = cgen.Var(f'single_c_transition_{inc_i()}', self._capnp_single_transition_type.c_ptr_type)
+    block.AddDeclaration(cgen.CreateVar(transitionI))
+    block.AddAssignment(transitionI.Dot('p'), cgen.capn_getp(vTransitions.Dot('p'), cgen.Zero, cgen.Zero))
+
+    self._write_single_c_transition_to_single_capnp_ptr(compiler, block, vSegment, transitionRvalue, transitionI)
+
+  def _write_single_c_transition_to_single_capnp_ptr(self, compiler, block, vSegment, transitionRvalue, vPtr):
+    switch = block.AddSwitch(transitionRvalue.Dot('type'))
+
+    for ident in self._product_type.transition_identifiers:
+      if ident == 'standard':
+        self._write_c_transitions_to_capnp_individual_components(compiler, switch, vSegment, transitionRvalue, vPtr)
+      elif ident == 'individual':
+        self._write_c_transitions_to_capnp_individual_components(compiler, switch, vSegment, transitionRvalue, vPtr)
+      elif ident == 'simultaneous':
+        self._write_c_transitions_to_capnp_simultaneous(compiler, switch, vSegment, transitionRvalue, vPtr)
+      else:
+        raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+
   def _write_c_state_to_capnp_ptr(self, compiler, block, vSegment, stateRvalue, vPtr):
     for field, t in self._items:
       itemPtr = cgen.Var(f'{field}_component_ptr', t.capnp_state_type.c_ptr_type)
@@ -393,17 +418,7 @@ class ConcreteProductType(ConcreteType):
 
     vCTransition = cgen.kv_A(transitionsRvalue, cTransitionsIndex)
 
-    switch = loop.AddSwitch(vCTransition.Dot('type'))
-
-    for ident in self._product_type.transition_identifiers:
-      if ident == 'standard':
-        self._write_c_transitions_to_capnp_individual_components(compiler, switch, vSegment, vCTransition, transitionI)
-      elif ident == 'individual':
-        self._write_c_transitions_to_capnp_individual_components(compiler, switch, vSegment, vCTransition, transitionI)
-      elif ident == 'simultaneous':
-        self._write_c_transitions_to_capnp_simultaneous(compiler, switch, vSegment, vCTransition, transitionI)
-      else:
-        raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+    self._write_single_c_transition_to_single_capnp_ptr(compiler, loop, vSegment, vCTransition, transitionI)
 
     loop.AddAssignment(cgen.UpdateVar(cTransitionsIndex), cTransitionsIndex + cgen.One)
 
@@ -530,7 +545,6 @@ class ConcreteProductType(ConcreteType):
             cgen.CreateVar(vFromValue),
             cgen.malloc(value.c_transitions_type.Sizeof()).Cast(value.c_transitions_type.Star()))
         cblock.AddAssignment(cgen.UpdateVar(vFromValue).Deref(), cexpr)
-        cblock.logf(f"Deserialized %d.\n", vFromValue.Deref())
         yield cblock, cgen.StructureLiteral(
             struct=self._c_transitions_type,
             key_to_expr={

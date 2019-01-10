@@ -177,6 +177,9 @@ class ReactiveCompiler(object):
       return types.Product(items=[(k, self.get_type_for_expr(v)) for k, v in expr.items])
     elif expr.__class__ == expression.Input:
       return expr.type
+    elif expr.__class__ == expression.Project:
+      base_type = self.get_type_for_expr(expr.base)
+      return base_type.d[expr.key]
     else:
       raise RuntimeError(f"Unrecognized type of normalized expression {expr.__class__}.")
 
@@ -894,5 +897,8 @@ class _Topsorter(object):
         self._visit(kid)
     elif expr.__class__ == expression.Input:
       self.expr_to_inputs[expr] = []
+    elif expr.__class__ == expression.Project:
+      self.expr_to_inputs[expr] = [expr.base]
+      self._visit(expr.base)
     else:
       raise errors.InternalError(f"Unrecognized type of normalized expression {expr.__class__}.")
