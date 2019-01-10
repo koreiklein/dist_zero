@@ -11,7 +11,7 @@ from dist_zero import types, concrete_types
 
 class ReactiveCompiler(object):
   '''
-  For building a reactive program from a set of normalized expressions.
+  The root object for building a reactive program from a set of normalized expressions.
   '''
 
   def __init__(self, name, docstring=''):
@@ -91,6 +91,10 @@ class ReactiveCompiler(object):
       self._built_capnp = True
 
   def get_pycapnp_module(self):
+    '''
+    Return a python module for generating and parsing capnp messages.
+    This method caches it's result, and should only be called after the program is finished being compiled.
+    '''
     if self._pycapnp_module is None:
       self._build_capnp()
       dirname = self._capnp_dirname()
@@ -101,25 +105,49 @@ class ReactiveCompiler(object):
     return self._pycapnp_module
 
   def capnp_state_module(self, expr):
+    '''
+    Get the capnp builder for ``expr``
+
+    :param expr: A dist_zero expression involved in compiling the program.
+    :type expr: `dist_zero.expression.Expression`
+    '''
     t = self.get_concrete_type_for_expr(expr).capnp_state_type
     capnp_module = self.get_pycapnp_module()
     return capnp_module.__dict__[t.name]
 
   def capnp_state_module_for_type(self, t):
+    '''
+    Get the capnp builder for ``t``
+
+    :param t: The dist_zero type involved in compiling the program.
+    :type t: `dist_zero.type.Type`
+    '''
     capnp_module = self.get_pycapnp_module()
     return capnp_module.__dict__[self.get_concrete_type_for_type(t).name]
 
   def capnp_transitions_module(self, expr):
+    '''
+    Get the capnp builder for transitions on ``expr``
+
+    :param expr: A dist_zero expression involved in compling the program.
+    :type expr: `dist_zero.expression.Expression`
+    '''
     t = self.get_concrete_type_for_expr(expr).capnp_transitions_type
     capnp_module = self.get_pycapnp_module()
     return capnp_module.__dict__[t.name]
 
   def capnp_transitions_module_for_type(self, t):
+    '''
+    Get the capnp builder for transitions on ``t``
+
+    :param t: The dist_zero type involved in compiling the program.
+    :type t: `dist_zero.type.Type`
+    '''
     capnp_module = self.get_pycapnp_module()
     return capnp_module.__dict__[self.get_concrete_type_for_type(t).name]
 
   def get_concrete_type_for_expr(self, expr):
-    return self.get_concrete_type_for_type(self.get_type_for_expr(expr))
+    return self.get_concrete_type_for_type(expr.type)
 
   def get_concrete_type_for_type(self, t):
     if t not in self._concrete_type_by_type:
@@ -128,14 +156,6 @@ class ReactiveCompiler(object):
       return result
     else:
       return self._concrete_type_by_type[t]
-
-  def get_type_for_expr(self, expr):
-    if expr not in self._type_by_expr:
-      t = self._compute_type(expr)
-      self._type_by_expr[expr] = t
-      return t
-    else:
-      return self._type_by_expr[expr]
 
   def state_lvalue(self, vGraph, expr):
     index = self.expr_index[expr]
@@ -159,29 +179,6 @@ class ReactiveCompiler(object):
       return concrete_types.ConcreteBasicType(t).initialize(self)
     else:
       raise RuntimeError(f"Unrecognized dist_zero type {t.__class__}.")
-
-  def _compute_type(self, expr):
-    if expr.__class__ == expression.Applied:
-      arg_type = self.get_type_for_expr(expr.arg)
-      if not isinstance(expr.func, primitive.PrimitiveOp):
-        raise RuntimeError(
-            f"Expected a normalized expression, but function an application of a non-PrimitiveOp: {expr.func}.")
-
-      if not expr.func.get_input_type().equivalent(arg_type):
-        raise RuntimeError(
-            f"Badly typed normalized expression.  Applied a function taking {expr.func.get_input_type()} to an {arg_type}."
-        )
-
-      return expr.func.get_output_type()
-    elif expr.__class__ == expression.Product:
-      return types.Product(items=[(k, self.get_type_for_expr(v)) for k, v in expr.items])
-    elif expr.__class__ == expression.Input:
-      return expr.type
-    elif expr.__class__ == expression.Project:
-      base_type = self.get_type_for_expr(expr.base)
-      return base_type.d[expr.key]
-    else:
-      raise RuntimeError(f"Unrecognized type of normalized expression {expr.__class__}.")
 
   def _generate_structs(self):
     '''Generate the graph struct in self.program.'''

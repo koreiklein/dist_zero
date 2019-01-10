@@ -54,7 +54,6 @@ class PlusBinOp(BinOp):
     outputTransitions = compiler.transitions_rvalue(vGraph, expr)
     output_transition_ctype = compiler.get_concrete_type_for_expr(expr).c_transitions_type
 
-    arg_type = compiler.get_type_for_expr(arg)
     arg_c_transition_type = compiler.get_concrete_type_for_expr(arg).c_transitions_type
     arg_enum = arg_c_transition_type.field_by_id['type']
     arg_union = arg_c_transition_type.field_by_id['value']
@@ -72,7 +71,7 @@ class PlusBinOp(BinOp):
     switch = loop.AddSwitch(transition.Dot('type'))
 
     # NOTE: Not all cases are product_on_{key} cases.  The others should also be handled.
-    for key, _value in arg_type.items:
+    for key, _value in arg.type.items:
       product_on_key = f"product_on_{key}"
       case = switch.AddCase(arg_enum.literal(product_on_key))
       nextValue = transition.Dot('value').Dot(product_on_key).Deref()

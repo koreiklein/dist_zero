@@ -1,9 +1,17 @@
-from dist_zero import cgen, errors
+from dist_zero import cgen, errors, types
 
 
 class Expression(object):
   def __repr__(self):
     return str(self)
+
+  @property
+  def type(self):
+    '''
+    :return: The type of the expression.
+    :rtype: `dist_zero.type.Type`
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
     '''
@@ -50,8 +58,8 @@ class Expression(object):
 
     loop = whenMaintainsState.AddWhile(vIndex < cgen.kv_size(transitions))
     transition = cgen.kv_A(transitions, vIndex)
-    compiler.get_type_for_expr(self).generate_apply_transition(loop, compiler.state_lvalue(vGraph, self),
-                                                               compiler.state_rvalue(vGraph, self), transition)
+    self.type.generate_apply_transition(loop, compiler.state_lvalue(vGraph, self), compiler.state_rvalue(vGraph, self),
+                                        transition)
     loop.AddAssignment(cgen.UpdateVar(vIndex), vIndex + cgen.One)
 
 
@@ -59,6 +67,10 @@ class Project(Expression):
   def __init__(self, key, base):
     self.key = key
     self.base = base
+
+  @property
+  def type(self):
+    return self.base.type.d[self.key]
 
   def __str__(self):
     return f"{self.base}.'{self.key}'"
@@ -107,6 +119,11 @@ class Applied(Expression):
     '''
     self.func = func
     self.arg = arg
+    self._type = func.get_output_type()
+
+  @property
+  def type(self):
+    return self._type
 
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
     self.func.generate_react_to_transitions(compiler, block, vGraph, maintainState, self.arg, self)
@@ -125,18 +142,22 @@ class Applied(Expression):
 class Product(Expression):
   def __init__(self, items):
     self.items = items
+    self._type = types.Product(items=[(k, v.type) for k, v in self.items])
+
+  @property
+  def type(self):
+    return self._type
 
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
-    product_type = compiler.get_type_for_expr(self)
     transition_ctype = compiler.get_concrete_type_for_expr(self).c_transitions_type
-    if 'standard' not in product_type.transition_identifiers and 'individual' not in product_type.transition_identifiers:
+    if 'standard' not in self._type.transition_identifiers and 'individual' not in self._type.transition_identifiers:
       raise errors.InternalError("Have not implemented the action of Product on transitions "
                                  "when the output type doesn't have individual transitions.")
 
     vIndex = cgen.Var('component_transitions_index', cgen.MachineInt)
     block.AddDeclaration(cgen.CreateVar(vIndex))
     outputTransitions = compiler.transitions_rvalue(vGraph, self)
-    block.logf(f"Running product {product_type.name} react to transitions.\n")
+    block.logf(f"Running product {self._type.name} react to transitions.\n")
 
     for key, expr in self.items:
       transitions = compiler.transitions_rvalue(vGraph, expr)
@@ -176,7 +197,11 @@ class Product(Expression):
 class Input(Expression):
   def __init__(self, name, type):
     self.name = name
-    self.type = type
+    self._type = type
+
+  @property
+  def type(self):
+    return self._type
 
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
     self._standard_update_state(compiler, block, vGraph, maintainState)
