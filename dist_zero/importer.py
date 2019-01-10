@@ -7,7 +7,7 @@ class Importer(object):
   a source of input messages to that node.
 
   As messages arrive from the sender, the underlying `Node` should pass them to the `Importer.import_message` method.
-  Internally, the `Importer` will de-duplicate and re-order messages, and eventually call `deliver` on
+  Internally, the `Importer` will de-duplicate and re-order messages, and eventually call a method like `Node.deliver` on
   each message, exactly once, and in the right order.
   '''
 
@@ -80,13 +80,12 @@ class Importer(object):
     rsn = message['sequence_number']
     if rsn < self._least_undelivered_remote_sequence_number or rsn in self._remote_sequence_number_to_early_message:
       self._linker.n_duplicates += 1
-      self.logger.warning(
-          ("Received duplicate message for sequence number {remote_sequence_number}"
-           " from sender {sender_id}"),
-          extra={
-              'remote_sequence_number': rsn,
-              'sender_id': self.sender_id,
-          })
+      self.logger.warning(("Received duplicate message for sequence number {remote_sequence_number}"
+                           " from sender {sender_id}"),
+                          extra={
+                              'remote_sequence_number': rsn,
+                              'sender_id': self.sender_id,
+                          })
     else:
       self._remote_sequence_number_to_early_message[rsn] = message
 

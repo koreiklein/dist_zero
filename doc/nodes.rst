@@ -16,7 +16,7 @@ that run on that machine.
 Classes for managing the network of nodes that perform computations
 -----------------------------------------------------------------------
 
-.. automodule:: dist_zero.node.computation
+.. automodule:: dist_zero.node.computation.standard
    :members:
 
 Classes for resending and acknowledging messages
@@ -78,6 +78,12 @@ dropped.
 .. automodule:: dist_zero.node.io.leaf
    :members:
 
-Node classes for performing computations
+.. automodule:: dist_zero.node.io.adopter
+   :members:
+
+Node classes for linking datasets
 --------------------------------------------
+
+.. automodule:: dist_zero.connector.connector
+  :members:
 

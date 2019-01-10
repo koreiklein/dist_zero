@@ -30,6 +30,8 @@ Welcome to DistZero's documentation!
    doc/errors
    doc/recorded
 
+   doc/load_balancer
+
    doc/migrations
    doc/ticker
 

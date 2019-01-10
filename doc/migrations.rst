@@ -12,10 +12,7 @@ Each `MigrationNode` will move through a series of `State` s in order to complet
 .. automodule:: dist_zero.migration.state.state
    :members:
 
-.. automodule::  dist_zero.migration.state.state_01_starting_new_nodes
-   :members:
-
-.. automodule:: dist_zero.migration.state.state_02_starting_node_migrators
+.. automodule::  dist_zero.migration.state.state_01_starting_node_migrators
    :members:
 
 .. automodule:: dist_zero.migration.state.state_03_starting_new_flow

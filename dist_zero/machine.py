@@ -133,9 +133,10 @@ class MachineController(object):
       receive(msg) will be called wheneven msg is received from the connected party
       terminate() will be called when the connected party terminates the connection
       and connection will be a Connection object supporting:
-        connection.send(msg) to send a message to the connected party
-        connection.sender_id to give the id of the connected party
-        connection.terminate() to terminate the connection
+
+          connection.send(msg) to send a message to the connected party
+          connection.sender_id to give the id of the connected party
+          connection.terminate() to terminate the connection
 
     :return: The server_address for the newly created server.
     :rtype: object
@@ -293,8 +294,8 @@ class NodeManager(MachineController):
       self._send_without_error_simulation(*send_args)
 
   def _postpone_ms(self):
-    return (self._now_ms + NodeManager.MIN_POSTPONE_TIME_MS +
-            int(self._random.random() * (NodeManager.MAX_POSTPONE_TIME_MS - NodeManager.MIN_POSTPONE_TIME_MS)))
+    return (self._now_ms + NodeManager.MIN_POSTPONE_TIME_MS + int(
+        self._random.random() * (NodeManager.MAX_POSTPONE_TIME_MS - NodeManager.MIN_POSTPONE_TIME_MS)))
 
   def _send_without_error_simulation(self, node_handle, message, sending_node_id):
     '''Like `NodeManager.send`, but do not simulate any errors'''
