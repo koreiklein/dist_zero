@@ -10,3 +10,4 @@ _build
 .rsync.output.log
 network.pdf
 cextensions/*.so
+notes.txt
