@@ -4,7 +4,7 @@ from collections import defaultdict
 import capnp
 capnp.remove_import_hook()
 
-from dist_zero import cgen, errors, expression, capnpgen, primitive, settings
+from dist_zero import cgen, errors, expression, capnpgen, primitive, settings, concrete_types
 from dist_zero import settings
 from dist_zero import types, concrete_types
 
@@ -536,7 +536,8 @@ class ReactiveCompiler(object):
     on_input.AddAssignment(
         cgen.UpdateVar(ptr).Dot('p'), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
 
-    inputType.generate_capnp_to_c_state(self, on_input, ptr, self.state_lvalue(vGraph, expr))
+    inputType.generate_capnp_to_c_state(
+        concrete_types.CapnpReadContext(compiler=self, block=on_input, ptr=ptr), self.state_lvalue(vGraph, expr))
 
     on_input.AddAssignment(None, cgen.capn_free(vCapn.Address()))
     on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('n_missing_productions').Sub(cgen.Constant(index)), cgen.Zero)
@@ -853,7 +854,8 @@ class ReactiveCompiler(object):
     listLoop.AddAssignment(
         cgen.UpdateVar(ptr).Dot('p'), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
 
-    for cblock, cexp in concreteInputType.generate_capnp_to_c_transition(self, listLoop, ptr):
+    read_ctx = concrete_types.CapnpReadContext(compiler=self, block=listLoop, ptr=ptr)
+    for cblock, cexp in concreteInputType.generate_and_yield_capnp_to_c_transition(read_ctx):
       cblock.AddAssignment(None, cgen.kv_push(concreteInputType.c_transitions_type, vKVec, cexp))
 
     listLoop.AddAssignment(None, cgen.capn_free(vCapn.Address()))
