@@ -246,6 +246,9 @@ class ConcreteBasicType(ConcreteType):
     self._capnp_transitions_type = None
     self._capnp_transitions_basicTransition_field = None
 
+  def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
+    block.AddAssignment(stateLvalue, self._basic_type._apply_transition(transition, stateRvalue))
+
   def generate_and_yield_capnp_to_c_transition(self, read_ctx):
     vStructure = cgen.Var(f'{self.name}_transition_structure', self._capnp_transitions_type.c_structure_type)
     read_ctx.block.AddDeclaration(cgen.CreateVar(vStructure))
@@ -346,6 +349,14 @@ class ConcreteProductType(ConcreteType):
     self._c_transition_union = None
     self._c_transition_enum = None
 
+  def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
+    # NOTE(KK): When we need to maintain the product state, then the components' states
+    # are also being maintained.  In that case, since the product shares data with them, it doesn't actually
+    # need any updating at all.
+    # The generated c code should be specifically designed to treat products differently so as to ensure
+    # that when a product is maintaining its state, so are all its components.
+    pass
+
   @property
   def capnp_transitions_type(self):
     return self._capnp_transitions_type
@@ -364,6 +375,20 @@ class ConcreteProductType(ConcreteType):
 
     self._write_single_c_transition_to_single_capnp_ptr(transitionRvalue, write_ctx.update_ptr(transitionI))
 
+  def generate_product_apply_transition_forced(self, block, stateLvalue, stateRvalue, transition):
+    '''Like generate_apply_transition, but ensure that the state is actually updated in response to the transition.'''
+    switch = block.AddSwitch(transition.Dot('type'))
+
+    for ident in self._product_type.transition_identifiers:
+      if ident == 'standard':
+        self._apply_transition_individual_components(switch, stateLvalue, stateRvalue, transition)
+      elif ident == 'individual':
+        self._apply_transition_individual_components(switch, stateLvalue, stateRvalue, transition)
+      elif ident == 'simultaneous':
+        self._apply_transition_simultaneous(switch, stateLvalue, stateRvalue, transition)
+      else:
+        raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+
   def _write_single_c_transition_to_single_capnp_ptr(self, transitionRvalue, write_ctx):
     switch = write_ctx.block.AddSwitch(transitionRvalue.Dot('type'))
 
@@ -376,6 +401,10 @@ class ConcreteProductType(ConcreteType):
         self._write_c_transitions_to_capnp_simultaneous(transitionRvalue, write_ctx.update_block(switch))
       else:
         raise RuntimeError(f"Unrecognized transition identifier {ident}.")
+
+  def _apply_transition_simultaneous(self, switch, stateLvalue, stateRvalue, transition):
+    # FIXME(KK): Test and implement this
+    raise RuntimeError("Not Yet Implemented")
 
   def _write_c_transitions_to_capnp_simultaneous(self, transitionRvalue, write_ctx):
     # FIXME(KK): Test and implement this
@@ -439,6 +468,18 @@ class ConcreteProductType(ConcreteType):
                                                         write_ctx.update_block(loop).update_ptr(transitionI))
 
     loop.AddAssignment(cgen.UpdateVar(cTransitionsIndex), cTransitionsIndex + cgen.One)
+
+  def _apply_transition_individual_components(self, switch, stateLvalue, stateRvalue, transition):
+    for key, value in self._items:
+      name = f'product_on_{key}'
+      block = switch.AddCase(self._c_transition_enum.literal(name))
+
+      value.generate_apply_transition(block,
+                                      stateLvalue.Dot(key).Deref(),
+                                      stateRvalue.Dot(key).Deref(),
+                                      transition.Dot('value').Dot(name).Deref())
+
+      block.AddBreak()
 
   def _write_c_transitions_to_capnp_individual_components(self, vCTransition, write_ctx):
     for key, value in self._items:

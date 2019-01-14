@@ -117,6 +117,24 @@ class TestMultiplicativeReactive(object):
     assert 'productOnright' == str(t.which)
     assert 4 == t.productOnright.basicTransition
 
+  def test_maintain_product_state(self, program_V):
+    net = program_V.module.Net()
+
+    product_msg = program_V.capnpForA.new_message()
+    product_msg.left.basicState = 4
+    product_msg.right.basicState = 7
+    assert not net.OnInput_a(product_msg.to_bytes())
+
+    product_transition = program_V.capnpForA_T.new_message()
+    product_transition.init('transitions', 1)[0].init('productOnright').basicTransition = 100
+    assert not net.OnTransitions({'a': [product_transition.to_bytes()]})
+
+    assert not net.OnInput_b(program_V.capnpForB.new_message(basicState=2).to_bytes())
+
+    output = net.OnOutput_output()
+    assert len(output) == 1
+    assert 113 == program_V.capnpForOutput.from_bytes(output['output']).basicState
+
   def test_product_input(self, program_V):
     net = program_V.module.Net()
 

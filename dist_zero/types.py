@@ -73,9 +73,6 @@ class BasicType(Type):
         self.capnp_transition_type == other.capnp_transition_type and \
         self.c_transition_type == other.c_transition_type
 
-  def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
-    block.AddAssignment(stateLvalue, self._apply_transition(transition, stateRvalue))
-
 
 apply_plus = lambda transition, stateRvalue: transition + stateRvalue
 Int8 = BasicType(
@@ -145,14 +142,6 @@ class Product(Type):
     self.name = name if name is not None else f"Product{_gen_name()}"
 
     super(Product, self).__init__()
-
-  def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
-    # NOTE(KK): When we need to maintain the product state, then the components' states
-    # are also being maintained.  In that case, since the product shares data with them, it doesn't actually
-    # need any updating at all.
-    # The generated c code should be specifically designed to treat products differently so as to ensure
-    # that when a product is maintaining its state, so are all its components.
-    pass
 
   def equivalent(self, other):
     if other.__class__ != Product or len(self.items) != len(other.items):

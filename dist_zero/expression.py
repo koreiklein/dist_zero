@@ -1,4 +1,4 @@
-from dist_zero import cgen, errors, types
+from dist_zero import cgen, errors, types, concrete_types
 
 
 class Expression(object):
@@ -64,8 +64,9 @@ class Expression(object):
 
     loop = whenMaintainsState.AddWhile(vIndex < cgen.kv_size(transitions))
     transition = cgen.kv_A(transitions, vIndex)
-    self.type.generate_apply_transition(loop, compiler.state_lvalue(vGraph, self), compiler.state_rvalue(vGraph, self),
-                                        transition)
+
+    compiler.get_concrete_type(self.type).generate_apply_transition(loop, compiler.state_lvalue(vGraph, self),
+                                                                    compiler.state_rvalue(vGraph, self), transition)
     loop.AddAssignment(cgen.UpdateVar(vIndex), vIndex + cgen.One)
 
 
@@ -217,7 +218,25 @@ class Input(Expression):
     return self._type
 
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
-    self._standard_update_state(compiler, block, vGraph, maintainState)
+    if compiler.get_concrete_type(self._type).__class__ != concrete_types.ConcreteProductType:
+      self._standard_update_state(compiler, block, vGraph, maintainState)
+      return
+
+    whenMaintainsState = block.AddIf(maintainState).consequent
+
+    vIndex = cgen.Var('index', cgen.MachineInt)
+    whenMaintainsState.AddAssignment(cgen.CreateVar(vIndex), cgen.Zero)
+
+    transitions = compiler.transitions_rvalue(vGraph, self)
+
+    loop = whenMaintainsState.AddWhile(vIndex < cgen.kv_size(transitions))
+    transition = cgen.kv_A(transitions, vIndex)
+
+    compiler.get_concrete_type(self.type).generate_product_apply_transition_forced(loop,
+                                                                                   compiler.state_lvalue(vGraph, self),
+                                                                                   compiler.state_rvalue(vGraph, self),
+                                                                                   transition)
+    loop.AddAssignment(cgen.UpdateVar(vIndex), vIndex + cgen.One)
 
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
     raise errors.InternalError("Input expressions should never generate c code to initialize from prior inputs.")
