@@ -10,7 +10,6 @@ Welcome to DistZero's documentation!
    :maxdepth: 2
    :caption: Table of Contents:
 
-   doc/settings
 
    doc/language
    doc/compilers/index
@@ -37,6 +36,8 @@ Welcome to DistZero's documentation!
    doc/migrations
 
    doc/demo
+
+   doc/settings
 
 Indices and tables
 ==================
