@@ -12,8 +12,10 @@ Welcome to DistZero's documentation!
 
    doc/settings
 
+   doc/language
+   doc/compilers/index
+
    doc/handle
-   doc/message
    doc/transport
 
    doc/ids
@@ -33,7 +35,6 @@ Welcome to DistZero's documentation!
    doc/load_balancer
 
    doc/migrations
-   doc/ticker
 
    doc/demo
 

@@ -6,6 +6,8 @@ from .type import CType
 
 
 class Expression(object):
+  '''A C expression'''
+
   def add_includes(self, program):
     raise NotImplementedError()
 
@@ -94,6 +96,8 @@ class Expression(object):
 
 
 class UnionLiteral(Expression):
+  '''A C union literal expression'''
+
   def __init__(self, union, key, value):
     self.union = union
     self.key = key
@@ -107,6 +111,8 @@ class UnionLiteral(Expression):
 
 
 class StructureLiteral(Expression):
+  '''A C structure literal expression'''
+
   def __init__(self, struct, key_to_expr):
     self.struct = struct
     self.key_to_expr = key_to_expr
@@ -121,6 +127,8 @@ class StructureLiteral(Expression):
 
 
 class Sizeof(Expression):
+  '''The C sizeof operator'''
+
   def __init__(self, base_type):
     self.base_type = base_type
 
@@ -132,6 +140,8 @@ class Sizeof(Expression):
 
 
 class ComponentRvalue(Expression):
+  '''A C expression with syntactic accessors (e.g. ".", "->", "[3]", "*") applied to it'''
+
   def __init__(self, base, accessors):
     self.base = base
     self.accessors = accessors
@@ -167,6 +177,8 @@ class ComponentRvalue(Expression):
 
 
 class UnOp(Expression):
+  '''A unary C operator applied to a C expression'''
+
   def __init__(self, base_expression, op):
     if not isinstance(base_expression, Expression):
       raise RuntimeError(f"Unary operation \"{op.s}\" must be applied to an Expression.  Got {base_expression}.")
@@ -184,6 +196,8 @@ class UnOp(Expression):
 
 
 class Constant(Expression):
+  '''A predefined C constant'''
+
   def __init__(self, s):
     self.s = str(s)
 
@@ -202,6 +216,8 @@ MinusOne = Constant(-1)
 
 
 class StrConstant(Expression):
+  '''A predefined C string constant'''
+
   def __init__(self, s):
     self.s = s
 
@@ -213,6 +229,8 @@ class StrConstant(Expression):
 
 
 class Call(Expression):
+  '''A C function call expression'''
+
   def __init__(self, func, args):
     if not isinstance(func, Expression):
       raise RuntimeError(f"Function argument in call was not an expression. Got {func}")
@@ -233,6 +251,8 @@ class Call(Expression):
 
 
 class BinOp(Expression):
+  '''A C binary operator applied to two argument expressions'''
+
   def __init__(self, op, left, right):
     self.op = op
     if not isinstance(left, Expression):
@@ -254,6 +274,8 @@ class BinOp(Expression):
 
 
 class Operation(object):
+  '''A C binary operator'''
+
   def __init__(self, s):
     self.s = s
 
@@ -278,6 +300,8 @@ NotEqual = Operation("!=")
 
 
 class _NULL(Expression):
+  '''The special C NULL expression'''
+
   def add_includes(self, program):
     pass
 
@@ -289,6 +313,8 @@ NULL = _NULL()
 
 
 class Cast(Expression):
+  '''A C typecast expression'''
+
   def __init__(self, base, type):
     self.base = base
     self.type = type
@@ -305,6 +331,8 @@ class Cast(Expression):
 
 
 class Var(Expression):
+  '''A C variable'''
+
   def __init__(self, name, type):
     self.name = name
     self.type = type

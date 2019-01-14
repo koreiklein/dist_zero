@@ -17,6 +17,11 @@ def _gen_name():
 
 
 class Type(object):
+  '''
+  Abstract base class for DistZero input types.
+  Instances of `Type` represent the types employed by the user constructing his input program.
+  '''
+
   def _write_c_state_definition(self, compiler):
     '''Add a definition for the c states of this type.'''
     raise RuntimeError(f"Abstract Superclass {self.__class__}")

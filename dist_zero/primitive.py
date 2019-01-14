@@ -6,6 +6,11 @@ from dist_zero import errors, types, cgen
 
 
 class PrimitiveOp(object):
+  '''
+  A reactive function that can not be decomposed into simpler functions.
+  They are used as the ``func`` argument to `dist_zero.expression.Applied`
+  '''
+
   def get_type(self):
     raise errors.AbstractSuperclass(self.__class__)
 
@@ -17,6 +22,8 @@ class PrimitiveOp(object):
 
 
 class BinOp(PrimitiveOp):
+  '''A binary operation'''
+
   def __init__(self, s, type, c_operation):
     self.s = s
     self.output_type = type
@@ -52,9 +59,9 @@ class BinOp(PrimitiveOp):
 class PlusBinOp(BinOp):
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState, arg, expr):
     outputTransitions = compiler.transitions_rvalue(vGraph, expr)
-    output_transition_ctype = compiler.get_concrete_type_for_expr(expr).c_transitions_type
+    output_transition_ctype = compiler.get_concrete_type(expr.type).c_transitions_type
 
-    arg_c_transition_type = compiler.get_concrete_type_for_expr(arg).c_transitions_type
+    arg_c_transition_type = compiler.get_concrete_type(arg.type).c_transitions_type
     arg_enum = arg_c_transition_type.field_by_id['type']
     arg_union = arg_c_transition_type.field_by_id['value']
 

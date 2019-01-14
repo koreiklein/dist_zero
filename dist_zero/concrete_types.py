@@ -3,11 +3,34 @@ from dist_zero import capnpgen, errors, cgen
 
 class ConcreteType(object):
   '''
-  A concrete type is like a `dist_zero.types.Type`, but with all relevant physical
-  representations already determined.
-  In particular, this means that the c structures and network messages to represent
-  the type will be determined.
+  A concrete type consists of a `dist_zero.types.Type`, along with a specification for exactly
+  how the states and transitions will be represented internally in C and externally in capnproto structures.
   '''
+
+  @property
+  def dz_type(self):
+    '''The underlying abstract `dist_zero.types.Type`.'''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
+  @property
+  def c_state_type(self):
+    '''The `cgen.type.CType` used in C to represent the state of this type.'''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
+  @property
+  def capnp_state_type(self):
+    '''The `capnpgen.Structure` used to represent the state of this type.'''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
+  @property
+  def c_transitions_type(self):
+    '''The `cgen.type.CType` used in C to represent the transitions for this type.'''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
+  @property
+  def capnp_transitions_type(self):
+    '''The `capnpgen.Structure` used to represent the transitions for this type.'''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
   def initialize(self, compiler):
     '''
@@ -49,9 +72,9 @@ class ConcreteType(object):
     :param block: The current code block in which to generate the code.
     :type block: `Block`
     :param stateRvalue: An expression for the rvalue giving a c state of the type of self.
-    :type stateRvalue: `dist_zero.cgen.Expression`
+    :type stateRvalue: `dist_zero.cgen.expression.Expression`
     :param vPtr: The c variable defining the capnp pointer to which to write the result.
-    :type vPtr: `dist_zero.cgen.Var`
+    :type vPtr: `dist_zero.cgen.expression.Var`
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
@@ -64,9 +87,9 @@ class ConcreteType(object):
     :param block: The current code block in which to generate the code.
     :type block: `Block`
     :param transitionsRvalue: An expression for the rvalue giving the kvec of c transitions of the c transition type of self.
-    :type transitionsRvalue: `dist_zero.cgen.Expression`
+    :type transitionsRvalue: `dist_zero.cgen.expression.Expression`
     :param vPtr: The c variable defining the capnp pointer to which to write the result.
-    :type vPtr: `dist_zero.cgen.Var`
+    :type vPtr: `cgen.expression.Var`
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
@@ -83,26 +106,6 @@ class ConcreteType(object):
     yield the (block, expression) pairs as they are generated.
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
-
-  @property
-  def c_state_type(self):
-    raise RuntimeError(f"Abstract Superclass {self.__class__}")
-
-  @property
-  def capnp_state_type(self):
-    raise RuntimeError(f"Abstract Superclass {self.__class__}")
-
-  @property
-  def c_transitions_type(self):
-    raise RuntimeError(f"Abstract Superclass {self.__class__}")
-
-  @property
-  def capnp_transitions_type(self):
-    raise RuntimeError(f"Abstract Superclass {self.__class__}")
-
-  @property
-  def dz_type(self):
-    raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
   def _write_c_transition_definition(self, compiler, ident, union, enum):
     raise RuntimeError(f"Unrecognized transition identifier {ident} for {self.__class__}.")
@@ -449,7 +452,7 @@ class ConcreteProductType(ConcreteType):
     struct = compiler.program.AddStruct(self._product_type.name + '_c')
     self._items = []
     for key, value in self._product_type.items:
-      self._items.append((key, compiler.get_concrete_type_for_type(value)))
+      self._items.append((key, compiler.get_concrete_type(value)))
 
     for key, value in self._items:
       struct.AddField(key, value.c_state_type.Star())
@@ -674,7 +677,7 @@ class ConcreteSumType(ConcreteType):
     self._c_state_type = compiler.program.AddStruct(f"{self.name}_c")
     self._items = []
     for key, value in self._sum_type.items:
-      self._items.append((key, compiler.get_concrete_type_for_type(value)))
+      self._items.append((key, compiler.get_concrete_type(value)))
 
     if len(self._items) > 0:
       union = compiler.program.AddUnion(f'{self.name}_union')
@@ -722,7 +725,7 @@ class ConcreteList(ConcreteType):
     return self._capnp_state_type
 
   def initialize(self, compiler):
-    self.base = compiler.get_concrete_type_for_type(self._base_list_type.base)
+    self.base = compiler.get_concrete_type(self._base_list_type.base)
     self.name = f"{self.base.name}List"
     self._c_state_type = self.base.c_state_type.Star().KVec()
     self._c_transitions_type = self._write_c_transitions_definition(compiler)

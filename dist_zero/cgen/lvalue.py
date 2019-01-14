@@ -3,6 +3,11 @@ from . import expression
 
 
 class Lvalue(object):
+  '''
+  Abstract base class for C lvalues.
+  lvalues are the C syntax for "things that can be assigned to"
+  '''
+
   def add_includes(self, program):
     raise RuntimeError(f"Abstract superclass {self.__class__}")
 

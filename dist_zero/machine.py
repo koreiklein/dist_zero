@@ -44,7 +44,7 @@ class MachineController(object):
 
   @property
   def random(self):
-    '''A `Random` instance.'''
+    '''A `random` number generator instance.'''
     raise RuntimeError("Abstract Superclass")
 
   def spawn_node(self, node_config):

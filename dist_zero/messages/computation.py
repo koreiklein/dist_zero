@@ -28,12 +28,11 @@ def computation_node_config(node_id,
   :param bool is_mid_node: True iff this node is functioning as the mid node in an hourglass operation.
   :param list[str] receiver_ids: A list of ids of the nodes that should receive from self, or `None` if that list should
       be determined based on the right_configurations received by the node as it starts up.
-  param object leaf_config: Configuration information for how this `ComputationNode` should run its leaves.
+  :param object leaf_config: Configuration information for how this `ComputationNode` should run its leaves.
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
   :param object connector_type: One of the connector_type messages, defining which type of connector to use.
   :param object connector: Serializable json object representing the `Connector` instance of the newly spawned
       `ComputationNode`.
-
   '''
   return {
       'type': 'ComputationNode',

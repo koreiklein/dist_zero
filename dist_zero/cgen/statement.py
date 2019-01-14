@@ -5,6 +5,8 @@ from .common import INDENT
 
 
 class Block(object):
+  '''A block of C code.'''
+
   def __init__(self, program, root=False):
     self.root = root
     self.program = program

@@ -31,7 +31,7 @@ X = types.Product([
 def test_type_to_capnp_and_c(t):
   compiler = ReactiveCompiler(name='test_type_to_capnp_and_c')
 
-  compiler.get_concrete_type_for_type(t)
+  compiler.get_concrete_type(t)
 
   compiler._build_capnp()
   compiler.program.build_and_import()

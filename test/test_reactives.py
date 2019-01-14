@@ -338,19 +338,19 @@ def program_U():
   self.compiler = reactive.ReactiveCompiler(name='program_U')
   self.module = self.compiler.compile({'output': self.output, 'combined_output': self.combined_output})
 
-  self.capnpForA = self.compiler.capnp_state_module(self.inputA)
-  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
+  self.capnpForA = self.compiler.capnp_state_builder(self.inputA)
+  self.capnpForA_T = self.compiler.capnp_transitions_builder(self.inputA)
 
-  self.capnpForInt32 = self.compiler.capnp_state_module_for_type(types.Int32)
-  self.capnpForInt32_T = self.compiler.capnp_transitions_module_for_type(types.Int32)
+  self.capnpForInt32 = self.compiler.capnp_state_builder_for_type(types.Int32)
+  self.capnpForInt32_T = self.compiler.capnp_transitions_builder_for_type(types.Int32)
 
-  self.capnpForB = self.compiler.capnp_state_module(self.inputB)
-  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
-  self.capnpForOutput = self.compiler.capnp_state_module(self.output)
-  self.capnpForOutput_T = self.compiler.capnp_transitions_module(self.output)
+  self.capnpForB = self.compiler.capnp_state_builder(self.inputB)
+  self.capnpForB_T = self.compiler.capnp_transitions_builder(self.inputB)
+  self.capnpForOutput = self.compiler.capnp_state_builder(self.output)
+  self.capnpForOutput_T = self.compiler.capnp_transitions_builder(self.output)
 
-  self.capnpForCombinedOutput = self.compiler.capnp_state_module(self.combined_output)
-  self.capnpForCombinedOutput_T = self.compiler.capnp_transitions_module(self.combined_output)
+  self.capnpForCombinedOutput = self.compiler.capnp_state_builder(self.combined_output)
+  self.capnpForCombinedOutput_T = self.compiler.capnp_transitions_builder(self.combined_output)
 
   return self
 
@@ -369,16 +369,16 @@ def program_V():
   self.compiler = reactive.ReactiveCompiler(name='program_V')
   self.module = self.compiler.compile({'output': self.outputExpr})
 
-  self.capnpForA = self.compiler.capnp_state_module(self.inputA)
-  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
+  self.capnpForA = self.compiler.capnp_state_builder(self.inputA)
+  self.capnpForA_T = self.compiler.capnp_transitions_builder(self.inputA)
 
-  self.capnpForInt32 = self.compiler.capnp_state_module_for_type(types.Int32)
-  self.capnpForInt32_T = self.compiler.capnp_transitions_module_for_type(types.Int32)
+  self.capnpForInt32 = self.compiler.capnp_state_builder_for_type(types.Int32)
+  self.capnpForInt32_T = self.compiler.capnp_transitions_builder_for_type(types.Int32)
 
-  self.capnpForB = self.compiler.capnp_state_module(self.inputB)
-  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
-  self.capnpForOutput = self.compiler.capnp_state_module(self.outputExpr)
-  self.capnpForOutput_T = self.compiler.capnp_transitions_module(self.outputExpr)
+  self.capnpForB = self.compiler.capnp_state_builder(self.inputB)
+  self.capnpForB_T = self.compiler.capnp_transitions_builder(self.inputB)
+  self.capnpForOutput = self.compiler.capnp_state_builder(self.outputExpr)
+  self.capnpForOutput_T = self.compiler.capnp_transitions_builder(self.outputExpr)
 
   return self
 
@@ -398,12 +398,12 @@ def program_W():
   self.compiler = reactive.ReactiveCompiler(name='program_W')
   self.module = self.compiler.compile({'output': self.outputExpr})
 
-  self.capnpForA = self.compiler.capnp_state_module(self.inputA)
-  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
-  self.capnpForB = self.compiler.capnp_state_module(self.inputB)
-  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
-  self.capnpForOutput = self.compiler.capnp_state_module(self.outputExpr)
-  self.capnpForOutput_T = self.compiler.capnp_transitions_module(self.outputExpr)
+  self.capnpForA = self.compiler.capnp_state_builder(self.inputA)
+  self.capnpForA_T = self.compiler.capnp_transitions_builder(self.inputA)
+  self.capnpForB = self.compiler.capnp_state_builder(self.inputB)
+  self.capnpForB_T = self.compiler.capnp_transitions_builder(self.inputB)
+  self.capnpForOutput = self.compiler.capnp_state_builder(self.outputExpr)
+  self.capnpForOutput_T = self.compiler.capnp_transitions_builder(self.outputExpr)
 
   return self
 
@@ -419,12 +419,12 @@ def program_X():
   self.compiler = reactive.ReactiveCompiler(name='program_X')
   self.module = self.compiler.compile({'output': self.outputExpr})
 
-  self.capnpForA = self.compiler.capnp_state_module(self.inputA)
-  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
-  self.capnpForB = self.compiler.capnp_state_module(self.inputB)
-  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
-  self.capnpForOutput = self.compiler.capnp_state_module(self.outputExpr)
-  self.capnpForOutput_T = self.compiler.capnp_transitions_module(self.outputExpr)
+  self.capnpForA = self.compiler.capnp_state_builder(self.inputA)
+  self.capnpForA_T = self.compiler.capnp_transitions_builder(self.inputA)
+  self.capnpForB = self.compiler.capnp_state_builder(self.inputB)
+  self.capnpForB_T = self.compiler.capnp_transitions_builder(self.inputB)
+  self.capnpForOutput = self.compiler.capnp_state_builder(self.outputExpr)
+  self.capnpForOutput_T = self.compiler.capnp_transitions_builder(self.outputExpr)
 
   return self
 
@@ -441,14 +441,14 @@ def program_Y():
   self.compiler = reactive.ReactiveCompiler(name='program_Y')
   self.module = self.compiler.compile({'x': self.outputX, 'y': self.outputY})
 
-  self.capnpForA = self.compiler.capnp_state_module(self.inputA)
-  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
-  self.capnpForB = self.compiler.capnp_state_module(self.inputB)
-  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
-  self.capnpForX = self.compiler.capnp_state_module(self.outputX)
-  self.capnpForX_T = self.compiler.capnp_transitions_module(self.outputX)
-  self.capnpForY = self.compiler.capnp_state_module(self.outputY)
-  self.capnpForY_T = self.compiler.capnp_transitions_module(self.outputY)
+  self.capnpForA = self.compiler.capnp_state_builder(self.inputA)
+  self.capnpForA_T = self.compiler.capnp_transitions_builder(self.inputA)
+  self.capnpForB = self.compiler.capnp_state_builder(self.inputB)
+  self.capnpForB_T = self.compiler.capnp_transitions_builder(self.inputB)
+  self.capnpForX = self.compiler.capnp_state_builder(self.outputX)
+  self.capnpForX_T = self.compiler.capnp_transitions_builder(self.outputX)
+  self.capnpForY = self.compiler.capnp_state_builder(self.outputY)
+  self.capnpForY_T = self.compiler.capnp_transitions_builder(self.outputY)
 
   return self
 
@@ -471,14 +471,14 @@ def program_Z():
   self.compiler = reactive.ReactiveCompiler(name='program_Z')
   self.module = self.compiler.compile({'x': self.outputX, 'y': self.outputY})
 
-  self.capnpForA = self.compiler.capnp_state_module(self.inputA)
-  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
-  self.capnpForB = self.compiler.capnp_state_module(self.inputB)
-  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
-  self.capnpForX = self.compiler.capnp_state_module(self.outputX)
-  self.capnpForX_T = self.compiler.capnp_transitions_module(self.outputX)
-  self.capnpForY = self.compiler.capnp_state_module(self.outputY)
-  self.capnpForY_T = self.compiler.capnp_transitions_module(self.outputY)
+  self.capnpForA = self.compiler.capnp_state_builder(self.inputA)
+  self.capnpForA_T = self.compiler.capnp_transitions_builder(self.inputA)
+  self.capnpForB = self.compiler.capnp_state_builder(self.inputB)
+  self.capnpForB_T = self.compiler.capnp_transitions_builder(self.inputB)
+  self.capnpForX = self.compiler.capnp_state_builder(self.outputX)
+  self.capnpForX_T = self.compiler.capnp_transitions_builder(self.outputX)
+  self.capnpForY = self.compiler.capnp_state_builder(self.outputY)
+  self.capnpForY_T = self.compiler.capnp_transitions_builder(self.outputY)
 
   return self
 
@@ -504,20 +504,20 @@ def program_C():
       'z': self.outputZ,
   })
 
-  self.capnpForA = self.compiler.capnp_state_module(self.inputA)
-  self.capnpForB = self.compiler.capnp_state_module(self.inputB)
-  self.capnpForC = self.compiler.capnp_state_module(self.inputC)
+  self.capnpForA = self.compiler.capnp_state_builder(self.inputA)
+  self.capnpForB = self.compiler.capnp_state_builder(self.inputB)
+  self.capnpForC = self.compiler.capnp_state_builder(self.inputC)
 
-  self.capnpForA_T = self.compiler.capnp_transitions_module(self.inputA)
-  self.capnpForB_T = self.compiler.capnp_transitions_module(self.inputB)
-  self.capnpForC_T = self.compiler.capnp_transitions_module(self.inputC)
+  self.capnpForA_T = self.compiler.capnp_transitions_builder(self.inputA)
+  self.capnpForB_T = self.compiler.capnp_transitions_builder(self.inputB)
+  self.capnpForC_T = self.compiler.capnp_transitions_builder(self.inputC)
 
-  self.capnpForX = self.compiler.capnp_state_module(self.outputX)
-  self.capnpForY = self.compiler.capnp_state_module(self.outputY)
-  self.capnpForZ = self.compiler.capnp_state_module(self.outputZ)
+  self.capnpForX = self.compiler.capnp_state_builder(self.outputX)
+  self.capnpForY = self.compiler.capnp_state_builder(self.outputY)
+  self.capnpForZ = self.compiler.capnp_state_builder(self.outputZ)
 
-  self.capnpForX_T = self.compiler.capnp_transitions_module(self.outputX)
-  self.capnpForY_T = self.compiler.capnp_transitions_module(self.outputY)
-  self.capnpForZ_T = self.compiler.capnp_transitions_module(self.outputZ)
+  self.capnpForX_T = self.compiler.capnp_transitions_builder(self.outputX)
+  self.capnpForY_T = self.compiler.capnp_transitions_builder(self.outputY)
+  self.capnpForZ_T = self.compiler.capnp_transitions_builder(self.outputZ)
 
   return self

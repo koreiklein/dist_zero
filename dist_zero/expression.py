@@ -2,6 +2,12 @@ from dist_zero import cgen, errors, types
 
 
 class Expression(object):
+  '''
+  Abstract base class for DistZero input expressions.
+  Instances of `Expression` represent the expressions in the end-user's input program.
+  Each subclass defines a different type of expression.
+  '''
+
   def __repr__(self):
     return str(self)
 
@@ -9,7 +15,7 @@ class Expression(object):
   def type(self):
     '''
     :return: The type of the expression.
-    :rtype: `dist_zero.type.Type`
+    :rtype: `dist_zero.types.Type`
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
@@ -36,10 +42,10 @@ class Expression(object):
     :type block: `Block`
 
     :param vGraph: A c variable for a graph pointer
-    :type vGraph: `cgen.Var`
+    :type vGraph: `cgen.expression.Var`
 
     :param maintainsState: A c expression indicating whether we should maintain the state of this expression.
-    :type maintainsState: `dist_zero.cgen.Expression`
+    :type maintainsState: `dist_zero.cgen.expression.Expression`
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
@@ -86,8 +92,8 @@ class Project(Expression):
     curTransition = cgen.kv_A(baseTransitionsRvalue, vIndex)
     switch = loop.AddSwitch(curTransition.Dot('type'))
 
-    base_transitions_ctype = compiler.get_concrete_type_for_expr(self.base).c_transitions_type
-    output_transitions_ctype = compiler.get_concrete_type_for_expr(self).c_transitions_type
+    base_transitions_ctype = compiler.get_concrete_type(self.base.type).c_transitions_type
+    output_transitions_ctype = compiler.get_concrete_type(self.type).c_transitions_type
     c_enum = base_transitions_ctype.field_by_id['type']
     product_on_key = f"product_on_{self.key}"
 
@@ -112,10 +118,17 @@ class Project(Expression):
 
 
 class Applied(Expression):
+  '''
+  A fully normalized application of a function to its argument.  The function must have
+  no more decomposable structure and must be represented by a `PrimitiveOp`
+  '''
+
   def __init__(self, func, arg):
     '''
-    :param Primitive func: The operation to apply to the argument.
-    :param Expression arg: The input to this function.  Multi-argument functions will take a Product expression as input.
+    :param func: The operation to apply to the argument.
+    :type func: `PrimitiveOp`
+    :param arg: The input to this function.  Multi-argument functions will take a Product expression as input.
+    :type arg: `Expression`
     '''
     self.func = func
     self.arg = arg
@@ -149,7 +162,7 @@ class Product(Expression):
     return self._type
 
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
-    transition_ctype = compiler.get_concrete_type_for_expr(self).c_transitions_type
+    transition_ctype = compiler.get_concrete_type(self.type).c_transitions_type
     if 'standard' not in self._type.transition_identifiers and 'individual' not in self._type.transition_identifiers:
       raise errors.InternalError("Have not implemented the action of Product on transitions "
                                  "when the output type doesn't have individual transitions.")
@@ -186,7 +199,7 @@ class Product(Expression):
     return f"{{{items}}}"
 
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
-    my_c_type = compiler.get_concrete_type_for_expr(self).c_state_type
+    my_c_type = compiler.get_concrete_type(self.type).c_state_type
 
     stateLvalue = compiler.state_lvalue(vGraph, self)
 

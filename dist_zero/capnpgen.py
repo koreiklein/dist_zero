@@ -1,3 +1,10 @@
+'''
+This module contains classes for programatically generating a capnproto file,
+and obtaining python representations for all the structures and unions within it.
+These representations can then be used by compilers operating on a `dist_zero.cgen.program.Program` object
+to generate the proper C code to serialize/deserialize to the capnproto structures.
+
+'''
 import os
 import subprocess
 
@@ -7,6 +14,8 @@ INDENT = '  '
 
 
 class Union(object):
+  '''Represents a capnproto union.'''
+
   def __init__(self, structure, name):
     self.structure = structure
     self.name = name
@@ -19,10 +28,12 @@ class Union(object):
     return self._c_enum_option_by_name[name]
 
   def AddField(self, name, option_type):
+    '''Add a field to the union.'''
     self._c_enum_option_by_name[name] = cgen.Constant(f"{self.structure.name}_{name}")
     self._options.append((name, option_type))
 
   def RemoveIfTooSmall(self):
+    '''Remove the union entirely if it has no fields.'''
     if len(self._options) <= 1:
       self._removed = True
       return True
@@ -30,6 +41,7 @@ class Union(object):
       return False
 
   def lines(self, indent):
+    '''yield the `str` lines of the union'''
     if self._removed:
       return
 
@@ -45,6 +57,8 @@ class Union(object):
 
 
 class Structure(object):
+  '''Represents a capnproto structure.'''
+
   def __init__(self, name):
     self.name = name
     self._fields = []
@@ -64,6 +78,11 @@ class Structure(object):
     self.c_structure_type = cgen.BasicType(f"struct {self.name}")
 
   def get_field(self, name):
+    '''
+    :param str name: The name of a field of this structure.
+    :return: The field itself.
+    :rtype: `Field`
+    '''
     return self._field_by_name[name]
 
   def __str__(self):
@@ -75,6 +94,7 @@ class Structure(object):
     return result
 
   def lines(self, indent):
+    '''yield the `str` lines of the structure'''
     self.count = 0
     yield f"{indent}struct {self.name} {{\n"
 
@@ -96,6 +116,14 @@ class Structure(object):
     yield f"{indent}}}\n\n"
 
   def AddField(self, name, field_type):
+    '''
+    Add a new field to the structure.
+
+    :param str name: The name of the field.
+    :param str field_type: The type of the field.
+    :return: The newly added field.
+    :rtype: `Field`
+    '''
     result = Field(name=name, type=field_type, base=self)
     self._fields.append(result)
     if name in self._field_by_name:
@@ -104,14 +132,29 @@ class Structure(object):
     return result
 
   def c_set_field(self, field_name):
+    '''
+    :param str field_name: The name of the field.
+    :return: The C variable for the C function that sets that field.
+    :rtype: `dist_zero.cgen.expression.Var`
+    '''
     field = self._field_by_name[field_name]
     return field.c_set
 
   def c_get_field(self, field_name):
+    '''
+    :param str field_name: The name of the field.
+    :return: The C variable for the C function that gets that field.
+    :rtype: `dist_zero.cgen.expression.Var`
+    '''
     field = self._field_by_name[field_name]
     return field.c_get
 
   def AddUnion(self, name=None):
+    '''
+    Add a union field to this structure.
+
+    :rtype: `Union`
+    '''
     if name is None:
       if self._has_unnamed_union:
         raise errors.CapnpFormatError("This structure already has an unnamed union.")
@@ -124,15 +167,20 @@ class Structure(object):
 
 
 class Field(object):
+  '''Represents a field of a capnproto structure/union.'''
+
   def __init__(self, name, type, base):
     self.name = name
     self.type = type
     self._base = base
 
     self.c_set = cgen.Var(f"{self._base.name}_set_{self.name}", None)
+    '''The `cgen.expression.Var` for the C function to set this field.'''
     self.c_get = cgen.Var(f"{self._base.name}_get_{self.name}", None)
+    '''The `cgen.expression.Var` for the C function to get this field.'''
 
     self.c_get_structure_from_list = cgen.Var(f"get_{self._base.name}_{self.name}", None)
+    '''For fields that are of a list type, the `cgen.expression.Var` for the C function to get an item in the list at this field.'''
 
 
 Void = 'Void'
@@ -154,11 +202,16 @@ gen_capn_uid = lambda: subprocess.check_output(['capnpc', '-i']).decode().strip(
 
 
 class CapnpFile(object):
+  '''
+  Root object for generating a capnproto file.
+  '''
+
   def __init__(self, capnpid):
     self.id = capnpid
     self._structures = []
 
   def lines(self):
+    '''yield: The `str` lines of the underlying capnproto file.'''
     yield f"{self.id};\n\n"
 
     imported_file = os.path.join('/', 'c-capnproto', 'compiler', 'c.capnp')
@@ -171,8 +224,8 @@ class CapnpFile(object):
 
   def build_in(self, dirname, filename):
     '''
-    Generate capnproto and c files in dirname.
-    The generated files will all start with filename and have the appropriate extensions.
+    Write capnproto and c files in dirname.
+    The written files will all start with filename and have the appropriate extensions.
     '''
     fullname = os.path.join(dirname, filename)
 
@@ -192,6 +245,12 @@ class CapnpFile(object):
     return ''.join(self.lines())
 
   def AddStructure(self, name):
+    '''
+    Add a capnproto structure to this file.
+
+    :return: The newly added structure.
+    :rtype: `dist_zero.capnpgen.Structure`
+    '''
     result = Structure(name)
     self._structures.append(result)
     return result
