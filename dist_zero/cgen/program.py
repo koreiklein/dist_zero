@@ -433,9 +433,7 @@ class PythonType(object):
     self.methods = []
 
     self._init = None
-
-  def _init_function_name(self):
-    return f"{self.name}_init"
+    self._finalize = None
 
   def _self_arg(self):
     return expression.Var("self", self.struct.Star())
@@ -472,7 +470,9 @@ class PythonType(object):
     yield f"{INDENT}.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,\n"
     yield f"{INDENT}.tp_new = PyType_GenericNew,\n"
     if self._init:
-      yield f"{INDENT}.tp_init = (initproc) {self._init_function_name()},\n"
+      yield f"{INDENT}.tp_init = (initproc) {self._init.name},\n"
+    if self._finalize:
+      yield f"{INDENT}.tp_finalize = (destructor) {self._finalize.name},\n"
     yield f"{INDENT}.tp_methods = {self._static_method_array_name()},\n"
 
     yield "};\n"
@@ -481,9 +481,11 @@ class PythonType(object):
     yield from self.struct.to_c_string_definition()
 
   def lower_part_to_c_string_definition(self):
-    if self._init:
-      yield from self._init.function_to_c_string()
-      yield "\n"
+    for f in [self._init, self._finalize]:
+      if f:
+        yield from f.function_to_c_string()
+        yield "\n"
+
     yield from self._emit_methods_and_static_method_array()
     yield "\n"
     yield from self._emit_type_definition()
@@ -500,10 +502,17 @@ class PythonType(object):
     return result
 
   def AddInit(self):
+    if self._init is not None:
+      raise RuntimeError(f"An initializer was already added to {self.name}.")
     arg_kwargs = expression.Var('kwargs', type.PyObject.Star())
     mainArg = self._args_arg()
 
-    result = Function(
-        self.program, self._init_function_name(), type.MachineInt, [self._self_arg(), mainArg, arg_kwargs], export=True)
+    result = Function(self.program, f"{self.name}_init", type.MachineInt, [self._self_arg(), mainArg, arg_kwargs])
     self._init = result
     return result
+
+  def AddFinalize(self):
+    if self._finalize is not None:
+      raise RuntimeError(f"A finalizer was already added to {self.name}.")
+    self._finalize = Function(self.program, f"{self.name}_finalizer", type.Void, [self._self_arg()])
+    return self._finalize

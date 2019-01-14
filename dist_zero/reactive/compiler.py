@@ -66,6 +66,10 @@ class ReactiveCompiler(object):
     self._type_by_expr = {} # expr to dist_zero.types.Type
     self._concrete_type_by_type = {} # type to dist_zero.concrete_types.ConcreteType
 
+    # when in the middle of generating code for a turn, this variable will refer to a kvec of pointers
+    # that will be freed at the end of the turn
+    self.ptrsToFree = None
+
     self._graph_struct = None
     self._turn_struct = None
     self._cached_n_exprs = None
@@ -260,7 +264,8 @@ class ReactiveCompiler(object):
 
     self._turn_struct.AddField('remaining', cgen.Queue)
     self._turn_struct.AddField('was_added', cgen.UInt8.Array(cgen.Constant(len(self._top_exprs))))
-    self._turn_struct.AddField('to_free', cgen.KVec(cgen.Void.Star()))
+    self._turn_struct.AddField('vecs_to_free', cgen.KVec(cgen.Void.Star()))
+    self._turn_struct.AddField('ptrs_to_free', cgen.KVec(cgen.Void.Star()))
 
     for i, expr in enumerate(self._top_exprs):
       ct = self.get_concrete_type(expr.type)
@@ -273,10 +278,8 @@ class ReactiveCompiler(object):
 
     return self._cached_n_exprs
 
-  def _generate_initialize_root_graph(self):
-    '''Generate code in self.program defining the Net type.'''
-    self._generate_graph_struct()
-
+  def _generate_graph_initializer(self):
+    '''Generate the graph initialization function.'''
     init = self._net.AddInit()
 
     for i, expr in enumerate(self._top_exprs):
@@ -307,6 +310,17 @@ class ReactiveCompiler(object):
           cgen.UpdateVar(init.SelfArg()).Arrow('react_to_transitions').Sub(cgen.Constant(i)), react.Address())
 
     init.AddReturn(cgen.Constant(0))
+
+  def _generate_graph_finalizer(self):
+    '''Generate the graph finalization function.'''
+    finalize = self._net.AddFinalize()
+
+    vGraph = finalize.SelfArg()
+
+    for i, expr in enumerate(self._top_exprs):
+      ifInitialized = finalize.AddIf(
+          cgen.Zero == vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(i))).consequent
+      expr.generate_free_state(self, ifInitialized, self.state_rvalue(vGraph, expr))
 
   def _shall_maintain_state_function_name(self):
     return 'shall_maintain_state'
@@ -537,7 +551,8 @@ class ReactiveCompiler(object):
         cgen.UpdateVar(ptr).Dot('p'), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
 
     inputType.generate_capnp_to_c_state(
-        concrete_types.CapnpReadContext(compiler=self, block=on_input, ptr=ptr), self.state_lvalue(vGraph, expr))
+        concrete_types.CapnpReadContext(compiler=self, block=on_input, ptrsToFree=None, ptr=ptr),
+        self.state_lvalue(vGraph, expr))
 
     on_input.AddAssignment(None, cgen.capn_free(vCapn.Address()))
     on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('n_missing_productions').Sub(cgen.Constant(index)), cgen.Zero)
@@ -681,8 +696,10 @@ class ReactiveCompiler(object):
     on_transitions.Newline()
 
     # Initialize the queue
-    toFree = vGraph.Arrow('turn').Dot('to_free')
-    on_transitions.AddAssignment(None, cgen.kv_init(toFree))
+    self.ptrsToFree = vGraph.Arrow('turn').Dot('ptrs_to_free')
+    vecsToFree = vGraph.Arrow('turn').Dot('vecs_to_free')
+    on_transitions.AddAssignment(None, cgen.kv_init(vecsToFree))
+    on_transitions.AddAssignment(None, cgen.kv_init(self.ptrsToFree))
 
     # initialize was_added
     vIndexWas = cgen.Var('was_added_init_i', cgen.MachineInt)
@@ -738,18 +755,24 @@ class ReactiveCompiler(object):
     (queueLoop.AddIf(vGraph.Arrow('react_to_transitions').Sub(nextIndex)(vGraph)).consequent.AddAssignment(
         None, cgen.Py_DECREF(vResult)).AddAssignment(cgen.UpdateVar(vResult), cgen.NULL).AddBreak())
 
-    freeIndex = cgen.Var('free_index', cgen.MachineInt)
-    on_transitions.Newline().AddAssignment(cgen.CreateVar(freeIndex), cgen.Zero)
-    freeLoop = on_transitions.AddWhile(freeIndex < cgen.kv_size(toFree))
-    kvecToFree = cgen.kv_A(toFree, freeIndex).Cast(cgen.KVec(cgen.Void).Star()).Deref()
+    # free from ptrs_to_free
+    ptrsFreeIndex = cgen.Var('ptrsFreeIndex', cgen.MachineInt)
+    on_transitions.Newline().AddAssignment(cgen.CreateVar(ptrsFreeIndex), cgen.Zero)
+    freeLoop = on_transitions.AddWhile(ptrsFreeIndex < cgen.kv_size(self.ptrsToFree))
+    freeLoop.AddAssignment(None, cgen.free(cgen.kv_A(self.ptrsToFree, ptrsFreeIndex)))
+    freeLoop.AddAssignment(cgen.UpdateVar(ptrsFreeIndex), ptrsFreeIndex + cgen.One)
+    on_transitions.AddAssignment(None, cgen.kv_destroy(self.ptrsToFree))
 
+    # free from vecs_to_free
+    kvecsFreeIndex = cgen.Var('kvecs_free_index', cgen.MachineInt)
+    on_transitions.Newline().AddAssignment(cgen.CreateVar(kvecsFreeIndex), cgen.Zero)
+    freeLoop = on_transitions.AddWhile(kvecsFreeIndex < cgen.kv_size(vecsToFree))
+    kvecToFree = cgen.kv_A(vecsToFree, kvecsFreeIndex).Cast(cgen.KVec(cgen.Void).Star()).Deref()
     # make sure to free the vec, and reinitialize it.
     freeLoop.AddAssignment(None, cgen.kv_destroy(kvecToFree))
     freeLoop.AddAssignment(None, cgen.kv_init(kvecToFree))
-
-    freeLoop.AddAssignment(cgen.UpdateVar(freeIndex), freeIndex + cgen.One)
-
-    on_transitions.AddAssignment(None, cgen.kv_destroy(toFree))
+    freeLoop.AddAssignment(cgen.UpdateVar(kvecsFreeIndex), kvecsFreeIndex + cgen.One)
+    on_transitions.AddAssignment(None, cgen.kv_destroy(vecsToFree))
 
     on_transitions.Newline().AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn').Dot('result'), cgen.NULL)
     on_transitions.AddReturn(vResult)
@@ -801,7 +824,7 @@ class ReactiveCompiler(object):
     react.AddAssignment(
         None,
         cgen.kv_push(cgen.Void.Star(),
-                     vGraph.Arrow('turn').Dot('to_free'),
+                     vGraph.Arrow('turn').Dot('vecs_to_free'),
                      self.transitions_rvalue(vGraph, expr).Address().Cast(cgen.Void.Star())))
 
     react.AddReturn(cgen.false)
@@ -854,7 +877,8 @@ class ReactiveCompiler(object):
     listLoop.AddAssignment(
         cgen.UpdateVar(ptr).Dot('p'), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
 
-    read_ctx = concrete_types.CapnpReadContext(compiler=self, block=listLoop, ptr=ptr)
+    read_ctx = concrete_types.CapnpReadContext(
+        compiler=self, block=listLoop, ptrsToFree=vGraph.Arrow('turn').Dot('ptrs_to_free'), ptr=ptr)
     for cblock, cexp in concreteInputType.generate_and_yield_capnp_to_c_transition(read_ctx):
       cblock.AddAssignment(None, cgen.kv_push(concreteInputType.c_transitions_type, vKVec, cexp))
 
@@ -946,7 +970,9 @@ class ReactiveCompiler(object):
 
     self._build_capnp()
 
-    self._generate_initialize_root_graph()
+    self._generate_graph_struct()
+    self._generate_graph_initializer()
+    self._generate_graph_finalizer()
     self._generate_python_bytes_from_capnp()
     self._generate_shall_maintain_state()
 

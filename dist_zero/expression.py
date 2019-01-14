@@ -25,6 +25,13 @@ class Expression(object):
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
+  def generate_free_state(self, compiler, block, stateRvalue):
+    '''
+    Generate c code in ``block`` to free all memory associated with this expr that is not stored
+    directly in the ``vGraph`` struct.
+    '''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
   def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
     '''
     Generate c code in ``block`` to:
@@ -117,6 +124,9 @@ class Project(Expression):
     stateLvalue = compiler.state_lvalue(vGraph, self)
     stateInitFunction.AddAssignment(stateLvalue, compiler.state_rvalue(vGraph, self.base).Dot(self.key).Deref())
 
+  def generate_free_state(self, compiler, block, stateRvalue):
+    pass
+
 
 class Applied(Expression):
   '''
@@ -151,6 +161,9 @@ class Applied(Expression):
         stateInitFunction,
         argRvalue=compiler.state_rvalue(vGraph, self.arg),
         resultLvalue=compiler.state_lvalue(vGraph, self))
+
+  def generate_free_state(self, compiler, block, stateRvalue):
+    pass
 
 
 class Product(Expression):
@@ -207,6 +220,9 @@ class Product(Expression):
     for key, expr in self.items:
       stateInitFunction.AddAssignment(stateLvalue.Dot(key), compiler.state_rvalue(vGraph, expr).Address())
 
+  def generate_free_state(self, compiler, block, stateRvalue):
+    pass
+
 
 class Input(Expression):
   def __init__(self, name, type):
@@ -240,6 +256,11 @@ class Input(Expression):
 
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
     raise errors.InternalError("Input expressions should never generate c code to initialize from prior inputs.")
+
+  def generate_free_state(self, compiler, block, stateRvalue):
+    t = compiler.get_concrete_type(self._type)
+    if t.__class__ == concrete_types.ConcreteProductType:
+      t.generate_free_state(compiler, block, stateRvalue)
 
   def __str__(self):
     return f"Input_{self.name}"

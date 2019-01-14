@@ -43,6 +43,19 @@ class ConcreteType(object):
     '''
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
+  def generate_free_state(self, compiler, block, stateRvalue):
+    '''
+    Generate C code to free the allocated memory associated with this type.
+
+    :param compiler: The compiler instance that will generate code using this concrete type.
+    :type compiler: `ReactiveCompiler`
+    :param block: The block in which to generate the code.
+    :type block: `Block`
+    :param stateRvalue: A C expression for the state to free.
+    :type stateRvalue: `cgen.expression.Expression`
+    '''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
   def initialize_capnp(self, compiler):
     '''
     Initialize the capnp structures for this type.
@@ -245,6 +258,9 @@ class ConcreteBasicType(ConcreteType):
     self._basicState_field = None
     self._capnp_transitions_type = None
     self._capnp_transitions_basicTransition_field = None
+
+  def generate_free_state(self, compiler, block, stateRvalue):
+    pass
 
   def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
     block.AddAssignment(stateLvalue, self._basic_type._apply_transition(transition, stateRvalue))
@@ -529,6 +545,11 @@ class ConcreteProductType(ConcreteType):
     self._capnp_single_transition_type = self._write_capnp_transitions_definition(compiler)
     self._capnp_transitions_type = _wrap_struct_in_list(compiler, self._capnp_single_transition_type)
 
+  def generate_free_state(self, compiler, block, stateRvalue):
+    for key, value in self._items:
+      value.generate_free_state(compiler, block, stateRvalue.Dot(key).Deref())
+      block.AddAssignment(None, cgen.free(stateRvalue.Dot(key)))
+
   def generate_capnp_to_c_state(self, read_ctx, output_lvalue):
     key_to_expr = {}
 
@@ -538,7 +559,6 @@ class ConcreteProductType(ConcreteType):
 
     for key, value in self._items:
       vComponent = cgen.Var(f'component_{key}', value.c_state_type.Star())
-      # FIXME(KK): Be sure this malloc is eventually freed
       read_ctx.block.AddAssignment(
           cgen.CreateVar(vComponent),
           cgen.malloc(value.c_state_type.Sizeof()).Cast(value.c_state_type.Star()))
@@ -580,17 +600,18 @@ class ConcreteProductType(ConcreteType):
     for ident in self._product_type.transition_identifiers:
       if ident == 'standard':
         yield from self._generate_capnp_to_c_single_transition_individual_components(
-            read_ctx.compiler, switch, vSingleTransition)
+            read_ctx.compiler, switch, read_ctx.ptrsToFree, vSingleTransition)
       elif ident == 'individual':
         yield from self._generate_capnp_to_c_single_transition_individual_components(
-            read_ctx.compiler, switch, vSingleTransition)
+            read_ctx.compiler, switch, read_ctx.ptrsToFree, vSingleTransition)
       elif ident == 'simultaneous':
         yield from self._generate_capnp_to_c_single_transition_simultaneous(read_ctx.compiler, switch,
                                                                             vSingleTransition)
       else:
         raise RuntimeError(f"Unrecognized transition identifier {ident}.")
 
-  def _generate_capnp_to_c_single_transition_individual_components(self, compiler, switch, vSingleTransition):
+  def _generate_capnp_to_c_single_transition_individual_components(self, compiler, switch, ptrsToFree,
+                                                                   vSingleTransition):
     for key, value in self._items:
       c_name = f'product_on_{key}'
       name = f"productOn{key}"
@@ -599,12 +620,12 @@ class ConcreteProductType(ConcreteType):
 
       i = 0
       for cblock, cexpr in value.generate_and_yield_capnp_to_c_transition(
-          CapnpReadContext(compiler=compiler, block=block, ptr=componentPtr)):
+          CapnpReadContext(compiler=compiler, block=block, ptrsToFree=ptrsToFree, ptr=componentPtr)):
         vFromValue = cgen.Var(f'from_value_{key}_{i}', value.c_transitions_type.Star())
-        # FIXME(KK): Be sure this malloc is eventually freed
         cblock.AddAssignment(
             cgen.CreateVar(vFromValue),
             cgen.malloc(value.c_transitions_type.Sizeof()).Cast(value.c_transitions_type.Star()))
+        cblock.AddAssignment(None, cgen.kv_push(cgen.Void.Star(), ptrsToFree, vFromValue.Cast(cgen.Void.Star())))
         cblock.AddAssignment(cgen.UpdateVar(vFromValue).Deref(), cexpr)
         yield cblock, cgen.StructureLiteral(
             struct=self._c_transitions_type,
@@ -676,6 +697,10 @@ class ConcreteSumType(ConcreteType):
     self._items = None
 
     self._capnp_state_type
+
+  def generate_free_state(self, compiler, block, stateRvalue):
+    # FIXME(KK): Actually implement this
+    pass
 
   @property
   def c_transitions_type(self):
@@ -762,6 +787,10 @@ class ConcreteList(ConcreteType):
     self._c_state_type = None
     self._c_transitions_type = None
     self._initialized_capnp = False
+
+  def generate_free_state(self, compiler, block, stateRvalue):
+    # FIXME(KK): Actually implement this
+    pass
 
   @property
   def c_transitions_type(self):
@@ -880,13 +909,14 @@ def _wrap_struct_in_list(compiler, struct):
 class CapnpReadContext(object):
   '''Context object for code generators that generate C code that reads from a capnproto structure.'''
 
-  def __init__(self, compiler, block, ptr):
+  def __init__(self, compiler, block, ptrsToFree, ptr):
     self.compiler = compiler
     self.block = block
+    self.ptrsToFree = ptrsToFree
     self.ptr = ptr
 
   def _copy(self):
-    return CapnpReadContext(compiler=self.compiler, block=self.block, ptr=self.ptr)
+    return CapnpReadContext(compiler=self.compiler, block=self.block, ptrsToFree=self.ptrsToFree, ptr=self.ptr)
 
   def update_compiler(self, compiler):
     result = self._copy()
