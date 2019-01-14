@@ -1,6 +1,14 @@
 Messages
 ====================================
 
+.. _message:
+
+Message
+--------------------------
+
+DistZero messages are `json` serializable objects that are used to represent various the messages that nodes send
+to each other.  Each message has a 'type' key, and the other values depend on the type.
+
 .. automodule:: dist_zero.messages
    :members:
 
@@ -24,11 +32,6 @@ Linker messages
 .. automodule:: dist_zero.messages.linker
    :members:
 
-Common messages
------------------
-.. automodule:: dist_zero.messages.common
-   :members:
-
 Computation node messages
 ---------------------------
 .. automodule:: dist_zero.messages.computation
@@ -37,4 +40,9 @@ Computation node messages
 Messages relating to migrations
 ---------------------------------
 .. automodule:: dist_zero.messages.migration
+   :members:
+
+Common messages
+-----------------
+.. automodule:: dist_zero.messages.common
    :members:

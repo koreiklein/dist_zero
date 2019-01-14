@@ -1,8 +1,10 @@
 ''' 
 Environment configuration.
 
-All environment variables used to configure DistZero should be accessed by only this module
-and stored in python variables for use by other modules.
+All environment variables used to configure DistZero should be accessed by only the dist_zero.settings
+module.  It will parse and process them into variables that other modules can rely on for configuration.
+
+Generally, environment variables will live in :file:`.env`.
 '''
 
 import asyncio
@@ -58,6 +60,9 @@ LOGSTASH_HOST = os.environ['LOGSTASH_HOST']
 LOGSTASH_PORT = int(os.environ['LOGSTASH_PORT'])
 
 LOGZ_IO_TOKEN = os.environ.get('LOGZ_IO_TOKEN', '')
+
+C_DEBUG = os.environ.get('C_DEBUG', 'false')
+c_debug = C_DEBUG.lower() == 'true'
 
 CAPNP_DIR = os.environ['CAPNP_DIR']
 

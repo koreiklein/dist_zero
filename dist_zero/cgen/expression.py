@@ -1,11 +1,13 @@
 from dist_zero import errors
 
-from .common import INDENT, escape_c
+from .common import INDENT, escape_c_string
 from . import lvalue
 from .type import CType
 
 
 class Expression(object):
+  '''A C expression'''
+
   def add_includes(self, program):
     raise NotImplementedError()
 
@@ -94,6 +96,8 @@ class Expression(object):
 
 
 class UnionLiteral(Expression):
+  '''A C union literal expression'''
+
   def __init__(self, union, key, value):
     self.union = union
     self.key = key
@@ -103,10 +107,12 @@ class UnionLiteral(Expression):
     self.value.add_includes(program)
 
   def to_c_string(self, root=False):
-    return f"(({self.union.to_c_string()}){{ .{self.key}={self.value.to_c_string()} }})"
+    return f"(({self.union.to_c_string()}) {{ .{self.key}={self.value.to_c_string()} }})"
 
 
 class StructureLiteral(Expression):
+  '''A C structure literal expression'''
+
   def __init__(self, struct, key_to_expr):
     self.struct = struct
     self.key_to_expr = key_to_expr
@@ -116,11 +122,13 @@ class StructureLiteral(Expression):
       expr.add_includes(program)
 
   def to_c_string(self, root=False):
-    assignments = ", ".join(f".{key}={expr.to_c_string()}" for key, expr in self.key_to_expr.items())
-    return f"(({self.struct.to_c_string()}){{ {assignments} }})"
+    assignments = ", ".join(f"\n    .{key}={expr.to_c_string()}" for key, expr in self.key_to_expr.items())
+    return f"(({self.struct.to_c_string()}) {{ {assignments} }})"
 
 
 class Sizeof(Expression):
+  '''The C sizeof operator'''
+
   def __init__(self, base_type):
     self.base_type = base_type
 
@@ -132,6 +140,8 @@ class Sizeof(Expression):
 
 
 class ComponentRvalue(Expression):
+  '''A C expression with syntactic accessors (e.g. ".", "->", "[3]", "*") applied to it'''
+
   def __init__(self, base, accessors):
     self.base = base
     self.accessors = accessors
@@ -167,6 +177,8 @@ class ComponentRvalue(Expression):
 
 
 class UnOp(Expression):
+  '''A unary C operator applied to a C expression'''
+
   def __init__(self, base_expression, op):
     if not isinstance(base_expression, Expression):
       raise RuntimeError(f"Unary operation \"{op.s}\" must be applied to an Expression.  Got {base_expression}.")
@@ -184,6 +196,8 @@ class UnOp(Expression):
 
 
 class Constant(Expression):
+  '''A predefined C constant'''
+
   def __init__(self, s):
     self.s = str(s)
 
@@ -202,6 +216,8 @@ MinusOne = Constant(-1)
 
 
 class StrConstant(Expression):
+  '''A predefined C string constant'''
+
   def __init__(self, s):
     self.s = s
 
@@ -209,10 +225,12 @@ class StrConstant(Expression):
     pass
 
   def to_c_string(self, root=False):
-    return escape_c(self.s)
+    return escape_c_string(self.s)
 
 
 class Call(Expression):
+  '''A C function call expression'''
+
   def __init__(self, func, args):
     if not isinstance(func, Expression):
       raise RuntimeError(f"Function argument in call was not an expression. Got {func}")
@@ -233,6 +251,8 @@ class Call(Expression):
 
 
 class BinOp(Expression):
+  '''A C binary operator applied to two argument expressions'''
+
   def __init__(self, op, left, right):
     self.op = op
     if not isinstance(left, Expression):
@@ -254,6 +274,8 @@ class BinOp(Expression):
 
 
 class Operation(object):
+  '''A C binary operator'''
+
   def __init__(self, s):
     self.s = s
 
@@ -278,6 +300,8 @@ NotEqual = Operation("!=")
 
 
 class _NULL(Expression):
+  '''The special C NULL expression'''
+
   def add_includes(self, program):
     pass
 
@@ -289,6 +313,8 @@ NULL = _NULL()
 
 
 class Cast(Expression):
+  '''A C typecast expression'''
+
   def __init__(self, base, type):
     self.base = base
     self.type = type
@@ -305,6 +331,8 @@ class Cast(Expression):
 
 
 class Var(Expression):
+  '''A C variable'''
+
   def __init__(self, name, type):
     self.name = name
     self.type = type
@@ -354,8 +382,10 @@ free = Var("free", None)
 capn_init_mem = Var("capn_init_mem", None)
 capn_write_mem = Var("capn_write_mem", None)
 capn_getp = Var("capn_getp", None)
+capn_len = Var("capn_len", None)
 capn_setp = Var("capn_setp", None)
 capn_root = Var("capn_root", None)
+capn_resolve = Var("capn_resolve", None)
 capn_init_malloc = Var("capn_init_malloc", None)
 capn_free = Var("capn_free", None)
 

@@ -1,3 +1,4 @@
+from .connector import *
 from .all_to_all import *
 from .all_to_one_available import *
 

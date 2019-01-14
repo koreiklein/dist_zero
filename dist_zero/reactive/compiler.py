@@ -4,16 +4,28 @@ from collections import defaultdict
 import capnp
 capnp.remove_import_hook()
 
-from dist_zero import cgen, errors, expression, capnpgen, types, primitive, settings
-from dist_zero import type_compiler, settings
+from dist_zero import cgen, errors, expression, capnpgen, primitive, settings, concrete_types
+from dist_zero import settings
+from dist_zero import types, concrete_types
 
 
 class ReactiveCompiler(object):
   '''
-  For building a reactive program from a set of normalized expressions.
+  The root object for building a reactive program from a set of normalized expressions.
+
+  Usage:
+
+  - Create a ``compiler = ReactiveCompiler()`` instance.
+  - Call `ReactiveCompiler.compile` to produce a python module from some normalize expressions.
+  - Create a Net with from the generated python module
+  - Call methods on the Net to run the reactive program.
   '''
 
   def __init__(self, name, docstring=''):
+    '''
+    :param str name: A name, safe to use in c variables and filenames.
+    :param str docstring: The python docstring to use for the module this compiler will eventually generate.
+    '''
     self.name = name
     self.docstring = docstring
 
@@ -43,14 +55,20 @@ class ReactiveCompiler(object):
             settings.CAPNP_DIR,
             capnp_lib_dir,
         ])
-    self.c_types = type_compiler.CTypeCompiler(self.program)
-    self.capnp_types = type_compiler.CapnpTypeCompiler()
+
+    self.type_to_concrete_type = {}
+    self.capnp = capnpgen.CapnpFile(capnpgen.gen_capn_uid())
 
     self.BadInputError = self.program.AddException('BadReactiveInput')
 
     self.output_key_to_norm_expr = None
 
-    self._type_by_expr = {}
+    self._type_by_expr = {} # expr to dist_zero.types.Type
+    self._concrete_type_by_type = {} # type to dist_zero.concrete_types.ConcreteType
+
+    # when in the middle of generating code for a turn, this variable will refer to a kvec of pointers
+    # that will be freed at the end of the turn
+    self.ptrsToFree = None
 
     self._graph_struct = None
     self._turn_struct = None
@@ -60,70 +78,12 @@ class ReactiveCompiler(object):
     self.expr_to_inputs = None
     self.expr_to_outputs = None
     self.expr_index = None
-    self.expr_type = None
-    self._state_types = None
     self._input_exprs = None
     self._output_exprs = None # Dictionary from output expression to its list of keys
     self._net = None
 
     self._built_capnp = False
     self._pycapnp_module = None
-
-  def type_to_capnp_state_type(self, type):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.BasicType(f"struct {state_ref}")
-
-  def type_to_capnp_transitions_type(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.BasicType(f"struct {transitions_ref}")
-
-  def type_to_capnp_state_ptr(self, type):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.BasicType(f"{state_ref}_ptr")
-
-  def type_to_capnp_transitions_ptr(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.BasicType(f"{transitions_ref}_ptr")
-
-  def type_to_capnp_field_set_function(self, type, field):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.Var(f"{state_ref}_set_{field}", None)
-
-  def type_to_capnp_transition_field_set_function(self, type, field):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.Var(f"{transitions_ref}_set_{field}", None)
-
-  def type_to_capnp_field_get_function(self, type, field):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.Var(f"{state_ref}_get_{field}", None)
-
-  def type_to_capnp_state_write_function(self, type):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.Var(f"write_{state_ref}", None)
-
-  def type_to_capnp_transitions_write_function(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.Var(f"write_{transitions_ref}", None)
-
-  def type_to_capnp_state_new_ptr_function(self, type):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.Var(f"new_{state_ref}", None)
-
-  def type_to_capnp_transitions_new_ptr_function(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.Var(f"new_{transitions_ref}_list", None)
-
-  def type_to_capnp_transitions_list_type(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.BasicType(f"{transitions_ref}_list")
-
-  def type_to_capnp_state_read_function(self, type):
-    state_ref = self.capnp_types.type_to_state_ref[type]
-    return cgen.Var(f"read_{state_ref}", None)
-
-  def type_to_capnp_transitions_read_function(self, type):
-    transitions_ref = self.capnp_types.type_to_transitions_ref[type]
-    return cgen.Var(f"read_{transitions_ref}", None)
 
   def _capnp_filename(self):
     return f"{self.name}.capnp"
@@ -142,10 +102,14 @@ class ReactiveCompiler(object):
       dirname = self._capnp_dirname()
       os.makedirs(dirname, exist_ok=True)
       filename = self._capnp_filename()
-      self.capnp_types.capnp.build_in(dirname=dirname, filename=filename)
+      self.capnp.build_in(dirname=dirname, filename=filename)
       self._built_capnp = True
 
   def get_pycapnp_module(self):
+    '''
+    Return a python module for generating and parsing capnp messages.
+    This method caches it's result, and should only be called after the program is finished being compiled.
+    '''
     if self._pycapnp_module is None:
       self._build_capnp()
       dirname = self._capnp_dirname()
@@ -155,64 +119,128 @@ class ReactiveCompiler(object):
 
     return self._pycapnp_module
 
-  def capnp_state_module(self, expr):
-    t = self._type_by_expr[expr]
-    capnp_module = self.get_pycapnp_module()
-    name = self.capnp_types.type_to_state_ref[t]
-    return capnp_module.__dict__[name]
+  def capnp_state_builder(self, expr):
+    '''
+    Get the capnp builder for ``expr``
 
-  def capnp_transitions_module(self, expr):
-    t = self._type_by_expr[expr]
-    capnp_module = self.get_pycapnp_module()
-    name = self.capnp_types.type_to_transitions_ref[t]
-    return capnp_module.__dict__[name]
+    :param expr: A dist_zero expression involved in compiling the program.
+    :type expr: `dist_zero.expression.Expression`
 
-  def get_type_for_expr(self, expr):
-    if expr not in self._type_by_expr:
-      t = self._compute_type(expr)
-      self._type_by_expr[expr] = t
-      return t
+    :return: The pycapnp builder object for ``expr``.  The specific builder subclass class
+      will be generated by the capnproto compiler.
+    :rtype: `capnp._DynamicStructBuilder`
+    '''
+    t = self.get_concrete_type(expr.type).capnp_state_type
+    capnp_module = self.get_pycapnp_module()
+    return capnp_module.__dict__[t.name]
+
+  def capnp_state_builder_for_type(self, t):
+    '''
+    Get the capnp builder for ``t``
+
+    :param t: The dist_zero type involved in compiling the program.
+    :type t: `dist_zero.types.Type`
+    :return: The pycapnp builder object for ``t``.  The specific builder subclass class
+      will be generated by the capnproto compiler.
+    :rtype: `capnp._DynamicStructBuilder`
+    '''
+    capnp_module = self.get_pycapnp_module()
+    return capnp_module.__dict__[self.get_concrete_type(t).name]
+
+  def capnp_transitions_builder(self, expr):
+    '''
+    Get the capnp builder for transitions on ``expr``
+
+    :param expr: A dist_zero expression involved in compling the program.
+    :type expr: `dist_zero.expression.Expression`
+    :return: The pycapnp builder object for transitions on ``expr``.  The specific builder subclass class
+      will be generated by the capnproto compiler.
+    :rtype: `capnp._DynamicStructBuilder`
+    '''
+    t = self.get_concrete_type(expr.type).capnp_transitions_type
+    capnp_module = self.get_pycapnp_module()
+    return capnp_module.__dict__[t.name]
+
+  def capnp_transitions_builder_for_type(self, t):
+    '''
+    Get the capnp builder for transitions on ``t``
+
+    :param t: The dist_zero type involved in compiling the program.
+    :type t: `dist_zero.types.Type`
+    :return: The pycapnp builder object for transitions on ``t``.  The specific builder subclass class
+      will be generated by the capnproto compiler.
+    :rtype: `capnp._DynamicStructBuilder`
+    '''
+    capnp_module = self.get_pycapnp_module()
+    return capnp_module.__dict__[self.get_concrete_type(t).name]
+
+  def get_concrete_type(self, t):
+    '''
+    :param t: A type in the input program.
+    :type t: `dist_zero.types.Type`
+    :return: The unique `ConcreteType` this `ReactiveCompiler` instance will eventually use to represent ``t``.
+    :rtype: `ConcreteType`
+    '''
+    if t not in self._concrete_type_by_type:
+      result = self._compute_concrete_type(t)
+      self._concrete_type_by_type[t] = result
+      return result
     else:
-      return self._type_by_expr[expr]
+      return self._concrete_type_by_type[t]
 
   def state_lvalue(self, vGraph, expr):
+    '''
+    :param vGraph: The c variable for the relevant graph structure.
+    :type vGraph: `dist_zero.cgen.expression.Expression`
+    :param expr: Any expression in the input program. 
+    :type expr: `dist_zero.expression.Expression`
+    :return: The c lvalue that holds the current state of ``expr``.
+    :rtype: `dist_zero.cgen.lvalue.Lvalue`
+    '''
     index = self.expr_index[expr]
     return cgen.UpdateVar(vGraph).Arrow(self._state_key_in_graph(index))
 
   def state_rvalue(self, vGraph, expr):
+    '''
+    :param vGraph: The c variable for the relevant graph structure.
+    :type vGraph: `dist_zero.cgen.expression.Expression`
+    :param expr: Any expression in the input program. 
+    :type expr: `dist_zero.expression.Expression`
+    :return: A c expression that holds the current state of ``expr``.
+    :rtype: `dist_zero.cgen.expression.Expression`
+    '''
     index = self.expr_index[expr]
     return vGraph.Arrow(self._state_key_in_graph(index))
 
-  def type_to_c_state_type(self, type):
-    return self.c_types.type_to_state_ctype[type]
+  def transitions_rvalue(self, vGraph, expr):
+    '''
+    :param vGraph: The c variable for the relevant graph structure.
+    :type vGraph: `dist_zero.cgen.expression.Expression`
+    :param expr: Any expression in the input program. 
+    :type expr: `dist_zero.expression.Expression`
+    :return: A c expression that holds the current transitions kvec for ``expr``.
+    :rtype: `dist_zero.cgen.expression.Expression`
+    '''
+    index = self.expr_index[expr]
+    return vGraph.Arrow('turn').Dot(self._transition_key_in_turn(index))
 
-  def get_c_state_type(self, expr):
-    return self.type_to_c_state_type(self.get_type_for_expr(expr))
-
-  def get_c_transition_type(self, expr):
-    return self.c_types.type_to_transitions_ctype[self.get_type_for_expr(expr)]
-
-  def _compute_type(self, expr):
-    if expr.__class__ == expression.Applied:
-      arg_type = self.get_type_for_expr(expr.arg)
-      if not isinstance(expr.func, primitive.PrimitiveOp):
-        raise RuntimeError(
-            f"Expected a normalized expression, but function an application of a non-PrimitiveOp: {expr.func}.")
-
-      if not expr.func.get_input_type().equivalent(arg_type):
-        raise RuntimeError(
-            f"Badly typed normalized expression.  Applied a function taking {expr.func.get_input_type()} to an {arg_type}."
-        )
-
-      return expr.func.get_output_type()
-    elif expr.__class__ == expression.Product:
-      return types.Product(items=[(k, self.get_type_for_expr(v)) for k, v in expr.items])
-    elif expr.__class__ == expression.Input:
-      return expr.type
+  def _compute_concrete_type(self, t):
+    '''Determine which `ConcreteType` to use for ``t``'''
+    if t.__class__ == types.Product:
+      return concrete_types.ConcreteProductType(t).initialize(self)
+    elif t.__class__ == types.Sum:
+      return concrete_types.ConcreteSumType(t).initialize(self)
+    elif t.__class__ == types.List:
+      return concrete_types.ConcreteList(t).initialize(self)
+    elif t.__class__ == types.FunctionType:
+      raise errors.InternalError(
+          "Reactive compiler can't produce a concrete type for a function type. It should have been normalized away.")
+    elif t.__class__ == types.BasicType:
+      return concrete_types.ConcreteBasicType(t).initialize(self)
     else:
-      raise RuntimeError(f"Unrecognized type of normalized expression {expr.__class__}.")
+      raise RuntimeError(f"Unrecognized dist_zero type {t.__class__}.")
 
-  def _generate_structs(self):
+  def _generate_graph_struct(self):
     '''Generate the graph struct in self.program.'''
     self._graph_struct = self._net.struct
 
@@ -236,20 +264,13 @@ class ReactiveCompiler(object):
 
     self._turn_struct.AddField('remaining', cgen.Queue)
     self._turn_struct.AddField('was_added', cgen.UInt8.Array(cgen.Constant(len(self._top_exprs))))
-    self._turn_struct.AddField('to_free', cgen.KVec(cgen.Void.Star()))
+    self._turn_struct.AddField('vecs_to_free', cgen.KVec(cgen.Void.Star()))
+    self._turn_struct.AddField('ptrs_to_free', cgen.KVec(cgen.Void.Star()))
 
     for i, expr in enumerate(self._top_exprs):
-      c_state_type = self.get_c_state_type(expr)
-      self._graph_struct.AddField(self._state_key_in_graph(i), c_state_type)
-
-      c_transition_type = self.get_c_transition_type(expr)
-      self._turn_struct.AddField(self._transition_key_in_turn(i), cgen.KVec(c_transition_type))
-
-  def _transition_key_in_turn(self, index):
-    return f'transitions_{index}'
-
-  def _state_key_in_graph(self, index):
-    return f'state_{index}'
+      ct = self.get_concrete_type(expr.type)
+      self._graph_struct.AddField(self._state_key_in_graph(i), ct.c_state_type)
+      self._turn_struct.AddField(self._transition_key_in_turn(i), cgen.KVec(ct.c_transitions_type))
 
   def _n_exprs(self):
     if self._cached_n_exprs is None:
@@ -257,10 +278,8 @@ class ReactiveCompiler(object):
 
     return self._cached_n_exprs
 
-  def _generate_initialize_root_graph(self):
-    '''Generate code in self.program defining the Net type.'''
-    self._generate_structs()
-
+  def _generate_graph_initializer(self):
+    '''Generate the graph initialization function.'''
     init = self._net.AddInit()
 
     for i, expr in enumerate(self._top_exprs):
@@ -271,6 +290,9 @@ class ReactiveCompiler(object):
       n_outputs = len(self._output_exprs.get(expr, []))
       for outputExpr in self.expr_to_outputs[expr]:
         if outputExpr.__class__ == expression.Product:
+          # We add an extra output for a product expression to ensure that this expression's
+          # state is maintained if the product's state must be maintained.
+          # In the event that the product's state need NOT be maintained, it will satisfy this addition output.
           n_outputs += 2
         else:
           n_outputs += 1
@@ -289,11 +311,28 @@ class ReactiveCompiler(object):
 
     init.AddReturn(cgen.Constant(0))
 
+  def _generate_graph_finalizer(self):
+    '''Generate the graph finalization function.'''
+    finalize = self._net.AddFinalize()
+
+    vGraph = finalize.SelfArg()
+
+    for i, expr in enumerate(self._top_exprs):
+      ifInitialized = finalize.AddIf(
+          cgen.Zero == vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(i))).consequent
+      expr.generate_free_state(self, ifInitialized, self.state_rvalue(vGraph, expr))
+
   def _shall_maintain_state_function_name(self):
     return 'shall_maintain_state'
 
   def _python_bytes_from_capn_function_name(self):
     return "python_bytes_from_capn"
+
+  def _transition_key_in_turn(self, index):
+    return f'transitions_{index}'
+
+  def _state_key_in_graph(self, index):
+    return f'state_{index}'
 
   def _react_to_transitions_function_name(self, index):
     return f"react_to_transitions_{index}"
@@ -380,12 +419,26 @@ class ReactiveCompiler(object):
     produce.AddReturnVoid()
 
   def pyerr(self, err_type, s, *args):
+    '''
+    Return a c function call that sets a python exception.
+    :param err_type: A c variable that refers to a python exception type.
+    :type err_type: `cgen.expression.Var`
+    :param str s: The printf format string
+    :param args: The c variables to matching the format specifiers in ``s``
+    :type args: list[`cgen.expression.Var`]
+    '''
     if len(args) == 0:
       return cgen.PyErr_SetString(err_type, cgen.StrConstant(s))
     else:
       return cgen.PyErr_Format(err_type, cgen.StrConstant(s), *args)
 
   def pyerr_from_string(self, s, *args):
+    '''
+    Return a c function call that sets a python RuntimeError.
+    :param str s: The printf format string
+    :param args: The c variables to matching the format specifiers in ``s``
+    :type args: list[`cgen.expression.Var`]
+    '''
     return self.pyerr(cgen.PyExc_RuntimeError, s, *args)
 
   def _generate_write_output_transitions(self, key, expr):
@@ -393,7 +446,7 @@ class ReactiveCompiler(object):
     Generate the write_output_transitions_{key} function in c for ``expr``.
     '''
     index = self.expr_index[expr]
-    exprType = self._state_types[index]
+    exprType = self._concrete_types[index]
     vGraph = cgen.Var('graph', self._graph_struct.Star())
     write_output_transitions = self.program.AddFunction(
         name=self._write_output_transitions_function_name(index), retType=cgen.PyObject.Star(), args=[vGraph])
@@ -410,7 +463,7 @@ class ReactiveCompiler(object):
     Generate the write_output_state_{key} function in c for ``expr``.
     '''
     index = self.expr_index[expr]
-    exprType = self._state_types[index]
+    exprType = self._concrete_types[index]
     vGraph = cgen.Var('graph', self._graph_struct.Star())
     write_output_state = self.program.AddFunction(
         name=self._write_output_state_function_name(index), retType=cgen.PyObject.Star(), args=[vGraph])
@@ -426,7 +479,6 @@ class ReactiveCompiler(object):
     Generate the OnOutput_{key} function in c for ``expr``.
     '''
     on_output = self._net.AddMethod(name=self._on_output_function_name(key), args=None)
-    outputType = self.expr_type[expr]
     output_index = self.expr_index[expr]
 
     vGraph = on_output.SelfArg()
@@ -461,7 +513,7 @@ class ReactiveCompiler(object):
     Generate the OnInput_{name} function in c for ``expr``.
     '''
     index = self.expr_index[expr]
-    inputType = self.expr_type[expr]
+    inputType = self.get_concrete_type(expr.type)
 
     vBuf = cgen.Var('buf', cgen.UInt8.Star())
     vBuflen = cgen.Var('buflen', cgen.MachineInt)
@@ -493,11 +545,14 @@ class ReactiveCompiler(object):
         None, self.pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
     on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn').Dot('result'), vResult)
 
-    vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
+    ptr = cgen.Var(f'ptr', inputType.capnp_state_type.c_ptr_type)
+    on_input.AddDeclaration(cgen.CreateVar(ptr))
     on_input.AddAssignment(
-        cgen.CreateVar(vCapnPtr), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
+        cgen.UpdateVar(ptr).Dot('p'), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
 
-    inputType.generate_capnp_to_c_state(self, on_input, vCapnPtr, self.state_lvalue(vGraph, expr))
+    inputType.generate_capnp_to_c_state(
+        concrete_types.CapnpReadContext(compiler=self, block=on_input, ptrsToFree=None, ptr=ptr),
+        self.state_lvalue(vGraph, expr))
 
     on_input.AddAssignment(None, cgen.capn_free(vCapn.Address()))
     on_input.AddAssignment(cgen.UpdateVar(vGraph).Arrow('n_missing_productions').Sub(cgen.Constant(index)), cgen.Zero)
@@ -521,6 +576,7 @@ class ReactiveCompiler(object):
       self._generate_subscribe_noninput(index, expr)
 
   def _generate_subscribe_input(self, index, expr):
+    '''see _generate_subscribe'''
     vGraph = cgen.Var('graph', self._graph_struct.Star())
     subscribe = self.program.AddFunction(name=self._subscribe_function_name(index), retType=cgen.Int32, args=[vGraph])
 
@@ -532,6 +588,7 @@ class ReactiveCompiler(object):
     subscribe.AddReturn(vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(index)) == cgen.Zero)
 
   def _generate_subscribe_noninput(self, index, expr):
+    '''see _generate_subscribe'''
     vGraph = cgen.Var('graph', self._graph_struct.Star())
     subscribe = self.program.AddFunction(name=self._subscribe_function_name(index), retType=cgen.Int32, args=[vGraph])
 
@@ -588,6 +645,7 @@ class ReactiveCompiler(object):
     shall_maintain_state.AddReturn(vGraph.Arrow('n_missing_subscriptions').Sub(vIndex) > cgen.Zero)
 
   def _generate_python_bytes_from_capnp(self):
+    '''generate a c function to produce a python bytes object from a capnp structure.'''
     vCapn = cgen.Var('capn', cgen.Capn.Star())
     python_bytes_from_capn = self.program.AddFunction(
         name=self._python_bytes_from_capn_function_name(), retType=cgen.PyObject.Star(), args=[vCapn])
@@ -623,6 +681,7 @@ class ReactiveCompiler(object):
     loop.AddAssignment(cgen.UpdateVar(vSize), vSize + vSize)
 
   def _generate_on_transitions(self):
+    '''Generate the c function that implements the OnTransitions method of the Net object.'''
     vTransitionsDict = cgen.Var('input_transitions_dict', cgen.PyObject.Star())
     on_transitions = self._net.AddMethod(name='OnTransitions', args=[vTransitionsDict]) # We'll do our own arg parsing
     vGraph = on_transitions.SelfArg()
@@ -637,8 +696,10 @@ class ReactiveCompiler(object):
     on_transitions.Newline()
 
     # Initialize the queue
-    toFree = vGraph.Arrow('turn').Dot('to_free')
-    on_transitions.AddAssignment(None, cgen.kv_init(toFree))
+    self.ptrsToFree = vGraph.Arrow('turn').Dot('ptrs_to_free')
+    vecsToFree = vGraph.Arrow('turn').Dot('vecs_to_free')
+    on_transitions.AddAssignment(None, cgen.kv_init(vecsToFree))
+    on_transitions.AddAssignment(None, cgen.kv_init(self.ptrsToFree))
 
     # initialize was_added
     vIndexWas = cgen.Var('was_added_init_i', cgen.MachineInt)
@@ -694,27 +755,37 @@ class ReactiveCompiler(object):
     (queueLoop.AddIf(vGraph.Arrow('react_to_transitions').Sub(nextIndex)(vGraph)).consequent.AddAssignment(
         None, cgen.Py_DECREF(vResult)).AddAssignment(cgen.UpdateVar(vResult), cgen.NULL).AddBreak())
 
-    freeIndex = cgen.Var('free_index', cgen.MachineInt)
-    on_transitions.Newline().AddAssignment(cgen.CreateVar(freeIndex), cgen.Zero)
-    freeLoop = on_transitions.AddWhile(freeIndex < cgen.kv_size(toFree))
-    kvecToFree = cgen.kv_A(toFree, freeIndex).Cast(cgen.KVec(cgen.Void).Star()).Deref()
+    # free from ptrs_to_free
+    ptrsFreeIndex = cgen.Var('ptrsFreeIndex', cgen.MachineInt)
+    on_transitions.Newline().AddAssignment(cgen.CreateVar(ptrsFreeIndex), cgen.Zero)
+    freeLoop = on_transitions.AddWhile(ptrsFreeIndex < cgen.kv_size(self.ptrsToFree))
+    freeLoop.AddAssignment(None, cgen.free(cgen.kv_A(self.ptrsToFree, ptrsFreeIndex)))
+    freeLoop.AddAssignment(cgen.UpdateVar(ptrsFreeIndex), ptrsFreeIndex + cgen.One)
+    on_transitions.AddAssignment(None, cgen.kv_destroy(self.ptrsToFree))
 
+    # free from vecs_to_free
+    kvecsFreeIndex = cgen.Var('kvecs_free_index', cgen.MachineInt)
+    on_transitions.Newline().AddAssignment(cgen.CreateVar(kvecsFreeIndex), cgen.Zero)
+    freeLoop = on_transitions.AddWhile(kvecsFreeIndex < cgen.kv_size(vecsToFree))
+    kvecToFree = cgen.kv_A(vecsToFree, kvecsFreeIndex).Cast(cgen.KVec(cgen.Void).Star()).Deref()
     # make sure to free the vec, and reinitialize it.
     freeLoop.AddAssignment(None, cgen.kv_destroy(kvecToFree))
     freeLoop.AddAssignment(None, cgen.kv_init(kvecToFree))
-
-    freeLoop.AddAssignment(cgen.UpdateVar(freeIndex), freeIndex + cgen.One)
-
-    on_transitions.AddAssignment(None, cgen.kv_destroy(toFree))
+    freeLoop.AddAssignment(cgen.UpdateVar(kvecsFreeIndex), kvecsFreeIndex + cgen.One)
+    on_transitions.AddAssignment(None, cgen.kv_destroy(vecsToFree))
 
     on_transitions.Newline().AddAssignment(cgen.UpdateVar(vGraph).Arrow('turn').Dot('result'), cgen.NULL)
     on_transitions.AddReturn(vResult)
 
-  def transitions_rvalue(self, vGraph, expr):
-    index = self.expr_index[expr]
-    return vGraph.Arrow('turn').Dot(self._transition_key_in_turn(index))
-
   def _generate_react_to_transitions(self, expr):
+    '''
+    Generate a c function that implement ``expr`` reacting to transitions on its inputs.
+    This function will read the transitions for the input exprs to ``expr`` (from the `transitions_rvalue` kvecs),
+    and based on their values, write output transitions in `transitions_rvalue` for ``expr``.
+
+    :param expr: Any expression in the input program. 
+    :type expr: `dist_zero.expression.Expression`
+    '''
     index = self.expr_index[expr]
     vGraph = cgen.Var('graph', self._graph_struct.Star())
     react = self.program.AddFunction(
@@ -753,12 +824,16 @@ class ReactiveCompiler(object):
     react.AddAssignment(
         None,
         cgen.kv_push(cgen.Void.Star(),
-                     vGraph.Arrow('turn').Dot('to_free'),
+                     vGraph.Arrow('turn').Dot('vecs_to_free'),
                      self.transitions_rvalue(vGraph, expr).Address().Cast(cgen.Void.Star())))
 
     react.AddReturn(cgen.false)
 
   def _generate_deserialize_transitions(self, inputExpr):
+    '''
+    Generate a c function to convert from a capnproto representation of a transition on an input expression
+    to the internal c representation inside the graph struct.
+    '''
     index = self.expr_index[inputExpr]
     vGraph = cgen.Var('graph', self._graph_struct.Star())
     vPythonList = cgen.Var('user_input_list_of_bytes', cgen.PyObject.Star())
@@ -794,16 +869,79 @@ class ReactiveCompiler(object):
          None, self.pyerr(self.BadInputError,
                           "Failed to initialize struct capn when parsing a transitions message.")).AddReturnVoid())
 
-    vCapnPtr = cgen.Var('msg_ptr', cgen.Capn_Ptr)
-    listLoop.AddAssignment(
-        cgen.CreateVar(vCapnPtr), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
+    listLoop.Newline()
 
-    inputExpr.type.generate_capnp_to_c_transition(self, listLoop, vCapnPtr, vKVec)
+    concreteInputType = self.get_concrete_type(inputExpr.type)
+    ptr = cgen.Var(f'ptr', concreteInputType.capnp_transitions_type.c_ptr_type)
+    listLoop.AddDeclaration(cgen.CreateVar(ptr))
+    listLoop.AddAssignment(
+        cgen.UpdateVar(ptr).Dot('p'), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
+
+    read_ctx = concrete_types.CapnpReadContext(
+        compiler=self, block=listLoop, ptrsToFree=vGraph.Arrow('turn').Dot('ptrs_to_free'), ptr=ptr)
+    for cblock, cexp in concreteInputType.generate_and_yield_capnp_to_c_transition(read_ctx):
+      cblock.AddAssignment(None, cgen.kv_push(concreteInputType.c_transitions_type, vKVec, cexp))
+
     listLoop.AddAssignment(None, cgen.capn_free(vCapn.Address()))
 
     listLoop.Newline().AddAssignment(cgen.UpdateVar(vI), vI + cgen.One)
 
   def compile(self, output_key_to_norm_expr):
+    '''
+    Compile normalized expressions into a reactive program.
+
+      ``mod = reactive_compiler.compile(output_key_to_norm_expr)``
+
+
+    The input program is provided as a dictionary that maps output keys to `dist_zero.expression.Expression` instances.
+    Any expression used in constructing one of these "output" expressions is considered part of the program.
+    Any `dist_zero.expression.Input` expression is treated as an input to the reactive program.
+    In general, much structure will be shared between distinct output expressions.
+
+    The return value of ``compile`` will be a python module that exports a new type ``Net`` which
+    can be used in the following ways:
+
+
+    Passing in and receiving states:
+
+      By calling ``net = mod.Net()``, you can create a separate instance of the reactive program described by ``output_key_to_norm_expr``
+      Once the reactive program ``net`` has been created, you can
+
+        - Register an output with ``net.OnOutput_{output_key}()``.  This method may be called exactly once for each output key
+          in ``output_key_to_norm_expr``
+        - For each input expression ``I`` that was provided to `ReactiveCompiler.compile`, you can register the input key
+          for ``I`` by calling ``net.OnInput_{I.name}(bytes)`` where ``bytes`` is a python bytes object containing
+          a capnpproto serialized message for ``I``.  You can use `ReactiveCompiler.capnp_state_builder_for_type` to obtain
+          a builder for such a python bytes object.
+
+      Each of the above methods of ``Net`` will return a python dictionary mapping output keys to byte-like objects.
+      For each mapping ``output_key`` -> ``bytes``, ``bytes`` will be a serialized capnproto message for that
+      output key.  You can use ``compiler.capnp_state_builder_for_type(output_key_to_norm_expr[output_key].type)``
+      to get a builder that will parse ``bytes``.
+
+      Each output key will only ever produce at most one output state, and that state will be returned
+      as soon as the output has received all the inputs it needs to calculate it.
+      The calculated state will be exactly the one determined by its associated
+      `dist_zero.expression.Expression`.
+
+    Passing in and receiving transitions:
+
+      ``net.OnTransitions(input_transitions)`` takes as input an ``input_transitions`` dictionary that maps
+      certain registered input keys to lists of bytes objects representing capnproto transitions
+      (use `ReactiveCompiler.capnp_transitions_builder_for_type` to obtain a builder that can generate the proper bytes).
+      This method will return a dictionary mapping output keys to bytes-like objects with the
+      appropriate output capnproto transitions.
+
+      Output transitions will be returned whenever an update to an input expression leads to an update to an output
+      expression.  The calculated transitions will be xactly those determined by the associated `dist_zero.expression.Expression`
+
+    See :file:`test/test_reactives.py` for some examples of how to use reactives.
+
+    :param output_key_to_norm_expr: A map from strings to normalized expressions.
+    :type output_key_to_norm_expr: dict[str, dist_zero.expression.Expression]
+
+    :return: The compiled c extension module, loaded into the current interpret as a python module.
+    '''
     self._output_key_to_norm_expr = output_key_to_norm_expr
     topsorter = _Topsorter(list(output_key_to_norm_expr.values()))
     self._top_exprs = topsorter.topsort()
@@ -813,31 +951,28 @@ class ReactiveCompiler(object):
     for i, expr in enumerate(self._top_exprs):
       self.expr_index[expr] = i
 
-    self._state_types = [self.get_type_for_expr(expr) for expr in self._top_exprs]
-    self.expr_type = dict(zip(self._top_exprs, self._state_types))
+    self._concrete_types = [self.get_concrete_type(expr.type) for expr in self._top_exprs]
 
     self._net = self.program.AddPythonType(name='Net', docstring=f"For running the {self.name} reactive network.")
-
-    # Add c types for all
-    for t in self._state_types:
-      self.c_types.ensure_root_type(t)
 
     # Add capnproto types for outputs
     self._output_exprs = defaultdict(list)
     for key, expr in self._output_key_to_norm_expr.items():
       self._output_exprs[expr].append(key)
-      self.capnp_types.ensure_root_type(self.get_type_for_expr(expr))
+      self.get_concrete_type(expr.type).initialize_capnp(self)
 
     # Add capnproto types for inputs
     self._input_exprs = []
     for expr in self._top_exprs:
       if expr.__class__ == expression.Input:
         self._input_exprs.append(expr)
-        self.capnp_types.ensure_root_type(self.get_type_for_expr(expr))
+        self.get_concrete_type(expr.type).initialize_capnp(self)
 
     self._build_capnp()
 
-    self._generate_initialize_root_graph()
+    self._generate_graph_struct()
+    self._generate_graph_initializer()
+    self._generate_graph_finalizer()
     self._generate_python_bytes_from_capnp()
     self._generate_shall_maintain_state()
 
@@ -866,14 +1001,14 @@ class ReactiveCompiler(object):
 
     self._generate_on_transitions()
 
-    ## For writing intermediate files to disk for inspection.
-    #with open('msg.capnp', 'w') as f:
-    #  for line in self.capnp_types.capnp.lines():
-    #    f.write(line)
-    #
-    with open('example.c', 'w') as f:
-      for line in self.program.to_c_string():
-        f.write(line)
+    if settings.c_debug:
+      with open('msg.capnp', 'w') as f:
+        for line in self.capnp.lines():
+          f.write(line)
+
+      with open('example.c', 'w') as f:
+        for line in self.program.to_c_string():
+          f.write(line)
 
     module = self.program.build_and_import()
 
@@ -881,9 +1016,15 @@ class ReactiveCompiler(object):
 
 
 class _Topsorter(object):
-  '''Populate self._top_exprs from a topological traversal of self.output_key_to_norm_expr'''
+  '''
+  Helper class to populate ReactiveCompiler._top_exprs via topological traversal of `dist_zero.expression.Expression`
+  instances referenced by a list of root expressions.
+  '''
 
   def __init__(self, root_exprs):
+    '''
+    :param list root_exprs: A list of `dist_zero.expression.Expression` instances in any order.
+    '''
     self.root_exprs = root_exprs
     self.visited = set()
     self.active = set()
@@ -893,6 +1034,9 @@ class _Topsorter(object):
     self.expr_to_outputs = defaultdict(list)
 
   def topsort(self):
+    '''
+    Populate all the parameters of self by traversing expressions in ``self.root_exprs`` in topological order.
+    '''
     for expr in self.root_exprs:
       self._visit(expr)
 
@@ -903,29 +1047,37 @@ class _Topsorter(object):
     return self.result
 
   def _visit(self, expr):
+    '''Visit a single expression.  It may have already been visited.'''
     if expr in self.visited:
       return
     elif expr in self.active:
       raise errors.InternalError("Cycle detected in normalized expression.")
     else:
       self.active.add(expr)
+      inputs = []
+      self.expr_to_inputs[expr] = inputs
       try:
-        self._visit_all_kids(expr)
+        for kid in self._yield_kids(expr):
+          inputs.append(kid)
+          self._visit(kid)
       finally:
         self.active.remove(expr)
         self.result.append(expr)
         self.visited.add(expr)
 
-  def _visit_all_kids(self, expr):
+  def _yield_kids(self, expr):
+    '''
+    yield all "kids" of ``expr``
+    A "kid" in any other expression ``k`` such that the value of ``expr`` depends directly on ``k``
+    '''
     if expr.__class__ == expression.Applied:
-      self.expr_to_inputs[expr] = [expr.arg]
-      self._visit(expr.arg)
+      yield expr.arg
     elif expr.__class__ == expression.Product:
-      self.expr_to_inputs[expr] = []
       for key, kid in expr.items:
-        self.expr_to_inputs[expr].append(kid)
-        self._visit(kid)
+        yield kid
     elif expr.__class__ == expression.Input:
-      self.expr_to_inputs[expr] = []
+      return
+    elif expr.__class__ == expression.Project:
+      yield expr.base
     else:
       raise errors.InternalError(f"Unrecognized type of normalized expression {expr.__class__}.")

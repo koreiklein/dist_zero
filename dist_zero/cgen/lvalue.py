@@ -3,6 +3,11 @@ from . import expression
 
 
 class Lvalue(object):
+  '''
+  Abstract base class for C lvalues.
+  lvalues are the C syntax for "things that can be assigned to"
+  '''
+
   def add_includes(self, program):
     raise RuntimeError(f"Abstract superclass {self.__class__}")
 
@@ -97,7 +102,7 @@ class Sub(Accessor):
 
 class _Deref(Accessor):
   def access_variable(self, var):
-    return f"*({var})"
+    return f"(*({var}))"
 
 
 Deref = _Deref()

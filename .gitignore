@@ -1,5 +1,6 @@
 __pycache__
 example.c
+msg.capnp
 _build
 *.pyc
 .pytest_cache
@@ -9,3 +10,4 @@ _build
 .rsync.output.log
 network.pdf
 cextensions/*.so
+notes.txt

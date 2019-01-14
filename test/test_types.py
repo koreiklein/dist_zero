@@ -4,7 +4,8 @@ import tempfile
 
 import pytest
 
-from dist_zero import types, type_compiler, cgen
+from dist_zero import types, cgen
+from dist_zero.reactive.compiler import ReactiveCompiler
 
 TwoByThree = types.Product([
     ('left', types.Two),
@@ -28,18 +29,12 @@ X = types.Product([
     X,
 ])
 def test_type_to_capnp_and_c(t):
-  f = type_compiler.CapnpTypeCompiler()
+  compiler = ReactiveCompiler(name='test_type_to_capnp_and_c')
 
-  f.ensure_root_type(t)
+  compiler.get_concrete_type(t)
 
-  dirname = os.path.join('.tmp', 'capnp')
-  os.makedirs(dirname, exist_ok=True)
-  f.capnp.build_in(dirname=dirname, filename='example.capnp')
-
-  cf = type_compiler.CTypeCompiler(cgen.Program(name="test_program"))
-  cf.ensure_root_type(t)
-
-  cf.cprogram.build_and_import()
+  compiler._build_capnp()
+  compiler.program.build_and_import()
 
 
 def test_type_cardinalities():

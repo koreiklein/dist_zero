@@ -2,6 +2,8 @@ from . import expression
 
 
 class CType(object):
+  '''Represents a type in C.'''
+
   def add_includes(self, program):
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
@@ -15,19 +17,28 @@ class CType(object):
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
   def Sizeof(self):
+    '''C sizeof applied to self.'''
     return expression.Sizeof(self)
 
   def Star(self):
+    '''Pointer type over self.'''
     return Star(self)
 
   def Array(self, n=None):
+    '''
+    Array type over self.
+    :param n int: If provided, this will be a sized array type in C.
+    '''
     return Array(self, n=n)
 
   def KVec(self):
+    '''Kvec type over self.  For dynamically resized arrays of a given type.'''
     return KVec(self)
 
 
 class Function(CType):
+  '''Represents a function in C.'''
+
   def __init__(self, retType, argTypes):
     self.retType = retType
     self.argTypes = argTypes

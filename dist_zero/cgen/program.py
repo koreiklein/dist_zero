@@ -6,10 +6,19 @@ import subprocess
 import tempfile
 
 from . import expression, statement, type, lvalue, struct
-from .common import INDENT, INDENT_TWO, escape_c
+from .common import INDENT, INDENT_TWO, escape_c_string
 
 
 class Program(object):
+  '''
+  A C program, to be compiled as a python extension.
+
+  This class is meant to be used by code that needs to generates python extensions dynamically.
+  Users of this class can create a `Program` instance, add new C functions and types to it, and eventually
+  call `Program.build_and_import` to compile the generated C code into a python extension and load it into
+  the active python interpreter.
+  '''
+
   def __init__(self,
                name,
                docstring='',
@@ -54,14 +63,19 @@ class Program(object):
     return f"cextensions.{self.name}.{self.name}"
 
   def build_and_import(self):
+    '''
+    Build the C extension as is, and import it into the python interpreter.
+
+    :return: The newly compiled python module.
+    '''
     full_name = self.build_so("./cextensions")
     return importlib.import_module(self._package_name(), self.name)
 
   def build_so(self, dirname):
     '''
-        Build this program and write the resulting so file to dirname.
-        Return the fully qualified path to the so.
-        '''
+    Build this program and write the resulting so file to dirname.
+    Return the fully qualified path to the ``.so`` file.
+    '''
     tempdir = tempfile.mkdtemp()
 
     # Generate the c file
@@ -144,14 +158,20 @@ class Program(object):
     return contents[0]
 
   def AddDeclaration(self, lvalue):
+    '''Add a C global declaration.'''
     self._declarations.append(statement.Declaration(lvalue))
 
   def AddException(self, name):
+    '''Add a new python exception to the python extension.'''
     exc = PythonException(name)
     self._exceptions.append(exc)
     return exc.var
 
   def AddExternalFunction(self, name, args, docstring=''):
+    '''
+    Add and export a function in the python extension.
+    The function will be available on the python module once it's compiled.
+    '''
     fself = expression.Var('self', type.PyObject.Star())
     fargs = expression.Var('args', type.PyObject.Star())
     f = self.AddFunction(name, type.PyObject.Star(), [fself, fargs], export=True, docstring=docstring)
@@ -162,11 +182,13 @@ class Program(object):
     return f
 
   def AddPythonType(self, name, docstring=''):
+    '''Add a new type to the python extension.'''
     result = PythonType(program=self, name=name, docstring=docstring)
     self._python_types.append(result)
     return result
 
   def AddFunction(self, name, retType, args, docstring='', export=False):
+    '''Add a new C function.'''
     if name in self._function_names:
       raise RuntimeError(f"A function with the name {name} has already been added to this c program.")
     self._function_names.add(name)
@@ -177,16 +199,19 @@ class Program(object):
     return result
 
   def AddEnum(self, name):
+    '''Add a new C enum type.'''
     result = struct.Enum(name)
     self._enums.append(result)
     return result
 
   def AddUnion(self, name):
+    '''Add a new C union type.'''
     result = struct.Union(name)
     self._unions.append(result)
     return result
 
   def AddStruct(self, name):
+    '''Add a new C struct type.'''
     result = struct.Structure(name)
     self._structures.append(result)
     return result
@@ -195,6 +220,7 @@ class Program(object):
     return ''.join(self.to_c_string())
 
   def to_c_string(self):
+    '''yield the lines of the C extension source file.'''
     for x in itertools.chain(self._structures, self._unions):
       x.add_includes(self)
 
@@ -222,11 +248,11 @@ class Program(object):
       yield '\n'
 
     yield '\n'
-    yield from self.add_exception_declarations()
+    yield from self._add_exception_declarations()
     yield '\n'
 
     yield '\n'
-    yield from self.add_declarations()
+    yield from self._add_declarations()
     yield '\n'
 
     for func in self._functions:
@@ -237,22 +263,22 @@ class Program(object):
       yield from python_type.lower_part_to_c_string_definition()
       yield '\n'
 
-    yield from self.add_python_c_extension_boilerplate()
+    yield from self._add_python_c_extension_boilerplate()
 
-  def add_python_c_extension_boilerplate(self):
-    yield from self.add_c_extension_exported_methods()
-    yield from self.add_py_module_def()
-    yield from self.add_py_module_init()
+  def _add_python_c_extension_boilerplate(self):
+    yield from self._add_c_extension_exported_methods()
+    yield from self._add_py_module_def()
+    yield from self._add_py_module_init()
 
-  def add_exception_declarations(self):
+  def _add_exception_declarations(self):
     for exc in self._exceptions:
       yield f"static PyObject *{exc.name};\n"
 
-  def add_declarations(self):
+  def _add_declarations(self):
     for dcl in self._declarations:
       yield from dcl.to_c_string('')
 
-  def add_py_module_init(self):
+  def _add_py_module_init(self):
     yield "PyMODINIT_FUNC\n"
     yield f"PyInit_{self.name}(void) {{\n"
 
@@ -260,7 +286,7 @@ class Program(object):
     for python_type in self._python_types:
       yield f"{INDENT}if (PyType_Ready(&{python_type._type_definition_name()}) < 0) return NULL;\n"
 
-    yield f"\n{INDENT}module = PyModule_Create(&{self.module_name()});\n"
+    yield f"\n{INDENT}module = PyModule_Create(&{self._module_name()});\n"
     yield f"{INDENT}if (module == NULL) return NULL;\n\n"
 
     for python_type in self._python_types:
@@ -277,30 +303,32 @@ class Program(object):
 
     yield "}\n\n"
 
-  def add_py_module_def(self):
-    yield f"static struct PyModuleDef {self.module_name()} = {{\n"
+  def _add_py_module_def(self):
+    yield f"static struct PyModuleDef {self._module_name()} = {{\n"
     yield f"{INDENT}PyModuleDef_HEAD_INIT,\n"
     yield f'{INDENT}"{self.name}",\n'
-    yield f'{INDENT}"{escape_c(self.docstring)}",\n'
+    yield f'{INDENT}{escape_c_string(self.docstring)},\n'
     yield f"{INDENT}-1,\n"
-    yield f"{INDENT}{self.method_array_name()}\n"
+    yield f"{INDENT}{self._method_array_name()}\n"
     yield "};\n\n"
 
-  def method_array_name(self):
+  def _method_array_name(self):
     return f"{self.name}_Methods"
 
-  def module_name(self):
+  def _module_name(self):
     return f"{self.name}_Module"
 
-  def add_c_extension_exported_methods(self):
-    yield f"static struct PyMethodDef {self.method_array_name()}[] = {{\n"
+  def _add_c_extension_exported_methods(self):
+    yield f"static struct PyMethodDef {self._method_array_name()}[] = {{\n"
     for func in self._exported_functions:
-      yield f'{INDENT}{{"{func.name}", {func.name}, METH_VARARGS, "{escape_c(func.docstring)}"}},\n'
+      yield f'{INDENT}{{"{func.name}", {func.name}, METH_VARARGS, {escape_c_string(func.docstring)}}},\n'
     yield f"{INDENT}{{NULL, NULL, 0, NULL}},\n"
     yield "};\n\n"
 
 
 class PythonException(object):
+  '''Represents a python exception class to be added by a python extension.'''
+
   def __init__(self, base_name):
     self.base_name = base_name
 
@@ -309,6 +337,8 @@ class PythonException(object):
 
 
 class Function(expression.Expression):
+  '''Represents a C function.'''
+
   def __init__(self, program, name, retType, args, export=False, docstring=''):
     self.program = program
     self.name = name
@@ -376,6 +406,9 @@ class Function(expression.Expression):
   def AddAssignment(self, *args, **kwargs):
     return self._block.AddAssignment(*args, **kwargs)
 
+  def logf(self, *args, **kwargs):
+    return self._block.logf(*args, **kwargs)
+
   def header_string(self):
     args = ", ".join([arg.type.wrap_variable(arg.name) for arg in self.args])
     static = 'static ' if self.export else ''
@@ -388,6 +421,8 @@ class Function(expression.Expression):
 
 
 class PythonType(object):
+  '''Represents a new python type added by a C extension.'''
+
   def __init__(self, program, name, docstring):
     self.program = program
     self.name = name
@@ -398,9 +433,7 @@ class PythonType(object):
     self.methods = []
 
     self._init = None
-
-  def _init_function_name(self):
-    return f"{self.name}_init"
+    self._finalize = None
 
   def _self_arg(self):
     return expression.Var("self", self.struct.Star())
@@ -419,7 +452,7 @@ class PythonType(object):
     yield "\n"
     yield f"static PyMethodDef {self._static_method_array_name()}[] = {{\n"
     for method in self.methods:
-      yield f'{INDENT}{{"{method.name}", (PyCFunction) {method.name}, METH_VARARGS, "{escape_c(method.docstring)}"}},\n'
+      yield f'{INDENT}{{"{method.name}", (PyCFunction) {method.name}, METH_VARARGS, {escape_c_string(method.docstring)}}},\n'
     yield f"{INDENT}{{NULL}}\n"
     yield "};\n"
 
@@ -437,7 +470,9 @@ class PythonType(object):
     yield f"{INDENT}.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,\n"
     yield f"{INDENT}.tp_new = PyType_GenericNew,\n"
     if self._init:
-      yield f"{INDENT}.tp_init = (initproc) {self._init_function_name()},\n"
+      yield f"{INDENT}.tp_init = (initproc) {self._init.name},\n"
+    if self._finalize:
+      yield f"{INDENT}.tp_finalize = (destructor) {self._finalize.name},\n"
     yield f"{INDENT}.tp_methods = {self._static_method_array_name()},\n"
 
     yield "};\n"
@@ -446,9 +481,11 @@ class PythonType(object):
     yield from self.struct.to_c_string_definition()
 
   def lower_part_to_c_string_definition(self):
-    if self._init:
-      yield from self._init.function_to_c_string()
-      yield "\n"
+    for f in [self._init, self._finalize]:
+      if f:
+        yield from f.function_to_c_string()
+        yield "\n"
+
     yield from self._emit_methods_and_static_method_array()
     yield "\n"
     yield from self._emit_type_definition()
@@ -465,10 +502,17 @@ class PythonType(object):
     return result
 
   def AddInit(self):
+    if self._init is not None:
+      raise RuntimeError(f"An initializer was already added to {self.name}.")
     arg_kwargs = expression.Var('kwargs', type.PyObject.Star())
     mainArg = self._args_arg()
 
-    result = Function(
-        self.program, self._init_function_name(), type.MachineInt, [self._self_arg(), mainArg, arg_kwargs], export=True)
+    result = Function(self.program, f"{self.name}_init", type.MachineInt, [self._self_arg(), mainArg, arg_kwargs])
     self._init = result
     return result
+
+  def AddFinalize(self):
+    if self._finalize is not None:
+      raise RuntimeError(f"A finalizer was already added to {self.name}.")
+    self._finalize = Function(self.program, f"{self.name}_finalizer", type.Void, [self._self_arg()])
+    return self._finalize

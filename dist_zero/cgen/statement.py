@@ -1,8 +1,12 @@
+from dist_zero import settings
+
 from . import expression
-from .common import INDENT, escape_c
+from .common import INDENT
 
 
 class Block(object):
+  '''A block of C code.'''
+
   def __init__(self, program, root=False):
     self.root = root
     self.program = program
@@ -22,6 +26,10 @@ class Block(object):
         else:
           yield from statement.to_c_string(indent + INDENT)
       yield f"{indent}}}\n"
+
+  def logf(self, fmt, *args):
+    if settings.c_debug:
+      self.AddAssignment(None, expression.printf(expression.StrConstant(fmt), *args))
 
   def Newline(self):
     self._statements.append('\n')

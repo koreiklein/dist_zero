@@ -19,7 +19,7 @@ def computation_node_config(node_id,
   :param bool left_is_data: True iff the node just to the left is a data node.
   :param bool right_is_data: True iff the node just to the right is a data node.
   :param list[str] configure_right_parent_ids: The ids of the nodes that will send 'configure_right_parent' to this
-    insertion node.
+      insertion node.
   :param parent: The :ref:`handle` of this node's parent.
   :type parent: :ref:`handle`
   :param int height: The height of the new computation node in its tree.
@@ -27,12 +27,12 @@ def computation_node_config(node_id,
   :param list[str] left_ids: A list of the ids of nodes for which the computation node should expect a left configuration.
   :param bool is_mid_node: True iff this node is functioning as the mid node in an hourglass operation.
   :param list[str] receiver_ids: A list of ids of the nodes that should receive from self, or `None` if that list should
-    be determined based on the right_configurations received by the node as it starts up.
-  param object leaf_config: Configuration information for how this `ComputationNode` should run its leaves.
+      be determined based on the right_configurations received by the node as it starts up.
+  :param object leaf_config: Configuration information for how this `ComputationNode` should run its leaves.
   :param migrator: The migrator config for the new node if it is being started as part of a migration.
   :param object connector_type: One of the connector_type messages, defining which type of connector to use.
   :param object connector: Serializable json object representing the `Connector` instance of the newly spawned
-    `ComputationNode`.
+      `ComputationNode`.
   '''
   return {
       'type': 'ComputationNode',

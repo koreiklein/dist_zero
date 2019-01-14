@@ -17,7 +17,6 @@ def leaf_config(request):
       node_id=ids.new_id('LeafNode_test'),
       parent=node_handle,
       variant='input',
-      initial_state=0,
       height=-1,
       leaf_config=messages.io.sum_leaf_config(0),
   )
