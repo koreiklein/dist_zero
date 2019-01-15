@@ -13,30 +13,10 @@ Welcome to DistZero's documentation!
 
    doc/language
    doc/compilers/index
+   doc/runtime/index
 
-   doc/handle
-   doc/transport
-
-   doc/ids
-
-   doc/machine_runner
-   doc/machine
-
-   doc/system_controller
-   doc/spawners
-
-   doc/messages
-   doc/nodes
-   doc/migrations
+   doc/testing
    doc/errors
-   doc/recorded
-
-   doc/load_balancer
-
-   doc/migrations
-
-   doc/demo
-
    doc/settings
 
 Indices and tables

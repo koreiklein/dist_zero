@@ -1,4 +1,4 @@
-Programmatically generating C extensions to Python
+Compiling a python extension
 ==================================================
 
 .. automodule:: dist_zero.cgen.program

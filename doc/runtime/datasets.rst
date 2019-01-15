@@ -1,44 +1,7 @@
-Nodes
-==================
+.. _dataset:
 
-
-The Node abstraction
----------------------
-
-Nodes are the fundamental unit of computation in dist_zero.
-They function much like processes do in traditional computing.
-Each `MachineController` instance manages a machine, and a set of `Node` instances
-that run on that machine.
-
-.. automodule:: dist_zero.node.node
-   :members:
-
-Classes for managing the network of nodes that perform computations
------------------------------------------------------------------------
-
-.. automodule:: dist_zero.node.computation.standard
-   :members:
-
-Classes for resending and acknowledging messages
---------------------------------------------------
-
-The linker/exporter/importer classes are designed to cover all the logic regarding message acknowledgement and
-retransmission.  Nodes can ensure messages are retransmitted and acknowledged appropriately by receiving all
-their messages with importers, sending all their messages with exporters, and updating their internal sequence
-number from time to time.  The linker connects importers with exporters, and will ensure that acknowledgements
-are sent on any importer for any message M once all the messages exporter because of M have been acknowledged.
-
-.. automodule:: dist_zero.linker
-   :members:
-
-.. automodule:: dist_zero.importer
-   :members:
-
-.. automodule:: dist_zero.exporter
-   :members:
-
-IO trees
------------------
+Datasets
+==========
 
 User input and output are modeled by trees of nodes, each of which is in instance of `DataNode`.
 The nodes with height >= 0 are for managing child nodes, and the nodes of height -1 do the "actual work",
@@ -80,17 +43,4 @@ dropped.
 
 .. automodule:: dist_zero.node.io.adopter
    :members:
-
-Node classes for linking datasets
---------------------------------------------
-
-.. automodule:: dist_zero.connector.connector
-  :members:
-
-.. automodule:: dist_zero.connector.all_to_all
-  :members:
-
-.. automodule:: dist_zero.connector.all_to_one_available
-  :members:
-
 

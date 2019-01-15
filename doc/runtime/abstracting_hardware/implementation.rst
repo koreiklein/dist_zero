@@ -1,5 +1,8 @@
-Machine
-====================================
+Implementations of the Distributed Hardware Interface
+======================================================
+
+Node Manager
+--------------
 
 `Node` instances interact with the underlying hardware via the `MachineController` interface.
 That interface has a unique implementation as a `NodeManager` that provides additional
@@ -10,6 +13,12 @@ In simulated mode, the `SimulatedSpawner` class runs every `NodeManager` instanc
 In virtual and cloud modes, the unique `MachineRunner` runloop on each container or cloud instance
 runs a single `NodeManager`.
 
-.. automodule:: dist_zero.machine
+.. autoclass:: dist_zero.machine.NodeManager
    :members:
 
+
+Machine Runner
+----------------
+
+.. automodule:: dist_zero.machine_runner
+   :members:
