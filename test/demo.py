@@ -61,7 +61,7 @@ def cloud_demo(request):
 
 class Demo(object):
   '''
-  For running Demos of a full distributed system.
+  For running a Demo of a full distributed system.
 
   Demos may run in simulated, virtual, or cloud mode.
   '''

@@ -12,13 +12,10 @@ from dist_zero import machine, settings, errors, messages, spawners, transport
 class SystemController(object):
   '''
   Class to manage the entire distributed system for tests.
+  It can be used to send messages to various nodes in the system, spawn links and spawn datasets.
+  It was originially intended for use in tests.
 
-  Because this class is for testing, it has special behavior in each of the three modes.
-  In simulated mode, each instance of this class will contain the entire distributed system inside its `SimulatedSpawner`.
-  In virtual mode, each instance will be running on the host, and have access to a docker daemon for managing
-  the containers.
-  In cloud mode, each instance of this class will have network access to the cloud instance, and be able
-  have access to cloud credentials.
+  This class must be initialized with a `Spawner` instance that determine the mode in which to run.
   '''
 
   # NOTE(KK): This class is entirely for tests at the moment.
@@ -103,11 +100,11 @@ class SystemController(object):
     :return: A node_config for creating the new kid node.
     :rtype: :ref:`message`
     '''
-    return self.send_api_message(data_node_id,
-                                 messages.machine.create_kid_config(
-                                     new_node_name=new_node_name,
-                                     machine_id=machine_id,
-                                 ))
+    return self.send_api_message(
+        data_node_id, messages.machine.create_kid_config(
+            new_node_name=new_node_name,
+            machine_id=machine_id,
+        ))
 
   def create_descendant(self, data_node_id, new_node_name, machine_id, recorded_user=None):
     '''
