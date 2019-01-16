@@ -85,6 +85,134 @@ class ReactiveCompiler(object):
     self._built_capnp = False
     self._pycapnp_module = None
 
+  def compile(self, output_key_to_norm_expr):
+    '''
+    Compile normalized expressions into a reactive program.
+
+      ``mod = reactive_compiler.compile(output_key_to_norm_expr)``
+
+    The input program is provided as a dictionary that maps output keys to `dist_zero.expression.Expression` instances.
+    Any expression used in constructing one of these "output" expressions is considered part of the program.
+    Any such `dist_zero.expression.Input` expression is treated as an input to the reactive program.
+    In general, much structure will be shared between distinct output expressions.
+
+    The return value of ``compile`` will be a python module that exports a new type ``Net`` which
+    can be used in the following ways:
+
+
+    Passing in and receiving states:
+
+      Each call to ``net = mod.Net()`` creates a separate instance of the
+      reactive program described by ``output_key_to_norm_expr``.
+      Once the reactive program ``net`` has been created, you can
+
+        - Register an output with ``net.OnOutput_{output_key}()``.  This method may be called exactly once for each output key
+          in ``output_key_to_norm_expr``
+        - For each input expression ``I`` that was provided to `ReactiveCompiler.compile`, you can register the input key
+          for ``I`` by calling ``net.OnInput_{I.name}(bytes)`` where ``bytes`` is a python bytes object containing
+          a capnpproto serialized message for ``I``.  You can use `ReactiveCompiler.capnp_state_builder_for_type` to obtain
+          a builder for such a python bytes object.
+
+      Each of the above methods of ``Net`` will return a python dictionary mapping output keys to byte-like objects.
+      For each mapping ``output_key`` -> ``bytes``, ``bytes`` will be a serialized capnproto message for that
+      output key.  You can use ``compiler.capnp_state_builder_for_type(output_key_to_norm_expr[output_key].type)``
+      to get a builder that will parse ``bytes``.
+
+      Each output key will only ever produce at most one output state, and that state will be returned
+      as soon as the output has received all the inputs it needs to calculate it.
+      The calculated state will be exactly the one determined by its associated
+      `dist_zero.expression.Expression`.
+
+    Passing in and receiving transitions:
+
+      ``net.OnTransitions(input_transitions)`` takes as input an ``input_transitions`` dictionary that maps
+      certain registered input keys to lists of bytes objects representing capnproto transitions
+      (use `ReactiveCompiler.capnp_transitions_builder_for_type` to obtain a builder that can generate the proper bytes).
+      This method will return a dictionary mapping output keys to bytes-like objects with the
+      appropriate output capnproto transitions.
+
+      Output transitions will be returned whenever an update to an input expression leads to an update to an output
+      expression.  The calculated transitions will be exactly those determined by the associated `dist_zero.expression.Expression`
+
+    See :file:`test/test_reactives.py` for some examples of how to use reactives.
+
+    :param output_key_to_norm_expr: A map from strings to normalized expressions.
+    :type output_key_to_norm_expr: dict[str, dist_zero.expression.Expression]
+
+    :return: The compiled c extension module, loaded into the current interpret as a python module.
+    '''
+    self._output_key_to_norm_expr = output_key_to_norm_expr
+    topsorter = _Topsorter(list(output_key_to_norm_expr.values()))
+    self._top_exprs = topsorter.topsort()
+    self.expr_to_inputs = topsorter.expr_to_inputs
+    self.expr_to_outputs = topsorter.expr_to_outputs
+    self.expr_index = {}
+    for i, expr in enumerate(self._top_exprs):
+      self.expr_index[expr] = i
+
+    self._concrete_types = [self.get_concrete_type(expr.type) for expr in self._top_exprs]
+
+    self._net = self.program.AddPythonType(name='Net', docstring=f"For running the {self.name} reactive network.")
+
+    # Add capnproto types for outputs
+    self._output_exprs = defaultdict(list)
+    for key, expr in self._output_key_to_norm_expr.items():
+      self._output_exprs[expr].append(key)
+      self.get_concrete_type(expr.type).initialize_capnp(self)
+
+    # Add capnproto types for inputs
+    self._input_exprs = []
+    for expr in self._top_exprs:
+      if expr.__class__ == expression.Input:
+        self._input_exprs.append(expr)
+        self.get_concrete_type(expr.type).initialize_capnp(self)
+
+    self._build_capnp()
+
+    self._generate_graph_struct()
+    self._generate_graph_initializer()
+    self._generate_graph_finalizer()
+    self._generate_python_bytes_from_capnp()
+    self._generate_shall_maintain_state()
+
+    for i in range(0, len(self._top_exprs)):
+      self._generate_initialize_state(i)
+
+    for i in range(0, len(self._top_exprs)):
+      self._generate_subscribe(i)
+
+    for key, expr in self._output_key_to_norm_expr.items():
+      self._generate_write_output_state(key, expr)
+      self._generate_write_output_transitions(key, expr)
+
+    for i in range(len(self._top_exprs) - 1, -1, -1):
+      self._generate_produce(i)
+
+    for expr in self._input_exprs:
+      self._generate_on_input(expr)
+      self._generate_deserialize_transitions(expr)
+
+    for key, expr in self._output_key_to_norm_expr.items():
+      self._generate_on_output(key, expr)
+
+    for expr in self._top_exprs:
+      self._generate_react_to_transitions(expr)
+
+    self._generate_on_transitions()
+
+    if settings.c_debug:
+      with open('msg.capnp', 'w') as f:
+        for line in self.capnp.lines():
+          f.write(line)
+
+      with open('example.c', 'w') as f:
+        for line in self.program.to_c_string():
+          f.write(line)
+
+    module = self.program.build_and_import()
+
+    return module
+
   def _capnp_filename(self):
     return f"{self.name}.capnp"
 
@@ -885,134 +1013,6 @@ class ReactiveCompiler(object):
     listLoop.AddAssignment(None, cgen.capn_free(vCapn.Address()))
 
     listLoop.Newline().AddAssignment(cgen.UpdateVar(vI), vI + cgen.One)
-
-  def compile(self, output_key_to_norm_expr):
-    '''
-    Compile normalized expressions into a reactive program.
-
-      ``mod = reactive_compiler.compile(output_key_to_norm_expr)``
-
-
-    The input program is provided as a dictionary that maps output keys to `dist_zero.expression.Expression` instances.
-    Any expression used in constructing one of these "output" expressions is considered part of the program.
-    Any `dist_zero.expression.Input` expression is treated as an input to the reactive program.
-    In general, much structure will be shared between distinct output expressions.
-
-    The return value of ``compile`` will be a python module that exports a new type ``Net`` which
-    can be used in the following ways:
-
-
-    Passing in and receiving states:
-
-      By calling ``net = mod.Net()``, you can create a separate instance of the reactive program described by ``output_key_to_norm_expr``
-      Once the reactive program ``net`` has been created, you can
-
-        - Register an output with ``net.OnOutput_{output_key}()``.  This method may be called exactly once for each output key
-          in ``output_key_to_norm_expr``
-        - For each input expression ``I`` that was provided to `ReactiveCompiler.compile`, you can register the input key
-          for ``I`` by calling ``net.OnInput_{I.name}(bytes)`` where ``bytes`` is a python bytes object containing
-          a capnpproto serialized message for ``I``.  You can use `ReactiveCompiler.capnp_state_builder_for_type` to obtain
-          a builder for such a python bytes object.
-
-      Each of the above methods of ``Net`` will return a python dictionary mapping output keys to byte-like objects.
-      For each mapping ``output_key`` -> ``bytes``, ``bytes`` will be a serialized capnproto message for that
-      output key.  You can use ``compiler.capnp_state_builder_for_type(output_key_to_norm_expr[output_key].type)``
-      to get a builder that will parse ``bytes``.
-
-      Each output key will only ever produce at most one output state, and that state will be returned
-      as soon as the output has received all the inputs it needs to calculate it.
-      The calculated state will be exactly the one determined by its associated
-      `dist_zero.expression.Expression`.
-
-    Passing in and receiving transitions:
-
-      ``net.OnTransitions(input_transitions)`` takes as input an ``input_transitions`` dictionary that maps
-      certain registered input keys to lists of bytes objects representing capnproto transitions
-      (use `ReactiveCompiler.capnp_transitions_builder_for_type` to obtain a builder that can generate the proper bytes).
-      This method will return a dictionary mapping output keys to bytes-like objects with the
-      appropriate output capnproto transitions.
-
-      Output transitions will be returned whenever an update to an input expression leads to an update to an output
-      expression.  The calculated transitions will be xactly those determined by the associated `dist_zero.expression.Expression`
-
-    See :file:`test/test_reactives.py` for some examples of how to use reactives.
-
-    :param output_key_to_norm_expr: A map from strings to normalized expressions.
-    :type output_key_to_norm_expr: dict[str, dist_zero.expression.Expression]
-
-    :return: The compiled c extension module, loaded into the current interpret as a python module.
-    '''
-    self._output_key_to_norm_expr = output_key_to_norm_expr
-    topsorter = _Topsorter(list(output_key_to_norm_expr.values()))
-    self._top_exprs = topsorter.topsort()
-    self.expr_to_inputs = topsorter.expr_to_inputs
-    self.expr_to_outputs = topsorter.expr_to_outputs
-    self.expr_index = {}
-    for i, expr in enumerate(self._top_exprs):
-      self.expr_index[expr] = i
-
-    self._concrete_types = [self.get_concrete_type(expr.type) for expr in self._top_exprs]
-
-    self._net = self.program.AddPythonType(name='Net', docstring=f"For running the {self.name} reactive network.")
-
-    # Add capnproto types for outputs
-    self._output_exprs = defaultdict(list)
-    for key, expr in self._output_key_to_norm_expr.items():
-      self._output_exprs[expr].append(key)
-      self.get_concrete_type(expr.type).initialize_capnp(self)
-
-    # Add capnproto types for inputs
-    self._input_exprs = []
-    for expr in self._top_exprs:
-      if expr.__class__ == expression.Input:
-        self._input_exprs.append(expr)
-        self.get_concrete_type(expr.type).initialize_capnp(self)
-
-    self._build_capnp()
-
-    self._generate_graph_struct()
-    self._generate_graph_initializer()
-    self._generate_graph_finalizer()
-    self._generate_python_bytes_from_capnp()
-    self._generate_shall_maintain_state()
-
-    for i in range(0, len(self._top_exprs)):
-      self._generate_initialize_state(i)
-
-    for i in range(0, len(self._top_exprs)):
-      self._generate_subscribe(i)
-
-    for key, expr in self._output_key_to_norm_expr.items():
-      self._generate_write_output_state(key, expr)
-      self._generate_write_output_transitions(key, expr)
-
-    for i in range(len(self._top_exprs) - 1, -1, -1):
-      self._generate_produce(i)
-
-    for expr in self._input_exprs:
-      self._generate_on_input(expr)
-      self._generate_deserialize_transitions(expr)
-
-    for key, expr in self._output_key_to_norm_expr.items():
-      self._generate_on_output(key, expr)
-
-    for expr in self._top_exprs:
-      self._generate_react_to_transitions(expr)
-
-    self._generate_on_transitions()
-
-    if settings.c_debug:
-      with open('msg.capnp', 'w') as f:
-        for line in self.capnp.lines():
-          f.write(line)
-
-      with open('example.c', 'w') as f:
-        for line in self.program.to_c_string():
-          f.write(line)
-
-    module = self.program.build_and_import()
-
-    return module
 
 
 class _Topsorter(object):

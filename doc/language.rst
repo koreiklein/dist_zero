@@ -2,7 +2,8 @@ Language for Distributed Programs
 ===================================
 
 DistZero's embedded language for defining distributed programs.
-These language constructs ultimately form the frontend for how users will interact with DistZero.
+Ultimately, end users will produce a program defined by `dist_zero.expression.Expression` instances,
+and DistZero will compile and run it.
 
 .. automodule:: dist_zero.expression
    :members:

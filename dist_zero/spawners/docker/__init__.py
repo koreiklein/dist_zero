@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 class DockerSpawner(spawner.Spawner):
   '''
-  A class for simulating new hardware by spinning up docker containers on a host and
-  running a 'production' `MachineRunner` on each.
+  A class for simulating new hardware by spinning up docker containers on a host
+  and starting a long-running `dist_zero.machine_init` process on it.
   '''
 
   DOCKERFILE = 'dist_zero/spawners/docker/Dockerfile'
@@ -219,7 +219,7 @@ class DockerSpawner(spawner.Spawner):
     return os.path.join(self._all_containers_msg_dir, machine_controller_id)
 
   async def create_machines(self, machine_configs):
-    return [ await self.create_machine(machine_config) for machine_config in machine_configs]
+    return [await self.create_machine(machine_config) for machine_config in machine_configs]
 
   def _new_port(self):
     self._current_port += 1

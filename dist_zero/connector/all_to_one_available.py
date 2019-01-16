@@ -64,6 +64,11 @@ def weighted_rr(kids, parents, weights):
 
 
 class AllToOneAvailableConnector(Connector):
+  '''
+  `Connector` subclass for maintaining a network of kids that connects each node to the left
+  with any node to the right with available capacity.
+  '''
+
   def __init__(self, height, left_configurations, left_is_data, right_configurations, right_is_data, max_outputs,
                max_inputs):
     self._height = height
@@ -88,7 +93,7 @@ class AllToOneAvailableConnector(Connector):
       if self.max_left_height() >= self.max_right_height():
         adjacents = []
         for left_id in self._layers[-1]:
-          adjacent_id = ids.new_id("ComputationNode_to_one_available_left_adjacent")
+          adjacent_id = ids.new_id("LinkNode_to_one_available_left_adjacent")
           adjacents.append(adjacent_id)
           self._graph.add_node(left_id)
           self._graph.add_node(adjacent_id)
@@ -96,7 +101,7 @@ class AllToOneAvailableConnector(Connector):
         self._layers.append(adjacents)
         return adjacents
       else:
-        gap_node_id = ids.new_id("ComputationNode_to_one_available_left_gap_child")
+        gap_node_id = ids.new_id("LinkNode_to_one_available_left_gap_child")
         self._layers.append([gap_node_id])
         self._graph.add_node(gap_node_id)
         return [gap_node_id]
@@ -114,7 +119,7 @@ class AllToOneAvailableConnector(Connector):
           adjacents = []
           for i in range(right_config['n_kids']):
             per_kid = availability // right_config['n_kids']
-            adjacent_id = ids.new_id(f"ComputationNode_to_one_available_right_adjacent_{i}")
+            adjacent_id = ids.new_id(f"LinkNode_to_one_available_right_adjacent_{i}")
             adjacents.append(adjacent_id)
             self._right_to_parent_ids[adjacent_id] = [parent_id]
             self._graph.add_node(adjacent_id)
@@ -125,7 +130,7 @@ class AllToOneAvailableConnector(Connector):
           result.extend(adjacents)
         return result, weights
       else:
-        gap_node_id = ids.new_id("ComputationNode_to_one_available_right_gap_child")
+        gap_node_id = ids.new_id("LinkNode_to_one_available_right_gap_child")
         self._graph.add_node(gap_node_id)
         if len(self._right_configurations) != 1:
           raise errors.InternalError("There must be a unique right gap parent when spawning a gap child.")

@@ -67,39 +67,39 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
   demo.system.spawn_node(
       on_machine=machine_a,
       node_config=messages.io.data_node_config(
-          root_input_node_id, parent=None, height=1, state_updater='sum', variant='input'))
+          root_input_node_id, parent=None, height=1, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
 
   root_output_node_id = dist_zero.ids.new_id('DataNode_output')
   demo.system.spawn_node(
       on_machine=machine_c,
       node_config=messages.io.data_node_config(
-          root_output_node_id, parent=None, height=1, variant='output', state_updater='sum', initial_state=0))
+          root_output_node_id, parent=None, height=1, variant='output', leaf_config=messages.io.sum_leaf_config(0)))
 
   await demo.run_for(ms=200)
 
-  # Set up the sum computation with a migration:
-  root_computation_node_id = demo.connect_trees_with_sum_network(root_input_node_id, root_output_node_id, machine_b)
+  # Set up the sum link with a migration:
+  root_link_node_id = demo.connect_trees_with_sum_network(root_input_node_id, root_output_node_id, machine_b)
 
   await demo.run_for(ms=2000)
 
-  assert root_computation_node_id == demo.system.get_adjacent(root_input_node_id)
-  assert root_computation_node_id == demo.system.get_adjacent(root_output_node_id)
-  input_kids, output_kids, computation_kids = [
-      demo.system.get_kids(nid) for nid in [root_input_node_id, root_output_node_id, root_computation_node_id]
+  assert root_link_node_id == demo.system.get_adjacent(root_input_node_id)
+  assert root_link_node_id == demo.system.get_adjacent(root_output_node_id)
+  input_kids, output_kids, link_kids = [
+      demo.system.get_kids(nid) for nid in [root_input_node_id, root_output_node_id, root_link_node_id]
   ]
   assert 1 == len(input_kids)
   assert 1 == len(output_kids)
-  assert 2 == len(computation_kids)
+  assert 2 == len(link_kids)
 
   input_kid, output_kid = input_kids[0], output_kids[0]
-  computation_kid_a, computation_kid_b = computation_kids
-  if input_kid not in demo.system.get_senders(computation_kid_a):
-    computation_kid_a, computation_kid_b = (computation_kid_b, computation_kid_a)
+  link_kid_a, link_kid_b = link_kids
+  if input_kid not in demo.system.get_senders(link_kid_a):
+    link_kid_a, link_kid_b = (link_kid_b, link_kid_a)
 
-  assert input_kid in demo.system.get_senders(computation_kid_a)
-  assert computation_kid_a in demo.system.get_senders(computation_kid_b)
-  assert computation_kid_b == demo.system.get_adjacent(output_kid)
-  comp_a_kids, comp_b_kids = [demo.system.get_kids(nid) for nid in [computation_kid_a, computation_kid_b]]
+  assert input_kid in demo.system.get_senders(link_kid_a)
+  assert link_kid_a in demo.system.get_senders(link_kid_b)
+  assert link_kid_b == demo.system.get_adjacent(output_kid)
+  comp_a_kids, comp_b_kids = [demo.system.get_kids(nid) for nid in [link_kid_a, link_kid_b]]
   assert 1 == len(comp_a_kids)
   assert 1 == len(comp_b_kids)
   sum_kid_a, sum_kid_b = comp_a_kids[0], comp_b_kids[0]
@@ -153,7 +153,7 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
         for kid in kids:
           _explore(kid)
 
-    _explore(root_computation_node_id)
+    _explore(root_link_node_id)
     assert any(demo.system.get_stats(sum_kid)['n_duplicates'] > 0 for sum_kid in all_sum_kids)
 
   # Check that the output nodes receive the correct sum

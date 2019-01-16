@@ -10,7 +10,7 @@ from random import Random
 from dist_zero import errors, messages, dns, settings
 
 from .node import io
-from .node.computation import ComputationNode
+from .node.link import LinkNode
 from .migration.migration_node import MigrationNode
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,9 @@ class MachineController(object):
     '''
     Asynchronously trigger the creation of a new node on a linked machine.
 
-    :param json node_config: A JSON serializable message that describes how to run the node.
+    :param node_config: A JSON serializable message that describes how to run the node.
+      These configs are usually generated via a function like `data_node_config` or `link_node_config`
+    :type node_config: `message`
     :param on_machine: The handle of a :any:`MachineController`.
     :type on_machine: :ref:`handle`
     :return: The id of the newly created node.
@@ -185,15 +187,7 @@ class MachineController(object):
 
 class NodeManager(MachineController):
   '''
-  The only implementation of `MachineController`.  A `NodeManager` instance exposes two interfaces.
-
-  The first interface is the `MachineController` interface to the `Node` instances it manages.
-
-  The second interface is to whatever is running the `NodeManager` .  In virtual and cloud modes,
-  the `NodeManager` is probably managed by a `MachineRunner` runloop for the process responding to the passage of time
-  and to events on a socket.  In simulated mode, the `NodeManager` is managed by a `SimulatedSpawner`
-  instance.  Either way, whatever manages the `NodeManager` must elapse time,
-  and deliver ordinary messages and api messages.
+  The unique implementation of `MachineController`
   '''
 
   MIN_POSTPONE_TIME_MS = 10
@@ -359,8 +353,8 @@ class NodeManager(MachineController):
       return io.AdopterNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'MigrationNode':
       return MigrationNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'ComputationNode':
-      return ComputationNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'LinkNode':
+      return LinkNode.from_config(node_config, controller=self)
     else:
       raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 

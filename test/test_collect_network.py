@@ -44,7 +44,7 @@ def test_weighted_rr(n_kids, weights, tolerance):
     assert abs(weight_fraction - assigned_fraction) < tolerance
 
 
-class TestSpawnCollectComputationNetwork(Utils):
+class TestSpawnCollectLinkNetwork(Utils):
   async def _create_collect_network(self, n_inputs, n_outputs):
     self.root_input = await self.root_io_tree(
         machine=self.machine_ids[0], variant='input', leaf_config=messages.io.sum_leaf_config(0))
@@ -64,7 +64,7 @@ class TestSpawnCollectComputationNetwork(Utils):
     # Need to wait for the new users to be fully connected.
     await self.demo.run_for(ms=3000)
 
-    self.root_computation = self.demo.connect_trees_with_collect_network(
+    self.root_link = self.demo.connect_trees_with_collect_network(
         self.root_input, self.root_output, machine=self.machine_ids[0])
 
     await self.demo.run_for(ms=8000)

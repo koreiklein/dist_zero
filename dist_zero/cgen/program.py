@@ -64,7 +64,7 @@ class Program(object):
 
   def build_and_import(self):
     '''
-    Build the C extension as is, and import it into the python interpreter.
+    Build the C extension, and import it into the python interpreter.
 
     :return: The newly compiled python module.
     '''
@@ -73,7 +73,7 @@ class Program(object):
 
   def build_so(self, dirname):
     '''
-    Build this program and write the resulting so file to dirname.
+    Build this program and write the resulting ``.so`` file to dirname.
     Return the fully qualified path to the ``.so`` file.
     '''
     tempdir = tempfile.mkdtemp()

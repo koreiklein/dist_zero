@@ -169,33 +169,36 @@ class SpawnerTransaction(object):
   def spawned_a_kid(self, node):
     self._node.kids[node['id']] = node
     if node['id'] == self._left_gap_child_id:
-      self._node.send(node,
-                      messages.migration.configure_new_flow_left(self._node.migration_id, [
-                          messages.migration.left_configuration(
-                              height=left_config['height'],
-                              is_data=left_config['is_data'],
-                              node=self._node.transfer_handle(left_config['node'], node['id']),
-                              kids=[{
-                                  'handle': self._node.transfer_handle(kid['handle'], node['id']),
-                                  'connection_limit': kid['connection_limit']
-                              } for kid in left_config['kids']],
-                          ) for left_config in self._connector._left_configurations.values()
-                      ]))
+      self._node.send(
+          node,
+          messages.migration.configure_new_flow_left(self._node.migration_id, [
+              messages.migration.left_configuration(
+                  height=left_config['height'],
+                  is_data=left_config['is_data'],
+                  node=self._node.transfer_handle(left_config['node'], node['id']),
+                  kids=[{
+                      'handle': self._node.transfer_handle(kid['handle'], node['id']),
+                      'connection_limit': kid['connection_limit']
+                  } for kid in left_config['kids']],
+              ) for left_config in self._connector._left_configurations.values()
+          ]))
     elif node['id'] == self._right_gap_child_id:
-      self._node.send(node,
-                      messages.migration.configure_right_parent(
-                          self._node.migration_id, kid_ids=list(self._connector._right_configurations.keys())))
-      self._node.send(node,
-                      messages.migration.configure_new_flow_right(self._node.migration_id, [
-                          messages.migration.right_configuration(
-                              parent_handle=self._node.transfer_handle(right_config['parent_handle'], node['id']),
-                              availability=right_config['availability'],
-                              height=right_config['height'],
-                              is_data=right_config['is_data'],
-                              n_kids=right_config['n_kids'],
-                              connection_limit=right_config['connection_limit'],
-                          ) for right_config in self._connector._right_configurations.values()
-                      ]))
+      self._node.send(
+          node,
+          messages.migration.configure_right_parent(
+              self._node.migration_id, kid_ids=list(self._connector._right_configurations.keys())))
+      self._node.send(
+          node,
+          messages.migration.configure_new_flow_right(self._node.migration_id, [
+              messages.migration.right_configuration(
+                  parent_handle=self._node.transfer_handle(right_config['parent_handle'], node['id']),
+                  availability=right_config['availability'],
+                  height=right_config['height'],
+                  is_data=right_config['is_data'],
+                  n_kids=right_config['n_kids'],
+                  connection_limit=right_config['connection_limit'],
+              ) for right_config in self._connector._right_configurations.values()
+          ]))
     self._maybe_spawned_kids()
 
   def _send_configure_right_parent(self, layer_index):

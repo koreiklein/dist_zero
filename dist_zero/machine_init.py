@@ -1,3 +1,7 @@
+'''
+DistZero startup script for running a single `MachineController` in the current process.
+This script is generally invoked with ``python -m dist_zero.machine_init``
+'''
 import json
 import logging
 import sys
@@ -10,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 def run_new_machine_runner_from_args():
   '''
-  Read arguments from `sys.argv` and enter the runloop of a new `MachineController` instance for the current host.
+  Root runction to start run a single `MachineController` in the current process.
+  It will make a single call to `MachineRunner.runloop` using arguments from `sys.argv`
   '''
   config_filename = sys.argv[1]
   with open(config_filename, 'r') as f:

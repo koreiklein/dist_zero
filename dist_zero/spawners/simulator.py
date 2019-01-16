@@ -120,7 +120,8 @@ class SimulatedSpawner(spawner.Spawner):
         receiving_controller = self._controller_by_id[to_receive['machine_id']]
         receiving_controller.handle_message(message=to_receive['message'])
 
-      # FIXME(KK): Surely there must be a better way to run the events that were scheduled by the above few lines.
+      # FIXME(KK): Surely there must be a better way to run the events that may have been
+      # scheduled by the above few lines.
       await asyncio.sleep(0.001)
 
       self._elapsed_time_ms = received_at

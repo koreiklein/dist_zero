@@ -32,9 +32,9 @@ Linker messages
 .. automodule:: dist_zero.messages.linker
    :members:
 
-Computation node messages
+Link node messages
 ---------------------------
-.. automodule:: dist_zero.messages.computation
+.. automodule:: dist_zero.messages.link
    :members:
 
 Messages relating to migrations

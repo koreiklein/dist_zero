@@ -3,7 +3,7 @@ from dist_zero import errors, ids, messages, connector
 
 class BumpHeightTransaction(object):
   '''
-  For spawning proxy children of a `ComputationNode` when the adjacent nodes bump their height.
+  For spawning proxy children of a `LinkNode` when the adjacent nodes bump their height.
   '''
 
   def __init__(self, node, proxy, kid_ids, variant):
@@ -49,19 +49,21 @@ class BumpHeightTransaction(object):
 
   def _finished_bumping(self):
     # Pass on the right_configurations of self (as in dist_zero.connector.Spawner when the right gap child is spawned)
-    self._node.send(self._proxy,
-                    messages.migration.configure_right_parent(
-                        migration_id=None, kid_ids=list(self._node._connector._right_configurations.keys())))
-    self._node.send(self._proxy,
-                    messages.migration.configure_new_flow_right(None, [
-                        messages.migration.right_configuration(
-                            parent_handle=self._node.transfer_handle(right_config['parent_handle'], self._proxy['id']),
-                            height=right_config['height'],
-                            is_data=right_config['is_data'],
-                            n_kids=right_config['n_kids'],
-                            connection_limit=right_config['connection_limit'],
-                        ) for right_config in self._node._connector._right_configurations.values()
-                    ]))
+    self._node.send(
+        self._proxy,
+        messages.migration.configure_right_parent(
+            migration_id=None, kid_ids=list(self._node._connector._right_configurations.keys())))
+    self._node.send(
+        self._proxy,
+        messages.migration.configure_new_flow_right(None, [
+            messages.migration.right_configuration(
+                parent_handle=self._node.transfer_handle(right_config['parent_handle'], self._proxy['id']),
+                height=right_config['height'],
+                is_data=right_config['is_data'],
+                n_kids=right_config['n_kids'],
+                connection_limit=right_config['connection_limit'],
+            ) for right_config in self._node._connector._right_configurations.values()
+        ]))
 
     left_root, = self._node._importers.keys()
     left_configuration = self._node._connector._left_configurations[left_root]
@@ -75,7 +77,7 @@ class BumpHeightTransaction(object):
         self._node._connector_type,
         left_configurations={left_root: left_configuration},
         right_configurations=self._node._connector._right_configurations,
-        computation_node=self._node)
+        link_node=self._node)
     self._node._connector.fill_in(new_node_ids=[self._proxy_adjacent_id, self._proxy_id])
     self._node.height = self._node._connector.max_height()
     self._node.kids = {self._proxy_id: self._proxy, self._proxy_adjacent_id: self._proxy_adjacent}
@@ -110,7 +112,7 @@ class BumpHeightTransaction(object):
                 self._node.transfer_handle(kid, self._proxy_id) for kid in self._node.kids.values()
                 if kid['id'] != self._proxy_adjacent['id']
             ],
-            data_node_config=messages.computation.computation_node_config(
+            data_node_config=messages.link.link_node_config(
                 node_id=self._proxy_id,
                 parent=self._node.new_handle(self._proxy_id),
                 height=self._node.height,
@@ -128,16 +130,15 @@ class BumpHeightTransaction(object):
   def start(self):
     '''Called in response to an adjacent node informing self that it has bumped its height.'''
     self._old_kids = self._node.kids
-    self._proxy_adjacent_id = ids.new_id('ComputationNode_{}_proxy_adjacent'.format(self._proxy_adjacent_variant))
-    self._proxy_id = ids.new_id('ComputationNode_proxy')
+    self._proxy_adjacent_id = ids.new_id('LinkNode_{}_proxy_adjacent'.format(self._proxy_adjacent_variant))
+    self._proxy_id = ids.new_id('LinkNode_proxy')
     if self._proxy_adjacent_variant == 'input':
       left_root, = self._node._importers.keys()
       senders = [self._node.transfer_handle(self._external_proxy, self._proxy_adjacent_id)]
       receivers = [] # The receiver will be added later
       configure_right_parent_ids = [self._node.id]
       adoptee_ids = [
-          computation_kid_id for io_kid in self._kid_ids
-          for computation_kid_id in self._node._connector.graph.node_receivers(io_kid)
+          link_kid_id for io_kid in self._kid_ids for link_kid_id in self._node._connector.graph.node_receivers(io_kid)
       ]
       left_ids = [self._external_proxy['id']]
     elif self._proxy_adjacent_variant == 'output':
@@ -146,8 +147,7 @@ class BumpHeightTransaction(object):
       senders = [] # The sender will be added later
       receivers = [self._node.transfer_handle(self._external_proxy, self._proxy_adjacent_id)]
       adoptee_ids = [
-          computation_kid_id for io_kid in self._kid_ids
-          for computation_kid_id in self._node._connector.graph.node_senders(io_kid)
+          link_kid_id for io_kid in self._kid_ids for link_kid_id in self._node._connector.graph.node_senders(io_kid)
       ]
     else:
       raise errors.InternalError("Unrecognized variant {}".format(self._proxy_adjacent_variant))
@@ -157,7 +157,7 @@ class BumpHeightTransaction(object):
                 self._node.transfer_handle(self._node.kids[adoptee_id], self._proxy_adjacent_id)
                 for adoptee_id in adoptee_ids
             ],
-            data_node_config=messages.computation.computation_node_config(
+            data_node_config=messages.link.link_node_config(
                 node_id=self._proxy_adjacent_id,
                 parent=self._node.new_handle(self._proxy_adjacent_id),
                 left_is_data=self._proxy_adjacent_variant == 'input',

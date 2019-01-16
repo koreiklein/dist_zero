@@ -131,11 +131,12 @@ class IncrementalSpawnerTransaction(object):
     receiver_handles = [_lookup_tgt(receiver_id) for receiver_id in receivers]
     mid_node_handle = self._mid_node_by_id[mid_node_id]
     for receiver_handle in receiver_handles:
-      self._node.send(receiver_handle,
-                      messages.hourglass.hourglass_receive_from_mid_node(
-                          mid_node=self._node.transfer_handle(mid_node_handle, receiver_handle['id']),
-                          n_hourglass_senders=len(senders),
-                      ))
+      self._node.send(
+          receiver_handle,
+          messages.hourglass.hourglass_receive_from_mid_node(
+              mid_node=self._node.transfer_handle(mid_node_handle, receiver_handle['id']),
+              n_hourglass_senders=len(senders),
+          ))
 
   def _maybe_finished_hourglasses(self):
     if all(val == 'done' for val in self._hourglass_results.values()):

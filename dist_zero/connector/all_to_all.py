@@ -6,6 +6,10 @@ from .connector import Connector
 
 
 class AllToAllConnector(Connector):
+  '''
+  `Connector` subclass for connecting all nodes to the left to all nodes to right.
+  '''
+
   def __init__(self, height, left_configurations, left_is_data, right_configurations, right_is_data, max_outputs,
                max_inputs):
     self._height = height
@@ -22,7 +26,7 @@ class AllToAllConnector(Connector):
     self._max_outputs = max_outputs
     self._max_inputs = max_inputs
 
-    self._name_prefix = 'ComputationNode' if self._height > 0 else 'SumNode'
+    self._name_prefix = 'LinkNode' if self._height > 0 else 'SumNode'
 
     # If left is not data, the left nodes are identically the picker left nodes,
     # and this variable must be `None`.

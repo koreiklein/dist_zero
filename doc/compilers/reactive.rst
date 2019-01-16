@@ -12,6 +12,8 @@ Reactive programming in DistZero proceeds as follows:
   - Over time, the user submits various transitions on the input expressions of ``E`` to ``net``,
     and ``net`` computes the appropriate transitions on the output expressions of ``E``
 
+See `ReactiveCompiler.compile` for a detailed description of exactly how to produce and interact
+with these ``net`` objects.
 
 .. automodule:: dist_zero.reactive.compiler
    :members:

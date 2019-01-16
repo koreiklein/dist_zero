@@ -61,7 +61,7 @@ def cloud_demo(request):
 
 class Demo(object):
   '''
-  For running Demos of a full distributed system.
+  For running a Demo of a full distributed system.
 
   Demos may run in simulated, virtual, or cloud mode.
   '''
@@ -184,13 +184,13 @@ class Demo(object):
     return controllers[0]
 
   def connect_trees_with_collect_network(self, root_input_id, root_output_id, machine):
-    return self._connect_trees_with_computation_network(
-        node_id=dist_zero.ids.new_id('MigrationNode_add_collect_computation'),
+    return self._connect_trees_with_link_network(
+        node_id=dist_zero.ids.new_id('MigrationNode_add_collect_link'),
         root_input_id=root_input_id,
         root_output_id=root_output_id,
         machine=machine,
-        leaf_config=messages.computation.forward_to_any_leaf(),
-        connector_type=messages.computation.all_to_one_available_connector_type())
+        leaf_config=messages.link.forward_to_any_leaf(),
+        connector_type=messages.link.all_to_one_available_connector_type())
 
   def connect_trees_with_sum_network(self, root_input_id, root_output_id, machine):
     '''
@@ -199,20 +199,20 @@ class Demo(object):
     :param str root_input_id: The id of the root of a data tree.
     :param str root_output_id: The id of the root of a data tree.
 
-    :return: The id of the root computation node for the newly spawned network.
+    :return: The id of the root link node for the newly spawned network.
     :rtype: str
     '''
-    return self._connect_trees_with_computation_network(
-        node_id=dist_zero.ids.new_id('MigrationNode_add_sum_computation'),
+    return self._connect_trees_with_link_network(
+        node_id=dist_zero.ids.new_id('MigrationNode_add_sum_link'),
         root_input_id=root_input_id,
         root_output_id=root_output_id,
         machine=machine,
-        leaf_config=messages.computation.sum_leaf(),
-        connector_type=messages.computation.all_to_all_connector_type())
+        leaf_config=messages.link.sum_leaf(),
+        connector_type=messages.link.all_to_all_connector_type())
 
-  def _connect_trees_with_computation_network(self, node_id, root_input_id, root_output_id, machine, leaf_config,
-                                              connector_type):
-    root_computation_node_id = dist_zero.ids.new_id('ComputationNode_root')
+  def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, leaf_config,
+                                       connector_type):
+    root_link_node_id = dist_zero.ids.new_id('LinkNode_root')
     input_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_id)
     output_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_output_id)
 
@@ -223,15 +223,15 @@ class Demo(object):
             source_nodes=[(input_handle_for_migration, messages.migration.source_migrator_config(will_sync=False, ))],
             sink_nodes=[(output_handle_for_migration,
                          messages.migration.sink_migrator_config(
-                             new_flow_senders=[root_computation_node_id],
+                             new_flow_senders=[root_link_node_id],
                              old_flow_sender_ids=[],
                              will_sync=False,
                          ))],
             removal_nodes=[],
             sync_pairs=[],
             insertion_node_configs=[
-                messages.computation.computation_node_config(
-                    node_id=root_computation_node_id,
+                messages.link.link_node_config(
+                    node_id=root_link_node_id,
                     height=1,
                     parent=None,
                     left_is_data=True,
@@ -245,7 +245,7 @@ class Demo(object):
                     connector_type=connector_type,
                 )
             ]))
-    return root_computation_node_id
+    return root_link_node_id
 
   def all_io_kids(self, data_node_id):
     if self.system.get_stats(data_node_id)['height'] == 0:
