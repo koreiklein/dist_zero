@@ -6,6 +6,10 @@ from .connector import Connector
 
 
 class AllToAllConnector(Connector):
+  '''
+  `Connector` subclass for connecting all nodes to the left to all nodes to right.
+  '''
+
   def __init__(self, height, left_configurations, left_is_data, right_configurations, right_is_data, max_outputs,
                max_inputs):
     self._height = height

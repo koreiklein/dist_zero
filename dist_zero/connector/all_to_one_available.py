@@ -64,6 +64,11 @@ def weighted_rr(kids, parents, weights):
 
 
 class AllToOneAvailableConnector(Connector):
+  '''
+  `Connector` subclass for maintaining a network of kids that connects each node to the left
+  with any node to the right with available capacity.
+  '''
+
   def __init__(self, height, left_configurations, left_is_data, right_configurations, right_is_data, max_outputs,
                max_inputs):
     self._height = height
