@@ -10,7 +10,7 @@ from random import Random
 from dist_zero import errors, messages, dns, settings
 
 from .node import io
-from .node.computation import ComputationNode
+from .node.link import LinkNode
 from .migration.migration_node import MigrationNode
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class MachineController(object):
     Asynchronously trigger the creation of a new node on a linked machine.
 
     :param node_config: A JSON serializable message that describes how to run the node.
-      These configs are usually generated via a function like `data_node_config` or `computation_node_config`
+      These configs are usually generated via a function like `data_node_config` or `link_node_config`
     :type node_config: `message`
     :param on_machine: The handle of a :any:`MachineController`.
     :type on_machine: :ref:`handle`
@@ -353,8 +353,8 @@ class NodeManager(MachineController):
       return io.AdopterNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'MigrationNode':
       return MigrationNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'ComputationNode':
-      return ComputationNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'LinkNode':
+      return LinkNode.from_config(node_config, controller=self)
     else:
       raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 

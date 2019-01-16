@@ -119,19 +119,6 @@ def collect_leaf_config():
   return {'type': 'collect_leaf_config'}
 
 
-def added_sibling_kid(kid, height, variant):
-  '''
-  Indicates to a sibling node in a computation that a pending kid has successfully been added to the network,
-  and is now ready to receive messages.
-
-  :param kid: The :ref:`handle` of the node that was just added.
-  :type kid: :ref:`handle`
-  :param int height: The height of the parent.
-  :param str variant: 'input' or 'output'
-  '''
-  return {'type': 'added_sibling_kid', 'kid': kid, 'variant': variant, 'height': height}
-
-
 def hello_parent(kid):
   '''
   Sent by a newly spawned kid node to its parent to indicate that it is now live.

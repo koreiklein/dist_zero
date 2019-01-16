@@ -418,7 +418,7 @@ def right_configuration(parent_handle, is_data, height, n_kids, connection_limit
 
   :param parent_handle: The :ref:`handle` of the sender. A sibling node to the right of the node receiving the message.
   :param int height: The height of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
-  :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
+  :param bool is_data: True iff the sending node is a data node.  False iff a link node.
   :param n_kids: If the right node is a data node with a set number of kids, n_kids will give that number.
     Otherwise, n_kids will be `None`
   :type n_kids: int or None
@@ -517,7 +517,7 @@ def update_left_configuration(parent_id, new_kids, new_height):
 def left_configuration(height, is_data, node, kids, state=None):
   '''
   :param int height: The height of the sending node in its tree.  0 for a leaf node, 1 for a parent of a leaf, > 1 for other.
-  :param bool is_data: True iff the sending node is a data node.  False iff a computation node.
+  :param bool is_data: True iff the sending node is a data node.  False iff a link node.
   :param node: The :ref:`handle` of the sending node.
   :type node: :ref:`handle`
   :param list kids: A list of dictionaries each with the following keys:

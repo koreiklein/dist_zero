@@ -36,14 +36,15 @@ class StartHourglassTransaction(object):
         self._node._importers.pop(sender_id)
 
       self._node.import_from_node(self._mid_node)
-      self._node.send(self._mid_node,
-                      messages.migration.configure_new_flow_right(None, [
-                          messages.migration.right_configuration(
-                              n_kids=None,
-                              parent_handle=self._node.new_handle(self._mid_node_id),
-                              height=self._node.height,
-                              is_data=False,
-                              connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
-                          )
-                      ]))
+      self._node.send(
+          self._mid_node,
+          messages.migration.configure_new_flow_right(None, [
+              messages.migration.right_configuration(
+                  n_kids=None,
+                  parent_handle=self._node.new_handle(self._mid_node_id),
+                  height=self._node.height,
+                  is_data=False,
+                  connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
+              )
+          ]))
       self._node.end_transaction()

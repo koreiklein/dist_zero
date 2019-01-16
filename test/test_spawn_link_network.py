@@ -9,7 +9,7 @@ from dist_zero import messages
 from .common import Utils
 
 
-class TestSpawnSumComputationNetwork(Utils):
+class TestSpawnSumLinkNetwork(Utils):
   async def _connect_and_test_io_trees(self, n_input_leaves, n_output_leaves):
     root_input = await self.root_io_tree(
         machine=self.machine_ids[0], variant='input', leaf_config=messages.io.sum_leaf_config(0))
@@ -31,8 +31,7 @@ class TestSpawnSumComputationNetwork(Utils):
     # Need to wait for the new users to be fully connected.
     await self.demo.run_for(ms=1000)
 
-    self.root_computation = self.demo.connect_trees_with_sum_network(
-        root_input, root_output, machine=self.machine_ids[0])
+    self.root_link = self.demo.connect_trees_with_sum_network(root_input, root_output, machine=self.machine_ids[0])
 
     await self.demo.run_for(ms=8000)
 
@@ -148,7 +147,7 @@ class TestSpawnSumComputationNetwork(Utils):
     await self.spawn_users(self.root_output, n_users=new_outputs)
     await demo.run_for(ms=1000)
 
-    demo.render_network(self.root_computation)
+    demo.render_network(self.root_link)
 
     await self.spawn_users(
         self.root_input,

@@ -22,7 +22,7 @@ class AllToAllConnector(Connector):
     self._max_outputs = max_outputs
     self._max_inputs = max_inputs
 
-    self._name_prefix = 'ComputationNode' if self._height > 0 else 'SumNode'
+    self._name_prefix = 'LinkNode' if self._height > 0 else 'SumNode'
 
     # If left is not data, the left nodes are identically the picker left nodes,
     # and this variable must be `None`.

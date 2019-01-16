@@ -1,13 +1,13 @@
 '''
-Classes to perform work done only on leaf computation nodes.
+Classes to perform work done only on leaf link nodes.
 '''
 
 from dist_zero import errors, messages
 
 
-class ComputationLeaf(object):
+class LinkLeaf(object):
   '''
-  Abstract base class for all the ways to perform work at a leaf node in a computation network.
+  Abstract base class for all the ways to perform work at a leaf node in a link.
   '''
 
   def process_increment(self, state, delta_messages):
@@ -17,7 +17,7 @@ class ComputationLeaf(object):
     raise RuntimeError("Abstract Superclass")
 
 
-class SumComputationLeaf(ComputationLeaf):
+class SumLinkLeaf(LinkLeaf):
   def __init__(self, node):
     self._node = node
 
@@ -54,7 +54,7 @@ class SumComputationLeaf(ComputationLeaf):
         )
 
 
-class ForwardToAnyComputationLeaf(ComputationLeaf):
+class ForwardToAnyLinkLeaf(LinkLeaf):
   def __init__(self, node):
     self._node = node
 
@@ -67,9 +67,9 @@ class ForwardToAnyComputationLeaf(ComputationLeaf):
 
 
 def from_config(leaf_config, node):
-  if leaf_config['type'] == 'sum_computation_leaf':
-    return SumComputationLeaf(node)
-  elif leaf_config['type'] == 'forward_to_any_computation_leaf':
-    return ForwardToAnyComputationLeaf(node)
+  if leaf_config['type'] == 'sum_link_leaf':
+    return SumLinkLeaf(node)
+  elif leaf_config['type'] == 'forward_to_any_link_leaf':
+    return ForwardToAnyLinkLeaf(node)
   else:
-    raise errors.InternalError(f"Unrecognized computation leaf type '{leaf_config['type']}'")
+    raise errors.InternalError(f"Unrecognized link leaf type '{leaf_config['type']}'")

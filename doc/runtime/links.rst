@@ -3,7 +3,7 @@
 Links
 ========
 
-.. automodule:: dist_zero.node.computation.standard
+.. automodule:: dist_zero.node.link.standard
    :members:
 
 
