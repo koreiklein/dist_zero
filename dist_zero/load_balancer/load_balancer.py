@@ -7,7 +7,14 @@ from dist_zero import errors, settings
 
 class LoadBalancer(object):
   '''
-  Load balancer class.
+  A class for managing a load balancer.  The current implementation manages the single
+  `haproxy <http://cbonte.github.io/haproxy-dconv/1.9/intro.html>`_ process on the parent operating system.
+
+  Each `MachineController` instance ``M`` provides its `nodes <Node>` access to a single `LoadBalancer` instance
+  which they can use to set up `LoadBalancerFrontends <LoadBalancerFrontend>` for routing internet traffic
+  to the operating system on which ``M`` runs.
+
+  Given the current architecture, there is no meaningful way to use the `LoadBalancer` class in simulated mode.
   '''
 
   def __init__(self):
@@ -27,6 +34,14 @@ class LoadBalancer(object):
     self._started = True
 
   def new_frontend(self, server_address, height):
+    '''
+    Return a new `LoadBalancerFrontend` that will bind the given ``server_address``.
+
+    :param object server_address: The address that the new `LoadBalancerFrontend` should bind.
+      See `messages.machine.server_address`.
+    :param int height: A kind of priority for frontends.  For a given ``server_address``, only the frontend
+      with greatest height will receive all incomming messages.
+    '''
     return LoadBalancerFrontend(server_address=server_address, height=height, load_balancer=self)
 
   def _install_frontend(self, frontend):
@@ -193,7 +208,7 @@ class LoadBalancerFrontend(object):
   def __setitem__(self, address, weight):
     '''
     Set or update the weight of a backend server_address.
-    sync() must be called for the changes to take effect.
+    `sync() <LoadBalancerFrontend.sync>` must be called for the changes to take effect.
     '''
     self._changed = True
     self._backends_by_ip[address['ip']] = (address, weight)

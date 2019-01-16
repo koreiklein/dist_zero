@@ -1,13 +1,13 @@
 '''
-
-There are 3 modes that determine how `MachineController` instances are created and how they operate:
+DistZero can operate in 3 distinct modes, each with its own `Spawner` class that implements the interface
+to distirbuted hardware in its own way.
 '''
 
-#: For running machines in a simulation in the parent process.
+#: `SimulatedSpawner`: For running machines in a simulation in the parent process.
 MODE_SIMULATED = 'simulated'
-#: For running machines as virtual machines on the parent's host.
+#: `DockerSpawner`: For running machines as virtual machines on the parent's host.
 MODE_VIRTUAL = 'virtual'
-#: For running machines by provisioning instances in the cloud.
+#: `Ec2Spawner`: For running machines by provisioning instances in the cloud.
 MODE_CLOUD = 'cloud'
 
 #: The list of all modes

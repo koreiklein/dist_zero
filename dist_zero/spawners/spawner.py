@@ -1,7 +1,7 @@
 class Spawner(object):
   '''
-  Abstract base class for classes that can spawn and communicate with Machines.
-  Each subclass should define a way to create and track machines, and to communicate
+  Abstract base class for classes that can spawn and communicate between `MachineController` instances.
+  Each subclass should define a way to create and track `MachineController` instances, and to communicate
   with them once they have started running.
   '''
 
@@ -55,3 +55,12 @@ class Spawner(object):
     :param str ip_address: The ip address
     '''
     raise RuntimeError("class {} does not implement map_domain_to_ip".format(self.__class__.__name__))
+
+  def sleep_ms(self, ms):
+    '''
+    Return an awaitable that sleeps for some number of milliseconds.
+
+    Note that the awaitable is different from that returned by asyncio.sleep in that when DistZero is in simulated
+    mode, time is entirely simulated, and the awaitable may resolve in much less than ms milliseconds.
+    '''
+    raise RuntimeError("Abstract Superclass")

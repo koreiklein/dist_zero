@@ -51,7 +51,9 @@ class MachineController(object):
     '''
     Asynchronously trigger the creation of a new node on a linked machine.
 
-    :param json node_config: A JSON serializable message that describes how to run the node.
+    :param node_config: A JSON serializable message that describes how to run the node.
+      These configs are usually generated via a function like `data_node_config` or `computation_node_config`
+    :type node_config: `message`
     :param on_machine: The handle of a :any:`MachineController`.
     :type on_machine: :ref:`handle`
     :return: The id of the newly created node.
@@ -185,15 +187,7 @@ class MachineController(object):
 
 class NodeManager(MachineController):
   '''
-  The only implementation of `MachineController`.  A `NodeManager` instance exposes two interfaces.
-
-  The first interface is the `MachineController` interface to the `Node` instances it manages.
-
-  The second interface is to whatever is running the `NodeManager` .  In virtual and cloud modes,
-  the `NodeManager` is probably managed by a `MachineRunner` runloop for the process responding to the passage of time
-  and to events on a socket.  In simulated mode, the `NodeManager` is managed by a `SimulatedSpawner`
-  instance.  Either way, whatever manages the `NodeManager` must elapse time,
-  and deliver ordinary messages and api messages.
+  The unique implementation of `MachineController`
   '''
 
   MIN_POSTPONE_TIME_MS = 10

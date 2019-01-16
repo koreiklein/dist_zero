@@ -22,7 +22,7 @@ DNS_TTL = 1500
 class Ec2Spawner(spawner.Spawner):
   '''
   A `Spawner` subclass that creates each new `MachineController` instance by spinning up an aws ec2 instance
-  and starting a long-running `dist_zero.machine_init` process on it.
+  configured with a startup script (see :file:`scripts/dist-zero.service`) to run `dist_zero.machine_init`.
   '''
 
   def __init__(self,
