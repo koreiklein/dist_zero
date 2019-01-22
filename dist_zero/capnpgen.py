@@ -68,10 +68,10 @@ class Structure(object):
 
     self.count = 0
 
-    self.c_new_ptr_function = cgen.Var(f"new_{self.name}", None)
-    self.c_new_list_function = cgen.Var(f"new_{self.name}_list", None)
-    self.c_read_function = cgen.Var(f"read_{self.name}", None)
-    self.c_write_function = cgen.Var(f"write_{self.name}", None)
+    self.c_new_ptr_function = cgen.Var(f"new_{self.name}")
+    self.c_new_list_function = cgen.Var(f"new_{self.name}_list")
+    self.c_read_function = cgen.Var(f"read_{self.name}")
+    self.c_write_function = cgen.Var(f"write_{self.name}")
 
     self.c_ptr_type = cgen.BasicType(f"{self.name}_ptr")
     self.c_list_type = cgen.BasicType(f"{self.name}_list")
@@ -174,12 +174,12 @@ class Field(object):
     self.type = type
     self._base = base
 
-    self.c_set = cgen.Var(f"{self._base.name}_set_{self.name}", None)
+    self.c_set = cgen.Var(f"{self._base.name}_set_{self.name}")
     '''The `cgen.expression.Var` for the C function to set this field.'''
-    self.c_get = cgen.Var(f"{self._base.name}_get_{self.name}", None)
+    self.c_get = cgen.Var(f"{self._base.name}_get_{self.name}")
     '''The `cgen.expression.Var` for the C function to get this field.'''
 
-    self.c_get_structure_from_list = cgen.Var(f"get_{self._base.name}_{self.name}", None)
+    self.c_get_structure_from_list = cgen.Var(f"get_{self._base.name}_{self.name}")
     '''For fields that are of a list type, the `cgen.expression.Var` for the C function to get an item in the list at this field.'''
 
 

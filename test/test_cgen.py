@@ -12,7 +12,7 @@ def test_cgen_python_type():
   init = new_type.AddInit()
   init.AddReturn(cgen.Constant(0))
 
-  x = cgen.Var("x", cgen.Int32)
+  x = cgen.Int32.Var("x")
   pair_f = new_type.AddMethod('f', [x])
   pair_f.AddReturn(cgen.PyLong_FromLong(x + x))
 
@@ -27,15 +27,15 @@ def test_cgen_python_type():
 def test_cgen_basics():
   prog = cgen.Program("test_cgen_basics", docstring='Dummy program for testing')
 
-  x = cgen.Var("x", cgen.Int32)
+  x = cgen.Int32.Var("x")
   f = prog.AddFunction('f', cgen.Int32, [x])
-  y = f.AddDeclaration(cgen.Var("y", cgen.Int32), x + x)
-  z = f.AddDeclaration(cgen.Var("z", cgen.Int32), x + (x + y))
+  y = f.AddDeclaration(cgen.Int32.Var("y"), x + x)
+  z = f.AddDeclaration(cgen.Int32.Var("z"), x + (x + y))
   f.AddReturn(z)
 
-  F_i = cgen.Var("i", cgen.Int32)
+  F_i = cgen.Int32.Var("i")
   F = prog.AddExternalFunction("F", [F_i])
-  F_result = F.AddDeclaration(cgen.Var("result", cgen.Int32), f(F_i))
+  F_result = F.AddDeclaration(cgen.Int32.Var("result"), f(F_i))
   F.AddReturn(cgen.PyLong_FromLong(F_result))
 
   mod = prog.build_and_import()
@@ -45,7 +45,7 @@ def test_cgen_basics():
 @pytest.mark.cgen
 def test_cgen_emptyif():
   prog = cgen.Program('test_emptyif')
-  x = cgen.Var('x', cgen.Int32)
+  x = cgen.Int32.Var('x')
   f = prog.AddExternalFunction("f", [x])
   empty_if = f.AddIf(x == cgen.Constant(1))
   f.AddReturn(cgen.PyLong_FromLong(cgen.Constant(3)))
@@ -71,9 +71,9 @@ def test_cgen_break():
     return y
 
   prog = cgen.Program("test_collatz")
-  x = cgen.Var('x', cgen.Int32)
+  x = cgen.Int32.Var('x')
   f = prog.AddExternalFunction("f", [x])
-  y = f.AddDeclaration(cgen.Var('y', cgen.Int32), cgen.Constant(0))
+  y = f.AddDeclaration(cgen.Int32.Var('y'), cgen.Constant(0))
   whileblock = f.AddWhile(cgen.true)
 
   # It's good to try an if statement with no consequent, but an alternate.
@@ -112,9 +112,9 @@ def test_cgen_while():
 
   # The c version of f
   prog = cgen.Program("while_test_program")
-  x = cgen.Var('x', cgen.Int32)
+  x = cgen.Int32.Var('x')
   f = prog.AddExternalFunction("f", [x])
-  y = f.AddDeclaration(cgen.Var('y', cgen.Int32), cgen.Constant(0))
+  y = f.AddDeclaration(cgen.Int32.Var('y'), cgen.Constant(0))
 
   whileblock = f.AddWhile(x > cgen.Constant(0))
   whileblock.AddAssignment(x, x - cgen.Constant(1))
@@ -147,8 +147,8 @@ def test_cgen_binops():
   ]
 
   for i, op in enumerate(ops):
-    a = cgen.Var("a", cgen.Int32)
-    b = cgen.Var("b", cgen.Int32)
+    a = cgen.Int32.Var("a")
+    b = cgen.Int32.Var("b")
     f = prog.AddExternalFunction(f"F_{i}", [a, b])
     f.AddReturn(cgen.PyLong_FromLong(op(a, b)))
 
@@ -172,7 +172,7 @@ def test_cgen_switch():
       return 211
 
   prog = cgen.Program("switch_test_program")
-  x = cgen.Var('x', cgen.Int32)
+  x = cgen.Int32.Var('x')
   f = prog.AddExternalFunction("f", [x])
   switch = f.AddSwitch(x % cgen.Constant(4))
 

@@ -346,7 +346,7 @@ class Cast(Expression):
 class Var(Expression):
   '''A C variable'''
 
-  def __init__(self, name, type):
+  def __init__(self, name, type=None):
     self.name = name
     self.type = type
 
