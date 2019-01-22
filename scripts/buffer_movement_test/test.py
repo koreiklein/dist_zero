@@ -13,26 +13,23 @@ from dist_zero import cgen
 def test_pass_buffer_c_to_python():
   program = cgen.Program(name='simple_buffer_perf_test')
 
-  globalBuf = cgen.Var('global_buffer', cgen.Char.Star())
-
-  program.AddDeclaration(cgen.CreateVar(globalBuf))
+  globalBuf = program.AddDeclaration(cgen.Char.Star().Var('global_buffer'))
 
   nGlobalBufBytes = 10 * 1000 * 1000
 
   initGlobalBuf = program.AddExternalFunction(name='InitGlobalBuf', args=None)
   initGlobalBuf.AddAssignment(globalBuf, cgen.malloc(cgen.Constant(nGlobalBufBytes)).Cast(cgen.Char.Star()))
 
-  index = cgen.Var('index', cgen.MachineInt)
-  initGlobalBuf.AddAssignment(cgen.CreateVar(index), cgen.Zero)
+  index = initGlobalBuf.AddDeclaration(cgen.MachineInt.Var('index'), cgen.Zero)
   loop = initGlobalBuf.AddWhile(index < cgen.Constant(nGlobalBufBytes))
 
-  loop.AddAssignment(cgen.UpdateVar(globalBuf).Sub(index), cgen.Constant(120))
+  loop.AddAssignment(globalBuf.Sub(index), cgen.Constant(120))
 
-  loop.AddAssignment(cgen.UpdateVar(index), index + cgen.One)
+  loop.AddAssignment(index, index + cgen.One)
 
   initGlobalBuf.AddReturn(cgen.PyBool_FromLong(cgen.Constant(1)))
 
-  vSize = cgen.Var('size', cgen.Int32)
+  vSize = cgen.Int32.Var('size')
   f = program.AddExternalFunction(name='F', args=[vSize])
 
   f.AddReturn(cgen.PyBytes_FromStringAndSize(globalBuf, vSize))
@@ -71,20 +68,17 @@ def test_pass_buffer_c_to_python():
 
 def test_pass_buffer_python_to_c():
   program = cgen.Program(name='simple_buffer_perf_test')
-  vArgs = cgen.Var('args', cgen.PyObject.Star())
+  vArgs = cgen.PyObject.Star().Var('args')
   f = program.AddExternalFunction(name='F', args=None)
 
-  vBuf = cgen.Var('buf', cgen.UInt8.Star())
-  vBuflen = cgen.Var('buflen', cgen.MachineInt)
-
-  f.AddDeclaration(cgen.CreateVar(vBuf))
-  f.AddDeclaration(cgen.CreateVar(vBuflen))
+  vBuf = f.AddDeclaration(cgen.UInt8.Star().Var('buf'))
+  vBuflen = f.AddDeclaration(cgen.MachineInt.Var('buflen'))
 
   whenParseFail = f.AddIf(
       cgen.PyArg_ParseTuple(vArgs, cgen.StrConstant("s#"), vBuf.Address(), vBuflen.Address()).Negate()).consequent
   whenParseFail.AddReturn(cgen.PyLong_FromLong(cgen.Constant(0)))
 
-  resultBuf = cgen.Var('result', cgen.PyObject.Star())
+  resultBuf = cgen.PyObject.Star().Var('result')
   f.AddReturn(cgen.PyLong_FromLong(vBuflen))
 
   mod = program.build_and_import()

@@ -25,8 +25,11 @@ class Lvalue(object):
       raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
     return self.to_component_lvalue().Sub(i)
 
-  def to_component_lvalue(self):
-    return ComponentLvalue(self, [])
+  def toLValue(self):
+    return self
+
+  def to_component_lvalue(self, accessors=None):
+    return ComponentLvalue(self, [] if accessors is None else accessors)
 
 
 class ComponentLvalue(Lvalue):
@@ -43,6 +46,12 @@ class ComponentLvalue(Lvalue):
       result = accessor.access_variable(result)
 
     return result
+
+  def to_component_lvalue(self, accessors=None):
+    if accessors is None:
+      return self
+    else:
+      return ComponentLvalue(base_var=self.base_var, accessors=self.accessors + accessors)
 
   def _extend(self, accessor):
     accessors = list(self.accessors)
@@ -111,6 +120,9 @@ Deref = _Deref()
 class CreateVar(Lvalue):
   def __init__(self, var):
     self.var = var
+    if self.var.__class__ == CreateVar:
+      import ipdb
+      ipdb.set_trace()
 
   def add_includes(self, program):
     self.var.add_includes(program)

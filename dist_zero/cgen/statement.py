@@ -1,7 +1,7 @@
 from dist_zero import settings
 
-from . import expression
-from .common import INDENT
+from . import expression, lvalue, type
+from .common import INDENT, inc_i
 
 
 class Block(object):
@@ -44,6 +44,9 @@ class Block(object):
   def AddReturnVoid(self):
     self._statements.append('return;\n')
 
+  def ForInt(self, vLimit):
+    return expression.LoopVar(block=self, var=expression.Var(f'loop_{inc_i()}', type.MachineInt), limit=vLimit)
+
   def AddSwitch(self, switch_on):
     result = Switch(switch_on, program=self.program)
     self._statements.append(result)
@@ -65,14 +68,21 @@ class Block(object):
     self._statements.append(result)
     return result.block
 
-  def AddDeclaration(self, lvalue):
-    lvalue.add_includes(self.program)
-    self._statements.append(Declaration(lvalue))
-    return self
+  def AddDeclaration(self, var, rvalue=None):
+    '''
+    Declare a new function-local variable.
+    The first argument gives the variable to declare.
+    The second (if provided) is an expression to initialize the new variable.
+    '''
+    var.add_includes(self.program)
+    self._statements.append(Assignment(lvalue.CreateVar(var), rvalue))
+    return var
 
   def AddAssignment(self, lvalue, rvalue):
+    '''Update a c lvalue with a c rvalue'''
     if lvalue is not None:
       lvalue.add_includes(self.program)
+      lvalue = lvalue.toLValue()
     rvalue.add_includes(self.program)
     self._statements.append(Assignment(lvalue, rvalue))
     return self
@@ -179,21 +189,18 @@ class Return(Statement):
     yield f'{indent}return {self.rvalue.to_c_string(root=True)};\n'
 
 
-class Declaration(Statement):
-  def __init__(self, lvalue):
-    self.lvalue = lvalue
-
-  def to_c_string(self, indent):
-    yield f"{indent}{self.lvalue.to_c_string()};\n"
-
-
 class Assignment(Statement):
   def __init__(self, lvalue, rvalue):
     self.lvalue = lvalue
     self.rvalue = rvalue
 
+    if self.lvalue is None and self.rvalue is None:
+      raise errors.InternalError("Assignments should not be made with None as lvalue and rvalue.")
+
   def to_c_string(self, indent):
     if self.lvalue is None:
       yield f"{indent}{self.rvalue.to_c_string(root=True)};\n"
+    elif self.rvalue is None:
+      yield f"{indent}{self.lvalue.to_c_string()};\n"
     else:
       yield f"{indent}{self.lvalue.to_c_string()} = {self.rvalue.to_c_string(root=True)};\n"

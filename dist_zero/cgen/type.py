@@ -16,6 +16,10 @@ class CType(object):
   def to_c_string(self):
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
+  def Var(self, name):
+    '''Create a variable of this type with a given name.'''
+    return expression.Var(name=name, type=self)
+
   def Sizeof(self):
     '''C sizeof applied to self.'''
     return expression.Sizeof(self)
