@@ -5,7 +5,7 @@ from dist_zero import cgen
 
 @pytest.mark.cgen
 def test_cgen_python_type():
-  prog = cgen.Program("type_test_program", docstring='Dummy program exporting a new type')
+  prog = cgen.Program("test_python_type_program", docstring='Dummy program exporting a new type')
 
   new_type = prog.AddPythonType('MyNewType', docstring='For testing adding types via a c extension.')
 
@@ -25,20 +25,20 @@ def test_cgen_python_type():
 
 @pytest.mark.cgen
 def test_cgen_basics():
-  prog = cgen.Program("test_program", docstring='Dummy program for testing')
+  prog = cgen.Program("test_cgen_basics", docstring='Dummy program for testing')
 
   x = cgen.Var("x", cgen.Int32)
   f = prog.AddFunction('f', cgen.Int32, [x])
   y = cgen.Var("y", cgen.Int32)
   z = cgen.Var("z", cgen.Int32)
-  f.AddAssignment(cgen.CreateVar(y), x + x)
-  f.AddAssignment(cgen.CreateVar(z), x + (x + y))
+  f.AddDeclaration(y, x + x)
+  f.AddDeclaration(z, x + (x + y))
   f.AddReturn(z)
 
   F_i = cgen.Var("i", cgen.Int32)
   F = prog.AddExternalFunction("F", [F_i])
   F_result = cgen.Var("result", cgen.Int32)
-  F.AddAssignment(cgen.CreateVar(F_result), f(F_i))
+  F.AddDeclaration(F_result, f(F_i))
   F.AddReturn(cgen.PyLong_FromLong(F_result))
 
   mod = prog.build_and_import()
@@ -77,7 +77,7 @@ def test_cgen_break():
   x = cgen.Var('x', cgen.Int32)
   f = prog.AddExternalFunction("f", [x])
   y = cgen.Var('y', cgen.Int32)
-  f.AddAssignment(cgen.CreateVar(y), cgen.Constant(0))
+  f.AddDeclaration(y, cgen.Constant(0))
   whileblock = f.AddWhile(cgen.true)
 
   # It's good to try an if statement with no consequent, but an alternate.
@@ -119,7 +119,7 @@ def test_cgen_while():
   x = cgen.Var('x', cgen.Int32)
   f = prog.AddExternalFunction("f", [x])
   y = cgen.Var('y', cgen.Int32)
-  f.AddAssignment(cgen.CreateVar(y), cgen.Constant(0))
+  f.AddDeclaration(y, cgen.Constant(0))
 
   whileblock = f.AddWhile(x > cgen.Constant(0))
   whileblock.AddAssignment(x, x - cgen.Constant(1))

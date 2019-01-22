@@ -362,7 +362,7 @@ class Function(expression.Expression):
 
   def generate_parse_external_args(self, args, mainArg):
     for arg in args:
-      self.AddDeclaration(lvalue.CreateVar(arg))
+      self.AddDeclaration(arg)
 
     format_string = expression.StrConstant(''.join(arg.type.parsing_format_string() for arg in args))
     whenParseFail = self.AddIf(

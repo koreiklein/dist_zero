@@ -65,7 +65,7 @@ class Expression(object):
     whenMaintainsState = block.AddIf(maintainState).consequent
 
     vIndex = cgen.Var('index', cgen.MachineInt)
-    whenMaintainsState.AddAssignment(cgen.CreateVar(vIndex), cgen.Zero)
+    whenMaintainsState.AddDeclaration(vIndex, cgen.Zero)
 
     transitions = compiler.transitions_rvalue(vGraph, self)
 
@@ -74,7 +74,7 @@ class Expression(object):
 
     compiler.get_concrete_type(self.type).generate_apply_transition(loop, compiler.state_lvalue(vGraph, self),
                                                                     compiler.state_rvalue(vGraph, self), transition)
-    loop.AddAssignment(cgen.UpdateVar(vIndex), vIndex + cgen.One)
+    loop.AddAssignment(vIndex, vIndex + cgen.One)
 
 
 class Project(Expression):
@@ -94,7 +94,7 @@ class Project(Expression):
     baseTransitionsRvalue = compiler.transitions_rvalue(vGraph, self.base)
 
     vIndex = cgen.Var('base_index', cgen.MachineInt)
-    block.AddAssignment(cgen.CreateVar(vIndex), cgen.Zero)
+    block.AddDeclaration(vIndex, cgen.Zero)
     loop = block.AddWhile(vIndex < cgen.kv_size(baseTransitionsRvalue))
 
     curTransition = cgen.kv_A(baseTransitionsRvalue, vIndex)
@@ -116,7 +116,7 @@ class Project(Expression):
     default = switch.AddDefault()
     default.AddBreak()
 
-    loop.AddAssignment(cgen.UpdateVar(vIndex), vIndex + cgen.One)
+    loop.AddAssignment(vIndex, vIndex + cgen.One)
 
     self._standard_update_state(compiler, block, vGraph, maintainState)
 
@@ -182,14 +182,14 @@ class Product(Expression):
                                  "when the output type doesn't have individual transitions.")
 
     vIndex = cgen.Var('component_transitions_index', cgen.MachineInt)
-    block.AddDeclaration(cgen.CreateVar(vIndex))
+    block.AddDeclaration(vIndex)
     outputTransitions = compiler.transitions_rvalue(vGraph, self)
     block.logf(f"Running product {self._type.name} react to transitions.\n")
 
     for key, expr in self.items:
       transitions = compiler.transitions_rvalue(vGraph, expr)
 
-      block.AddAssignment(cgen.UpdateVar(vIndex), cgen.Zero)
+      block.AddAssignment(vIndex, cgen.Zero)
       loop = block.Newline().AddWhile(vIndex < cgen.kv_size(transitions))
       product_on_key = f"product_on_{key}"
       innerValue = cgen.kv_A(transitions, vIndex)
@@ -204,7 +204,7 @@ class Product(Expression):
                       key=product_on_key,
                       value=innerValue.Address(),
                   ))))
-      loop.AddAssignment(cgen.UpdateVar(vIndex), vIndex + cgen.One)
+      loop.AddAssignment(vIndex, vIndex + cgen.One)
 
     self._standard_update_state(compiler, block, vGraph, maintainState)
 
@@ -241,7 +241,7 @@ class Input(Expression):
     whenMaintainsState = block.AddIf(maintainState).consequent
 
     vIndex = cgen.Var('index', cgen.MachineInt)
-    whenMaintainsState.AddAssignment(cgen.CreateVar(vIndex), cgen.Zero)
+    whenMaintainsState.AddDeclaration(vIndex, cgen.Zero)
 
     transitions = compiler.transitions_rvalue(vGraph, self)
 
@@ -252,7 +252,7 @@ class Input(Expression):
                                                                                    compiler.state_lvalue(vGraph, self),
                                                                                    compiler.state_rvalue(vGraph, self),
                                                                                    transition)
-    loop.AddAssignment(cgen.UpdateVar(vIndex), vIndex + cgen.One)
+    loop.AddAssignment(vIndex, vIndex + cgen.One)
 
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
     raise errors.InternalError("Input expressions should never generate c code to initialize from prior inputs.")

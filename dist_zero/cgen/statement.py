@@ -1,6 +1,6 @@
 from dist_zero import settings
 
-from . import expression
+from . import expression, lvalue
 from .common import INDENT
 
 
@@ -65,14 +65,15 @@ class Block(object):
     self._statements.append(result)
     return result.block
 
-  def AddDeclaration(self, lvalue):
-    lvalue.add_includes(self.program)
-    self._statements.append(Declaration(lvalue))
+  def AddDeclaration(self, var, rvalue=None):
+    var.add_includes(self.program)
+    self._statements.append(Assignment(lvalue.CreateVar(var), rvalue))
     return self
 
   def AddAssignment(self, lvalue, rvalue):
     if lvalue is not None:
       lvalue.add_includes(self.program)
+      lvalue = lvalue.toLValue()
     rvalue.add_includes(self.program)
     self._statements.append(Assignment(lvalue, rvalue))
     return self
@@ -179,21 +180,18 @@ class Return(Statement):
     yield f'{indent}return {self.rvalue.to_c_string(root=True)};\n'
 
 
-class Declaration(Statement):
-  def __init__(self, lvalue):
-    self.lvalue = lvalue
-
-  def to_c_string(self, indent):
-    yield f"{indent}{self.lvalue.to_c_string()};\n"
-
-
 class Assignment(Statement):
   def __init__(self, lvalue, rvalue):
     self.lvalue = lvalue
     self.rvalue = rvalue
 
+    if self.lvalue is None and self.rvalue is None:
+      raise errors.InternalError("Assignments should not be made with None as lvalue and rvalue.")
+
   def to_c_string(self, indent):
     if self.lvalue is None:
       yield f"{indent}{self.rvalue.to_c_string(root=True)};\n"
+    elif self.rvalue is None:
+      yield f"{indent}{self.lvalue.to_c_string()};\n"
     else:
       yield f"{indent}{self.lvalue.to_c_string()} = {self.rvalue.to_c_string(root=True)};\n"

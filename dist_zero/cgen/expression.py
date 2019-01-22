@@ -14,6 +14,13 @@ class Expression(object):
   def to_c_string(self, root=False):
     raise NotImplementedError()
 
+  def toLValue(self):
+    '''
+    If this expression can be used as an lvalue, return an `Lvalue` instance representing it.
+    Otherwise, raise an appropriate error.
+    '''
+    raise errors.InternalError(f"Expression can't be used in assignment \"{self}\".")
+
   def __str__(self):
     return self.to_c_string()
 
@@ -145,6 +152,9 @@ class ComponentRvalue(Expression):
   def __init__(self, base, accessors):
     self.base = base
     self.accessors = accessors
+
+  def toLValue(self):
+    return self.base.toLValue().to_component_lvalue(accessors=self.accessors)
 
   def _extend(self, accessor):
     accessors = list(self.accessors)
@@ -319,6 +329,9 @@ class Cast(Expression):
     self.base = base
     self.type = type
 
+  def toLValue(self):
+    return Cast(base=self.base.toLValue(), type=self.type)
+
   def add_includes(self, program):
     self.base.add_includes(program)
     self.type.add_includes(program)
@@ -336,6 +349,9 @@ class Var(Expression):
   def __init__(self, name, type):
     self.name = name
     self.type = type
+
+  def toLValue(self):
+    return lvalue.UpdateVar(self)
 
   def __str__(self):
     return f"Var(\"{self.name}\": {self.type})"

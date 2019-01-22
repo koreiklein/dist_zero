@@ -68,7 +68,7 @@ class PlusBinOp(BinOp):
     argTransitions = compiler.transitions_rvalue(vGraph, arg)
 
     argTransitionIndex = cgen.Var('arg_transition_index', cgen.MachineInt)
-    block.AddAssignment(cgen.CreateVar(argTransitionIndex), cgen.Zero)
+    block.AddDeclaration(argTransitionIndex, cgen.Zero)
 
     block.logf(f"\nPlus operation is reacting to %zu.\n", cgen.kv_size(argTransitions))
 
@@ -90,7 +90,7 @@ class PlusBinOp(BinOp):
     default.AddAssignment(None, compiler.pyerr_from_string("Unrecognized input transition to operation.")).AddReturn(
         cgen.true)
 
-    loop.AddAssignment(cgen.UpdateVar(argTransitionIndex), argTransitionIndex + cgen.One)
+    loop.AddAssignment(argTransitionIndex, argTransitionIndex + cgen.One)
 
 
 Plus = lambda t: PlusBinOp('+', t, c_operation=cgen.Plus)
