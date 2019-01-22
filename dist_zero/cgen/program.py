@@ -160,6 +160,7 @@ class Program(object):
   def AddDeclaration(self, lvalue):
     '''Add a C global declaration.'''
     self._declarations.append(statement.Declaration(lvalue))
+    return lvalue
 
   def AddException(self, name):
     '''Add a new python exception to the python extension.'''
@@ -400,10 +401,19 @@ class Function(expression.Expression):
   def AddBreak(self, *args, **kwargs):
     return self._block.AddBreak(*args, **kwargs)
 
+  def ForInt(self, *args, **kwargs):
+    return self._block.ForInt(*args, **kwargs)
+
   def AddDeclaration(self, *args, **kwargs):
+    '''
+    Declare a new function-local variable.
+    The first argument gives the variable to declare.
+    The second (if provided) is an expression to initialize the new variable.
+    '''
     return self._block.AddDeclaration(*args, **kwargs)
 
   def AddAssignment(self, *args, **kwargs):
+    '''Update a c lvalue with a c rvalue'''
     return self._block.AddAssignment(*args, **kwargs)
 
   def logf(self, *args, **kwargs):

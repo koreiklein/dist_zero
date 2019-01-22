@@ -29,16 +29,13 @@ def test_cgen_basics():
 
   x = cgen.Var("x", cgen.Int32)
   f = prog.AddFunction('f', cgen.Int32, [x])
-  y = cgen.Var("y", cgen.Int32)
-  z = cgen.Var("z", cgen.Int32)
-  f.AddDeclaration(y, x + x)
-  f.AddDeclaration(z, x + (x + y))
+  y = f.AddDeclaration(cgen.Var("y", cgen.Int32), x + x)
+  z = f.AddDeclaration(cgen.Var("z", cgen.Int32), x + (x + y))
   f.AddReturn(z)
 
   F_i = cgen.Var("i", cgen.Int32)
   F = prog.AddExternalFunction("F", [F_i])
-  F_result = cgen.Var("result", cgen.Int32)
-  F.AddDeclaration(F_result, f(F_i))
+  F_result = F.AddDeclaration(cgen.Var("result", cgen.Int32), f(F_i))
   F.AddReturn(cgen.PyLong_FromLong(F_result))
 
   mod = prog.build_and_import()
@@ -76,8 +73,7 @@ def test_cgen_break():
   prog = cgen.Program("test_collatz")
   x = cgen.Var('x', cgen.Int32)
   f = prog.AddExternalFunction("f", [x])
-  y = cgen.Var('y', cgen.Int32)
-  f.AddDeclaration(y, cgen.Constant(0))
+  y = f.AddDeclaration(cgen.Var('y', cgen.Int32), cgen.Constant(0))
   whileblock = f.AddWhile(cgen.true)
 
   # It's good to try an if statement with no consequent, but an alternate.
@@ -118,8 +114,7 @@ def test_cgen_while():
   prog = cgen.Program("while_test_program")
   x = cgen.Var('x', cgen.Int32)
   f = prog.AddExternalFunction("f", [x])
-  y = cgen.Var('y', cgen.Int32)
-  f.AddDeclaration(y, cgen.Constant(0))
+  y = f.AddDeclaration(cgen.Var('y', cgen.Int32), cgen.Constant(0))
 
   whileblock = f.AddWhile(x > cgen.Constant(0))
   whileblock.AddAssignment(x, x - cgen.Constant(1))

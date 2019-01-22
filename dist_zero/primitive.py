@@ -67,30 +67,24 @@ class PlusBinOp(BinOp):
 
     argTransitions = compiler.transitions_rvalue(vGraph, arg)
 
-    argTransitionIndex = cgen.Var('arg_transition_index', cgen.MachineInt)
-    block.AddDeclaration(argTransitionIndex, cgen.Zero)
-
     block.logf(f"\nPlus operation is reacting to %zu.\n", cgen.kv_size(argTransitions))
 
-    loop = block.AddWhile(argTransitionIndex < cgen.kv_size(argTransitions))
+    with block.ForInt(cgen.kv_size(argTransitions)) as (loop, argTransitionIndex):
+      transition = cgen.kv_A(argTransitions, argTransitionIndex)
+      switch = loop.AddSwitch(transition.Dot('type'))
 
-    transition = cgen.kv_A(argTransitions, argTransitionIndex)
-    switch = loop.AddSwitch(transition.Dot('type'))
+      # NOTE: Not all cases are product_on_{key} cases.  The others should also be handled.
+      for key, _value in arg.type.items:
+        product_on_key = f"product_on_{key}"
+        case = switch.AddCase(arg_enum.literal(product_on_key))
+        nextValue = transition.Dot('value').Dot(product_on_key).Deref()
+        case.AddAssignment(None, cgen.kv_push(output_transition_ctype, outputTransitions, nextValue))
+        case.logf(f"\nPlus operation in product_on_{key} case %d\n", nextValue)
+        case.AddBreak()
 
-    # NOTE: Not all cases are product_on_{key} cases.  The others should also be handled.
-    for key, _value in arg.type.items:
-      product_on_key = f"product_on_{key}"
-      case = switch.AddCase(arg_enum.literal(product_on_key))
-      nextValue = transition.Dot('value').Dot(product_on_key).Deref()
-      case.AddAssignment(None, cgen.kv_push(output_transition_ctype, outputTransitions, nextValue))
-      case.logf(f"\nPlus operation in product_on_{key} case %d\n", nextValue)
-      case.AddBreak()
-
-    default = switch.AddDefault()
-    default.AddAssignment(None, compiler.pyerr_from_string("Unrecognized input transition to operation.")).AddReturn(
-        cgen.true)
-
-    loop.AddAssignment(argTransitionIndex, argTransitionIndex + cgen.One)
+      default = switch.AddDefault()
+      default.AddAssignment(None, compiler.pyerr_from_string("Unrecognized input transition to operation.")).AddReturn(
+          cgen.true)
 
 
 Plus = lambda t: PlusBinOp('+', t, c_operation=cgen.Plus)

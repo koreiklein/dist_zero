@@ -1,7 +1,7 @@
 from dist_zero import settings
 
-from . import expression, lvalue
-from .common import INDENT
+from . import expression, lvalue, type
+from .common import INDENT, inc_i
 
 
 class Block(object):
@@ -44,6 +44,9 @@ class Block(object):
   def AddReturnVoid(self):
     self._statements.append('return;\n')
 
+  def ForInt(self, vLimit):
+    return expression.LoopVar(block=self, var=expression.Var(f'loop_{inc_i()}', type.MachineInt), limit=vLimit)
+
   def AddSwitch(self, switch_on):
     result = Switch(switch_on, program=self.program)
     self._statements.append(result)
@@ -66,11 +69,17 @@ class Block(object):
     return result.block
 
   def AddDeclaration(self, var, rvalue=None):
+    '''
+    Declare a new function-local variable.
+    The first argument gives the variable to declare.
+    The second (if provided) is an expression to initialize the new variable.
+    '''
     var.add_includes(self.program)
     self._statements.append(Assignment(lvalue.CreateVar(var), rvalue))
-    return self
+    return var
 
   def AddAssignment(self, lvalue, rvalue):
+    '''Update a c lvalue with a c rvalue'''
     if lvalue is not None:
       lvalue.add_includes(self.program)
       lvalue = lvalue.toLValue()

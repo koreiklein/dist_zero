@@ -13,17 +13,14 @@ from dist_zero import cgen
 def test_pass_buffer_c_to_python():
   program = cgen.Program(name='simple_buffer_perf_test')
 
-  globalBuf = cgen.Var('global_buffer', cgen.Char.Star())
-
-  program.AddDeclaration(globalBuf)
+  globalBuf = program.AddDeclaration(cgen.Var('global_buffer', cgen.Char.Star()))
 
   nGlobalBufBytes = 10 * 1000 * 1000
 
   initGlobalBuf = program.AddExternalFunction(name='InitGlobalBuf', args=None)
   initGlobalBuf.AddAssignment(globalBuf, cgen.malloc(cgen.Constant(nGlobalBufBytes)).Cast(cgen.Char.Star()))
 
-  index = cgen.Var('index', cgen.MachineInt)
-  initGlobalBuf.AddDeclaration(index, cgen.Zero)
+  index = initGlobalBuf.AddDeclaration(cgen.Var('index', cgen.MachineInt), cgen.Zero)
   loop = initGlobalBuf.AddWhile(index < cgen.Constant(nGlobalBufBytes))
 
   loop.AddAssignment(globalBuf.Sub(index), cgen.Constant(120))
@@ -74,11 +71,8 @@ def test_pass_buffer_python_to_c():
   vArgs = cgen.Var('args', cgen.PyObject.Star())
   f = program.AddExternalFunction(name='F', args=None)
 
-  vBuf = cgen.Var('buf', cgen.UInt8.Star())
-  vBuflen = cgen.Var('buflen', cgen.MachineInt)
-
-  f.AddDeclaration(vBuf)
-  f.AddDeclaration(vBuflen)
+  vBuf = f.AddDeclaration(cgen.Var('buf', cgen.UInt8.Star()))
+  vBuflen = f.AddDeclaration(cgen.Var('buflen', cgen.MachineInt))
 
   whenParseFail = f.AddIf(
       cgen.PyArg_ParseTuple(vArgs, cgen.StrConstant("s#"), vBuf.Address(), vBuflen.Address()).Negate()).consequent

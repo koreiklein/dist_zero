@@ -518,8 +518,7 @@ class ReactiveCompiler(object):
 
     if expr in self._output_exprs:
       getBytes = cgen.Var(self._write_output_state_function_name(index), None)
-      vBytes = cgen.Var('result_bytes', cgen.PyObject.Star())
-      produce.AddDeclaration(vBytes, getBytes(vGraph))
+      vBytes = produce.AddDeclaration(cgen.Var('result_bytes', cgen.PyObject.Star()), getBytes(vGraph))
       produce.AddIf(vBytes == cgen.NULL).consequent.AddReturnVoid()
       for key in self._output_exprs[expr]:
         (produce.AddIf(cgen.MinusOne == cgen.PyDict_SetItemString(
@@ -575,8 +574,7 @@ class ReactiveCompiler(object):
     write_output_transitions = self.program.AddFunction(
         name=self._write_output_transitions_function_name(index), retType=cgen.PyObject.Star(), args=[vGraph])
 
-    vPythonBytes = cgen.Var('resulting_python_bytes', cgen.PyObject.Star())
-    write_output_transitions.AddDeclaration(vPythonBytes)
+    vPythonBytes = write_output_transitions.AddDeclaration(cgen.Var('resulting_python_bytes', cgen.PyObject.Star()))
     exprType.generate_c_transitions_to_capnp(self, write_output_transitions, self.transitions_rvalue(vGraph, expr),
                                              vPythonBytes)
 
@@ -592,8 +590,7 @@ class ReactiveCompiler(object):
     write_output_state = self.program.AddFunction(
         name=self._write_output_state_function_name(index), retType=cgen.PyObject.Star(), args=[vGraph])
 
-    vPythonBytes = cgen.Var('resulting_python_bytes', cgen.PyObject.Star())
-    write_output_state.AddDeclaration(vPythonBytes)
+    vPythonBytes = write_output_state.AddDeclaration(cgen.Var('resulting_python_bytes', cgen.PyObject.Star()))
     exprType.generate_c_state_to_capnp(self, write_output_state, self.state_rvalue(vGraph, expr), vPythonBytes)
 
     write_output_state.AddReturn(vPythonBytes)
@@ -607,8 +604,7 @@ class ReactiveCompiler(object):
 
     vGraph = on_output.SelfArg()
 
-    vResult = cgen.Var('result', cgen.PyObject.Star())
-    on_output.AddDeclaration(vResult, cgen.PyDict_New())
+    vResult = on_output.AddDeclaration(cgen.Var('result', cgen.PyObject.Star()), cgen.PyDict_New())
 
     (on_output.AddIf(vResult == cgen.NULL).consequent.AddAssignment(
         None, self.pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
@@ -619,9 +615,8 @@ class ReactiveCompiler(object):
 
     outputState = self.state_rvalue(vGraph, expr)
 
-    vBytes = cgen.Var('result_bytes', cgen.PyObject.Star())
     getBytes = cgen.Var(self._write_output_state_function_name(output_index), None)
-    whenHasState.AddDeclaration(vBytes, getBytes(vGraph))
+    vBytes = whenHasState.AddDeclaration(cgen.Var('result_bytes', cgen.PyObject.Star()), getBytes(vGraph))
 
     (whenHasState.AddIf(vBytes == cgen.NULL).consequent.AddAssignment(None,
                                                                       cgen.Py_DECREF(vResult)).AddReturn(cgen.NULL))
@@ -639,17 +634,13 @@ class ReactiveCompiler(object):
     index = self.expr_index[expr]
     inputType = self.get_concrete_type(expr.type)
 
-    vBuf = cgen.Var('buf', cgen.UInt8.Star())
-    vBuflen = cgen.Var('buflen', cgen.MachineInt)
-    vCapn = cgen.Var('capn', cgen.Capn)
-
     on_input = self._net.AddMethod(name=self._on_input_function_name(expr), args=None) # We'll do our own arg parsing
     vGraph = on_input.SelfArg()
     vArgsArg = on_input.ArgsArg()
 
-    on_input.AddDeclaration(vBuf)
-    on_input.AddDeclaration(vBuflen)
-    on_input.AddDeclaration(vCapn)
+    vBuf = on_input.AddDeclaration(cgen.Var('buf', cgen.UInt8.Star()))
+    vBuflen = on_input.AddDeclaration(cgen.Var('buflen', cgen.MachineInt))
+    vCapn = on_input.AddDeclaration(cgen.Var('capn', cgen.Capn))
 
     whenParseFail = on_input.AddIf(
         cgen.PyArg_ParseTuple(vArgsArg, cgen.StrConstant("s#"), vBuf.Address(), vBuflen.Address()).Negate()).consequent
@@ -663,14 +654,12 @@ class ReactiveCompiler(object):
 
     on_input.Newline()
 
-    vResult = cgen.Var('result', cgen.PyObject.Star())
-    on_input.AddDeclaration(vResult, cgen.PyDict_New())
+    vResult = on_input.AddDeclaration(cgen.Var('result', cgen.PyObject.Star()), cgen.PyDict_New())
     (on_input.AddIf(vResult == cgen.NULL).consequent.AddAssignment(
         None, self.pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
     on_input.AddAssignment(vGraph.Arrow('turn').Dot('result'), vResult)
 
-    ptr = cgen.Var(f'ptr', inputType.capnp_state_type.c_ptr_type)
-    on_input.AddDeclaration(ptr)
+    ptr = on_input.AddDeclaration(cgen.Var(f'ptr', inputType.capnp_state_type.c_ptr_type))
     on_input.AddAssignment(ptr.Dot('p'), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
 
     inputType.generate_capnp_to_c_state(
@@ -735,8 +724,8 @@ class ReactiveCompiler(object):
     ifAlreadySubscribed.consequent.AddReturn(missingInputsI == cgen.Zero)
     whenNotAlreadySubscribed = ifAlreadySubscribed.alternate
 
-    nMissingInputs = cgen.Var('n_missing_productions', cgen.Int32)
-    whenNotAlreadySubscribed.AddDeclaration(nMissingInputs, cgen.Constant(len(self.expr_to_inputs[expr])))
+    nMissingInputs = whenNotAlreadySubscribed.AddDeclaration(
+        cgen.Var('n_missing_productions', cgen.Int32), cgen.Constant(len(self.expr_to_inputs[expr])))
 
     for inputExpr in self.expr_to_inputs[expr]:
       inputSubscribeFunction = cgen.Var(self._subscribe_function_name(self.expr_index[inputExpr]), None)
@@ -772,15 +761,10 @@ class ReactiveCompiler(object):
     python_bytes_from_capn = self.program.AddFunction(
         name=self._python_bytes_from_capn_function_name(), retType=cgen.PyObject.Star(), args=[vCapn])
 
-    vSize = cgen.Var('n_bytes', cgen.MachineInt)
-    vBuf = cgen.Var('result_buf', cgen.UInt8.Star())
-    vWroteBytes = cgen.Var('wrote_bytes', cgen.MachineInt)
-    pyBuffer = cgen.Var('py_buffer_result', cgen.PyObject.Star())
-
-    python_bytes_from_capn.AddDeclaration(vBuf)
-    python_bytes_from_capn.AddDeclaration(vWroteBytes)
-    python_bytes_from_capn.AddDeclaration(pyBuffer)
-    python_bytes_from_capn.AddDeclaration(vSize, cgen.Constant(4096))
+    vBuf = python_bytes_from_capn.AddDeclaration(cgen.Var('result_buf', cgen.UInt8.Star()))
+    vWroteBytes = python_bytes_from_capn.AddDeclaration(cgen.Var('wrote_bytes', cgen.MachineInt))
+    pyBuffer = python_bytes_from_capn.AddDeclaration(cgen.Var('py_buffer_result', cgen.PyObject.Star()))
+    vSize = python_bytes_from_capn.AddDeclaration(cgen.Var('n_bytes', cgen.MachineInt), cgen.Constant(4096))
 
     python_bytes_from_capn.Newline()
 
@@ -809,9 +793,7 @@ class ReactiveCompiler(object):
     vGraph = on_transitions.SelfArg()
 
     # Create the result dictionary
-    vResult = cgen.Var('result', cgen.PyObject.Star())
-    on_transitions.Newline()
-    on_transitions.AddDeclaration(vResult, cgen.PyDict_New())
+    vResult = on_transitions.Newline().AddDeclaration(cgen.Var('result', cgen.PyObject.Star()), cgen.PyDict_New())
     (on_transitions.AddIf(vResult == cgen.NULL).consequent.AddAssignment(
         None, self.pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
     on_transitions.AddAssignment(vGraph.Arrow('turn').Dot('result'), vResult)
@@ -824,24 +806,19 @@ class ReactiveCompiler(object):
     on_transitions.AddAssignment(None, cgen.kv_init(self.ptrsToFree))
 
     # initialize was_added
-    vIndexWas = cgen.Var('was_added_init_i', cgen.MachineInt)
-    on_transitions.AddDeclaration(vIndexWas, cgen.Zero)
-    initWasAdded = on_transitions.AddWhile(vIndexWas < cgen.Constant(len(self._top_exprs)))
-    initWasAdded.AddAssignment(vGraph.Arrow('turn').Dot('was_added').Sub(vIndexWas), cgen.Zero)
-    initWasAdded.AddAssignment(vIndexWas, vIndexWas + cgen.One)
+    with on_transitions.ForInt(cgen.Constant(len(self._top_exprs))) as (initWasAdded, vIndexWas):
+      initWasAdded.AddAssignment(vGraph.Arrow('turn').Dot('was_added').Sub(vIndexWas), cgen.Zero)
 
     on_transitions.Newline().AddAssignment(vGraph.Arrow('turn').Dot('remaining').Dot('count'), cgen.Zero)
-    vRemainingData = cgen.Var('data', cgen.MachineInt.Array(cgen.Constant(len(self._top_exprs))))
-    on_transitions.AddDeclaration(vRemainingData)
+    vRemainingData = on_transitions.AddDeclaration(
+        cgen.Var('data', cgen.MachineInt.Array(cgen.Constant(len(self._top_exprs)))))
     on_transitions.AddAssignment(vGraph.Arrow('turn').Dot('remaining').Dot('data'), vRemainingData)
 
     on_transitions.Newline()
 
-    vKey, vValue = cgen.Var('input_key', cgen.PyObject.Star()), cgen.Var('input_value', cgen.PyObject.Star())
-    vPos = cgen.Var('loop_pos', cgen.Py_ssize_t)
-    on_transitions.AddDeclaration(vKey)
-    on_transitions.AddDeclaration(vValue)
-    on_transitions.AddDeclaration(vPos, cgen.Zero)
+    vKey = on_transitions.AddDeclaration(cgen.Var('input_key', cgen.PyObject.Star()))
+    vValue = on_transitions.AddDeclaration(cgen.Var('input_value', cgen.PyObject.Star()))
+    vPos = on_transitions.AddDeclaration(cgen.Var('loop_pos', cgen.Py_ssize_t), cgen.Zero)
 
     dictLoop = on_transitions.AddWhile(
         cgen.PyDict_Next(vTransitionsDict, vPos.Address(), vKey.Address(), vValue.Address()))
@@ -870,29 +847,23 @@ class ReactiveCompiler(object):
 
     queueLoop = on_transitions.Newline().AddWhile(cgen.Zero != vGraph.Arrow('turn').Dot('remaining').Dot('count'))
 
-    nextIndex = cgen.Var('next_index', cgen.MachineInt)
-    queueLoop.AddDeclaration(nextIndex, cgen.queue_pop(vGraph.Arrow('turn').Dot('remaining').Address()))
+    nextIndex = queueLoop.AddDeclaration(
+        cgen.Var('next_index', cgen.MachineInt), cgen.queue_pop(vGraph.Arrow('turn').Dot('remaining').Address()))
 
     (queueLoop.AddIf(vGraph.Arrow('react_to_transitions').Sub(nextIndex)(vGraph)).consequent.AddAssignment(
         None, cgen.Py_DECREF(vResult)).AddAssignment(vResult, cgen.NULL).AddBreak())
 
     # free from ptrs_to_free
-    ptrsFreeIndex = cgen.Var('ptrsFreeIndex', cgen.MachineInt)
-    on_transitions.Newline().AddDeclaration(ptrsFreeIndex, cgen.Zero)
-    freeLoop = on_transitions.AddWhile(ptrsFreeIndex < cgen.kv_size(self.ptrsToFree))
-    freeLoop.AddAssignment(None, cgen.free(cgen.kv_A(self.ptrsToFree, ptrsFreeIndex)))
-    freeLoop.AddAssignment(ptrsFreeIndex, ptrsFreeIndex + cgen.One)
+    with on_transitions.Newline().ForInt(cgen.kv_size(self.ptrsToFree)) as (freeLoop, ptrsFreeIndex):
+      freeLoop.AddAssignment(None, cgen.free(cgen.kv_A(self.ptrsToFree, ptrsFreeIndex)))
     on_transitions.AddAssignment(None, cgen.kv_destroy(self.ptrsToFree))
 
     # free from vecs_to_free
-    kvecsFreeIndex = cgen.Var('kvecs_free_index', cgen.MachineInt)
-    on_transitions.Newline().AddDeclaration(kvecsFreeIndex, cgen.Zero)
-    freeLoop = on_transitions.AddWhile(kvecsFreeIndex < cgen.kv_size(vecsToFree))
-    kvecToFree = cgen.kv_A(vecsToFree, kvecsFreeIndex).Cast(cgen.KVec(cgen.Void).Star()).Deref()
-    # make sure to free the vec, and reinitialize it.
-    freeLoop.AddAssignment(None, cgen.kv_destroy(kvecToFree))
-    freeLoop.AddAssignment(None, cgen.kv_init(kvecToFree))
-    freeLoop.AddAssignment(kvecsFreeIndex, kvecsFreeIndex + cgen.One)
+    with on_transitions.ForInt(cgen.kv_size(vecsToFree)) as (freeLoop, kvecsFreeIndex):
+      kvecToFree = cgen.kv_A(vecsToFree, kvecsFreeIndex).Cast(cgen.KVec(cgen.Void).Star()).Deref()
+      # make sure to free the vec, and reinitialize it.
+      freeLoop.AddAssignment(None, cgen.kv_destroy(kvecToFree))
+      freeLoop.AddAssignment(None, cgen.kv_init(kvecToFree))
     on_transitions.AddAssignment(None, cgen.kv_destroy(vecsToFree))
 
     on_transitions.Newline().AddAssignment(vGraph.Arrow('turn').Dot('result'), cgen.NULL)
@@ -926,8 +897,7 @@ class ReactiveCompiler(object):
 
     if expr in self._output_exprs:
       getBytes = cgen.Var(self._write_output_transitions_function_name(index), None)
-      vBytes = cgen.Var('result_bytes', cgen.PyObject.Star())
-      react.Newline().AddDeclaration(vBytes, getBytes(vGraph))
+      vBytes = react.Newline().AddDeclaration(cgen.Var('result_bytes', cgen.PyObject.Star()), getBytes(vGraph))
       react.AddIf(vBytes == cgen.NULL).consequent.AddReturn(cgen.true)
       for key in self._output_exprs[expr]:
         react.AddIf(cgen.MinusOne == cgen.PyDict_SetItemString(
@@ -963,25 +933,21 @@ class ReactiveCompiler(object):
 
     vKVec = vGraph.Arrow('turn').Dot(self._transition_key_in_turn(index))
 
-    vNumber = cgen.Var('n_transitions', cgen.Py_ssize_t)
-    deserialize_transitions.AddDeclaration(vNumber, cgen.PyList_Size(vPythonList))
-    vI = cgen.Var('i', cgen.Py_ssize_t)
-    deserialize_transitions.AddDeclaration(vI, cgen.Zero)
+    vNumber = deserialize_transitions.AddDeclaration(
+        cgen.Var('n_transitions', cgen.Py_ssize_t), cgen.PyList_Size(vPythonList))
+    vI = deserialize_transitions.AddDeclaration(cgen.Var('i', cgen.Py_ssize_t), cgen.Zero)
 
     listLoop = deserialize_transitions.Newline().AddWhile(vI < vNumber)
 
-    vPythonBytes = cgen.Var('python_bytes', cgen.PyObject.Star())
-    listLoop.AddDeclaration(vPythonBytes, cgen.PyList_GetItem(vPythonList, vI))
+    vPythonBytes = listLoop.AddDeclaration(
+        cgen.Var('python_bytes', cgen.PyObject.Star()), cgen.PyList_GetItem(vPythonList, vI))
     listLoop.AddIf(cgen.NULL == vPythonBytes).consequent.AddReturnVoid()
 
     listLoop.Newline()
 
-    vBuf = cgen.Var('buf', cgen.Char.Star())
-    vBuflen = cgen.Var('buflen', cgen.Py_ssize_t)
-    vCapn = cgen.Var('capn', cgen.Capn)
-    listLoop.AddDeclaration(vBuf)
-    listLoop.AddDeclaration(vBuflen)
-    listLoop.AddDeclaration(vCapn)
+    vBuf = listLoop.AddDeclaration(cgen.Var('buf', cgen.Char.Star()))
+    vBuflen = listLoop.AddDeclaration(cgen.Var('buflen', cgen.Py_ssize_t))
+    vCapn = listLoop.AddDeclaration(cgen.Var('capn', cgen.Capn))
     (listLoop.AddIf(cgen.MinusOne == cgen.PyBytes_AsStringAndSize(vPythonBytes, vBuf.Address(), vBuflen.Address())).
      consequent.AddReturnVoid())
 
@@ -993,8 +959,7 @@ class ReactiveCompiler(object):
     listLoop.Newline()
 
     concreteInputType = self.get_concrete_type(inputExpr.type)
-    ptr = cgen.Var(f'ptr', concreteInputType.capnp_transitions_type.c_ptr_type)
-    listLoop.AddDeclaration(ptr)
+    ptr = listLoop.AddDeclaration(cgen.Var(f'ptr', concreteInputType.capnp_transitions_type.c_ptr_type))
     listLoop.AddAssignment(ptr.Dot('p'), cgen.capn_getp(cgen.capn_root(vCapn.Address()), cgen.Zero, cgen.One))
 
     read_ctx = concrete_types.CapnpReadContext(

@@ -64,17 +64,12 @@ class Expression(object):
     '''
     whenMaintainsState = block.AddIf(maintainState).consequent
 
-    vIndex = cgen.Var('index', cgen.MachineInt)
-    whenMaintainsState.AddDeclaration(vIndex, cgen.Zero)
-
     transitions = compiler.transitions_rvalue(vGraph, self)
 
-    loop = whenMaintainsState.AddWhile(vIndex < cgen.kv_size(transitions))
-    transition = cgen.kv_A(transitions, vIndex)
-
-    compiler.get_concrete_type(self.type).generate_apply_transition(loop, compiler.state_lvalue(vGraph, self),
-                                                                    compiler.state_rvalue(vGraph, self), transition)
-    loop.AddAssignment(vIndex, vIndex + cgen.One)
+    with whenMaintainsState.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
+      compiler.get_concrete_type(self.type).generate_apply_transition(loop, compiler.state_lvalue(vGraph, self),
+                                                                      compiler.state_rvalue(vGraph, self),
+                                                                      cgen.kv_A(transitions, vIndex))
 
 
 class Project(Expression):
@@ -93,30 +88,25 @@ class Project(Expression):
     outputTransitions = compiler.transitions_rvalue(vGraph, self)
     baseTransitionsRvalue = compiler.transitions_rvalue(vGraph, self.base)
 
-    vIndex = cgen.Var('base_index', cgen.MachineInt)
-    block.AddDeclaration(vIndex, cgen.Zero)
-    loop = block.AddWhile(vIndex < cgen.kv_size(baseTransitionsRvalue))
+    with block.ForInt(cgen.kv_size(baseTransitionsRvalue)) as (loop, vIndex):
+      curTransition = cgen.kv_A(baseTransitionsRvalue, vIndex)
+      switch = loop.AddSwitch(curTransition.Dot('type'))
 
-    curTransition = cgen.kv_A(baseTransitionsRvalue, vIndex)
-    switch = loop.AddSwitch(curTransition.Dot('type'))
+      base_transitions_ctype = compiler.get_concrete_type(self.base.type).c_transitions_type
+      output_transitions_ctype = compiler.get_concrete_type(self.type).c_transitions_type
+      c_enum = base_transitions_ctype.field_by_id['type']
+      product_on_key = f"product_on_{self.key}"
 
-    base_transitions_ctype = compiler.get_concrete_type(self.base.type).c_transitions_type
-    output_transitions_ctype = compiler.get_concrete_type(self.type).c_transitions_type
-    c_enum = base_transitions_ctype.field_by_id['type']
-    product_on_key = f"product_on_{self.key}"
+      onMe = switch.AddCase(c_enum.literal(product_on_key))
+      onMe.AddAssignment(
+          None,
+          cgen.kv_push(output_transitions_ctype, outputTransitions,
+                       curTransition.Dot('value').Dot(product_on_key).Deref()))
 
-    onMe = switch.AddCase(c_enum.literal(product_on_key))
-    onMe.AddAssignment(
-        None,
-        cgen.kv_push(output_transitions_ctype, outputTransitions,
-                     curTransition.Dot('value').Dot(product_on_key).Deref()))
+      onMe.AddBreak()
 
-    onMe.AddBreak()
-
-    default = switch.AddDefault()
-    default.AddBreak()
-
-    loop.AddAssignment(vIndex, vIndex + cgen.One)
+      default = switch.AddDefault()
+      default.AddBreak()
 
     self._standard_update_state(compiler, block, vGraph, maintainState)
 
@@ -181,30 +171,26 @@ class Product(Expression):
       raise errors.InternalError("Have not implemented the action of Product on transitions "
                                  "when the output type doesn't have individual transitions.")
 
-    vIndex = cgen.Var('component_transitions_index', cgen.MachineInt)
-    block.AddDeclaration(vIndex)
     outputTransitions = compiler.transitions_rvalue(vGraph, self)
     block.logf(f"Running product {self._type.name} react to transitions.\n")
 
     for key, expr in self.items:
       transitions = compiler.transitions_rvalue(vGraph, expr)
 
-      block.AddAssignment(vIndex, cgen.Zero)
-      loop = block.Newline().AddWhile(vIndex < cgen.kv_size(transitions))
-      product_on_key = f"product_on_{key}"
-      innerValue = cgen.kv_A(transitions, vIndex)
+      with block.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
+        product_on_key = f"product_on_{key}"
+        innerValue = cgen.kv_A(transitions, vIndex)
 
-      loop.AddAssignment(
-          None,
-          cgen.kv_push(
-              transition_ctype, outputTransitions,
-              transition_ctype.literal(
-                  type=transition_ctype.field_by_id['type'].literal(product_on_key),
-                  value=transition_ctype.field_by_id['value'].literal(
-                      key=product_on_key,
-                      value=innerValue.Address(),
-                  ))))
-      loop.AddAssignment(vIndex, vIndex + cgen.One)
+        loop.AddAssignment(
+            None,
+            cgen.kv_push(
+                transition_ctype, outputTransitions,
+                transition_ctype.literal(
+                    type=transition_ctype.field_by_id['type'].literal(product_on_key),
+                    value=transition_ctype.field_by_id['value'].literal(
+                        key=product_on_key,
+                        value=innerValue.Address(),
+                    ))))
 
     self._standard_update_state(compiler, block, vGraph, maintainState)
 
@@ -240,19 +226,13 @@ class Input(Expression):
 
     whenMaintainsState = block.AddIf(maintainState).consequent
 
-    vIndex = cgen.Var('index', cgen.MachineInt)
-    whenMaintainsState.AddDeclaration(vIndex, cgen.Zero)
-
     transitions = compiler.transitions_rvalue(vGraph, self)
 
-    loop = whenMaintainsState.AddWhile(vIndex < cgen.kv_size(transitions))
-    transition = cgen.kv_A(transitions, vIndex)
+    with whenMaintainsState.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
+      transition = cgen.kv_A(transitions, vIndex)
 
-    compiler.get_concrete_type(self.type).generate_product_apply_transition_forced(loop,
-                                                                                   compiler.state_lvalue(vGraph, self),
-                                                                                   compiler.state_rvalue(vGraph, self),
-                                                                                   transition)
-    loop.AddAssignment(vIndex, vIndex + cgen.One)
+      compiler.get_concrete_type(self.type).generate_product_apply_transition_forced(
+          loop, compiler.state_lvalue(vGraph, self), compiler.state_rvalue(vGraph, self), transition)
 
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
     raise errors.InternalError("Input expressions should never generate c code to initialize from prior inputs.")

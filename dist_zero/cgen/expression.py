@@ -364,6 +364,22 @@ class Var(Expression):
     return self.name
 
 
+class LoopVar(object):
+  def __init__(self, block, var, limit):
+    self.block = block
+    self.var = var
+    self.limit = limit
+    self.loop = None
+
+  def __enter__(self):
+    self.block.AddDeclaration(self.var, Zero)
+    self.loop = self.block.AddWhile(self.var < self.limit)
+    return self.loop, self.var
+
+  def __exit__(self, type, value, traceback):
+    self.loop.AddAssignment(self.var, self.var + One)
+
+
 Py_DECREF = Var("Py_DECREF", None)
 Py_XDECREF = Var("Py_XDECREF", None)
 Py_INCREF = Var("Py_INCREF", None)
