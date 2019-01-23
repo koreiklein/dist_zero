@@ -133,6 +133,10 @@ and cloud mode tests will spin up instances in the cloud.  The tests should gene
 resources they use during testing, but you should still be aware that it's possible for tests to leak containers or
 cloud instances if something goes wrong with the cleanup.
 
+### Profiling
+
+Tests can be profiled by passing the `--profile` option to pytest.
+
 ## Development
 
 All development work on DistZero is managed in [pivotal tracker](https://www.pivotaltracker.com/n/projects/2160764).
