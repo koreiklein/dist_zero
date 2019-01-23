@@ -11,3 +11,4 @@ _build
 network.pdf
 cextensions/*.so
 notes.txt
+prof/
