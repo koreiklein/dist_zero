@@ -458,6 +458,12 @@ class ReactiveCompiler(object):
 
     vGraph = finalize.SelfArg()
 
+    # Free memory associated with the events queue.
+    with finalize.ForInt(vGraph.Arrow('events').Dot('count')) as (loop, eventIndex):
+      vData = vGraph.Arrow('events').Dot('data').Sub(eventIndex).Dot('data')
+      loop.AddIf(vData != cgen.NULL).consequent.AddAssignment(None, cgen.free(vData))
+    finalize.AddAssignment(None, cgen.free(vGraph.Arrow('events').Dot('data')))
+
     for i, expr in enumerate(self._top_exprs):
       ifInitialized = finalize.AddIf(
           cgen.Zero == vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(i))).consequent
