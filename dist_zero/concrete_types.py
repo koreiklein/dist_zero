@@ -56,6 +56,23 @@ class ConcreteType(object):
     '''
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
+  def generate_set_state(self, compiler, block, stateLvalue, python_state):
+    '''
+    Generate code to initialize a specific state.
+
+    :param compiler: The compiler instance that will generate code using this concrete type.
+    :type compiler: `ReactiveCompiler`
+    :param block: The block in which to generate the code.
+    :type block: `Block`
+    :param stateLvalue: A C lvalue for the state.
+    :type stateLvalue: `cgen.lvalue.Lvalue`
+    :param object python_state: A python object identifying a state of ``self.type``.
+
+    :return: a c literal for value.
+    :rtype: `cgen.expression.Expression`
+    '''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
   def initialize_capnp(self, compiler):
     '''
     Initialize the capnp structures for this type.
@@ -247,6 +264,9 @@ class ConcreteBasicType(ConcreteType):
     self._basicState_field = None
     self._capnp_transitions_type = None
     self._capnp_transitions_basicTransition_field = None
+
+  def generate_set_state(self, compiler, block, stateLvalue, python_state):
+    block.AddAssignment(stateLvalue, cgen.Constant(python_state))
 
   def generate_free_state(self, compiler, block, stateRvalue):
     pass

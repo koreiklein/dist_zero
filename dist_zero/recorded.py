@@ -1,12 +1,14 @@
 import asyncio
 import logging
 
-from dist_zero import errors
+from dist_zero import errors, cgen
+
+from . import expression
 
 logger = logging.getLogger(__name__)
 
 
-class RecordedUser(object):
+class RecordedUser(expression.Expression):
   '''
   In tests, it can be helpful to generate recordings of user interactions
   and play them back against nodes in order to generate input for a distributed
@@ -14,13 +16,33 @@ class RecordedUser(object):
   Instances of this class represent the recorded user.
   '''
 
-  def __init__(self, name, time_action_pairs=None):
+  def __init__(self, name, start, type, time_action_pairs=None):
     self.name = name
+    self.start = start
+    self._type = type
     self._time_action_pairs = [] if time_action_pairs is None else time_action_pairs
     self._started = False
     for i in range(1, len(self._time_action_pairs)):
       if self._time_action_pairs[i - 1][0] > self._time_action_pairs[i][0]:
         raise errors.InternalError('Times are not in order.')
+
+  @property
+  def type(self):
+    return self._type
+
+  def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
+    type = compiler.get_concrete_type(self.type)
+    stateLvalue = compiler.state_lvalue(vGraph, self)
+    type.generate_set_state(compiler, stateInitFunction, stateLvalue, self.start)
+
+  def generate_free_state(self, compiler, block, stateRvalue):
+    type = compiler.get_concrete_type(self.type)
+    type.generate_free_state(compiler, block, stateRvalue)
+
+  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
+    # No transitions should ever occur
+    block.AddAssignment(None, compiler.pyerr_from_string("Recordeds do not react to transitions"))
+    block.AddReturn(cgen.One)
 
   @property
   def actions(self):
@@ -46,6 +68,7 @@ class RecordedUser(object):
   def to_json(self):
     return {
         'name': self.name,
+        'start': self.start,
         'time_action_pairs': self._time_action_pairs,
     }
 
@@ -53,6 +76,8 @@ class RecordedUser(object):
   def from_json(recorded_user_json):
     return RecordedUser(
         name=recorded_user_json['name'],
+        start=recorded_user_json['start'],
+        type=None, # Serialized Recorded instances should not ever need a type parameter
         time_action_pairs=recorded_user_json['time_action_pairs'],
     )
 

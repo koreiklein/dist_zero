@@ -4,7 +4,7 @@ from collections import defaultdict
 import capnp
 capnp.remove_import_hook()
 
-from dist_zero import cgen, errors, expression, capnpgen, primitive, settings, concrete_types
+from dist_zero import cgen, errors, expression, capnpgen, primitive, settings, concrete_types, recorded
 from dist_zero import settings
 from dist_zero import types, concrete_types
 
@@ -1036,5 +1036,7 @@ class _Topsorter(object):
       return
     elif expr.__class__ == expression.Project:
       yield expr.base
+    elif expr.__class__ in [expression.Constant, recorded.RecordedUser]:
+      pass
     else:
       raise errors.InternalError(f"Unrecognized type of normalized expression {expr.__class__}.")

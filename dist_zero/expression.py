@@ -72,6 +72,30 @@ class Expression(object):
                                                                       cgen.kv_A(transitions, vIndex))
 
 
+class Constant(Expression):
+  def __init__(self, value, type):
+    self._value = value
+    self._type = type
+
+  @property
+  def type(self):
+    return self._type
+
+  def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
+    type = compiler.get_concrete_type(self.type)
+    stateLvalue = compiler.state_lvalue(vGraph, self)
+    type.generate_set_state(compiler, stateInitFunction, stateLvalue, self._value)
+
+  def generate_free_state(self, compiler, block, stateRvalue):
+    type = compiler.get_concrete_type(self.type)
+    type.generate_free_state(compiler, block, stateRvalue)
+
+  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
+    # No transitions should ever occur
+    block.AddAssignment(None, compiler.pyerr_from_string("Constants do not react to transitions"))
+    block.AddReturn(cgen.One)
+
+
 class Project(Expression):
   def __init__(self, key, base):
     self.key = key

@@ -4,6 +4,50 @@ from dist_zero import recorded, types, expression, reactive, primitive
 
 
 class TestMultiplicativeReactive(object):
+  def test_recorded_ints(self):
+    indiscrete_int = types.Int32.With('indiscrete')
+
+    changing_number = recorded.RecordedUser(
+        'user',
+        start=3,
+        type=indiscrete_int,
+        time_action_pairs=[
+            (40, [('jump', 1)]),
+            (70, [('jump', 2)]),
+            (75, [('jump', 6)]),
+        ])
+
+    constant_2 = expression.Constant(2, type=types.Int32)
+
+    compiler = reactive.ReactiveCompiler(name='test_recorded_ints')
+    thesum = program_plus(constant_2, changing_number)
+    module = compiler.compile({'thesum': thesum})
+    net = module.Net()
+
+    capnpForOutput = compiler.capnp_state_builder(thesum)
+    capnpForOutput_T = compiler.capnp_transitions_builder(thesum)
+
+    output = net.OnOutput_thesum()
+    assert 1 == len(output)
+    assert 5 == capnpForOutput.from_bytes(output['thesum']).basicState
+
+    assert 0 == net.CurTime()
+    assert 40 == net.NextTime()
+    assert not net.Elapse(20)
+    assert 20 == net.CurTime()
+    assert 40 == net.NextTime()
+    assert not net.Elapse(10)
+
+    output = net.Elapse(15)
+    assert 1 == len(output)
+    assert 3 == capnpForOutput_T.from_bytes(output['thesum']).jumpTo
+
+    assert 45 == net.CurTime()
+    assert 70 == net.NextTime()
+    output = net.Elapse(30)
+    assert 1 == len(output)
+    assert 8 == capnpForOutput_T.from_bytes(output['thesum']).jumpTo
+
   def test_reactive_errors(self, program_X):
     net = program_X.module.Net()
 
@@ -262,49 +306,6 @@ class TestMultiplicativeReactive(object):
     assert 1 == len(transition_output)
     output = program_X.capnpForOutput_T.from_bytes(transition_output['output'])
     assert 10 == output.basicTransition
-
-  def test_recorded_ints(self):
-    indiscrete_int = types.Int32.With('indiscrete')
-
-    changing_number = recorded.RecordedUser(
-        'user',
-        start=indiscrete_int.from_python(3),
-        time_action_pairs=[
-            (40, indiscrete_int.jump(1)),
-            (70, indiscrete_int.jump(2)),
-            (75, indiscrete_int.jump(6)),
-        ])
-
-    constant_2 = primitive(indiscrete_int.from_python(2))
-
-    compiler = reactive.ReactiveCompiler(name='test_recorded_ints')
-    thesum = program_plus(constant_2, changing_number)
-    module = self.compiler.compile({'thesum': thesum})
-    net = module.Net()
-
-    capnpForOutput = self.compiler.capnp_state_builder(thesum)
-    capnpForOutput_T = self.compiler.capnp_transitions_builder(thesum)
-
-    output = net.OnOutput_thesum()
-    assert 1 == len(output)
-    assert 5 == capnpForOutput.from_bytes(output['thesum']).basicState
-
-    assert 0 == net.CurTime()
-    assert 40 == net.NextTime()
-    assert not net.Elapse(20)
-    assert 20 == net.CurTime()
-    assert 40 == net.NextTime()
-    assert not net.Elapse(10)
-
-    output = net.Elapse(15)
-    assert 1 == len(output)
-    assert 3 == capnpForOutput_T.from_bytes(output['thesum']).jumpTo
-
-    assert 45 == net.CurTime()
-    assert 70 == net.NextTime()
-    output = net.Elapse(30)
-    assert 1 == len(output)
-    assert 8 == capnpForOutput_T.from_bytes(output['thesum']).jumpTo
 
   def test_complex_initialization(self, program_C):
     net = program_C.module.Net()
