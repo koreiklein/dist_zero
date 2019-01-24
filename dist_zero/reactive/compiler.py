@@ -410,8 +410,6 @@ class ReactiveCompiler(object):
     self._turn_struct.AddField('vecs_to_free', cgen.KVec(cgen.Void.Star()))
     self._turn_struct.AddField('ptrs_to_free', cgen.KVec(cgen.Void.Star()))
 
-    self._turn_struct.AddField('processed_transitions', cgen.MachineInt.Array(cgen.Constant(len(self._top_exprs))))
-
     for i, expr in enumerate(self._top_exprs):
       ct = self.get_concrete_type(expr.type)
       self._graph_struct.AddField(self._state_key_in_graph(i), ct.c_state_type)
@@ -902,22 +900,12 @@ class ReactiveCompiler(object):
       block.AddAssignment(
           None, cgen.memset(vGraph.Arrow('turn').Dot('was_added'), cgen.Zero, cgen.Constant(len(self._top_exprs))))
 
-      # initialize processed_transitions
-      block.AddAssignment(
-          None,
-          cgen.memset(
-              vGraph.Arrow('turn').Dot('processed_transitions'), cgen.Zero,
-              cgen.Constant(len(self._top_exprs)) * cgen.MachineInt.Sizeof()))
-
       block.Newline().AddAssignment(vGraph.Arrow('turn').Dot('remaining').Dot('count'), cgen.Zero)
       block.AddAssignment(vGraph.Arrow('turn').Dot('remaining').Dot('data'), vRemainingData)
 
       block.Newline()
 
     return self._initialize_turn
-
-  def vProcessedTransitions(self, vGraph, expr):
-    return vGraph.Arrow('turn').Dot('processed_transitions').Sub(self.expr_index[expr])
 
   def _generate_read_input_transitions(self, block, vGraph, vResult, vTransitionsDict):
     vKey = block.AddDeclaration(cgen.PyObject.Star().Var('input_key'))
@@ -1006,7 +994,6 @@ class ReactiveCompiler(object):
         vGraph,
         shallMaintainState(vGraph, cgen.Constant(index)),
     )
-    react.AddAssignment(self.vProcessedTransitions(vGraph, expr), cgen.kv_size(self.transitions_rvalue(vGraph, expr)))
 
     self._generate_propogate_transitions(react, vGraph, expr)
 
