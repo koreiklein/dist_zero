@@ -175,6 +175,8 @@ class ReactiveCompiler(object):
     self._generate_python_bytes_from_capnp()
     self._generate_shall_maintain_state()
 
+    self._generate_cur_time()
+
     for i in range(0, len(self._top_exprs)):
       self._generate_initialize_state(i)
 
@@ -372,6 +374,8 @@ class ReactiveCompiler(object):
     '''Generate the graph struct in self.program.'''
     self._graph_struct = self._net.struct
 
+    self._graph_struct.AddField('cur_time', cgen.UInt64)
+
     # -1 if the expr has not been subscribed to, otherwise the number of inputs that still need to be produced.
     self._graph_struct.AddField('n_missing_productions', cgen.Int32.Array(self._n_exprs()))
 
@@ -409,6 +413,8 @@ class ReactiveCompiler(object):
   def _generate_graph_initializer(self):
     '''Generate the graph initialization function.'''
     init = self._net.AddInit()
+
+    init.AddAssignment(init.SelfArg().Arrow('cur_time'), cgen.Zero)
 
     for i, expr in enumerate(self._top_exprs):
       init.AddAssignment(init.SelfArg().Arrow('n_missing_productions').Sub(cgen.Constant(i)), cgen.MinusOne)
@@ -754,6 +760,13 @@ class ReactiveCompiler(object):
 
     # Current implementation: Check whether any other expr is still unsubscribed to it.
     shall_maintain_state.AddReturn(vGraph.Arrow('n_missing_subscriptions').Sub(vIndex) > cgen.Zero)
+
+  def _generate_cur_time(self):
+    '''Generate the CurTime C function.'''
+    cur_time = self._net.AddMethod(name='CurTime', args=[])
+    vGraph = cur_time.SelfArg()
+
+    cur_time.AddReturn(cgen.PyLong_FromLong(vGraph.Arrow('cur_time')))
 
   def _generate_python_bytes_from_capnp(self):
     '''generate a c function to produce a python bytes object from a capnp structure.'''
