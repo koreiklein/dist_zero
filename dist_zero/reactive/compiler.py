@@ -8,6 +8,8 @@ from dist_zero import cgen, errors, expression, capnpgen, primitive, settings, c
 from dist_zero import settings
 from dist_zero import types, concrete_types
 
+EVENT_QUEUE_INITIAL_CAPACITY = 10
+
 
 class ReactiveCompiler(object):
   '''
@@ -176,6 +178,7 @@ class ReactiveCompiler(object):
     self._generate_shall_maintain_state()
 
     self._generate_cur_time()
+    self._generate_next_time()
 
     for i in range(0, len(self._top_exprs)):
       self._generate_initialize_state(i)
@@ -376,6 +379,8 @@ class ReactiveCompiler(object):
 
     self._graph_struct.AddField('cur_time', cgen.UInt64)
 
+    self._graph_struct.AddField('events', cgen.EventQueue)
+
     # -1 if the expr has not been subscribed to, otherwise the number of inputs that still need to be produced.
     self._graph_struct.AddField('n_missing_productions', cgen.Int32.Array(self._n_exprs()))
 
@@ -415,6 +420,11 @@ class ReactiveCompiler(object):
     init = self._net.AddInit()
 
     init.AddAssignment(init.SelfArg().Arrow('cur_time'), cgen.Zero)
+    (init.AddIf(
+        cgen.event_queue_init(init.SelfArg().Arrow('events').Address(),
+                              cgen.Constant(EVENT_QUEUE_INITIAL_CAPACITY))).consequent.AddAssignment(
+                                  None, self.pyerr_from_string("Failed to allocate a new event queue")).AddReturn(
+                                      cgen.MinusOne))
 
     for i, expr in enumerate(self._top_exprs):
       init.AddAssignment(init.SelfArg().Arrow('n_missing_productions').Sub(cgen.Constant(i)), cgen.MinusOne)
@@ -767,6 +777,14 @@ class ReactiveCompiler(object):
     vGraph = cur_time.SelfArg()
 
     cur_time.AddReturn(cgen.PyLong_FromLong(vGraph.Arrow('cur_time')))
+
+  def _generate_next_time(self):
+    next_time = self._net.AddMethod(name='NextTime', args=[])
+    vGraph = next_time.SelfArg()
+
+    ifEmpty = next_time.AddIf(vGraph.Arrow('events').Dot('count') == cgen.Zero)
+    ifEmpty.consequent.AddReturn(cgen.Py_None)
+    ifEmpty.alternate.AddReturn(cgen.PyLong_FromLong(vGraph.Arrow('events').Dot('data').Sub(cgen.Zero).Dot('when')))
 
   def _generate_python_bytes_from_capnp(self):
     '''generate a c function to produce a python bytes object from a capnp structure.'''

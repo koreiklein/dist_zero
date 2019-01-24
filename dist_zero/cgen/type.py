@@ -97,6 +97,23 @@ class _Queue(CType):
 Queue = _Queue()
 
 
+class _EventQueue(CType):
+  def add_includes(self, program):
+    program.includes.add('"event_queue.c"')
+
+  def wrap_variable(self, varname):
+    return f"struct event_queue {varname}"
+
+  def parsing_format_string(self):
+    raise RuntimeError(f"Unable to produce a PyArg_ParseTuple format string for {self.to_c_string()}")
+
+  def to_c_string(self):
+    return "struct event_queue"
+
+
+EventQueue = _EventQueue()
+
+
 class Array(CType):
   def __init__(self, base_type, n):
     self.base_type = base_type

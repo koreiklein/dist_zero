@@ -385,6 +385,8 @@ Py_XDECREF = Var("Py_XDECREF", None)
 Py_INCREF = Var("Py_INCREF", None)
 Py_XINCREF = Var("Py_XINCREF", None)
 
+Py_None = Var("Py_None")
+
 PyArg_ParseTuple = Var("PyArg_ParseTuple", None)
 PyLong_FromLong = Var("PyLong_FromLong", None)
 PyBool_FromLong = Var("PyBool_FromLong", None)
@@ -431,3 +433,7 @@ kv_destroy = Var('kv_destroy', None)
 
 queue_push = Var('queue_push', None)
 queue_pop = Var('queue_pop', None)
+
+event_queue_init = Var('event_queue_init', None)
+event_queue_push = Var('event_queue_push', None)
+event_queue_pop = Var('event_queue_pop', None)
