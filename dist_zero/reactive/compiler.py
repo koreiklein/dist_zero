@@ -65,12 +65,17 @@ class ReactiveCompiler(object):
 
     self.output_key_to_norm_expr = None
 
+    self._finalize_turn = None # A function to clean up data associated with a turn
+    self._initialize_turn = None # A function to initialize a turn
+
     self._type_by_expr = {} # expr to dist_zero.types.Type
     self._concrete_type_by_type = {} # type to dist_zero.concrete_types.ConcreteType
 
     # when in the middle of generating code for a turn, this variable will refer to a kvec of pointers
-    # that will be freed at the end of the turn
-    self.ptrsToFree = None
+    # that will be freed at the end of the turn,
+    self.ptrsToFree = lambda vGraph: vGraph.Arrow('turn').Dot('ptrs_to_free')
+    # and this variable will hold a kvec of kvecs to be freed at the end of the turn
+    self.vecsToFree = lambda vGraph: vGraph.Arrow('turn').Dot('vecs_to_free')
 
     self._graph_struct = None
     self._turn_struct = None
@@ -179,6 +184,7 @@ class ReactiveCompiler(object):
 
     self._generate_cur_time()
     self._generate_next_time()
+    self._generate_elapse()
 
     for i in range(0, len(self._top_exprs)):
       self._generate_initialize_state(i)
@@ -404,10 +410,16 @@ class ReactiveCompiler(object):
     self._turn_struct.AddField('vecs_to_free', cgen.KVec(cgen.Void.Star()))
     self._turn_struct.AddField('ptrs_to_free', cgen.KVec(cgen.Void.Star()))
 
+    self._turn_struct.AddField('processed_transitions', cgen.MachineInt.Array(cgen.Constant(len(self._top_exprs))))
+
     for i, expr in enumerate(self._top_exprs):
       ct = self.get_concrete_type(expr.type)
       self._graph_struct.AddField(self._state_key_in_graph(i), ct.c_state_type)
       self._turn_struct.AddField(self._transition_key_in_turn(i), cgen.KVec(ct.c_transitions_type))
+
+  @property
+  def graph_struct(self):
+    return self._graph_struct
 
   def _n_exprs(self):
     if self._cached_n_exprs is None:
@@ -425,9 +437,10 @@ class ReactiveCompiler(object):
                               cgen.Constant(EVENT_QUEUE_INITIAL_CAPACITY))).consequent.AddAssignment(
                                   None, self.pyerr_from_string("Failed to allocate a new event queue")).AddReturn(
                                       cgen.MinusOne))
+    init.Newline()
 
     for i, expr in enumerate(self._top_exprs):
-      init.AddAssignment(init.SelfArg().Arrow('n_missing_productions').Sub(cgen.Constant(i)), cgen.MinusOne)
+      init.AddAssignment(init.SelfArg().Arrow('n_missing_productions').Sub(i), cgen.MinusOne)
 
     for i, expr in enumerate(self._top_exprs):
       n_outputs = len(self._output_exprs.get(expr, []))
@@ -440,15 +453,14 @@ class ReactiveCompiler(object):
         else:
           n_outputs += 1
 
-      init.AddAssignment(init.SelfArg().Arrow('n_missing_subscriptions').Sub(cgen.Constant(i)),
-                         cgen.Constant(n_outputs))
+      init.AddAssignment(init.SelfArg().Arrow('n_missing_subscriptions').Sub(i), cgen.Constant(n_outputs))
 
     for expr in self._top_exprs:
       init.AddAssignment(None, cgen.kv_init(self.transitions_rvalue(init.SelfArg(), expr)))
 
     for i in range(len(self._top_exprs)):
       react = cgen.Var(self._react_to_transitions_function_name(i))
-      init.AddAssignment(init.SelfArg().Arrow('react_to_transitions').Sub(cgen.Constant(i)), react.Address())
+      init.AddAssignment(init.SelfArg().Arrow('react_to_transitions').Sub(i), react.Address())
 
     init.AddReturn(cgen.Constant(0))
 
@@ -462,11 +474,10 @@ class ReactiveCompiler(object):
     with finalize.ForInt(vGraph.Arrow('events').Dot('count')) as (loop, eventIndex):
       vData = vGraph.Arrow('events').Dot('data').Sub(eventIndex).Dot('data')
       loop.AddIf(vData != cgen.NULL).consequent.AddAssignment(None, cgen.free(vData))
-    finalize.AddAssignment(None, cgen.free(vGraph.Arrow('events').Dot('data')))
+    finalize.AddAssignment(None, cgen.free(vGraph.Arrow('events').Dot('data'))).Newline()
 
     for i, expr in enumerate(self._top_exprs):
-      ifInitialized = finalize.AddIf(
-          cgen.Zero == vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(i))).consequent
+      ifInitialized = finalize.AddIf(cgen.Zero == vGraph.Arrow('n_missing_productions').Sub(i)).consequent
       expr.generate_free_state(self, ifInitialized, self.state_rvalue(vGraph, expr))
 
   def _shall_maintain_state_function_name(self):
@@ -549,11 +560,10 @@ class ReactiveCompiler(object):
     for output_expr in self.expr_to_outputs[expr]:
       output_index = self.expr_index[output_expr]
 
-      vNMissingInputs = vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(output_index))
+      vNMissingInputs = vGraph.Arrow('n_missing_productions').Sub(output_index)
       whenSubscribed = produce.AddIf(vNMissingInputs >= cgen.Zero).consequent
 
-      whenSubscribed.AddAssignment(
-          vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(output_index)), vNMissingInputs - cgen.One)
+      whenSubscribed.AddAssignment(vGraph.Arrow('n_missing_productions').Sub(output_index), vNMissingInputs - cgen.One)
 
       whenReady = whenSubscribed.AddIf(vNMissingInputs == cgen.Zero).consequent
       initializeFunction = cgen.Var(self._initialize_state_function_name(output_index))
@@ -689,7 +699,7 @@ class ReactiveCompiler(object):
         self.state_lvalue(vGraph, expr))
 
     on_input.AddAssignment(None, cgen.capn_free(vCapn.Address()))
-    on_input.AddAssignment(vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(index)), cgen.Zero)
+    on_input.AddAssignment(vGraph.Arrow('n_missing_productions').Sub(index), cgen.Zero)
 
     produceState = cgen.Var(self._produce_function_name(index))
     on_input.AddAssignment(None, produceState(vGraph))
@@ -715,11 +725,11 @@ class ReactiveCompiler(object):
     subscribe = self.program.AddFunction(name=self._subscribe_function_name(index), retType=cgen.Int32, args=[vGraph])
 
     subscribe.AddAssignment(
-        vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)),
-        vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)) - cgen.One)
+        vGraph.Arrow('n_missing_subscriptions').Sub(index),
+        vGraph.Arrow('n_missing_subscriptions').Sub(index) - cgen.One)
 
     # Inputs will have their n_missing_productions value set to 0 only after they have been initialized.
-    subscribe.AddReturn(vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(index)) == cgen.Zero)
+    subscribe.AddReturn(vGraph.Arrow('n_missing_productions').Sub(index) == cgen.Zero)
 
   def _generate_subscribe_noninput(self, index, expr):
     '''see _generate_subscribe'''
@@ -727,20 +737,20 @@ class ReactiveCompiler(object):
     subscribe = self.program.AddFunction(name=self._subscribe_function_name(index), retType=cgen.Int32, args=[vGraph])
 
     subscribe.AddAssignment(
-        vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)),
-        vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)) - cgen.One)
+        vGraph.Arrow('n_missing_subscriptions').Sub(index),
+        vGraph.Arrow('n_missing_subscriptions').Sub(index) - cgen.One)
 
     if expr.__class__ == expression.Product:
-      ifZero = subscribe.AddIf(vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(index)) == cgen.Zero)
+      ifZero = subscribe.AddIf(vGraph.Arrow('n_missing_subscriptions').Sub(index) == cgen.Zero)
       for inputExpr in self.expr_to_inputs[expr]:
         ifZero.consequent.AddAssignment(
-            vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(self.expr_index[inputExpr])),
-            vGraph.Arrow('n_missing_subscriptions').Sub(cgen.Constant(self.expr_index[inputExpr])) - cgen.One)
+            vGraph.Arrow('n_missing_subscriptions').Sub(self.expr_index[inputExpr]),
+            vGraph.Arrow('n_missing_subscriptions').Sub(self.expr_index[inputExpr]) - cgen.One)
 
     subscribe.Newline()
 
-    missingInputsI = vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(index))
-    updateMissingInputsI = vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(index))
+    missingInputsI = vGraph.Arrow('n_missing_productions').Sub(index)
+    updateMissingInputsI = vGraph.Arrow('n_missing_productions').Sub(index)
 
     ifAlreadySubscribed = subscribe.AddIf(missingInputsI >= cgen.Zero)
     ifAlreadySubscribed.consequent.AddReturn(missingInputsI == cgen.Zero)
@@ -823,42 +833,98 @@ class ReactiveCompiler(object):
     loop.AddAssignment(None, cgen.free(vBuf))
     loop.AddAssignment(vSize, vSize + vSize)
 
+  def _generate_elapse(self):
+    ms = cgen.UInt64.Var('ms')
+    elapse = self._net.AddMethod(name="Elapse", args=[ms])
+    vGraph = elapse.SelfArg()
+
+    vResult = self._generate_output_dictionary(elapse, vGraph)
+    elapse.AddAssignment(vGraph.Arrow('cur_time'), vGraph.Arrow('cur_time') + ms)
+
+    whenHasEvents = elapse.AddIf(self._has_events(vGraph)).consequent
+
+    self._generate_initialize_turn(whenHasEvents, vGraph, vResult)
+    self._generate_events_loop(whenHasEvents, vGraph, vResult)
+    self._generate_queue_loop(whenHasEvents, vGraph, vResult)
+    self._generate_finalize_turn(whenHasEvents, vGraph)
+
+    elapse.AddReturn(vResult)
+
+  def _has_events(self, vGraph):
+    return (cgen.BinOp(cgen.And, (vGraph.Arrow('events').Dot('count') > cgen.Zero),
+                       (vGraph.Arrow('events').Dot('data').Sub(cgen.Zero).Dot('when') <= vGraph.Arrow('cur_time'))))
+
+  def _generate_events_loop(self, block, vGraph, vResult):
+    loop = block.AddWhile(self._has_events(vGraph))
+    vEvent = loop.AddDeclaration(
+        cgen.BasicType('struct event').Var('next_event'), cgen.event_queue_pop(vGraph.Arrow('events').Address()))
+    loop.AddAssignment(None, vEvent.Dot('occur').Deref()(vGraph, vEvent.Dot('data')))
+
   def _generate_on_transitions(self):
     '''Generate the c function that implements the OnTransitions method of the Net object.'''
     vTransitionsDict = cgen.PyObject.Star().Var('input_transitions_dict')
     on_transitions = self._net.AddMethod(name='OnTransitions', args=[vTransitionsDict]) # We'll do our own arg parsing
     vGraph = on_transitions.SelfArg()
 
-    # Create the result dictionary
-    vResult = on_transitions.Newline().AddDeclaration(cgen.PyObject.Star().Var('result'), cgen.PyDict_New())
-    (on_transitions.AddIf(vResult == cgen.NULL).consequent.AddAssignment(
+    vResult = self._generate_output_dictionary(on_transitions, vGraph)
+    self._generate_initialize_turn(on_transitions, vGraph, vResult)
+    self._generate_read_input_transitions(on_transitions, vGraph, vResult, vTransitionsDict)
+    self._generate_queue_loop(on_transitions, vGraph, vResult)
+    self._generate_finalize_turn(on_transitions, vGraph)
+    on_transitions.AddReturn(vResult)
+
+  def _generate_output_dictionary(self, block, vGraph):
+    vResult = block.Newline().AddDeclaration(cgen.PyObject.Star().Var('result'), cgen.PyDict_New())
+    (block.AddIf(vResult == cgen.NULL).consequent.AddAssignment(
         None, self.pyerr_from_string("Failed to create output dictionary")).AddReturn(cgen.NULL))
-    on_transitions.AddAssignment(vGraph.Arrow('turn').Dot('result'), vResult)
-    on_transitions.Newline()
+    block.Newline()
+    return vResult
 
-    # Initialize the queue
-    self.ptrsToFree = vGraph.Arrow('turn').Dot('ptrs_to_free')
-    vecsToFree = vGraph.Arrow('turn').Dot('vecs_to_free')
-    on_transitions.AddAssignment(None, cgen.kv_init(vecsToFree))
-    on_transitions.AddAssignment(None, cgen.kv_init(self.ptrsToFree))
+  def _generate_initialize_turn(self, block, vGraph, vResult):
+    block.AddAssignment(vGraph.Arrow('turn').Dot('result'), vResult)
 
-    # initialize was_added
-    with on_transitions.ForInt(cgen.Constant(len(self._top_exprs))) as (initWasAdded, vIndexWas):
-      initWasAdded.AddAssignment(vGraph.Arrow('turn').Dot('was_added').Sub(vIndexWas), cgen.Zero)
+    vRemainingData = block.AddDeclaration(cgen.MachineInt.Array(cgen.Constant(len(self._top_exprs))).Var('data'))
+    block.AddAssignment(None, self._initialize_turn_function()(vGraph, vRemainingData))
 
-    on_transitions.Newline().AddAssignment(vGraph.Arrow('turn').Dot('remaining').Dot('count'), cgen.Zero)
-    vRemainingData = on_transitions.AddDeclaration(
-        cgen.MachineInt.Array(cgen.Constant(len(self._top_exprs))).Var('data'))
-    on_transitions.AddAssignment(vGraph.Arrow('turn').Dot('remaining').Dot('data'), vRemainingData)
+  def _initialize_turn_function(self):
+    if self._initialize_turn is None:
+      vGraph = self._graph_struct.Star().Var('graph')
+      vRemainingData = cgen.MachineInt.Star().Var('data')
+      self._initialize_turn = self.program.AddFunction(
+          'initialize_turn', cgen.Void, args=[vGraph, vRemainingData], predeclare=True)
+      block = self._initialize_turn
 
-    on_transitions.Newline()
+      # Initialize the queue
+      block.AddAssignment(None, cgen.kv_init(self.vecsToFree(vGraph)))
+      block.AddAssignment(None, cgen.kv_init(self.ptrsToFree(vGraph)))
 
-    vKey = on_transitions.AddDeclaration(cgen.PyObject.Star().Var('input_key'))
-    vValue = on_transitions.AddDeclaration(cgen.PyObject.Star().Var('input_value'))
-    vPos = on_transitions.AddDeclaration(cgen.Py_ssize_t.Var('loop_pos'), cgen.Zero)
+      # initialize was_added
+      block.AddAssignment(
+          None, cgen.memset(vGraph.Arrow('turn').Dot('was_added'), cgen.Zero, cgen.Constant(len(self._top_exprs))))
 
-    dictLoop = on_transitions.AddWhile(
-        cgen.PyDict_Next(vTransitionsDict, vPos.Address(), vKey.Address(), vValue.Address()))
+      # initialize processed_transitions
+      block.AddAssignment(
+          None,
+          cgen.memset(
+              vGraph.Arrow('turn').Dot('processed_transitions'), cgen.Zero,
+              cgen.Constant(len(self._top_exprs)) * cgen.MachineInt.Sizeof()))
+
+      block.Newline().AddAssignment(vGraph.Arrow('turn').Dot('remaining').Dot('count'), cgen.Zero)
+      block.AddAssignment(vGraph.Arrow('turn').Dot('remaining').Dot('data'), vRemainingData)
+
+      block.Newline()
+
+    return self._initialize_turn
+
+  def vProcessedTransitions(self, vGraph, expr):
+    return vGraph.Arrow('turn').Dot('processed_transitions').Sub(self.expr_index[expr])
+
+  def _generate_read_input_transitions(self, block, vGraph, vResult, vTransitionsDict):
+    vKey = block.AddDeclaration(cgen.PyObject.Star().Var('input_key'))
+    vValue = block.AddDeclaration(cgen.PyObject.Star().Var('input_value'))
+    vPos = block.AddDeclaration(cgen.Py_ssize_t.Var('loop_pos'), cgen.Zero)
+
+    dictLoop = block.AddWhile(cgen.PyDict_Next(vTransitionsDict, vPos.Address(), vKey.Address(), vValue.Address()))
 
     condition = dictLoop
     for inputExpr in self._input_exprs:
@@ -866,7 +932,7 @@ class ReactiveCompiler(object):
       input_index = self.expr_index[inputExpr]
       ifMatch = condition.AddIf(cgen.Zero == cgen.PyUnicode_CompareWithASCIIString(vKey, cgen.StrConstant(key)))
       (ifMatch.consequent.AddIf(
-          vGraph.Arrow('n_missing_productions').Sub(cgen.Constant(input_index)) != cgen.Zero).consequent.AddAssignment(
+          vGraph.Arrow('n_missing_productions').Sub(input_index) != cgen.Zero).consequent.AddAssignment(
               None,
               self.pyerr(self.BadInputError,
                          f'Transitions were given for a key "{key}" that has not been initialized.')).AddAssignment(
@@ -882,29 +948,38 @@ class ReactiveCompiler(object):
         self.pyerr(self.BadInputError, 'keys of the argument OnTransition must correspond to inputs. Got "%S"',
                    vKey)).AddAssignment(None, cgen.Py_DECREF(vResult)).AddReturn(cgen.NULL))
 
-    queueLoop = on_transitions.Newline().AddWhile(cgen.Zero != vGraph.Arrow('turn').Dot('remaining').Dot('count'))
-
+  def _generate_queue_loop(self, block, vGraph, vResult):
+    queueLoop = block.Newline().AddWhile(cgen.Zero != vGraph.Arrow('turn').Dot('remaining').Dot('count'))
     nextIndex = queueLoop.AddDeclaration(
         cgen.MachineInt.Var('next_index'), cgen.queue_pop(vGraph.Arrow('turn').Dot('remaining').Address()))
-
     (queueLoop.AddIf(vGraph.Arrow('react_to_transitions').Sub(nextIndex)(vGraph)).consequent.AddAssignment(
         None, cgen.Py_DECREF(vResult)).AddAssignment(vResult, cgen.NULL).AddBreak())
 
-    # free from ptrs_to_free
-    with on_transitions.Newline().ForInt(cgen.kv_size(self.ptrsToFree)) as (freeLoop, ptrsFreeIndex):
-      freeLoop.AddAssignment(None, cgen.free(cgen.kv_A(self.ptrsToFree, ptrsFreeIndex)))
-    on_transitions.AddAssignment(None, cgen.kv_destroy(self.ptrsToFree))
+  def _finalize_turn_function(self):
+    if self._finalize_turn is None:
+      vGraph = self._graph_struct.Star().Var('graph')
+      self._finalize_turn = self.program.AddFunction("finalize_turn", cgen.Void, args=[vGraph], predeclare=True)
+      block = self._finalize_turn
 
-    # free from vecs_to_free
-    with on_transitions.ForInt(cgen.kv_size(vecsToFree)) as (freeLoop, kvecsFreeIndex):
-      kvecToFree = cgen.kv_A(vecsToFree, kvecsFreeIndex).Cast(cgen.KVec(cgen.Void).Star()).Deref()
-      # make sure to free the vec, and reinitialize it.
-      freeLoop.AddAssignment(None, cgen.kv_destroy(kvecToFree))
-      freeLoop.AddAssignment(None, cgen.kv_init(kvecToFree))
-    on_transitions.AddAssignment(None, cgen.kv_destroy(vecsToFree))
+      # free from ptrs_to_free
+      with block.Newline().ForInt(cgen.kv_size(self.ptrsToFree(vGraph))) as (freeLoop, ptrsFreeIndex):
+        freeLoop.AddAssignment(None, cgen.free(cgen.kv_A(self.ptrsToFree(vGraph), ptrsFreeIndex)))
+      block.AddAssignment(None, cgen.kv_destroy(self.ptrsToFree(vGraph)))
 
-    on_transitions.Newline().AddAssignment(vGraph.Arrow('turn').Dot('result'), cgen.NULL)
-    on_transitions.AddReturn(vResult)
+      # free from vecs_to_free
+      with block.ForInt(cgen.kv_size(self.vecsToFree(vGraph))) as (freeLoop, kvecsFreeIndex):
+        kvecToFree = cgen.kv_A(self.vecsToFree(vGraph), kvecsFreeIndex).Cast(cgen.KVec(cgen.Void).Star()).Deref()
+        # make sure to free the vec, and reinitialize it.
+        freeLoop.AddAssignment(None, cgen.kv_destroy(kvecToFree))
+        freeLoop.AddAssignment(None, cgen.kv_init(kvecToFree))
+      block.AddAssignment(None, cgen.kv_destroy(self.vecsToFree(vGraph)))
+
+      block.Newline().AddAssignment(vGraph.Arrow('turn').Dot('result'), cgen.NULL)
+
+    return self._finalize_turn
+
+  def _generate_finalize_turn(self, block, vGraph):
+    block.AddAssignment(None, self._finalize_turn_function()(vGraph))
 
   def _generate_react_to_transitions(self, expr):
     '''
@@ -931,31 +1006,37 @@ class ReactiveCompiler(object):
         vGraph,
         shallMaintainState(vGraph, cgen.Constant(index)),
     )
+    react.AddAssignment(self.vProcessedTransitions(vGraph, expr), cgen.kv_size(self.transitions_rvalue(vGraph, expr)))
+
+    self._generate_propogate_transitions(react, vGraph, expr)
+
+    react.AddReturn(cgen.false)
+
+  def _generate_propogate_transitions(self, block, vGraph, expr):
+    index = self.expr_index[expr]
 
     if expr in self._output_exprs:
       getBytes = cgen.Var(self._write_output_transitions_function_name(index))
-      vBytes = react.Newline().AddDeclaration(cgen.PyObject.Star().Var('result_bytes'), getBytes(vGraph))
-      react.AddIf(vBytes == cgen.NULL).consequent.AddReturn(cgen.true)
+      vBytes = block.Newline().AddDeclaration(cgen.PyObject.Star().Var('result_bytes'), getBytes(vGraph))
+      block.AddIf(vBytes == cgen.NULL).consequent.AddReturn(cgen.true)
       for key in self._output_exprs[expr]:
-        react.AddIf(cgen.MinusOne == cgen.PyDict_SetItemString(
+        block.AddIf(cgen.MinusOne == cgen.PyDict_SetItemString(
             vGraph.Arrow('turn').Dot('result'), cgen.StrConstant(key), vBytes)).consequent.AddReturn(cgen.true)
 
     for next_expr in self.expr_to_outputs[expr]:
       nextIndex = cgen.Constant(self.expr_index[next_expr])
-      whenShouldAdd = react.Newline().AddIf(
+      whenShouldAdd = block.Newline().AddIf(
           cgen.BinOp(cgen.And, (vGraph.Arrow('n_missing_productions').Sub(nextIndex) == cgen.Zero),
                      (vGraph.Arrow('turn').Dot('was_added').Sub(nextIndex).Negate()))).consequent
 
       whenShouldAdd.AddAssignment(None, cgen.queue_push(vGraph.Arrow('turn').Dot('remaining').Address(), nextIndex))
       whenShouldAdd.AddAssignment(vGraph.Arrow('turn').Dot('was_added').Sub(nextIndex), cgen.One)
 
-    react.AddAssignment(
+    block.AddAssignment(
         None,
         cgen.kv_push(cgen.Void.Star(),
                      vGraph.Arrow('turn').Dot('vecs_to_free'),
                      self.transitions_rvalue(vGraph, expr).Address().Cast(cgen.Void.Star())))
-
-    react.AddReturn(cgen.false)
 
   def _generate_deserialize_transitions(self, inputExpr):
     '''

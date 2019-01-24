@@ -73,6 +73,21 @@ class ConcreteType(object):
     '''
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
+  def generate_allocate_transition(self, compiler, block, transitionPointer, python_transition):
+    '''
+    Generate code to allocate a specific transition.
+    A pointer to the allocated transition should be placed in transitionPointer.
+    
+    :param compiler: The compiler instance that will generate code using this concrete type.
+    :type compiler: `ReactiveCompiler`
+    :param block: The block in which to generate the code.
+    :type block: `Block`
+    :param transitionPointer: A C lvalue for a pointer to the transition.
+    :type transitionPointer: `cgen.lvalue.Lvalue`
+    :param object python_transition: A python object identifying a transition of ``self.type``.
+    '''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
   def initialize_capnp(self, compiler):
     '''
     Initialize the capnp structures for this type.
@@ -267,6 +282,16 @@ class ConcreteBasicType(ConcreteType):
 
   def generate_set_state(self, compiler, block, stateLvalue, python_state):
     block.AddAssignment(stateLvalue, cgen.Constant(python_state))
+
+  def generate_allocate_transition(self, compiler, block, transitionPointer, python_transition):
+    total_inc = 0
+    for key, val in python_transition:
+      if key != 'inc':
+        raise errors.InternalError(f"ConcreteBasicType expected a transition of type 'inc', got '{key}'")
+      total_inc += val
+
+    block.AddAssignment(transitionPointer, cgen.malloc(self.c_transitions_type.Sizeof()).Cast(transitionPointer.type))
+    block.AddAssignment(transitionPointer.Deref(), cgen.Constant(total_inc))
 
   def generate_free_state(self, compiler, block, stateRvalue):
     pass

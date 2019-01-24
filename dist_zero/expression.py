@@ -66,7 +66,8 @@ class Expression(object):
 
     transitions = compiler.transitions_rvalue(vGraph, self)
 
-    with whenMaintainsState.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
+    with whenMaintainsState.ForInt(
+        cgen.kv_size(transitions), vStart=compiler.vProcessedTransitions(vGraph, self)) as (loop, vIndex):
       compiler.get_concrete_type(self.type).generate_apply_transition(loop, compiler.state_lvalue(vGraph, self),
                                                                       compiler.state_rvalue(vGraph, self),
                                                                       cgen.kv_A(transitions, vIndex))
@@ -112,7 +113,8 @@ class Project(Expression):
     outputTransitions = compiler.transitions_rvalue(vGraph, self)
     baseTransitionsRvalue = compiler.transitions_rvalue(vGraph, self.base)
 
-    with block.ForInt(cgen.kv_size(baseTransitionsRvalue)) as (loop, vIndex):
+    with block.ForInt(
+        cgen.kv_size(baseTransitionsRvalue), vStart=compiler.vProcessedTransitions(vGraph, self)) as (loop, vIndex):
       curTransition = cgen.kv_A(baseTransitionsRvalue, vIndex)
       switch = loop.AddSwitch(curTransition.Dot('type'))
 
@@ -201,7 +203,8 @@ class Product(Expression):
     for key, expr in self.items:
       transitions = compiler.transitions_rvalue(vGraph, expr)
 
-      with block.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
+      with block.ForInt(
+          cgen.kv_size(transitions), vStart=compiler.vProcessedTransitions(vGraph, self)) as (loop, vIndex):
         product_on_key = f"product_on_{key}"
         innerValue = cgen.kv_A(transitions, vIndex)
 
@@ -252,7 +255,8 @@ class Input(Expression):
 
     transitions = compiler.transitions_rvalue(vGraph, self)
 
-    with whenMaintainsState.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
+    with whenMaintainsState.ForInt(
+        cgen.kv_size(transitions), vStart=compiler.vProcessedTransitions(vGraph, self)) as (loop, vIndex):
       transition = cgen.kv_A(transitions, vIndex)
 
       compiler.get_concrete_type(self.type).generate_product_apply_transition_forced(

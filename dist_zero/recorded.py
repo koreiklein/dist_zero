@@ -30,10 +30,45 @@ class RecordedUser(expression.Expression):
   def type(self):
     return self._type
 
+  def _generate_play_recorded_transition(self, compiler):
+    type = compiler.get_concrete_type(self.type)
+    vGraphVoid = cgen.Void.Star().Var('graph_arg')
+    data = cgen.Void.Star().Var('data')
+    play_transition = compiler.program.AddFunction(
+        f'play_recorded_{cgen.inc_i()}', cgen.Void, [vGraphVoid, data], predeclare=True)
+
+    vGraph = play_transition.AddDeclaration(compiler.graph_struct.Star().Var('graph'),
+                                            vGraphVoid.Cast(compiler.graph_struct.Star()))
+
+    play_transition.AddAssignment(
+        None,
+        cgen.kv_push(type.c_transitions_type, compiler.transitions_rvalue(vGraph, self),
+                     data.Cast(type.c_transitions_type.Star()).Deref()))
+
+    compiler._generate_propogate_transitions(play_transition, vGraph, self)
+
+    return play_transition
+
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
     type = compiler.get_concrete_type(self.type)
     stateLvalue = compiler.state_lvalue(vGraph, self)
     type.generate_set_state(compiler, stateInitFunction, stateLvalue, self.start)
+
+    play_recorded_transition = self._generate_play_recorded_transition(compiler)
+
+    for when, python_transition in self._time_action_pairs:
+      vTransition = stateInitFunction.AddDeclaration(
+          type.c_transitions_type.Star().Var(f"recorded_transitions_{cgen.inc_i()}"))
+      type.generate_allocate_transition(compiler, stateInitFunction, vTransition, python_transition)
+      event = cgen.StructureLiteral(
+          struct=cgen.BasicType('struct event'),
+          key_to_expr={
+              'when': cgen.Constant(when),
+              'occur': play_recorded_transition.Address(),
+              'data': vTransition,
+          })
+      (stateInitFunction.AddIf(cgen.event_queue_push(vGraph.Arrow('events').Address(), event)).consequent.AddAssignment(
+          None, compiler.pyerr_from_string("Error pushing to event queue.")))
 
   def generate_free_state(self, compiler, block, stateRvalue):
     type = compiler.get_concrete_type(self.type)

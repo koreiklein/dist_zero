@@ -5,16 +5,16 @@ from dist_zero import recorded, types, expression, reactive, primitive
 
 class TestMultiplicativeReactive(object):
   def test_recorded_ints(self):
-    indiscrete_int = types.Int32.With('indiscrete')
+    indiscrete_int = types.Int32
 
     changing_number = recorded.RecordedUser(
         'user',
         start=3,
         type=indiscrete_int,
         time_action_pairs=[
-            (40, [('jump', 1)]),
-            (70, [('jump', 2)]),
-            (75, [('jump', 6)]),
+            (40, [('inc', -2)]),
+            (70, [('inc', 1)]),
+            (75, [('inc', 4)]),
         ])
 
     constant_2 = expression.Constant(2, type=types.Int32)
@@ -40,13 +40,13 @@ class TestMultiplicativeReactive(object):
 
     output = net.Elapse(15)
     assert 1 == len(output)
-    assert 3 == capnpForOutput_T.from_bytes(output['thesum']).jumpTo
+    assert -2 == capnpForOutput_T.from_bytes(output['thesum']).basicTransition
 
     assert 45 == net.CurTime()
     assert 70 == net.NextTime()
     output = net.Elapse(30)
     assert 1 == len(output)
-    assert 8 == capnpForOutput_T.from_bytes(output['thesum']).jumpTo
+    assert 5 == capnpForOutput_T.from_bytes(output['thesum']).basicTransition
 
   def test_reactive_errors(self, program_X):
     net = program_X.module.Net()

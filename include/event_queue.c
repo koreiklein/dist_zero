@@ -4,7 +4,7 @@
 struct event
 {
   uint64_t when;
-  void (*occur)(void *data);
+  void (*occur)(void *self, void *data);
   void *data;
 };
 

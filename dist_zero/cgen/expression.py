@@ -40,6 +40,8 @@ class Expression(object):
     return self.to_component_rvalue().Arrow(name)
 
   def Sub(self, i):
+    if isinstance(i, int):
+      i = Constant(i)
     if not isinstance(i, Expression):
       raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
     return self.to_component_rvalue().Sub(i)
@@ -171,6 +173,8 @@ class ComponentRvalue(Expression):
     return self._extend(lvalue.Arrow(name))
 
   def Sub(self, i):
+    if isinstance(i, int):
+      i = Constant(i)
     if not isinstance(i, Expression):
       raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
     return self._extend(lvalue.Sub(i))
@@ -337,18 +341,16 @@ class Cast(Expression):
     self.type.add_includes(program)
 
   def to_c_string(self, root=False):
-    if root:
-      return f"({self.type.to_c_string()}) {self.base.to_c_string(root=False)}"
-    else:
-      return f"(({self.type.to_c_string()}) {self.base.to_c_string(root=False)})"
+    return f"(({self.type.to_c_string()}) {self.base.to_c_string(root=False)})"
 
 
 class Var(Expression):
   '''A C variable'''
 
-  def __init__(self, name, type=None):
+  def __init__(self, name, type=None, includes=None):
     self.name = name
     self.type = type
+    self.includes = includes
 
   def toLValue(self):
     return lvalue.UpdateVar(self)
@@ -357,6 +359,9 @@ class Var(Expression):
     return f"Var(\"{self.name}\": {self.type})"
 
   def add_includes(self, program):
+    if self.includes is not None:
+      for x in self.includes:
+        program.includes.add(x)
     if self.type is not None:
       self.type.add_includes(program)
 
@@ -365,14 +370,15 @@ class Var(Expression):
 
 
 class LoopVar(object):
-  def __init__(self, block, var, limit):
+  def __init__(self, block, var, limit, start=None):
     self.block = block
     self.var = var
     self.limit = limit
     self.loop = None
+    self.start = start if start is not None else Zero
 
   def __enter__(self):
-    self.block.AddDeclaration(self.var, Zero)
+    self.block.AddDeclaration(self.var, self.start)
     self.loop = self.block.AddWhile(self.var < self.limit)
     return self.loop, self.var
 
@@ -437,3 +443,5 @@ queue_pop = Var('queue_pop', None)
 event_queue_init = Var('event_queue_init', None)
 event_queue_push = Var('event_queue_push', None)
 event_queue_pop = Var('event_queue_pop', None)
+
+memset = Var('memset', None, includes=['<string.h>'])
