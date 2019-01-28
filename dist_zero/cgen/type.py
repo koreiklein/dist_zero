@@ -40,7 +40,7 @@ class CType(object):
     return KVec(self)
 
 
-class Function(CType):
+class FunctionType(CType):
   '''Represents a function in C.'''
 
   def __init__(self, retType, argTypes):

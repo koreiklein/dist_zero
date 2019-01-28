@@ -46,7 +46,7 @@ class ReactiveCompiler(object):
         ],
         sources=[
             os.path.join(self._capnp_dirname(), self._capnp_source_filename()),
-            # NOTE(KK): We must compile all these files into each extension.
+            # NOTE(KK): We compile all these files into each extension.
             os.path.join(capnp_lib_dir, "capn.c"),
             os.path.join(capnp_lib_dir, "capn-malloc.c"),
             os.path.join(capnp_lib_dir, "capn-stream.c"),
@@ -404,8 +404,9 @@ class ReactiveCompiler(object):
 
     # Array of react_to_transitions* functions.  They should be called on initialized states when they
     # have input transitions to react to.
-    self._graph_struct.AddField('react_to_transitions',
-                                cgen.Function(cgen.UInt8, [self._graph_struct.Star()]).Star().Array(self._n_exprs()))
+    self._graph_struct.AddField(
+        'react_to_transitions',
+        cgen.FunctionType(cgen.UInt8, [self._graph_struct.Star()]).Star().Array(self._n_exprs()))
 
     self._turn_struct = self.program.AddStruct('turn')
     self._graph_struct.AddField('turn', self._turn_struct)
@@ -1052,14 +1053,9 @@ class ReactiveCompiler(object):
           vGraph,
       )
 
-      self._generate_propogate_transitions(react, vGraph, expr)
+      react.AddAssignment(None, self._after_transitions_function(expr)(vGraph))
 
       react.AddReturn(cgen.false)
-
-  def _generate_propogate_transitions(self, block, vGraph, expr):
-    index = self.expr_index[expr]
-
-    block.AddAssignment(None, self._after_transitions_function(expr)(vGraph))
 
   def _after_transitions_function(self, expr):
     if expr not in self._cached_after_transitions_function:

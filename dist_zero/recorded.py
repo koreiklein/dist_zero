@@ -45,7 +45,7 @@ class RecordedUser(expression.Expression):
         cgen.kv_push(type.c_transitions_type, compiler.transitions_rvalue(vGraph, self),
                      data.Cast(type.c_transitions_type.Star()).Deref()))
 
-    compiler._generate_propogate_transitions(play_transition, vGraph, self)
+    play_transition.AddAssignment(None, compiler._after_transitions_function(self)(vGraph))
 
     return play_transition
 
