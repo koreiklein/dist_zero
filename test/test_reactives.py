@@ -4,6 +4,42 @@ from dist_zero import recorded, types, expression, reactive, primitive
 
 
 class TestMultiplicativeReactive(object):
+  def test_interleave_recorded(self):
+    indiscrete_int = types.Int32
+
+    a = recorded.RecordedUser(
+        'user',
+        start=3,
+        type=indiscrete_int,
+        time_action_pairs=[
+            (40, [('inc', -2)]),
+            (70, [('inc', 1)]),
+            (75, [('inc', 4)]),
+        ])
+
+    b = recorded.RecordedUser(
+        'user',
+        start=1,
+        type=indiscrete_int,
+        time_action_pairs=[
+            (30, [('inc', 20)]),
+            (40, [('inc', 10)]),
+            (50, [('inc', 8)]),
+        ])
+
+    compiler = reactive.ReactiveCompiler(name='test_interleave_recorded')
+    thesum = program_plus(a, b)
+    module = compiler.compile({'thesum': thesum})
+    net = module.Net()
+
+    assert 4 == compiler.capnp_state_builder(thesum).from_bytes(net.OnOutput_thesum()['thesum']).basicState
+    assert not net.Elapse(20)
+
+    capnpForT = compiler.capnp_transitions_builder(thesum)
+
+    assert 28 == capnpForT.from_bytes(net.Elapse(25)['thesum']).basicTransition
+    assert 13 == capnpForT.from_bytes(net.Elapse(100)['thesum']).basicTransition
+
   def test_recorded_ints(self):
     indiscrete_int = types.Int32
 

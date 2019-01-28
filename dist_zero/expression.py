@@ -181,7 +181,7 @@ class Product(Expression):
       transitions = compiler.transitions_rvalue(vGraph, expr)
 
       with block.ForInt(
-          cgen.kv_size(transitions), vStart=compiler.vProcessedTransitions(vGraph, self)) as (loop, vIndex):
+          cgen.kv_size(transitions), vStart=compiler.vProcessedTransitions(vGraph, expr)) as (loop, vIndex):
         product_on_key = f"product_on_{key}"
         innerValue = cgen.kv_A(transitions, vIndex)
 
