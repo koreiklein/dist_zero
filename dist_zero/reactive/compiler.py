@@ -68,6 +68,9 @@ class ReactiveCompiler(object):
     self._finalize_turn = None # A function to clean up data associated with a turn
     self._initialize_turn = None # A function to initialize a turn
 
+    self._cached_after_transitions_function = {} # map each expr to a function to run after adding new transitions
+    self._shall_maintain_state = None
+
     self._type_by_expr = {} # expr to dist_zero.types.Type
     self._concrete_type_by_type = {} # type to dist_zero.concrete_types.ConcreteType
 
@@ -180,7 +183,7 @@ class ReactiveCompiler(object):
     self._generate_graph_initializer()
     self._generate_graph_finalizer()
     self._generate_python_bytes_from_capnp()
-    self._generate_shall_maintain_state()
+    self._shall_maintain_state_function()
 
     self._generate_cur_time()
     self._generate_next_time()
@@ -478,9 +481,6 @@ class ReactiveCompiler(object):
       ifInitialized = finalize.AddIf(cgen.Zero == vGraph.Arrow('n_missing_productions').Sub(i)).consequent
       expr.generate_free_state(self, ifInitialized, self.state_rvalue(vGraph, expr))
 
-  def _shall_maintain_state_function_name(self):
-    return 'shall_maintain_state'
-
   def _python_bytes_from_capn_function_name(self):
     return "python_bytes_from_capn"
 
@@ -772,18 +772,23 @@ class ReactiveCompiler(object):
     whenInputsAreSubscribed.AddAssignment(None, initializeFunction(vGraph))
     whenInputsAreSubscribed.AddReturn(cgen.true)
 
-  def _generate_shall_maintain_state(self):
+  def _shall_maintain_state_function(self):
     '''
     Generate a shall_maintain_state c function that determines whether an index must maintain its state
     as new transitions arrive.
     '''
-    vGraph = self._graph_struct.Star().Var('graph')
-    vIndex = cgen.MachineInt.Var('index')
-    shall_maintain_state = self.program.AddFunction(
-        name=self._shall_maintain_state_function_name(), retType=cgen.MachineInt, args=[vGraph, vIndex])
+    if self._shall_maintain_state is None:
+      vGraph = self._graph_struct.Star().Var('graph')
+      vIndex = cgen.MachineInt.Var('index')
+      shall_maintain_state = self.program.AddFunction(
+          name='shall_maintain_state', retType=cgen.MachineInt, args=[vGraph, vIndex])
 
-    # Current implementation: Check whether any other expr is still unsubscribed to it.
-    shall_maintain_state.AddReturn(vGraph.Arrow('n_missing_subscriptions').Sub(vIndex) > cgen.Zero)
+      # Current implementation: Check whether any other expr is still unsubscribed to it.
+      shall_maintain_state.AddReturn(vGraph.Arrow('n_missing_subscriptions').Sub(vIndex) > cgen.Zero)
+
+      self._shall_maintain_state = shall_maintain_state
+
+    return self._shall_maintain_state
 
   def _generate_cur_time(self):
     '''Generate the CurTime C function.'''
@@ -985,14 +990,11 @@ class ReactiveCompiler(object):
         retType=cgen.UInt8, # Return 1 if there was an error
         args=[vGraph])
 
-    shallMaintainState = cgen.Var(self._shall_maintain_state_function_name())
-
     # Update the state and write the transitions.
     expr.generate_react_to_transitions(
         self,
         react.Newline(),
         vGraph,
-        shallMaintainState(vGraph, cgen.Constant(index)),
     )
 
     self._generate_propogate_transitions(react, vGraph, expr)
@@ -1010,20 +1012,44 @@ class ReactiveCompiler(object):
         block.AddIf(cgen.MinusOne == cgen.PyDict_SetItemString(
             vGraph.Arrow('turn').Dot('result'), cgen.StrConstant(key), vBytes)).consequent.AddReturn(cgen.true)
 
-    for next_expr in self.expr_to_outputs[expr]:
-      nextIndex = cgen.Constant(self.expr_index[next_expr])
-      whenShouldAdd = block.Newline().AddIf(
-          cgen.BinOp(cgen.And, (vGraph.Arrow('n_missing_productions').Sub(nextIndex) == cgen.Zero),
-                     (vGraph.Arrow('turn').Dot('was_added').Sub(nextIndex).Negate()))).consequent
+    block.AddAssignment(None, self._after_transitions_function(expr)(vGraph))
 
-      whenShouldAdd.AddAssignment(None, cgen.queue_push(vGraph.Arrow('turn').Dot('remaining').Address(), nextIndex))
-      whenShouldAdd.AddAssignment(vGraph.Arrow('turn').Dot('was_added').Sub(nextIndex), cgen.One)
+  def _after_transitions_function(self, expr):
+    if expr not in self._cached_after_transitions_function:
+      index = self.expr_index[expr]
+      vGraph = self._graph_struct.Star().Var('graph')
+      block = self.program.AddFunction(f'after_transitions_{index}', cgen.Void, [vGraph], predeclare=True)
+      self._cached_after_transitions_function[expr] = block
 
-    block.AddAssignment(
-        None,
-        cgen.kv_push(cgen.Void.Star(),
-                     vGraph.Arrow('turn').Dot('vecs_to_free'),
-                     self.transitions_rvalue(vGraph, expr).Address().Cast(cgen.Void.Star())))
+      whenMaintainsState = block.AddIf(self._shall_maintain_state_function()(vGraph, cgen.Constant(index))).consequent
+      transitions = self.transitions_rvalue(vGraph, expr)
+      with whenMaintainsState.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
+        ct = self.get_concrete_type(expr.type)
+        if expr.__class__ == expression.Input and self.get_concrete_type(
+            expr.type).__class__ == concrete_types.ConcreteProductType:
+          generate_apply = ct.generate_product_apply_transition_forced
+        else:
+          generate_apply = ct.generate_apply_transition
+
+        generate_apply(loop, self.state_lvalue(vGraph, expr), self.state_rvalue(vGraph, expr),
+                       cgen.kv_A(transitions, vIndex))
+
+      for next_expr in self.expr_to_outputs[expr]:
+        nextIndex = cgen.Constant(self.expr_index[next_expr])
+        whenShouldAdd = block.Newline().AddIf(
+            cgen.BinOp(cgen.And, (vGraph.Arrow('n_missing_productions').Sub(nextIndex) == cgen.Zero),
+                       (vGraph.Arrow('turn').Dot('was_added').Sub(nextIndex).Negate()))).consequent
+
+        whenShouldAdd.AddAssignment(None, cgen.queue_push(vGraph.Arrow('turn').Dot('remaining').Address(), nextIndex))
+        whenShouldAdd.AddAssignment(vGraph.Arrow('turn').Dot('was_added').Sub(nextIndex), cgen.One)
+
+      block.AddAssignment(
+          None,
+          cgen.kv_push(cgen.Void.Star(),
+                       vGraph.Arrow('turn').Dot('vecs_to_free'),
+                       self.transitions_rvalue(vGraph, expr).Address().Cast(cgen.Void.Star())))
+
+    return self._cached_after_transitions_function[expr]
 
   def _generate_deserialize_transitions(self, inputExpr):
     '''

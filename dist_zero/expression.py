@@ -32,11 +32,10 @@ class Expression(object):
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
+  def generate_react_to_transitions(self, compiler, block, vGraph):
     '''
     Generate c code in ``block`` to:
       - Append the output transitions for self to compiler.transitions_rvalue(self)
-      - If the c expression ``maintainsState`` evaluates to true, update compiler.state_lvalue(self) as well.
 
     This function may assume that transitions and states have been written for all expressions 'prior' to self.
     It may also also that the kvec given by compiler.transitions_rvalue(self) has been initialized, and is empty.
@@ -50,26 +49,8 @@ class Expression(object):
 
     :param vGraph: A c variable for a graph pointer
     :type vGraph: `cgen.expression.Var`
-
-    :param maintainsState: A c expression indicating whether we should maintain the state of this expression.
-    :type maintainsState: `dist_zero.cgen.expression.Expression`
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
-
-  def _standard_update_state(self, compiler, block, vGraph, maintainState):
-    '''
-    For use in implementing generate_react_to_transitions
-
-    Assuming the transitions have already been written, update the state if necessary by applying all the transitions to it.
-    '''
-    whenMaintainsState = block.AddIf(maintainState).consequent
-
-    transitions = compiler.transitions_rvalue(vGraph, self)
-
-    with whenMaintainsState.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
-      compiler.get_concrete_type(self.type).generate_apply_transition(loop, compiler.state_lvalue(vGraph, self),
-                                                                      compiler.state_rvalue(vGraph, self),
-                                                                      cgen.kv_A(transitions, vIndex))
 
 
 class Constant(Expression):
@@ -90,7 +71,7 @@ class Constant(Expression):
     type = compiler.get_concrete_type(self.type)
     type.generate_free_state(compiler, block, stateRvalue)
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
+  def generate_react_to_transitions(self, compiler, block, vGraph):
     # No transitions should ever occur
     block.AddAssignment(None, compiler.pyerr_from_string("Constants do not react to transitions"))
     block.AddReturn(cgen.One)
@@ -108,7 +89,7 @@ class Project(Expression):
   def __str__(self):
     return f"{self.base}.'{self.key}'"
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
+  def generate_react_to_transitions(self, compiler, block, vGraph):
     outputTransitions = compiler.transitions_rvalue(vGraph, self)
     baseTransitionsRvalue = compiler.transitions_rvalue(vGraph, self.base)
 
@@ -131,8 +112,6 @@ class Project(Expression):
 
       default = switch.AddDefault()
       default.AddBreak()
-
-    self._standard_update_state(compiler, block, vGraph, maintainState)
 
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
     stateLvalue = compiler.state_lvalue(vGraph, self)
@@ -163,9 +142,8 @@ class Applied(Expression):
   def type(self):
     return self._type
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
-    self.func.generate_react_to_transitions(compiler, block, vGraph, maintainState, self.arg, self)
-    self._standard_update_state(compiler, block, vGraph, maintainState)
+  def generate_react_to_transitions(self, compiler, block, vGraph):
+    self.func.generate_react_to_transitions(compiler, block, vGraph, self.arg, self)
 
   def __str__(self):
     return f"{self.func}({self.arg})"
@@ -189,7 +167,7 @@ class Product(Expression):
   def type(self):
     return self._type
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
+  def generate_react_to_transitions(self, compiler, block, vGraph):
     transition_ctype = compiler.get_concrete_type(self.type).c_transitions_type
     if 'standard' not in self._type.transition_identifiers and 'individual' not in self._type.transition_identifiers:
       raise errors.InternalError("Have not implemented the action of Product on transitions "
@@ -216,8 +194,6 @@ class Product(Expression):
                         value=innerValue.Address(),
                     ))))
 
-    self._standard_update_state(compiler, block, vGraph, maintainState)
-
   def __str__(self):
     items = ', '.join(f"{key}: {value}" for key, value in self.items)
     return f"{{{items}}}"
@@ -243,20 +219,8 @@ class Input(Expression):
   def type(self):
     return self._type
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
-    if compiler.get_concrete_type(self._type).__class__ != concrete_types.ConcreteProductType:
-      self._standard_update_state(compiler, block, vGraph, maintainState)
-      return
-
-    whenMaintainsState = block.AddIf(maintainState).consequent
-
-    transitions = compiler.transitions_rvalue(vGraph, self)
-
-    with whenMaintainsState.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
-      transition = cgen.kv_A(transitions, vIndex)
-
-      compiler.get_concrete_type(self.type).generate_product_apply_transition_forced(
-          loop, compiler.state_lvalue(vGraph, self), compiler.state_rvalue(vGraph, self), transition)
+  def generate_react_to_transitions(self, compiler, block, vGraph):
+    pass
 
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
     raise errors.InternalError("Input expressions should never generate c code to initialize from prior inputs.")

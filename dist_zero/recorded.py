@@ -74,7 +74,7 @@ class RecordedUser(expression.Expression):
     type = compiler.get_concrete_type(self.type)
     type.generate_free_state(compiler, block, stateRvalue)
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState):
+  def generate_react_to_transitions(self, compiler, block, vGraph):
     # No transitions should ever occur
     block.AddAssignment(None, compiler.pyerr_from_string("Recordeds do not react to transitions"))
     block.AddReturn(cgen.One)

@@ -17,7 +17,7 @@ class PrimitiveOp(object):
   def generate_primitive_initialize_state(self, cFunction, arg, lvalue):
     raise errors.AbstractSuperclass(self.__class__)
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState, arg, expr):
+  def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     raise errors.AbstractSuperclass(self.__class__)
 
 
@@ -37,7 +37,7 @@ class BinOp(PrimitiveOp):
   def __str__(self):
     return self.s
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState, arg, expr):
+  def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     raise RuntimeError(f'BinOp of type "{self.s}" have not (yet) been programmed to react to transitions.')
 
   def generate_primitive_initialize_state(self, cFunction, argRvalue, resultLvalue):
@@ -57,7 +57,7 @@ class BinOp(PrimitiveOp):
 
 
 class PlusBinOp(BinOp):
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState, arg, expr):
+  def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     outputTransitions = compiler.transitions_rvalue(vGraph, expr)
     output_transition_ctype = compiler.get_concrete_type(expr.type).c_transitions_type
 
