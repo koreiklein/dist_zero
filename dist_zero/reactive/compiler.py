@@ -79,8 +79,6 @@ class ReactiveCompiler(object):
     # when in the middle of generating code for a turn, this variable will refer to a kvec of pointers
     # that will be freed at the end of the turn,
     self.ptrsToFree = lambda vGraph: vGraph.Arrow('turn').Dot('ptrs_to_free')
-    # and this variable will hold a kvec of kvecs to be freed at the end of the turn
-    self.vecsToFree = lambda vGraph: vGraph.Arrow('turn').Dot('vecs_to_free')
 
     self._graph_struct = None
     self._turn_struct = None
@@ -943,7 +941,6 @@ class ReactiveCompiler(object):
       block = self._initialize_turn
 
       # Initialize the queue
-      block.AddAssignment(None, cgen.kv_init(self.vecsToFree(vGraph)))
       block.AddAssignment(None, cgen.kv_init(self.ptrsToFree(vGraph)))
 
       # Initialize procesed_transitions
@@ -1012,12 +1009,10 @@ class ReactiveCompiler(object):
       block.AddAssignment(None, cgen.kv_destroy(self.ptrsToFree(vGraph)))
 
       # free from vecs_to_free
-      with block.ForInt(cgen.kv_size(self.vecsToFree(vGraph))) as (freeLoop, kvecsFreeIndex):
-        kvecToFree = cgen.kv_A(self.vecsToFree(vGraph), kvecsFreeIndex).Cast(cgen.KVec(cgen.Void).Star()).Deref()
-        # make sure to free the vec, and reinitialize it.
-        freeLoop.AddAssignment(None, cgen.kv_destroy(kvecToFree))
-        freeLoop.AddAssignment(None, cgen.kv_init(kvecToFree))
-      block.AddAssignment(None, cgen.kv_destroy(self.vecsToFree(vGraph)))
+      for expr in self._top_exprs:
+        transitions = self.transitions_rvalue(vGraph, expr)
+        block.AddAssignment(None, cgen.kv_destroy(transitions))
+        block.AddAssignment(None, cgen.kv_init(transitions))
 
       block.Newline().AddAssignment(vGraph.Arrow('turn').Dot('result'), cgen.NULL)
 
