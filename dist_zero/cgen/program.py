@@ -168,14 +168,15 @@ class Program(object):
     self._exceptions.append(exc)
     return exc.var
 
-  def AddExternalFunction(self, name, args, docstring=''):
+  def AddExternalFunction(self, name, args, docstring='', predeclare=False):
     '''
     Add and export a function in the python extension.
     The function will be available on the python module once it's compiled.
     '''
     fself = expression.Var('self', type.PyObject.Star())
     fargs = expression.Var('args', type.PyObject.Star())
-    f = self.AddFunction(name, type.PyObject.Star(), [fself, fargs], export=True, docstring=docstring)
+    f = self.AddFunction(
+        name, type.PyObject.Star(), [fself, fargs], export=True, docstring=docstring, predeclare=predeclare)
 
     if args is not None:
       f.generate_parse_external_args(args=args, mainArg=fargs)
@@ -188,12 +189,12 @@ class Program(object):
     self._python_types.append(result)
     return result
 
-  def AddFunction(self, name, retType, args, docstring='', export=False):
+  def AddFunction(self, name, retType, args, docstring='', export=False, predeclare=False):
     '''Add a new C function.'''
     if name in self._function_names:
       raise RuntimeError(f"A function with the name {name} has already been added to this c program.")
     self._function_names.add(name)
-    result = Function(self, name, retType, args, docstring=docstring, export=export)
+    result = Function(self, name, retType, args, docstring=docstring, export=export, predeclare=predeclare)
     self._functions.append(result)
     if export:
       self._exported_functions.append(result)
@@ -255,6 +256,14 @@ class Program(object):
     yield '\n'
     yield from self._add_declarations()
     yield '\n'
+
+    for func in self._functions:
+      if func.predeclare:
+        yield func.header_string()
+        yield ";\n"
+
+    if self._functions:
+      yield '\n'
 
     for func in self._functions:
       yield from func.function_to_c_string()
@@ -340,10 +349,11 @@ class PythonException(object):
 class Function(expression.Expression):
   '''Represents a C function.'''
 
-  def __init__(self, program, name, retType, args, export=False, docstring=''):
+  def __init__(self, program, name, retType, args, export=False, docstring='', predeclare=False):
     self.program = program
     self.name = name
     self.export = export
+    self.predeclare = predeclare
     self.docstring = docstring
     self.retType = retType
     self.args = args
@@ -422,10 +432,11 @@ class Function(expression.Expression):
   def header_string(self):
     args = ", ".join([arg.type.wrap_variable(arg.name) for arg in self.args])
     static = 'static ' if self.export else ''
-    return f"{static}{self.retType.wrap_variable(self.name)} ({args})\n"
+    return f"{static}{self.retType.wrap_variable(self.name)} ({args})"
 
   def function_to_c_string(self):
     yield self.header_string()
+    yield "\n"
 
     yield from self._block.to_c_string('')
 

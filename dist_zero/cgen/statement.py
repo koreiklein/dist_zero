@@ -25,6 +25,9 @@ class Block(object):
           yield indent + INDENT + statement
         else:
           yield from statement.to_c_string(indent + INDENT)
+        if isinstance(statement, Return):
+          # None of the upcomming statements will execute, they can be safely ignored
+          break
       yield f"{indent}}}\n"
 
   def logf(self, fmt, *args):
@@ -44,8 +47,9 @@ class Block(object):
   def AddReturnVoid(self):
     self._statements.append('return;\n')
 
-  def ForInt(self, vLimit):
-    return expression.LoopVar(block=self, var=expression.Var(f'loop_{inc_i()}', type.MachineInt), limit=vLimit)
+  def ForInt(self, vLimit, vStart=None):
+    return expression.LoopVar(
+        block=self, var=expression.Var(f'loop_{inc_i()}', type.MachineInt), limit=vLimit, start=vStart)
 
   def AddSwitch(self, switch_on):
     result = Switch(switch_on, program=self.program)

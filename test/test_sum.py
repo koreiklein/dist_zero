@@ -4,7 +4,7 @@ import logging
 import pytest
 
 import dist_zero.ids
-from dist_zero import messages, errors
+from dist_zero import messages, errors, types
 from dist_zero.node.io import DataNode
 from dist_zero.recorded import RecordedUser
 
@@ -13,13 +13,13 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.simulated
 def test_times_in_order():
-  RecordedUser('user b', [
+  RecordedUser('user b', 0, types.Int32, [
       (60, messages.io.input_action(1)),
       (80, messages.io.input_action(2)),
   ])
 
   with pytest.raises(errors.InternalError):
-    RecordedUser('user b', [
+    RecordedUser('user b', 0, types.Int32, [
         (80, messages.io.input_action(2)),
         (60, messages.io.input_action(1)),
     ])
@@ -125,7 +125,7 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
       parent_node_id=input_kid,
       new_node_name='input_b',
       machine_id=machine_b,
-      recorded_user=RecordedUser('user b', [
+      recorded_user=RecordedUser('user b', 0, types.Int32, [
           (2030, messages.io.input_action(2)),
           (2060, messages.io.input_action(1)),
       ]))
@@ -133,7 +133,7 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
       parent_node_id=input_kid,
       new_node_name='input_c',
       machine_id=machine_c,
-      recorded_user=RecordedUser('user c', [
+      recorded_user=RecordedUser('user c', 0, types.Int32, [
           (2033, messages.io.input_action(1)),
           (2043, messages.io.input_action(1)),
           (2073, messages.io.input_action(1)),

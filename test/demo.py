@@ -8,7 +8,7 @@ from collections import defaultdict
 
 import dist_zero.ids
 
-from dist_zero import spawners, messages
+from dist_zero import spawners, messages, types
 from dist_zero.recorded import RecordedUser
 from dist_zero.system_controller import SystemController
 from dist_zero.spawners.simulator import SimulatedSpawner
@@ -263,7 +263,7 @@ class Demo(object):
       self.total_simulated_amount += amount_to_send
       time_message_pairs.append((t, messages.io.input_action(amount_to_send)))
 
-    result = RecordedUser(name, time_message_pairs)
+    result = RecordedUser(name, 0, types.Int32, time_message_pairs)
     self._recorded_users.append(result)
     return result
 

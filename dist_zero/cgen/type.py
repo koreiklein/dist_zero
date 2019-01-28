@@ -40,7 +40,7 @@ class CType(object):
     return KVec(self)
 
 
-class Function(CType):
+class FunctionType(CType):
   '''Represents a function in C.'''
 
   def __init__(self, retType, argTypes):
@@ -95,6 +95,23 @@ class _Queue(CType):
 
 
 Queue = _Queue()
+
+
+class _EventQueue(CType):
+  def add_includes(self, program):
+    program.includes.add('"event_queue.c"')
+
+  def wrap_variable(self, varname):
+    return f"struct event_queue {varname}"
+
+  def parsing_format_string(self):
+    raise RuntimeError(f"Unable to produce a PyArg_ParseTuple format string for {self.to_c_string()}")
+
+  def to_c_string(self):
+    return "struct event_queue"
+
+
+EventQueue = _EventQueue()
 
 
 class Array(CType):
@@ -177,9 +194,10 @@ Capn_Segment = SimpleCType('struct capn_segment')
 
 
 class Int(CType):
-  def __init__(self, nbits, format_string=None):
+  def __init__(self, nbits, format_string=None, unsigned=False):
     self.nbits = nbits
     self.format_string = format_string
+    self.unsigned = unsigned
 
   def add_includes(self, program):
     program.includes.add("<stdint.h>")
@@ -194,7 +212,7 @@ class Int(CType):
     return f"{self.to_c_string()} {varname}"
 
   def to_c_string(self):
-    return f"int{self.nbits}_t"
+    return f"{'u' if self.unsigned else ''}int{self.nbits}_t"
 
 
 class BasicType(CType):
@@ -205,7 +223,7 @@ class BasicType(CType):
     pass
 
   def parsing_format_string(self):
-    raise RuntimeError(f"No PyArg_ParseTuple format string specified for {self.to_c_string}")
+    raise RuntimeError(f"No PyArg_ParseTuple format string specified for {self.to_c_string()}")
 
   def wrap_variable(self, varname):
     return f"{self.to_c_string()} {varname}"
@@ -223,7 +241,7 @@ Int16 = Int(16, format_string='h')
 Int32 = Int(32, format_string='i')
 Int64 = Int(64, format_string='l')
 
-UInt8 = BasicType('uint8_t')
-UInt16 = BasicType('uint16_t')
-UInt32 = BasicType('uint32_t')
-UInt64 = BasicType('uint64_t')
+UInt8 = Int(8, format_string='b', unsigned=True)
+UInt16 = Int(16, format_string='H', unsigned=True)
+UInt32 = Int(32, format_string='k', unsigned=True)
+UInt64 = Int(64, format_string='K', unsigned=True)

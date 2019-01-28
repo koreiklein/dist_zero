@@ -17,7 +17,7 @@ class PrimitiveOp(object):
   def generate_primitive_initialize_state(self, cFunction, arg, lvalue):
     raise errors.AbstractSuperclass(self.__class__)
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState, arg, expr):
+  def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     raise errors.AbstractSuperclass(self.__class__)
 
 
@@ -37,7 +37,7 @@ class BinOp(PrimitiveOp):
   def __str__(self):
     return self.s
 
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState, arg, expr):
+  def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     raise RuntimeError(f'BinOp of type "{self.s}" have not (yet) been programmed to react to transitions.')
 
   def generate_primitive_initialize_state(self, cFunction, argRvalue, resultLvalue):
@@ -57,7 +57,7 @@ class BinOp(PrimitiveOp):
 
 
 class PlusBinOp(BinOp):
-  def generate_react_to_transitions(self, compiler, block, vGraph, maintainState, arg, expr):
+  def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     outputTransitions = compiler.transitions_rvalue(vGraph, expr)
     output_transition_ctype = compiler.get_concrete_type(expr.type).c_transitions_type
 
@@ -67,9 +67,10 @@ class PlusBinOp(BinOp):
 
     argTransitions = compiler.transitions_rvalue(vGraph, arg)
 
-    block.logf(f"\nPlus operation is reacting to %zu.\n", cgen.kv_size(argTransitions))
+    vStart = compiler.vProcessedTransitions(vGraph, expr)
+    block.logf(f"  Plus operation is reacting to transitions [%d, %zu).\n", vStart, cgen.kv_size(argTransitions))
 
-    with block.ForInt(cgen.kv_size(argTransitions)) as (loop, argTransitionIndex):
+    with block.ForInt(cgen.kv_size(argTransitions), vStart=vStart) as (loop, argTransitionIndex):
       transition = cgen.kv_A(argTransitions, argTransitionIndex)
       switch = loop.AddSwitch(transition.Dot('type'))
 
@@ -79,7 +80,7 @@ class PlusBinOp(BinOp):
         case = switch.AddCase(arg_enum.literal(product_on_key))
         nextValue = transition.Dot('value').Dot(product_on_key).Deref()
         case.AddAssignment(None, cgen.kv_push(output_transition_ctype, outputTransitions, nextValue))
-        case.logf(f"\nPlus operation in product_on_{key} case %d\n", nextValue)
+        case.logf(f"  Plus operation in product_on_{key} case. Input value: %d\n", nextValue)
         case.AddBreak()
 
       default = switch.AddDefault()

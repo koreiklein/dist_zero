@@ -56,6 +56,38 @@ class ConcreteType(object):
     '''
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
+  def generate_set_state(self, compiler, block, stateLvalue, python_state):
+    '''
+    Generate code to initialize a specific state.
+
+    :param compiler: The compiler instance that will generate code using this concrete type.
+    :type compiler: `ReactiveCompiler`
+    :param block: The block in which to generate the code.
+    :type block: `Block`
+    :param stateLvalue: A C lvalue for the state.
+    :type stateLvalue: `cgen.lvalue.Lvalue`
+    :param object python_state: A python object identifying a state of ``self.type``.
+
+    :return: a c literal for value.
+    :rtype: `cgen.expression.Expression`
+    '''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
+  def generate_allocate_transition(self, compiler, block, transitionPointer, python_transition):
+    '''
+    Generate code to allocate a specific transition.
+    A pointer to the allocated transition should be placed in transitionPointer.
+    
+    :param compiler: The compiler instance that will generate code using this concrete type.
+    :type compiler: `ReactiveCompiler`
+    :param block: The block in which to generate the code.
+    :type block: `Block`
+    :param transitionPointer: A C lvalue for a pointer to the transition.
+    :type transitionPointer: `cgen.lvalue.Lvalue`
+    :param object python_transition: A python object identifying a transition of ``self.type``.
+    '''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
   def initialize_capnp(self, compiler):
     '''
     Initialize the capnp structures for this type.
@@ -161,7 +193,7 @@ class ConcreteType(object):
   def _write_capn_to_python_bytes(self, compiler, block, vCapn, vCapnPtr, ptr, result):
     (block.AddIf(cgen.Zero != cgen.capn_setp(vCapnPtr, cgen.Zero, ptr.Dot('p'))).consequent.AddAssignment(
         None, compiler.pyerr_from_string("Failed to capn_setp for root when producing output.")).AddAssignment(
-            None, cgen.capn_free(vCapn.Address())).AddReturn(cgen.NULL))
+            None, cgen.capn_free(vCapn.Address())).AddReturn(cgen.false))
 
     block.Newline()
 
@@ -247,6 +279,19 @@ class ConcreteBasicType(ConcreteType):
     self._basicState_field = None
     self._capnp_transitions_type = None
     self._capnp_transitions_basicTransition_field = None
+
+  def generate_set_state(self, compiler, block, stateLvalue, python_state):
+    block.AddAssignment(stateLvalue, cgen.Constant(python_state))
+
+  def generate_allocate_transition(self, compiler, block, transitionPointer, python_transition):
+    total_inc = 0
+    for key, val in python_transition:
+      if key != 'inc':
+        raise errors.InternalError(f"ConcreteBasicType expected a transition of type 'inc', got '{key}'")
+      total_inc += val
+
+    block.AddAssignment(transitionPointer, cgen.malloc(self.c_transitions_type.Sizeof()).Cast(transitionPointer.type))
+    block.AddAssignment(transitionPointer.Deref(), cgen.Constant(total_inc))
 
   def generate_free_state(self, compiler, block, stateRvalue):
     pass

@@ -1,7 +1,7 @@
 import pytest
 
 import dist_zero.ids
-from dist_zero import messages
+from dist_zero import messages, types
 from dist_zero.recorded import RecordedUser
 
 from .common import Utils
@@ -36,7 +36,7 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
       data_node_id=root_input_node_id,
       new_node_name=name,
       machine_id=machine,
-      recorded_user=RecordedUser('user b', [
+      recorded_user=RecordedUser('user b', 0, types.Int32, [
           (330, messages.io.input_action(2)),
           (660, messages.io.input_action(1)),
       ]),
