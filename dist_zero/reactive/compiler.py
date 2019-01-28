@@ -414,15 +414,15 @@ class ReactiveCompiler(object):
     # from an OnInput call.
     self._turn_struct.AddField('result', cgen.PyObject.Star())
 
-    self._turn_struct.AddField('processed_transitions', cgen.MachineInt.Array(self.nExprs))
+    self._turn_struct.AddField('processed_transitions', cgen.MachineInt.Array(self._n_exprs()))
 
     # kvec of functions that will serialize output transitions into the turn
     self._turn_struct.AddField('turn_outputs', cgen.KVec(cgen.Void.Star()))
     # true iff expr i has been added to turn_outputs.  Used to avoid adding the same function to the array twice
-    self._turn_struct.AddField('is_turn_output', cgen.UInt8.Array(self.nExprs))
+    self._turn_struct.AddField('is_turn_output', cgen.UInt8.Array(self._n_exprs()))
 
     self._turn_struct.AddField('remaining', cgen.Queue)
-    self._turn_struct.AddField('was_added', cgen.UInt8.Array(self.nExprs))
+    self._turn_struct.AddField('was_added', cgen.UInt8.Array(self._n_exprs()))
     self._turn_struct.AddField('vecs_to_free', cgen.KVec(cgen.Void.Star()))
     self._turn_struct.AddField('ptrs_to_free', cgen.KVec(cgen.Void.Star()))
 
@@ -430,10 +430,6 @@ class ReactiveCompiler(object):
       ct = self.get_concrete_type(expr.type)
       self._graph_struct.AddField(self._state_key_in_graph(i), ct.c_state_type)
       self._turn_struct.AddField(self._transition_key_in_turn(i), cgen.KVec(ct.c_transitions_type))
-
-  @property
-  def nExprs(self):
-    return cgen.Constant(len(self._top_exprs))
 
   @property
   def graph_struct(self):
@@ -457,7 +453,8 @@ class ReactiveCompiler(object):
     init.Newline()
 
     init.AddAssignment(
-        None, cgen.memset(vGraph.Arrow('turn').Dot('is_turn_output'), cgen.Zero, self.nExprs * cgen.UInt8.Sizeof()))
+        None, cgen.memset(vGraph.Arrow('turn').Dot('is_turn_output'), cgen.Zero,
+                          self._n_exprs() * cgen.UInt8.Sizeof()))
 
     init.AddAssignment(None, cgen.kv_init(vGraph.Arrow('turn').Dot('turn_outputs')))
 
@@ -869,11 +866,12 @@ class ReactiveCompiler(object):
     vResult = self._generate_output_dictionary(elapse, vGraph)
     elapse.AddAssignment(vGraph.Arrow('cur_time'), vGraph.Arrow('cur_time') + ms)
 
+    elapse.logf("Responding to %llu ms of events.\n", ms)
+
     whenHasEvents = elapse.AddIf(self._has_events(vGraph)).consequent
 
     self._generate_initialize_turn(whenHasEvents, vGraph, vResult)
     self._generate_events_loop(whenHasEvents, vGraph, vResult)
-    self._generate_queue_loop(whenHasEvents, vGraph, vResult)
     self._generate_finalize_turn(whenHasEvents, vGraph)
 
     elapse.AddReturn(vResult)
@@ -884,9 +882,27 @@ class ReactiveCompiler(object):
 
   def _generate_events_loop(self, block, vGraph, vResult):
     loop = block.AddWhile(self._has_events(vGraph))
+    for expr in self._top_exprs:
+      loop.AddAssignment(self.vProcessedTransitions(vGraph, expr), cgen.kv_size(self.transitions_rvalue(vGraph, expr)))
+
+    loop.AddAssignment(None, cgen.memset(vGraph.Arrow('turn').Dot('was_added'), cgen.Zero, self._n_exprs()))
+
     vEvent = loop.AddDeclaration(
         cgen.BasicType('struct event').Var('next_event'), cgen.event_queue_pop(vGraph.Arrow('events').Address()))
+    loop.logf("Responding to event at time %llu.\n", vEvent.Dot('when'))
     loop.AddAssignment(None, vEvent.Dot('occur').Deref()(vGraph, vEvent.Dot('data')))
+
+    queueLoop = loop.Newline().AddWhile(cgen.Zero != vGraph.Arrow('turn').Dot('remaining').Dot('count'))
+    nextIndex = queueLoop.AddDeclaration(
+        cgen.MachineInt.Var('next_index'), cgen.queue_pop(vGraph.Arrow('turn').Dot('remaining').Address()))
+    reactFailed = queueLoop.AddIf(vGraph.Arrow('react_to_transitions').Sub(nextIndex)(vGraph)).consequent
+    reactFailed.AddAssignment(None, cgen.Py_DECREF(vResult))
+    reactFailed.AddAssignment(None, self._finalize_turn_function()(vGraph))
+    reactFailed.AddReturn(cgen.NULL)
+
+    serializeFailed = block.AddIf(self._serialize_output_transitions_function()(vGraph)).consequent
+    serializeFailed.AddAssignment(None, cgen.Py_DECREF(vResult))
+    serializeFailed.AddAssignment(vResult, cgen.NULL)
 
   def _generate_on_transitions(self):
     '''Generate the c function that implements the OnTransitions method of the Net object.'''
@@ -898,8 +914,9 @@ class ReactiveCompiler(object):
     self._generate_initialize_turn(on_transitions, vGraph, vResult)
     self._generate_read_input_transitions(on_transitions, vGraph, vResult, vTransitionsDict)
     self._generate_queue_loop(on_transitions, vGraph, vResult)
-    on_transitions.AddIf(self._serialize_output_transitions_function()(vGraph)).consequent.AddAssignment(
-        vResult, cgen.NULL)
+    serializeFailed = on_transitions.AddIf(self._serialize_output_transitions_function()(vGraph)).consequent
+    serializeFailed.AddAssignment(None, cgen.Py_DECREF(vResult))
+    serializeFailed.AddAssignment(vResult, cgen.NULL)
     self._generate_finalize_turn(on_transitions, vGraph)
     on_transitions.AddReturn(vResult)
 
@@ -913,7 +930,7 @@ class ReactiveCompiler(object):
   def _generate_initialize_turn(self, block, vGraph, vResult):
     block.AddAssignment(vGraph.Arrow('turn').Dot('result'), vResult)
 
-    vRemainingData = block.AddDeclaration(cgen.MachineInt.Array(cgen.Constant(len(self._top_exprs))).Var('data'))
+    vRemainingData = block.AddDeclaration(cgen.MachineInt.Array(self._n_exprs()).Var('data'))
     block.AddAssignment(None, self._initialize_turn_function()(vGraph, vRemainingData))
 
   def _initialize_turn_function(self):
@@ -932,11 +949,11 @@ class ReactiveCompiler(object):
       block.AddAssignment(
           None,
           cgen.memset(
-              vGraph.Arrow('turn').Dot('processed_transitions'), cgen.Zero, self.nExprs * cgen.MachineInt.Sizeof()))
+              vGraph.Arrow('turn').Dot('processed_transitions'), cgen.Zero,
+              self._n_exprs() * cgen.MachineInt.Sizeof()))
 
       # initialize was_added
-      block.AddAssignment(
-          None, cgen.memset(vGraph.Arrow('turn').Dot('was_added'), cgen.Zero, cgen.Constant(len(self._top_exprs))))
+      block.AddAssignment(None, cgen.memset(vGraph.Arrow('turn').Dot('was_added'), cgen.Zero, self._n_exprs()))
 
       block.Newline().AddAssignment(vGraph.Arrow('turn').Dot('remaining').Dot('count'), cgen.Zero)
       block.AddAssignment(vGraph.Arrow('turn').Dot('remaining').Dot('data'), vRemainingData)
@@ -1098,6 +1115,7 @@ class ReactiveCompiler(object):
       self._serialize_output_transitions = block
 
       vTurnOutputs = vGraph.Arrow('turn').Dot('turn_outputs')
+      block.logf('Serializing %zu outputs.\n', cgen.kv_size(vTurnOutputs))
       with block.ForInt(cgen.kv_size(vTurnOutputs)) as (loop, index):
         failed = loop.AddIf(
             cgen.kv_A(vTurnOutputs, index).Cast(cgen.BasicType('uint8_t (*)(struct Net *)')).Deref()
@@ -1105,7 +1123,9 @@ class ReactiveCompiler(object):
         failed.AddReturn(cgen.One)
 
       block.AddAssignment(
-          None, cgen.memset(vGraph.Arrow('turn').Dot('is_turn_output'), cgen.Zero, self.nExprs * cgen.UInt8.Sizeof()))
+          None, cgen.memset(
+              vGraph.Arrow('turn').Dot('is_turn_output'), cgen.Zero,
+              self._n_exprs() * cgen.UInt8.Sizeof()))
 
       block.AddAssignment(None, cgen.kv_destroy(vTurnOutputs))
       block.AddAssignment(None, cgen.kv_init(vTurnOutputs))
