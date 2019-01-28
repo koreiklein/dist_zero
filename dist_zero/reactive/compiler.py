@@ -459,9 +459,10 @@ class ReactiveCompiler(object):
     for expr in self._top_exprs:
       init.AddAssignment(None, cgen.kv_init(self.transitions_rvalue(init.SelfArg(), expr)))
 
-    for i in range(len(self._top_exprs)):
-      react = cgen.Var(self._react_to_transitions_function_name(i))
-      init.AddAssignment(init.SelfArg().Arrow('react_to_transitions').Sub(i), react.Address())
+    for i, expr in enumerate(self._top_exprs):
+      if self._expr_can_react(expr):
+        react = cgen.Var(self._react_to_transitions_function_name(i))
+        init.AddAssignment(init.SelfArg().Arrow('react_to_transitions').Sub(i), react.Address())
 
     init.AddReturn(cgen.Constant(0))
 
@@ -930,8 +931,6 @@ class ReactiveCompiler(object):
               self.pyerr(self.BadInputError,
                          f'Transitions were given for a key "{key}" that has not been initialized.')).AddAssignment(
                              None, cgen.Py_DECREF(vResult)).AddReturn(cgen.NULL))
-      ifMatch.consequent.AddAssignment(
-          None, cgen.queue_push(vGraph.Arrow('turn').Dot('remaining').Address(), cgen.Constant(input_index)))
       deserializeTransitions = cgen.Var(self._deserialize_transitions_function_name(input_index))
       ifMatch.consequent.AddAssignment(None, deserializeTransitions(vGraph, vValue))
       condition = ifMatch.alternate
@@ -974,6 +973,9 @@ class ReactiveCompiler(object):
   def _generate_finalize_turn(self, block, vGraph):
     block.AddAssignment(None, self._finalize_turn_function()(vGraph))
 
+  def _expr_can_react(self, expr):
+    return expr.__class__ not in [expression.Input, recorded.RecordedUser]
+
   def _generate_react_to_transitions(self, expr):
     '''
     Generate a c function that implement ``expr`` reacting to transitions on its inputs.
@@ -983,23 +985,24 @@ class ReactiveCompiler(object):
     :param expr: Any expression in the input program. 
     :type expr: `dist_zero.expression.Expression`
     '''
-    index = self.expr_index[expr]
-    vGraph = self._graph_struct.Star().Var('graph')
-    react = self.program.AddFunction(
-        name=self._react_to_transitions_function_name(index),
-        retType=cgen.UInt8, # Return 1 if there was an error
-        args=[vGraph])
+    if self._expr_can_react(expr):
+      index = self.expr_index[expr]
+      vGraph = self._graph_struct.Star().Var('graph')
+      react = self.program.AddFunction(
+          name=self._react_to_transitions_function_name(index),
+          retType=cgen.UInt8, # Return 1 if there was an error
+          args=[vGraph])
 
-    # Update the state and write the transitions.
-    expr.generate_react_to_transitions(
-        self,
-        react.Newline(),
-        vGraph,
-    )
+      # Update the state and write the transitions.
+      expr.generate_react_to_transitions(
+          self,
+          react.Newline(),
+          vGraph,
+      )
 
-    self._generate_propogate_transitions(react, vGraph, expr)
+      self._generate_propogate_transitions(react, vGraph, expr)
 
-    react.AddReturn(cgen.false)
+      react.AddReturn(cgen.false)
 
   def _generate_propogate_transitions(self, block, vGraph, expr):
     index = self.expr_index[expr]
@@ -1101,6 +1104,8 @@ class ReactiveCompiler(object):
     listLoop.AddAssignment(None, cgen.capn_free(vCapn.Address()))
 
     listLoop.Newline().AddAssignment(vI, vI + cgen.One)
+
+    deserialize_transitions.AddAssignment(None, self._after_transitions_function(inputExpr)(vGraph))
 
 
 class _Topsorter(object):
