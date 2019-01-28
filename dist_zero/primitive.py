@@ -69,7 +69,9 @@ class PlusBinOp(BinOp):
 
     block.logf(f"\nPlus operation is reacting to %zu.\n", cgen.kv_size(argTransitions))
 
-    with block.ForInt(cgen.kv_size(argTransitions)) as (loop, argTransitionIndex):
+    with block.ForInt(
+        cgen.kv_size(argTransitions), vStart=compiler.vProcessedTransitions(vGraph, expr)) as (loop,
+                                                                                               argTransitionIndex):
       transition = cgen.kv_A(argTransitions, argTransitionIndex)
       switch = loop.AddSwitch(transition.Dot('type'))
 

@@ -193,7 +193,7 @@ class ConcreteType(object):
   def _write_capn_to_python_bytes(self, compiler, block, vCapn, vCapnPtr, ptr, result):
     (block.AddIf(cgen.Zero != cgen.capn_setp(vCapnPtr, cgen.Zero, ptr.Dot('p'))).consequent.AddAssignment(
         None, compiler.pyerr_from_string("Failed to capn_setp for root when producing output.")).AddAssignment(
-            None, cgen.capn_free(vCapn.Address())).AddReturn(cgen.NULL))
+            None, cgen.capn_free(vCapn.Address())).AddReturn(cgen.false))
 
     block.Newline()
 

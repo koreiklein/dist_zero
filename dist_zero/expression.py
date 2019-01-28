@@ -93,7 +93,8 @@ class Project(Expression):
     outputTransitions = compiler.transitions_rvalue(vGraph, self)
     baseTransitionsRvalue = compiler.transitions_rvalue(vGraph, self.base)
 
-    with block.ForInt(cgen.kv_size(baseTransitionsRvalue)) as (loop, vIndex):
+    with block.ForInt(
+        cgen.kv_size(baseTransitionsRvalue), vStart=compiler.vProcessedTransitions(vGraph, self)) as (loop, vIndex):
       curTransition = cgen.kv_A(baseTransitionsRvalue, vIndex)
       switch = loop.AddSwitch(curTransition.Dot('type'))
 
@@ -179,7 +180,8 @@ class Product(Expression):
     for key, expr in self.items:
       transitions = compiler.transitions_rvalue(vGraph, expr)
 
-      with block.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
+      with block.ForInt(
+          cgen.kv_size(transitions), vStart=compiler.vProcessedTransitions(vGraph, self)) as (loop, vIndex):
         product_on_key = f"product_on_{key}"
         innerValue = cgen.kv_A(transitions, vIndex)
 
