@@ -25,6 +25,7 @@ class RecordedUser(expression.Expression):
     for i in range(1, len(self._time_action_pairs)):
       if self._time_action_pairs[i - 1][0] > self._time_action_pairs[i][0]:
         raise errors.InternalError('Times are not in order.')
+    super(RecordedUser, self).__init__()
 
   @property
   def type(self):

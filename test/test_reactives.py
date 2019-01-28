@@ -4,6 +4,38 @@ from dist_zero import recorded, types, expression, reactive, primitive
 
 
 class TestMultiplicativeReactive(object):
+  def test_spy(self):
+    a = expression.Input('a', types.Int32)
+    b = expression.Input('b', types.Int32)
+    c = expression.Input('c', types.Int32)
+    spy = program_plus(b, c).spy('bc')
+    thesum = program_plus(a, spy)
+
+    compiler = reactive.ReactiveCompiler(name='test_spy')
+    module = compiler.compile({
+        'output': thesum,
+    })
+    net = module.Net()
+    assert not net.OnOutput_output()
+    assert net.Spy_bc() is None
+    assert not net.OnInput_b(compiler.capnp_state_builder(b).new_message(basicState=3).to_bytes())
+    assert net.Spy_bc() is None
+    assert not net.OnInput_c(compiler.capnp_state_builder(c).new_message(basicState=5).to_bytes())
+    assert 8 == compiler.capnp_state_builder(spy).from_bytes(net.Spy_bc()).basicState
+
+    output = net.OnInput_a(compiler.capnp_state_builder(a).new_message(basicState=1).to_bytes())
+    assert 1 == len(output)
+    assert 9 == compiler.capnp_state_builder(thesum).from_bytes(output['output']).basicState
+
+    assert 8 == compiler.capnp_state_builder(spy).from_bytes(net.Spy_bc()).basicState
+
+    net.OnTransitions({
+        'a': [compiler.capnp_transitions_builder(a).new_message(basicTransition=10).to_bytes()],
+        'c': [compiler.capnp_transitions_builder(c).new_message(basicTransition=30).to_bytes()],
+    })
+
+    assert 38 == compiler.capnp_state_builder(spy).from_bytes(net.Spy_bc()).basicState
+
   def test_interleave_recorded(self):
     indiscrete_int = types.Int32
 

@@ -8,9 +8,6 @@ class Expression(object):
   Each subclass defines a different type of expression.
   '''
 
-  def __repr__(self):
-    return str(self)
-
   @property
   def type(self):
     '''
@@ -52,11 +49,22 @@ class Expression(object):
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
 
+  def __repr__(self):
+    return str(self)
+
+  def __init__(self):
+    self.spy_keys = set()
+
+  def spy(self, key):
+    self.spy_keys.add(key)
+    return self
+
 
 class Constant(Expression):
   def __init__(self, value, type):
     self._value = value
     self._type = type
+    super(Constant, self).__init__()
 
   @property
   def type(self):
@@ -81,6 +89,7 @@ class Project(Expression):
   def __init__(self, key, base):
     self.key = key
     self.base = base
+    super(Project, self).__init__()
 
   @property
   def type(self):
@@ -138,6 +147,7 @@ class Applied(Expression):
     self.func = func
     self.arg = arg
     self._type = func.get_output_type()
+    super(Applied, self).__init__()
 
   @property
   def type(self):
@@ -163,6 +173,7 @@ class Product(Expression):
   def __init__(self, items):
     self.items = items
     self._type = types.Product(items=[(k, v.type) for k, v in self.items])
+    super(Product, self).__init__()
 
   @property
   def type(self):
@@ -216,6 +227,7 @@ class Input(Expression):
   def __init__(self, name, type):
     self.name = name
     self._type = type
+    super(Input, self).__init__()
 
   @property
   def type(self):

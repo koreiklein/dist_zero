@@ -72,6 +72,7 @@ class ReactiveCompiler(object):
     self._shall_maintain_state = None
     self._serialize_output_transitions = None # Function to serialize all output transitions inside the turn
     self._write_output_transitions = {} # map expr to the function to write its output transitions to the turn result
+    self._write_output_state = {} # map expr to the function to return the bytes object for its current state
 
     self._type_by_expr = {} # expr to dist_zero.types.Type
     self._concrete_type_by_type = {} # type to dist_zero.concrete_types.ConcreteType
@@ -195,8 +196,8 @@ class ReactiveCompiler(object):
     for i in range(0, len(self._top_exprs)):
       self._generate_subscribe(i)
 
-    for key, expr in self._output_key_to_norm_expr.items():
-      self._generate_write_output_state(key, expr)
+    for expr in self._output_exprs.keys():
+      self._write_output_state_function(expr)
 
     for expr in self._output_exprs.keys():
       self._write_output_transitions_function(expr)
@@ -217,6 +218,15 @@ class ReactiveCompiler(object):
       self._generate_react_to_transitions(expr)
 
     self._generate_on_transitions()
+
+    spies = set()
+    for expr in self._top_exprs:
+      for key in expr.spy_keys:
+        if key in spies:
+          raise errors.InternalError(f"spy key \"{key}\" should not be used twice in the same reactive compiler.")
+        else:
+          self._write_output_state_function(expr)
+          self._generate_spy_method(expr, key)
 
     if settings.c_debug:
       with open('msg.capnp', 'w') as f:
@@ -513,9 +523,6 @@ class ReactiveCompiler(object):
   def _react_to_transitions_function_name(self, index):
     return f"react_to_transitions_{index}"
 
-  def _write_output_state_function_name(self, index):
-    return f"write_output_state_{index}"
-
   def _initialize_state_function_name(self, index):
     return f"initialize_state_{index}"
 
@@ -565,7 +572,7 @@ class ReactiveCompiler(object):
     expr = self._top_exprs[index]
 
     if expr in self._output_exprs:
-      getBytes = cgen.Var(self._write_output_state_function_name(index))
+      getBytes = self._write_output_state_function(expr)
       vBytes = produce.AddDeclaration(cgen.PyObject.Star().Var('result_bytes'), getBytes(vGraph))
       produce.AddIf(vBytes == cgen.NULL).consequent.AddReturnVoid()
       for key in self._output_exprs[expr]:
@@ -631,20 +638,23 @@ class ReactiveCompiler(object):
 
     return self._write_output_transitions[expr]
 
-  def _generate_write_output_state(self, key, expr):
+  def _write_output_state_function(self, expr):
     '''
-    Generate the write_output_state_{key} function in c for ``expr``.
+    Generate the write_output_state function in c for ``expr``.
     '''
-    index = self.expr_index[expr]
-    exprType = self._concrete_types[index]
-    vGraph = self._graph_struct.Star().Var('graph')
-    write_output_state = self.program.AddFunction(
-        name=self._write_output_state_function_name(index), retType=cgen.PyObject.Star(), args=[vGraph])
+    if expr not in self._write_output_state:
+      index = self.expr_index[expr]
+      exprType = self._concrete_types[index]
+      vGraph = self._graph_struct.Star().Var('graph')
+      write_output_state = self.program.AddFunction(
+          name=f"write_output_state_{index}", retType=cgen.PyObject.Star(), args=[vGraph])
+      self._write_output_state[expr] = write_output_state
 
-    vPythonBytes = write_output_state.AddDeclaration(cgen.PyObject.Star().Var('resulting_python_bytes'))
-    exprType.generate_c_state_to_capnp(self, write_output_state, self.state_rvalue(vGraph, expr), vPythonBytes)
+      vPythonBytes = write_output_state.AddDeclaration(cgen.PyObject.Star().Var('resulting_python_bytes'))
+      exprType.generate_c_state_to_capnp(self, write_output_state, self.state_rvalue(vGraph, expr), vPythonBytes)
 
-    write_output_state.AddReturn(vPythonBytes)
+      write_output_state.AddReturn(vPythonBytes)
+    return self._write_output_state[expr]
 
   def _generate_on_output(self, key, expr):
     '''
@@ -666,7 +676,7 @@ class ReactiveCompiler(object):
 
     outputState = self.state_rvalue(vGraph, expr)
 
-    getBytes = cgen.Var(self._write_output_state_function_name(output_index))
+    getBytes = self._write_output_state_function(expr)
     vBytes = whenHasState.AddDeclaration(cgen.PyObject.Star().Var('result_bytes'), getBytes(vGraph))
 
     (whenHasState.AddIf(vBytes == cgen.NULL).consequent.AddAssignment(None,
@@ -919,6 +929,21 @@ class ReactiveCompiler(object):
     self._generate_finalize_turn(on_transitions, vGraph)
     on_transitions.AddReturn(vResult)
 
+  def _generate_spy_method(self, expr, key):
+    index = self.expr_index[expr]
+    spy = self._net.AddMethod(name=f'Spy_{key}', args=[])
+    vGraph = spy.SelfArg()
+
+    ifHasState = spy.AddIf(vGraph.Arrow('n_missing_productions').Sub(index) == cgen.Zero)
+    ifHasState.alternate.logf("Spy does not have a state. n_missing_productions = %d.\n",
+                              vGraph.Arrow('n_missing_productions').Sub(index))
+
+    block = ifHasState.consequent
+    ifHasState.alternate.AddReturn(cgen.Py_None)
+
+    getBytes = self._write_output_state_function(expr)
+    block.AddReturn(getBytes(vGraph))
+
   def _generate_output_dictionary(self, block, vGraph):
     vResult = block.Newline().AddDeclaration(cgen.PyObject.Star().Var('result'), cgen.PyDict_New())
     (block.AddIf(vResult == cgen.NULL).consequent.AddAssignment(
@@ -1069,7 +1094,10 @@ class ReactiveCompiler(object):
                          vGraph.Arrow('turn').Dot('turn_outputs'),
                          self._write_output_transitions_function(expr).Address().Cast(cgen.Void.Star())))
 
-      whenMaintainsState = block.AddIf(self._shall_maintain_state_function()(vGraph, cgen.Constant(index))).consequent
+      if expr.spy_keys:
+        whenMaintainsState = block
+      else:
+        whenMaintainsState = block.AddIf(self._shall_maintain_state_function()(vGraph, cgen.Constant(index))).consequent
       transitions = self.transitions_rvalue(vGraph, expr)
       with whenMaintainsState.ForInt(cgen.kv_size(transitions)) as (loop, vIndex):
         ct = self.get_concrete_type(expr.type)
