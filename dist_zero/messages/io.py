@@ -76,7 +76,7 @@ def adopter_node_config(adoptees, data_node_config):
 
 def data_node_config(node_id, parent, variant, height, leaf_config, recorded_user_json=None):
   '''
-  A node config for creating an data node to manage a new list of io nodes.
+  A node config for creating a data node to manage a new list of io nodes.
 
   :param str node_id: The id of the new node.
   :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.

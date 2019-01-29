@@ -27,12 +27,12 @@ def std_system_config():
 
   **KID_SUMMARY_INTERVAL**
 
-  Every time this many milliseconds pass on an data node, it should send a kid_summary message
+  Every time this many milliseconds pass on a data node, it should send a kid_summary message
   to its parent.
 
   **TOTAL_KID_CAPACITY_TRIGGER**
 
-  When all the kids of an data node have less than this much capacity,
+  When all the kids of a data node have less than this much capacity,
   it should spawn a new kid
 
   **SUM_NODE_SENDER_LIMIT, SUM_NODE_RECEIVER_LIMIT**
@@ -54,11 +54,11 @@ def std_system_config():
       # When an `DataNode` has this many kids, it will trigger a split.
       'DATA_NODE_KIDS_LIMIT': 200,
 
-      # Every time this many milliseconds pass on an data node, it should send a kid_summary message
+      # Every time this many milliseconds pass on a data node, it should send a kid_summary message
       # to its parent.
       'KID_SUMMARY_INTERVAL': 200,
 
-      # When all the kids of an data node have less than this much capacity,
+      # When all the kids of a data node have less than this much capacity,
       # it should spawn a new kid
       'TOTAL_KID_CAPACITY_TRIGGER': 5,
 
@@ -245,7 +245,7 @@ def get_adjacent_handle():
 
 def create_kid_config(new_node_name, machine_id):
   '''
-  Create a node_config for a new kid node of an data io node.
+  Create a node_config for a new kid node of a data io node.
 
   :param str new_node_name: The name to use for the new node.
   :param str machine_id: The id of the machine on which the new node will run.

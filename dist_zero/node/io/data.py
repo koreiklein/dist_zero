@@ -373,11 +373,12 @@ class DataNode(Node):
     self._graph = NetworkGraph()
     self._graph.add_node(proxy['id'])
     if self._adjacent is not None:
-      self.send(self._adjacent,
-                messages.io.bumped_height(
-                    proxy=self.transfer_handle(proxy, self._adjacent['id']),
-                    kid_ids=[kid['id'] for kid in self._kids_for_proxy_to_adopt],
-                    variant=self._variant))
+      self.send(
+          self._adjacent,
+          messages.io.bumped_height(
+              proxy=self.transfer_handle(proxy, self._adjacent['id']),
+              kid_ids=[kid['id'] for kid in self._kids_for_proxy_to_adopt],
+              variant=self._variant))
 
     self._root_proxy_id = None
     self._kids_for_proxy_to_adopt = None
@@ -397,21 +398,23 @@ class DataNode(Node):
     self._graph.add_node(kid_id)
 
     if self._exporter is not None:
-      self.send(self._exporter.receiver,
-                messages.migration.update_left_configuration(
-                    parent_id=self.id,
-                    new_kids=[{
-                        'connection_limit': self.system_config['SUM_NODE_SENDER_LIMIT'],
-                        'handle': self.transfer_handle(handle=kid, for_node_id=self._exporter.receiver_id)
-                    }],
-                    new_height=self._height))
+      self.send(
+          self._exporter.receiver,
+          messages.migration.update_left_configuration(
+              parent_id=self.id,
+              new_kids=[{
+                  'connection_limit': self.system_config['SUM_NODE_SENDER_LIMIT'],
+                  'handle': self.transfer_handle(handle=kid, for_node_id=self._exporter.receiver_id)
+              }],
+              new_height=self._height))
 
     if self._importer is not None:
-      self.send(self._importer.sender,
-                messages.migration.update_right_configuration(
-                    parent_id=self.id,
-                    new_kids=[self.transfer_handle(kid, self._importer.sender_id)],
-                    new_height=self._height))
+      self.send(
+          self._importer.sender,
+          messages.migration.update_right_configuration(
+              parent_id=self.id,
+              new_kids=[self.transfer_handle(kid, self._importer.sender_id)],
+              new_height=self._height))
 
     self._graph.add_node(kid_id)
 
@@ -435,20 +438,21 @@ class DataNode(Node):
       right_config, = message['right_configurations']
       node = right_config['parent_handle']
       self._set_output(node)
-      self.send(node,
-                messages.migration.configure_new_flow_left(
-                    migration_id=None,
-                    left_configurations=[
-                        messages.migration.left_configuration(
-                            height=self._height,
-                            is_data=True,
-                            node=self.new_handle(node['id']),
-                            kids=[{
-                                'connection_limit': self.system_config['SUM_NODE_SENDER_LIMIT'],
-                                'handle': self.transfer_handle(kid, node['id'])
-                            } for kid in self._kids.values()],
-                        )
-                    ]))
+      self.send(
+          node,
+          messages.migration.configure_new_flow_left(
+              migration_id=None,
+              left_configurations=[
+                  messages.migration.left_configuration(
+                      height=self._height,
+                      is_data=True,
+                      node=self.new_handle(node['id']),
+                      kids=[{
+                          'connection_limit': self.system_config['SUM_NODE_SENDER_LIMIT'],
+                          'handle': self.transfer_handle(kid, node['id'])
+                      } for kid in self._kids.values()],
+                  )
+              ]))
     elif message['type'] == 'configure_new_flow_left':
       for left_config in message['left_configurations']:
         node = left_config['node']
@@ -491,17 +495,18 @@ class DataNode(Node):
       pass
     elif message['type'] == 'added_sender':
       node = message['node']
-      self.send(node,
-                messages.migration.configure_new_flow_right(None, [
-                    messages.migration.right_configuration(
-                        n_kids=len(self._kids) if self._height >= 0 else None,
-                        parent_handle=self.new_handle(node['id']),
-                        height=self._height,
-                        is_data=True,
-                        availability=self.availability(),
-                        connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'] if self._height >= 0 else 1,
-                    )
-                ]))
+      self.send(
+          node,
+          messages.migration.configure_new_flow_right(None, [
+              messages.migration.right_configuration(
+                  n_kids=len(self._kids) if self._height >= 0 else None,
+                  parent_handle=self.new_handle(node['id']),
+                  height=self._height,
+                  is_data=True,
+                  availability=self.availability(),
+                  connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'] if self._height >= 0 else 1,
+              )
+          ]))
       self._added_sender_respond_to = message['respond_to']
     elif message['type'] == 'merge_with':
       if self._parent is None:
@@ -578,8 +583,8 @@ class DataNode(Node):
   def _send_kid_summary(self):
     if self._parent is not None and self._height >= 0:
       message = messages.io.kid_summary(
-          size=(sum(kid_summary['size'] for kid_summary in self._kid_summaries.values())
-                if self._height > 0 else len(self._kids)),
+          size=(sum(kid_summary['size']
+                    for kid_summary in self._kid_summaries.values()) if self._height > 0 else len(self._kids)),
           n_kids=len(self._kids),
           availability=self.availability())
       if (self._parent['id'], message) != self._last_kid_summary:
@@ -714,7 +719,7 @@ class DataNode(Node):
       return self._adjacent
     elif message['type'] == 'get_output_state':
       if self._height != -1:
-        raise errors.InternalError("Can't get output state for an DataNode with height >= 0")
+        raise errors.InternalError("Can't get output state for a DataNode with height >= 0")
       return self._leaf.state
     else:
       return super(DataNode, self).handle_api_message(message)

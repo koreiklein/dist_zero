@@ -36,7 +36,7 @@ overly burdened.  Node limits (see limits in `std_system_config`) prevent nodes 
 senders or receivers.
 
 Any mechanism for adding leaf nodes is expected to only ever add them to data nodes
-of height 0 that have excess capacity.  The two scaling rules above ensure that such an data node should always
+of height 0 that have excess capacity.  The two scaling rules above ensure that such a data node should always
 exist.
 
 Two operations will decrease the size of the tree:
