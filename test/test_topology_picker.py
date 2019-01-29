@@ -14,6 +14,7 @@ def test_tree_on_empty_base():
       nodes=[],
       max_kids=3,
   )
+  tree.fill_in_tree()
   assert 2 == tree.height
   assert 0 == len(tree.layers[0])
   assert 1 == len(tree.layers[1])
@@ -24,6 +25,7 @@ def test_append_base_to_tree():
       nodes=[ids.new_id('TestNode_{}'.format(i)) for i in range(14)],
       max_kids=3,
   )
+  tree.fill_in_tree()
   assert 4 == tree.height
   root = tree.root
   root_kids = tree.kids[tree.root]
@@ -94,7 +96,8 @@ def test_append_left_right(side):
   append(ids.new_id("Inserted_TestNode_{}".format(i)))
   _assert_unique_paths(picker)
   assert 27 == len(edge())
-  assert 5 == len(picker.layers)
+
+  assert (4 if side == 'left' else 5) == len(picker.layers)
 
 
 def test_graph_outgoing_with_duplicates():
