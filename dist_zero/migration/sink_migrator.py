@@ -137,17 +137,18 @@ class SinkMigrator(migrator.Migrator):
     for sender in self._new_flow_senders.values():
       n_kids = len(self._node._kids)
       connection_limit = n_kids
-      self._node.send(sender,
-                      messages.migration.configure_new_flow_right(self.migration_id, [
-                          messages.migration.right_configuration(
-                              n_kids=n_kids,
-                              parent_handle=self._node.new_handle(sender['id']),
-                              height=self._node.height,
-                              connection_limit=connection_limit,
-                              availability=self._node.availability(),
-                              is_data=self._node.is_data(),
-                          )
-                      ]))
+      self._node.send(
+          sender,
+          messages.migration.configure_new_flow_right(self.migration_id, [
+              messages.migration.right_configuration(
+                  n_kids=n_kids,
+                  parent_handle=self._node.new_handle(sender['id']),
+                  height=self._node.height,
+                  connection_limit=connection_limit,
+                  availability=self._node.availability(),
+                  is_data=self._node.is_data(),
+              )
+          ]))
 
   def receive(self, sender_id, message):
     if message['type'] == 'start_flow':
@@ -235,17 +236,18 @@ class SinkMigrator(migrator.Migrator):
       self._maybe_kids_are_terminated()
     elif message['type'] == 'set_new_flow_adjacent':
       adjacent = message['adjacent']
-      self._node.send(adjacent,
-                      messages.migration.configure_new_flow_right(self.migration_id, [
-                          messages.migration.right_configuration(
-                              parent_handle=self._node.new_handle(adjacent['id']),
-                              height=self._node.height,
-                              is_data=self._node.is_data(),
-                              n_kids=len(self._node._kids),
-                              availability=self._node.availability(),
-                              connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
-                          )
-                      ]))
+      self._node.send(
+          adjacent,
+          messages.migration.configure_new_flow_right(self.migration_id, [
+              messages.migration.right_configuration(
+                  parent_handle=self._node.new_handle(adjacent['id']),
+                  height=self._node.height,
+                  is_data=self._node.is_data(),
+                  n_kids=len(self._node._kids),
+                  availability=self._node.availability(),
+                  connection_limit=self._node.system_config['SUM_NODE_SENDER_LIMIT'],
+              )
+          ]))
     else:
       raise errors.InternalError('Unrecognized migration message type "{}"'.format(message['type']))
 
@@ -286,13 +288,13 @@ class SinkMigrator(migrator.Migrator):
             })
         for left_kid_id, my_kid_id in left_kid_to_my_kid.items():
           left_kid, my_kid = left_kids[left_kid_id], self._node._kids[my_kid_id]
-          self._node.send(left_kid,
-                          messages.migration.configure_right_parent(
-                              migration_id=self.migration_id, kid_ids=[my_kid_id]))
+          self._node.send(
+              left_kid, messages.migration.configure_right_parent(migration_id=self.migration_id, kid_ids=[my_kid_id]))
 
-          self._node.send(my_kid,
-                          messages.migration.set_new_flow_adjacent(self.migration_id,
-                                                                   self._node.transfer_handle(left_kid, my_kid_id)))
+          self._node.send(
+              my_kid,
+              messages.migration.set_new_flow_adjacent(self.migration_id, self._node.transfer_handle(
+                  left_kid, my_kid_id)))
 
   def _maybe_flow_is_started(self):
     if all(val is not None for val in self._left_configurations.values()) and \
@@ -324,7 +326,7 @@ class SinkMigrator(migrator.Migrator):
 
         # Discard deltas before _new_sender_id_to_first_swapped_sequence_number, as they were exactly
         # what was represented from the old flow as of the above call to send_forward_messages.
-        if self._node._height == -1:
+        if self._node._height == 0:
           self._deltas.pop_deltas(before=self._new_sender_id_to_first_swapped_sequence_number)
         self._node.checkpoint(before=self._old_sender_id_to_first_swapped_sequence_number)
 
@@ -358,11 +360,12 @@ class SinkMigrator(migrator.Migrator):
       for i, receiver in enumerate(receivers):
         # The first total_remainder receivers will get a total that is one greater than that of the other receivers.
         # This way, the totals of the receivers will add to the total of self._node
-        self._node.send(receiver,
-                        messages.migration.set_sum_total(
-                            migration_id=self.migration_id,
-                            from_node=self._node.new_handle(receiver['id']),
-                            total=total_quotient + 1 if i < total_remainder else total_quotient))
+        self._node.send(
+            receiver,
+            messages.migration.set_sum_total(
+                migration_id=self.migration_id,
+                from_node=self._node.new_handle(receiver['id']),
+                total=total_quotient + 1 if i < total_remainder else total_quotient))
 
   def elapse(self, ms):
     self._maybe_start_syncing()
@@ -390,12 +393,13 @@ class SinkMigrator(migrator.Migrator):
     self._node.deltas_only.add(self.migration_id)
     for kid in self._node._kids.values():
       self._kid_has_migrator[kid['id']] = False
-      self._node.send(kid,
-                      messages.migration.attach_migrator(
-                          messages.migration.sink_migrator_config(
-                              migration=self._node.transfer_handle(self._migration, kid['id']),
-                              old_flow_sender_ids=self._node._graph.node_senders(kid['id']),
-                              new_flow_senders=None,
-                              will_sync=self._will_sync)))
+      self._node.send(
+          kid,
+          messages.migration.attach_migrator(
+              messages.migration.sink_migrator_config(
+                  migration=self._node.transfer_handle(self._migration, kid['id']),
+                  old_flow_sender_ids=self._node._graph.node_senders(kid['id']),
+                  new_flow_senders=None,
+                  will_sync=self._will_sync)))
 
     self._maybe_send_attached_migrator()

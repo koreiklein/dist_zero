@@ -76,6 +76,7 @@ class TestSpawnCollectLinkNetwork(Utils):
     all_outputs = [output for leaf in self.output_leaves for output in self.demo.system.get_output_state(leaf)]
     all_outputs.sort()
     all_actions.sort()
+    self.demo.render_network(self.root_output)
     assert all_outputs == all_actions
 
   @pytest.mark.asyncio

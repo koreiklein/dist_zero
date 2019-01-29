@@ -195,7 +195,7 @@ class AllToOneAvailableConnector(Connector):
     return max(self.max_left_height(), self.max_right_height())
 
   def max_left_height(self):
-    return max((config['height'] for config in self._left_configurations.values()), default=-1)
+    return max((config['height'] for config in self._left_configurations.values()), default=0)
 
   def max_right_height(self):
-    return max((config['height'] for config in self._right_configurations.values()), default=-1)
+    return max((config['height'] for config in self._right_configurations.values()), default=0)

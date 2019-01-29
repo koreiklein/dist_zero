@@ -82,7 +82,7 @@ class LinkNode(Node):
 
     # FIXME(KK): Move this into a class specific to summing.
     self._current_state = 0
-    '''For when sum link nodes (of height -1) track their internal state'''
+    '''For when sum link nodes (of height 0) track their internal state'''
 
     self._transaction = None
     '''The currently transaction instance if there is one.'''
@@ -122,7 +122,7 @@ class LinkNode(Node):
 
     self._configuration_receiver.initialize()
 
-    if self.height == -1:
+    if self.height == 0:
       self._leaf = link_leaf.from_config(leaf_config=self._leaf_config, node=self)
       self._controller.periodically(LinkNode.SEND_INTERVAL_MS,
                                     lambda: self._maybe_send_forward_messages(LinkNode.SEND_INTERVAL_MS))
@@ -232,8 +232,8 @@ class LinkNode(Node):
 
   def _get_new_layers_edges_and_hourglasses(self, is_left, new_layers, last_edges, hourglasses):
     if new_layers or last_edges or hourglasses:
-      if hourglasses and self.height >= 1:
-        # FIXME(KK): Ultimately, we should be able to create hourglasses for LinkNodes of height >= 1,
+      if hourglasses and self.height > 2:
+        # FIXME(KK): Ultimately, we should be able to create hourglasses for LinkNodes of height > 2,
         #   but it will be complex to orchestrate, as it involves reassigning all the receivers recursively of the
         #   rightmost kids of the nodes on the left of the hourglass.
         import ipdb
@@ -328,7 +328,7 @@ class LinkNode(Node):
       raise errors.InternalError(
           "self._connector may not be initialized hen has_left_and_right_configurations is called.")
 
-    if self.height == -1:
+    if self.height == 0:
       total_state = 0
       for left_config in left_configurations.values():
         if left_config['state'] is not None:
@@ -380,7 +380,7 @@ class LinkNode(Node):
 
   def new_left_configurations(self, left_configurations):
     '''For when a fully configured node gets new left_configurations'''
-    if self.height >= 0:
+    if self.height > 0:
       self._get_new_layers_edges_and_hourglasses(True, *self._connector.add_left_configurations(left_configurations))
 
     for left_config in left_configurations:
@@ -398,7 +398,7 @@ class LinkNode(Node):
       right_parent_ids.append(node['id'])
       self._receivers[node['id']] = node
 
-    if self.height >= 0:
+    if self.height > 0:
       self._connector.add_right_configurations(right_configurations)
       receiver_to_kids = self._receiver_to_kids()
 
@@ -410,7 +410,7 @@ class LinkNode(Node):
               height=self.height,
               is_data=False,
               state=self._current_state,
-              kids=[] if self.height == -1 else [{
+              kids=[] if self.height == 0 else [{
                   'handle': self.transfer_handle(self.kids[kid_id], receiver['id']),
                   'connection_limit': self.system_config['SUM_NODE_RECEIVER_LIMIT']
               } for kid_id in receiver_to_kids.get(receiver['id'], [])],
@@ -478,7 +478,7 @@ class LinkNode(Node):
     elif message['type'] == 'start_hourglass':
       self.send_forward_messages()
       mid_node = message['mid_node']
-      if self.height >= 0:
+      if self.height > 0:
         # FIXME(KK): Set kids appropriately in this case.
         #self._connector.set_right_parent_ids(kid_ids=message['receiver_ids'], parent_ids=[mid_node['id']])
         import ipdb

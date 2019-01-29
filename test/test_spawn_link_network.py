@@ -124,12 +124,12 @@ class TestSpawnSumLinkNetwork(Utils):
   @pytest.mark.parametrize(
       'name,start_inputs,start_outputs,new_inputs,new_outputs,ending_input_height,ending_output_height,sender_limit',
       [
-          ('grow_input', 2, 2, 5, 0, 1, 1, 10), # Just add inputs
-          ('grow_output', 2, 1, 0, 5, 1, 1, 10), # Just add outputs
-          ('bump_input_once', 2, 2, 10, 0, 2, 1, 10), # Add enough inputs that the tree bumps its height
-          ('bump_input_twice', 2, 2, 29, 0, 3, 1, 10), # Add enough inputs that the tree bumps its height twice
+          ('grow_input', 2, 2, 5, 0, 2, 2, 10), # Just add inputs
+          ('grow_output', 2, 1, 0, 5, 2, 2, 10), # Just add outputs
+          ('bump_input_once', 2, 2, 10, 0, 3, 2, 10), # Add enough inputs that the tree bumps its height
+          ('bump_input_twice', 2, 2, 29, 0, 4, 2, 10), # Add enough inputs that the tree bumps its height twice
           # FIXME(KK): Test and handle hourglass scenarios
-          #('cause_hourglass', 2, 2, 15, 0, 2, 1, 4), # Restrict sender_limit to cause hourglass operations
+          #('cause_hourglass', 2, 2, 15, 0, 3, 2, 4), # Restrict sender_limit to cause hourglass operations
       ])
   @pytest.mark.asyncio
   async def test_grow_trees(self, demo, name, start_inputs, start_outputs, new_inputs, new_outputs, ending_input_height,

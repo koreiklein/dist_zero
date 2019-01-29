@@ -26,7 +26,7 @@ class AllToAllConnector(Connector):
     self._max_outputs = max_outputs
     self._max_inputs = max_inputs
 
-    self._name_prefix = 'LinkNode' if self._height > 0 else 'SumNode'
+    self._name_prefix = 'LinkNode' if self._height > 1 else 'SumNode'
 
     # If left is not data, the left nodes are identically the picker left nodes,
     # and this variable must be `None`.
@@ -119,10 +119,10 @@ class AllToAllConnector(Connector):
     return max(self.max_left_height(), self.max_right_height())
 
   def max_left_height(self):
-    return max((config['height'] for config in self._left_configurations.values()), default=-1)
+    return max((config['height'] for config in self._left_configurations.values()), default=0)
 
   def max_right_height(self):
-    return max((config['height'] for config in self._right_configurations.values()), default=-1)
+    return max((config['height'] for config in self._right_configurations.values()), default=0)
 
   def add_kids_to_right_configuration(self, parent_id_kid_pairs):
     '''

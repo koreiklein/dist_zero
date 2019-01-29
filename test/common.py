@@ -21,7 +21,7 @@ class Utils(object):
     self.demo.system.spawn_node(
         on_machine=machine,
         node_config=messages.io.data_node_config(
-            node_id, parent=None, height=1, variant=variant, leaf_config=leaf_config))
+            node_id, parent=None, height=2, variant=variant, leaf_config=leaf_config))
     await self.demo.run_for(ms=200)
     return node_id
 

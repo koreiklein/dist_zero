@@ -232,7 +232,7 @@ class Demo(object):
             insertion_node_configs=[
                 messages.link.link_node_config(
                     node_id=root_link_node_id,
-                    height=1,
+                    height=2,
                     parent=None,
                     left_is_data=True,
                     right_is_data=True,
@@ -248,7 +248,7 @@ class Demo(object):
     return root_link_node_id
 
   def all_io_kids(self, data_node_id):
-    if self.system.get_stats(data_node_id)['height'] == 0:
+    if self.system.get_stats(data_node_id)['height'] == 1:
       return self.system.get_kids(data_node_id)
     else:
       return [descendant for kid_id in self.system.get_kids(data_node_id) for descendant in self.all_io_kids(kid_id)]

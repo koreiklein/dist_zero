@@ -30,7 +30,7 @@ class DataNode(Node):
     :param int height: The height of the node in the tree.  See `DataNode`
     :param `MachineController` controller: The controller for this node.
     :param objcect leaf_config: Configuration information for how to run a leaf.
-    :param object recorded_user_json: None, or configuration for a recorded user.  Only allowed if this is a height -1 Node.
+    :param object recorded_user_json: None, or configuration for a recorded user.  Only allowed if this is a height 0 Node.
     '''
     self._controller = controller
     self._parent = parent
@@ -38,7 +38,7 @@ class DataNode(Node):
     self._variant = variant
     self._height = height
     self._leaf_config = leaf_config
-    if self._height == -1:
+    if self._height == 0:
       self._leaf = leaf.Leaf.from_config(leaf_config)
     else:
       self._leaf = None
@@ -63,7 +63,7 @@ class DataNode(Node):
 
     self._load_balancer_frontend = None
     '''
-    DataNodes with height > 0 will manager a `LoadBalancerFrontend` when
+    DataNodes with height > 0 will manage a `LoadBalancerFrontend` when
     they start routing.
     '''
 
@@ -151,7 +151,7 @@ class DataNode(Node):
 
   @property
   def current_state(self):
-    if self._height != -1:
+    if self._height != 0:
       raise errors.InternalError("Non-leaf DataNodes do not maintain a current_state.")
     else:
       return self._leaf.state
@@ -203,7 +203,7 @@ class DataNode(Node):
       self.send(kid, messages.migration.switch_flows(migration_id))
 
   def initialize(self):
-    if self._height > 0 and len(self._kids) == 0:
+    if self._height > 1 and len(self._kids) == 0:
       # unless we are height 0, we must have a new kid.
       self._startup_kid = self._spawn_kid()
     else:
@@ -244,14 +244,14 @@ class DataNode(Node):
 
   def _check_for_kid_limits(self):
     '''In case the kids of self are hitting any limits, address them.'''
-    if self._height > 0:
+    if self._height > 1:
       self._check_for_low_capacity()
 
   def _check_for_consumable_proxy(self, ms):
     TIME_TO_WAIT_BEFORE_CONSUME_PROXY_MS = 4 * 1000
 
     if self._parent is None:
-      if len(self._kids) == 1 and not self._root_consuming_proxy_id and self._height > 1:
+      if len(self._kids) == 1 and not self._root_consuming_proxy_id and self._height > 2:
         self._time_since_no_consumable_proxy += ms
         if self._time_since_no_consumable_proxy >= TIME_TO_WAIT_BEFORE_CONSUME_PROXY_MS:
           self._consume_proxy()
@@ -274,7 +274,7 @@ class DataNode(Node):
     '''Check whether any two kids should be merged.'''
     TIME_TO_WAIT_BEFORE_KID_MERGE_MS = 2 * 1000
 
-    if self._height > 0:
+    if self._height > 1:
       best_pair = self._best_mergeable_kids()
       if best_pair is None or self._merging_kid_ids:
         self._time_since_no_mergable_kids_ms = 0
@@ -456,7 +456,7 @@ class DataNode(Node):
     elif message['type'] == 'configure_new_flow_left':
       for left_config in message['left_configurations']:
         node = left_config['node']
-        if self._height == -1 and left_config['state']:
+        if self._height == 0 and left_config['state']:
           self._leaf.set_state(left_config['state'])
         self._set_input(node)
     elif message['type'] == 'routing_start':
@@ -499,12 +499,12 @@ class DataNode(Node):
           node,
           messages.migration.configure_new_flow_right(None, [
               messages.migration.right_configuration(
-                  n_kids=len(self._kids) if self._height >= 0 else None,
+                  n_kids=len(self._kids) if self._height > 0 else None,
                   parent_handle=self.new_handle(node['id']),
                   height=self._height,
                   is_data=True,
                   availability=self.availability(),
-                  connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'] if self._height >= 0 else 1,
+                  connection_limit=self.system_config['SUM_NODE_SENDER_LIMIT'] if self._height > 0 else 1,
               )
           ]))
       self._added_sender_respond_to = message['respond_to']
@@ -531,8 +531,8 @@ class DataNode(Node):
   def _complete_consuming_proxy(self):
     if self._parent is not None:
       raise errors.InternalError("Only root nodes should complete consuming a proxy node.")
-    if self._height < 2:
-      raise errors.InternalError("A root node should have a height >= 2 when it completes consuming its proxy.")
+    if self._height < 3:
+      raise errors.InternalError("A root node should have a height >= 3 when it completes consuming its proxy.")
     self._height -= 1
     self._root_consuming_proxy_id = None
 
@@ -573,7 +573,7 @@ class DataNode(Node):
     self.linker.elapse(ms)
 
   def _check_limits(self, ms):
-    if self._updated_summary or self._height == 0:
+    if self._updated_summary or self._height == 1:
       self._send_kid_summary()
       self._updated_summary = False
     self._check_for_kid_limits()
@@ -581,10 +581,10 @@ class DataNode(Node):
     self._check_for_consumable_proxy(ms)
 
   def _send_kid_summary(self):
-    if self._parent is not None and self._height >= 0:
+    if self._parent is not None and self._height > 0:
       message = messages.io.kid_summary(
           size=(sum(kid_summary['size']
-                    for kid_summary in self._kid_summaries.values()) if self._height > 0 else len(self._kids)),
+                    for kid_summary in self._kid_summaries.values()) if self._height > 1 else len(self._kids)),
           n_kids=len(self._kids),
           availability=self.availability())
       if (self._parent['id'], message) != self._last_kid_summary:
@@ -597,14 +597,14 @@ class DataNode(Node):
 
   @property
   def _kid_capacity_limit(self):
-    return self._branching_factor**self._height
+    return self._branching_factor**(self._height - 1)
 
   @property
   def _leaf_availability(self):
     return self.system_config['SUM_NODE_SENDER_LIMIT']
 
   def availability(self):
-    if self._height == -1:
+    if self._height == 0:
       # FIXME(KK): Remove availability based on how many nodes are sending to self.
       return self._leaf_availability
     else:
@@ -623,7 +623,7 @@ class DataNode(Node):
         highest_capacity_kid_id, max_kid_capacity = kid_id, kid_capacity
 
     if highest_capacity_kid_id is None:
-      if self._height == 0:
+      if self._height == 1:
         highest_capacity_kid = None
       else:
         raise errors.NoCapacityError()
@@ -657,7 +657,7 @@ class DataNode(Node):
 
   def _on_routing_start(self, message, sender_id):
     self._domain_name = message['domain_name']
-    if self._height == 0:
+    if self._height == 1:
       self._http_server_for_adding_leaves = self._controller.new_http_server(
           self._domain_name, lambda request: self._add_leaf_from_http_get(request))
       self.send(self._parent, messages.io.routing_started(server_address=self._http_server_for_adding_leaves.address()))
@@ -718,8 +718,8 @@ class DataNode(Node):
     elif message['type'] == 'get_adjacent_handle':
       return self._adjacent
     elif message['type'] == 'get_output_state':
-      if self._height != -1:
-        raise errors.InternalError("Can't get output state for a DataNode with height >= 0")
+      if self._height != 0:
+        raise errors.InternalError("Can't get output state for a DataNode with height > 0")
       return self._leaf.state
     else:
       return super(DataNode, self).handle_api_message(message)
@@ -734,8 +734,8 @@ class DataNode(Node):
     :return: A config for the new child node.
     :rtype: :ref:`message`
     '''
-    if self._height != 0:
-      raise errors.InternalError("Only DataNode instances of height 0 should create kid configs.")
+    if self._height != 1:
+      raise errors.InternalError("Only DataNode instances of height 1 should create kid configs.")
 
     node_id = ids.new_id('LeafNode_{}'.format(name))
     self.logger.info(
@@ -751,11 +751,11 @@ class DataNode(Node):
         node_id=node_id,
         parent=self.new_handle(node_id),
         variant=self._variant,
-        height=-1,
+        height=0,
         leaf_config=self._leaf_config)
 
   def deliver(self, message, sequence_number, sender_id):
-    if self._variant != 'output' or self._height != -1:
+    if self._variant != 'output' or self._height != 0:
       raise errors.InternalError("Only 'output' variant leaf nodes may receive output actions")
 
     self._leaf.update_current_state(message)

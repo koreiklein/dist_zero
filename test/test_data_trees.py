@@ -24,7 +24,7 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
   demo.system.spawn_node(
       on_machine=machine,
       node_config=messages.io.data_node_config(
-          root_input_node_id, parent=None, height=1, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
+          root_input_node_id, parent=None, height=2, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
   await demo.run_for(ms=2000)
 
   leaves = demo.all_io_kids(root_input_node_id)
@@ -66,7 +66,7 @@ async def test_scale_unconnected_io_tree(demo):
   demo.system.spawn_node(
       on_machine=machine,
       node_config=messages.io.data_node_config(
-          root_input_node_id, parent=None, height=1, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
+          root_input_node_id, parent=None, height=2, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
   await demo.run_for(ms=2000)
 
   leaf_ids = []
@@ -75,7 +75,7 @@ async def test_scale_unconnected_io_tree(demo):
     leaf_ids.append(
         demo.system.create_descendant(data_node_id=root_input_node_id, new_node_name=name, machine_id=machine))
 
-  assert 1 == demo.system.get_capacity(root_input_node_id)['height']
+  assert 2 == demo.system.get_capacity(root_input_node_id)['height']
 
   n_new_leaves = 9
   for i in range(n_new_leaves):
@@ -84,7 +84,7 @@ async def test_scale_unconnected_io_tree(demo):
 
   await demo.run_for(ms=4000)
 
-  assert 2 == demo.system.get_capacity(root_input_node_id)['height']
+  assert 3 == demo.system.get_capacity(root_input_node_id)['height']
 
   n_new_leaves = 27 - 9
   for i in range(n_new_leaves):
@@ -93,7 +93,7 @@ async def test_scale_unconnected_io_tree(demo):
 
   await demo.run_for(ms=4000)
 
-  assert 3 == demo.system.get_capacity(root_input_node_id)['height']
+  assert 4 == demo.system.get_capacity(root_input_node_id)['height']
 
   for i in range(27):
     demo.system.kill_node(leaf_ids.pop())
@@ -101,4 +101,4 @@ async def test_scale_unconnected_io_tree(demo):
 
   await demo.run_for(ms=60 * 1000)
 
-  assert 1 == demo.system.get_capacity(root_input_node_id)['height']
+  assert 2 == demo.system.get_capacity(root_input_node_id)['height']

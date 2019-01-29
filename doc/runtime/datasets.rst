@@ -18,7 +18,7 @@ Here are some example lists each of which would be represented by a single distr
   - In a university's course registration system: the list of all units in any course offered in the fall, 2015.
 
 Internally, DistZero represents each distributed dataset with a **singly rooted tree** of `DataNode` instances.
-The nodes with height >= 0 are "manager" nodes, and the nodes of height -1 are "leaf" nodes.
+The nodes with height > 0 are "manager" nodes, and the nodes of height 0 are "leaf" nodes.
 As suggested by the names, manager nodes manage other nodes,
 whereas leaf nodes do the actual work associated with the dataset.
 The nodes managed by a manager node of height ``h`` will have height ``h-1`` and
@@ -36,7 +36,7 @@ overly burdened.  Node limits (see limits in `std_system_config`) prevent nodes 
 senders or receivers.
 
 Any mechanism for adding leaf nodes is expected to only ever add them to data nodes
-of height 0 that have excess capacity.  The two scaling rules above ensure that such a data node should always
+of height 1 that have excess capacity.  The two scaling rules above ensure that such a data node should always
 exist.
 
 Two operations will decrease the size of the tree:

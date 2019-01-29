@@ -12,7 +12,7 @@ dataset consists of all the unique user profiles, then it would make sense to ha
 route login attempts from browser tabs to user profiles based on a ``username`` parameter provided by the user.
 
 Just as with :doc:`datasets <datasets>`, each link is represented internally as a **singly rooted tree** of `LinkNode`
-instances.  Link nodes of height >= 0 are "manager" nodes, and link nodes of height -1 are
+instances.  Link nodes of height > 0 are "manager" nodes, and link nodes of height 0 are
 "leaf" nodes.
 
 We imagine that each link is forwarding messages from left to right.  Each individual link node has some

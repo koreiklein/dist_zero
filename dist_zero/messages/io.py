@@ -8,7 +8,7 @@ from dist_zero import errors
 def route_dns(domain_name):
   '''
   Indicates to a root io node that it should set up DNS to resolve domain_name
-  (possibly via some load balancers) to a server being run by a height 0
+  (possibly via some load balancers) to a server being run by a height 1
   `DataNode` with capacity to add new kids.
   '''
   return {'type': 'route_dns', 'domain_name': domain_name}
@@ -87,9 +87,6 @@ def data_node_config(node_id, parent, variant, height, leaf_config, recorded_use
   :param object initial_state: The initial state to use for new nodes.
   :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
   '''
-  if parent is None and height == 0:
-    raise errors.InternalError("data_node_config for root nodes must have nonzero height.")
-
   return {
       'type': 'DataNode',
       'id': node_id,
