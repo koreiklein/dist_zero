@@ -100,7 +100,7 @@ class Ec2Spawner(spawner.Spawner):
   def mode(self):
     return spawners.MODE_CLOUD
 
-  def clean_all(self):
+  async def clean_all(self):
     if self._owned_instances:
       instance_ids = [instance.id for instance in self._owned_instances]
       self._ec2.create_tags(Resources=instance_ids, Tags=[{'Key': 'DistZeroFree', 'Value': 'True'}])

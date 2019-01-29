@@ -330,7 +330,7 @@ class DockerSpawner(spawner.Spawner):
     '''
     return list(self._container_by_id.keys())
 
-  def clean_all(self):
+  async def clean_all(self):
     '''
     Remove all the docker resources associated with any instance of `DockerSpawner`
     (not just the current instance).

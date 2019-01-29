@@ -21,42 +21,42 @@ from dist_zero.spawners.cloud.aws import Ec2Spawner
     pytest.param(spawners.MODE_VIRTUAL, marks=pytest.mark.virtual),
     pytest.param(spawners.MODE_CLOUD, marks=pytest.mark.cloud),
 ])
-def demo(request):
+async def demo(request):
   result = Demo(mode=request.param)
   result.start()
-  request.addfinalizer(lambda: result.tear_down())
-  return result
+  yield result
+  await result.tear_down()
 
 
 @pytest.fixture(params=[
     pytest.param(spawners.MODE_SIMULATED, marks=pytest.mark.simulated),
     pytest.param(spawners.MODE_VIRTUAL, marks=pytest.mark.virtual),
 ])
-def no_cloud_demo(request):
+async def no_cloud_demo(request):
   result = Demo(mode=request.param)
   result.start()
-  request.addfinalizer(lambda: result.tear_down())
-  return result
+  yield result
+  await result.tear_down()
 
 
 @pytest.fixture(params=[
     pytest.param(spawners.MODE_SIMULATED, marks=pytest.mark.simulated),
 ])
-def simulated_demo(request):
+async def simulated_demo(request):
   result = Demo(mode=request.param)
   result.start()
   yield result
-  result.tear_down()
+  await result.tear_down()
 
 
 @pytest.fixture(params=[
     pytest.param(spawners.MODE_CLOUD, marks=pytest.mark.cloud),
 ])
-def cloud_demo(request):
+async def cloud_demo(request):
   result = Demo(mode=request.param)
   result.start()
-  request.addfinalizer(lambda: result.tear_down())
-  return result
+  yield result
+  await result.tear_down()
 
 
 class Demo(object):
@@ -97,16 +97,16 @@ class Demo(object):
     elif self.virtual_spawner:
       self.virtual_spawner.start()
 
-  def tear_down(self):
+  async def tear_down(self):
     '''Remove any resources created as part of the demo.'''
     if self.simulated_spawner:
-      self.simulated_spawner.clean_all()
+      await self.simulated_spawner.clean_all()
 
     if self.virtual_spawner and self.virtual_spawner.started:
-      self.virtual_spawner.clean_all()
+      await self.virtual_spawner.clean_all()
 
     if self.cloud_spawner:
-      self.cloud_spawner.clean_all()
+      await self.cloud_spawner.clean_all()
 
   def _new_unique_system_id(self):
     '''

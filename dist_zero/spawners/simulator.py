@@ -53,9 +53,9 @@ class SimulatedSpawner(spawner.Spawner):
   def mode(self):
     return spawners.MODE_SIMULATED
 
-  def clean_all(self):
+  async def clean_all(self):
     for controller in self._controller_by_id.values():
-      controller.clean_all()
+      await controller.clean_all()
 
   def _random_ms_for_send(self):
     return max(

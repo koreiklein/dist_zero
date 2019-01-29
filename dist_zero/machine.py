@@ -154,7 +154,7 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
-  def clean_all(self):
+  async def clean_all(self):
     '''
     Finalize everything running on this controller.
     '''
@@ -169,18 +169,35 @@ class MachineController(object):
 
     :return: A function to cancel the periodic calls.
     '''
-    cancelled = [False]
+    over = asyncio.get_event_loop().create_future()
 
     async def _loop():
-      if not cancelled[0]:
+      while True:
         f()
-        await self.sleep_ms(interval_ms)
-        asyncio.get_event_loop().create_task(_loop())
+        done, pending = await asyncio.wait([self.sleep_ms(interval_ms), over], return_when=asyncio.FIRST_COMPLETED)
+        if over in done:
+          return
+        else:
+          runloop = asyncio.get_event_loop()
+          if runloop.is_running():
+            continue
+          else:
+            return
 
-    asyncio.get_event_loop().create_task(_loop())
+    task = asyncio.get_event_loop().create_task(_loop())
 
     def _cancel():
-      cancelled[0] = True
+      runloop = asyncio.get_event_loop()
+      if runloop.is_running():
+        if not over.done():
+          over.set_result(True)
+      else:
+        task.cancel()
+
+      if _cancel in self._cancellables:
+        self._cancellables.remove(_cancel)
+
+    self._cancellables.add(_cancel)
 
     return _cancel
 
@@ -228,6 +245,8 @@ class NodeManager(MachineController):
     self._spawner = spawner
 
     self._machine_runner = machine_runner
+
+    self._cancellables = set() # Functions that can be called (idempotently) to cancel running tasks
 
     self._ip_host = ip_host
 
@@ -475,8 +494,12 @@ class NodeManager(MachineController):
         })
     node.receive(message=message, sender_id=sender_id)
 
-  def clean_all(self):
+  async def clean_all(self):
     self._running = False
+    for cancel in list(self._cancellables):
+      cancel()
+
+    await asyncio.sleep(0.01)
 
   def elapse_nodes(self, ms):
     '''
