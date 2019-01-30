@@ -6,17 +6,13 @@ from collections import defaultdict
 from cryptography.fernet import Fernet
 
 import dist_zero.logging
-from dist_zero import messages, linker, migration, deltas, errors
+from dist_zero import messages, linker, migration, deltas, errors, transaction
 
 logger = logging.getLogger(__name__)
 
 
 class Node(object):
   '''Abstract base class for nodes'''
-
-  def set_fernet(self, node):
-    self._fernet_key = node._fernet_key
-    self.fernet = node.fernet
 
   def __init__(self, logger):
     self.logger = dist_zero.logging.LoggerAdapter(logger, extra={'cur_node_id': self.id})
@@ -26,6 +22,8 @@ class Node(object):
     self.fernet = Fernet(self._fernet_key)
 
     self.least_unused_sequence_number = 0
+
+    self._transaction_queue = [] # Queue of transaction roles to run.  If nonempty, the first is active.
 
     self.migrators = {}
     '''
@@ -45,6 +43,10 @@ class Node(object):
     When true, this node should never apply deltas to its current state.  It should collect them in the deltas
     map instead.
     '''
+
+  def set_fernet(self, node):
+    self._fernet_key = node._fernet_key
+    self.fernet = node.fernet
 
   def send(self, receiver, message):
     '''
@@ -199,3 +201,26 @@ class Node(object):
       return self.stats()
     else:
       self.logger.error('Unrecognized node api message of type "{}"'.format(message['type']))
+
+  # Methods relevant to transactions
+
+  def start_transaction_eventually(self, originator_role: 'dist_zero.transaction.OriginatorRole'):
+    self._transaction_queue.append(originator_role)
+    self._maybe_initialize_next_transaction()
+
+  def _maybe_initialize_next_transaction(self):
+    if len(self._transaction_queue) >= 1:
+      self._transaction_queue[0].initialize(transaction.TransactionController(self))
+
+  def _active_role(self):
+    if len(self._transaction_queue) >= 1:
+      return self._transaction_queue[0]
+    else:
+      return None
+
+  def finish_role(self, role):
+    if role != self._active_role():
+      raise errors.InternalError("Can't finish a role when it is not active.")
+    else:
+      self._transaction_queue.pop(0)
+      self._maybe_initialize_next_transaction()
