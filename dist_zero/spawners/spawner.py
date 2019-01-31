@@ -5,6 +5,11 @@ class Spawner(object):
   with them once they have started running.
   '''
 
+  @property
+  def dz_time(self):
+    '''Current time as returned by time.time().  It may be real or simulated.'''
+    raise RuntimeError("Abstract Superclass")
+
   @staticmethod
   def from_spawner_json(self, spawner_config):
     '''

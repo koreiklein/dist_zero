@@ -6,7 +6,7 @@ from dist_zero.node.node import Node
 from dist_zero.node.io import leaf_html
 from dist_zero.node.io import leaf
 
-from .transactions import merge_kids
+from .transactions import merge_kids, consume_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -246,14 +246,21 @@ class DataNode(Node):
     if self._height > 1:
       self._check_for_low_capacity()
 
+  def _get_proxy(self):
+    if len(self._kids) == 1 and not self._root_consuming_proxy_id and self._height > 2:
+      return next(iter(self._kids.values()))
+    else:
+      return None
+
   def _check_for_consumable_proxy(self, ms):
     TIME_TO_WAIT_BEFORE_CONSUME_PROXY_MS = 4 * 1000
 
     if self._parent is None:
-      if len(self._kids) == 1 and not self._root_consuming_proxy_id and self._height > 2:
+      if self._get_proxy():
         self._time_since_no_consumable_proxy += ms
         if self._time_since_no_consumable_proxy >= TIME_TO_WAIT_BEFORE_CONSUME_PROXY_MS:
-          self._consume_proxy()
+          self.start_transaction_eventually(consume_proxy.ConsumeProxy())
+          #self._consume_proxy()
       else:
         self._time_since_no_consumable_proxy = 0
 
@@ -265,7 +272,7 @@ class DataNode(Node):
     if self._root_consuming_proxy_id is not None:
       raise errors.InternalError("Root node is already in the process of consuming a separate proxy node.")
 
-    proxy = next(iter(self._kids.values()))
+    proxy = self._get_proxy()
     self._root_consuming_proxy_id = proxy['id']
     self.send(proxy, messages.io.merge_with(self.new_handle(proxy['id'])))
 
@@ -283,6 +290,12 @@ class DataNode(Node):
         if self._time_since_no_mergable_kids_ms >= TIME_TO_WAIT_BEFORE_KID_MERGE_MS:
           self._time_since_no_mergable_kids_ms = 0
           self.start_transaction_eventually(merge_kids.MergeKids(*best_pair))
+
+  def _remove_kid(self, kid_id):
+    if kid_id in self._kids:
+      self._kids.pop(kid_id)
+    if kid_id in self._kid_summaries:
+      self._kid_summaries.pop(kid_id)
 
   @property
   def MERGEABLE_N_KIDS_FIRST(self):
@@ -319,6 +332,9 @@ class DataNode(Node):
 
   def _check_for_low_capacity(self):
     '''Check whether the total capacity of this node's kids is too low.'''
+    if set(self._kid_summaries.keys()) < set(self._kids.keys()):
+      return # Wait till we have summaries for all our kids
+
     total_kid_capacity = sum(
         self._kid_capacity_limit - kid_summary['size'] for kid_summary in self._kid_summaries.values())
 

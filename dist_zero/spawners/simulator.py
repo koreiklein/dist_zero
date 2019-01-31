@@ -53,6 +53,10 @@ class SimulatedSpawner(spawner.Spawner):
   def mode(self):
     return spawners.MODE_SIMULATED
 
+  @property
+  def dz_time(self):
+    return float(self._elapsed_time_ms) / 1000
+
   async def clean_all(self):
     for controller in self._controller_by_id.values():
       await controller.clean_all()

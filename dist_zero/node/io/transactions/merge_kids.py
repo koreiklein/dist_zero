@@ -16,7 +16,7 @@ class MergeKids(transaction.OriginatorRole):
       return
 
     controller.logger.info(
-        "Starting to merge kid '{absorbee_id}' into '{absorber_id}'",
+        "Starting MergeKids transaction merging '{absorbee_id}' into '{absorber_id}'",
         extra={
             'absorbee_id': self._absorbee_id,
             'absorber_id': self._absorber_id,
@@ -37,11 +37,10 @@ class MergeKids(transaction.OriginatorRole):
     await controller.listen(type='goodbye_parent')
     await controller.listen(type='finished_absorbing')
 
-    controller.node._kids.pop(self._absorbee_id)
-    controller.node._kid_summaries.pop(self._absorbee_id)
+    controller.node._remove_kid(self._absorbee_id)
 
     controller.node._send_kid_summary()
-    controller.logger.info("Finished absorbing.")
+    controller.logger.info("Finished MergeKids transaction.")
 
 
 class Absorber(transaction.ParticipantRole):
@@ -101,3 +100,4 @@ class FosterChild(transaction.ParticipantRole):
     controller.send(self.old_parent, messages.io.goodbye_parent())
     controller.send(self.new_parent, messages.io.hello_parent(controller.new_handle(self.new_parent['id'])))
     controller.node._parent = controller.role_handle_to_node_handle(self.new_parent)
+    controller.node._send_kid_summary()

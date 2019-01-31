@@ -99,7 +99,6 @@ async def test_scale_unconnected_io_tree(demo):
     demo.system.kill_node(leaf_ids.pop())
     await demo.run_for(ms=1000)
 
-  await demo.run_for(ms=60 * 1000)
+  await demo.run_for(ms=50 * 1000)
 
-  demo.render_network(root_input_node_id)
   assert 2 == demo.system.get_capacity(root_input_node_id)['height']
