@@ -5,6 +5,10 @@ Each transaction exists not as a single python object, but as a collection
 of related `TransactionRole` instances, each living on its own `Node`
 '''
 
+import asyncio
+from collections import defaultdict
+
+import dist_zero.logging
 from dist_zero import messages, ids, errors
 
 
@@ -16,6 +20,14 @@ class TransactionRoleController(object):
   def __init__(self, node: 'dist_zero.node.node.Node', transaction_id: str):
     self.node = node
     self.transaction_id = transaction_id
+
+    self.logger = dist_zero.logging.LoggerAdapter(
+        self.node.logger, extra={
+            'cur_node_id': self.node.id,
+            'transaction_id': self.transaction_id,
+        })
+
+    self._matcher = _Matcher()
 
   def new_handle(self, for_node_id):
     handle = self.node.new_handle(for_node_id)
@@ -47,24 +59,46 @@ class TransactionRoleController(object):
             message=message,
         ))
 
-  def deliver(self, message):
+  def deliver(self, message, sender_id):
     '''
     Deliver a message to the role.
 
     This method is to be called by general purpose message delivery code to indicate that a message has arrived
     for this role.
     '''
-    # FIXME(KK): Implement this
-    import ipdb
-    ipdb.set_trace()
+    self._matcher.deliver(message, sender_id)
 
-  def listen(self, type=None, node_id=None):
+  def listen(self, type):
     '''
     Return an awaitable that resolves when a particular type of message arrives for this role.
     '''
-    # FIXME(KK): Implement this
-    import ipdb
-    ipdb.set_trace()
+    future = self._matcher.install(type)
+    return future
+
+
+class _Matcher(object):
+  def __init__(self):
+    self._messages_by_type = defaultdict(list)
+    self._future_by_type = {}
+
+  def install(self, type):
+    if self._messages_by_type[type]:
+      future = asyncio.get_event_loop().create_future()
+      future.set_result(self._messages_by_type[type].pop(0))
+      return future
+    elif type in self._future_by_type:
+      raise errors.InternalError(f"A listener was already installed for messages of type \"{type}\".")
+    else:
+      future = asyncio.get_event_loop().create_future()
+      self._future_by_type[type] = future
+      return future
+
+  def deliver(self, message, sender_id):
+    type = message['type']
+    if type in self._future_by_type:
+      self._future_by_type.pop(type).set_result((message, sender_id))
+    else:
+      self._messages_by_type[type].append((message, sender_id))
 
 
 class TransactionRole(object):

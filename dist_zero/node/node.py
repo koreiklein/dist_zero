@@ -176,9 +176,9 @@ class Node(object):
         active_role, active_role_controller = self._transaction_role_queue[0]
 
         if active_role_controller.transaction_id == message['transaction_id']:
-          active_role_controller.deliver(message['message'])
+          active_role_controller.deliver(message['message'], sender_id)
         else:
-          self._postponed_transaction_messages[message['transaction_id']].append(message['message'])
+          self._postponed_transaction_messages[message['transaction_id']].append((message['message'], sender_id))
     else:
       raise errors.InternalError("Unrecognized message type {}".format(message['type']))
 
@@ -238,7 +238,7 @@ class Node(object):
   def _start_transaction_participant_eventually(self, transaction_id: str,
                                                 role: 'dist_zero.transaction.ParticipantRole'):
     controller = transaction.TransactionRoleController(self, transaction_id)
-    self._start_role_eventually((role, controller))
+    self._start_role_eventually(role, controller)
 
   async def _run_transaction_roles_till_empty(self):
     while len(self._transaction_role_queue) > 0:
@@ -247,11 +247,11 @@ class Node(object):
       self._transaction_role_queue.pop(0)
 
   async def _deliver_postponed_transaction_messages(self, role_controller, msgs):
-    for msg in msgs:
-      role_controller.deliver(msg)
+    for (msg, sender_id) in msgs:
+      role_controller.deliver(msg, sender_id)
 
   async def _run_transaction_role(self, role, controller):
-    if transaction_id in self._postponed_transaction_messages:
+    if controller.transaction_id in self._postponed_transaction_messages:
       msgs = self._postponed_transaction_messages.pop(controller.transaction_id)
       self._controller.create_task(self._deliver_postponed_transaction_messages(controller, msgs))
     await role.run(controller)

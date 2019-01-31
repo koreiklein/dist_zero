@@ -86,9 +86,6 @@ class DataNode(Node):
     Otherwise, the set of kids that must leave this node before it has lost all its kids and it's safe to terminate.
     '''
 
-    self._merging_kid_ids = set()
-    '''Set of kid ids of kids that are in process of merging with another kid.'''
-
     self._graph = NetworkGraph()
 
     self._root_proxy_id = None
@@ -278,25 +275,26 @@ class DataNode(Node):
 
     if self._height > 1:
       best_pair = self._best_mergeable_kids()
-      if best_pair is None or self._merging_kid_ids:
+      if best_pair is None:
         self._time_since_no_mergable_kids_ms = 0
       else:
         self._time_since_no_mergable_kids_ms += ms
 
         if self._time_since_no_mergable_kids_ms >= TIME_TO_WAIT_BEFORE_KID_MERGE_MS:
-          #self.start_transaction_eventually(merge_kids.MergeKids(*best_pair))
-          self._merge_kids(*best_pair)
+          self._time_since_no_mergable_kids_ms = 0
+          self.start_transaction_eventually(merge_kids.MergeKids(*best_pair))
 
-  def _merge_kids(self, left_kid_id, right_kid_id):
-    '''
-    Merge the kids identified by left_kid_id and right_kid_id
+  @property
+  def MERGEABLE_N_KIDS_FIRST(self):
+    MAX_N_KIDS = self.system_config['DATA_NODE_KIDS_LIMIT']
+    if MAX_N_KIDS <= 3:
+      return 1
+    else:
+      return MAX_N_KIDS // 3
 
-    :param str left_kid_id: The id of one kid to merge.
-    :param str right_kid_id: The id of another kid to merge.
-    '''
-    self._merging_kid_ids.add(left_kid_id)
-    self.send(self._kids[left_kid_id],
-              messages.io.merge_with(self.transfer_handle(self._kids[right_kid_id], left_kid_id)))
+  @property
+  def MERGEABLE_N_KIDS_SECOND(self):
+    return self.MERGEABLE_N_KIDS_FIRST
 
   def _best_mergeable_kids(self):
     '''
@@ -306,18 +304,18 @@ class DataNode(Node):
     '''
     # Current algorithm: 2 kids can be merged if each has n_kids less than 1/3 the max
     if len(self._kid_summaries) >= 2:
-      MAX_N_KIDS = self.system_config['DATA_NODE_KIDS_LIMIT']
-      if MAX_N_KIDS <= 3:
-        MERGEABLE_N_KIDS_FIRST = MERGEABLE_N_KIDS_SECOND = 1
-      else:
-        MERGEABLE_N_KIDS_FIRST = MERGEABLE_N_KIDS_SECOND = MAX_N_KIDS // 3
       n_kids_kid_id_pairs = [(kid_summary['n_kids'], kid_id) for kid_id, kid_summary in self._kid_summaries.items()]
       n_kids_kid_id_pairs.sort()
       (least_n_kids, least_id), (next_least_n_kids, next_least_id) = n_kids_kid_id_pairs[:2]
 
-      if least_n_kids <= MERGEABLE_N_KIDS_FIRST and next_least_n_kids <= MERGEABLE_N_KIDS_SECOND:
+      if self._kids_are_mergeable(least_id, next_least_id):
         return least_id, next_least_id
     return None
+
+  def _kids_are_mergeable(self, left_id, right_id):
+    return left_id in self._kid_summaries and right_id in self._kid_summaries and \
+        self._kid_summaries[left_id]['n_kids'] <= self.MERGEABLE_N_KIDS_FIRST and \
+        self._kid_summaries[right_id]['n_kids'] <= self.MERGEABLE_N_KIDS_SECOND
 
   def _check_for_low_capacity(self):
     '''Check whether the total capacity of this node's kids is too low.'''
@@ -475,8 +473,6 @@ class DataNode(Node):
       self._updated_summary = True
     elif message['type'] == 'goodbye_parent':
       self._updated_summary = True
-      if sender_id in self._merging_kid_ids:
-        self._merging_kid_ids.remove(sender_id)
       if sender_id in self._kids:
         self._kids.pop(sender_id)
       if sender_id in self._kid_summaries:
@@ -488,6 +484,7 @@ class DataNode(Node):
 
       if sender_id == self._root_consuming_proxy_id:
         self._complete_consuming_proxy()
+      self._send_kid_summary()
     elif message['type'] == 'kid_summary':
       if message != self._kid_summaries.get(sender_id, None):
         if sender_id in self._kids:

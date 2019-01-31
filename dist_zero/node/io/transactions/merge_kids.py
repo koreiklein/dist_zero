@@ -11,10 +11,21 @@ class MergeKids(transaction.OriginatorRole):
     self._absorber_id = right_kid_id
 
   async def run(self, controller: 'TransactionRoleController'):
+    # By the time this transaction starts to run, the kids may no longer be mergeable
+    if not controller.node._kids_are_mergeable(self._absorbee_id, self._absorber_id):
+      return
+
+    controller.logger.info(
+        "Starting to merge kid '{absorbee_id}' into '{absorber_id}'",
+        extra={
+            'absorbee_id': self._absorbee_id,
+            'absorber_id': self._absorber_id,
+        })
+
     controller.enlist(controller.node._kids[self._absorber_id], 'Absorber',
                       dict(parent=controller.new_handle(self._absorber_id)))
 
-    hello_parent, _sender_id = await controller.listen(type='hello_parent', node_id=self._absorber_id)
+    hello_parent, _sender_id = await controller.listen(type='hello_parent')
     self._absorber = hello_parent['kid']
 
     controller.enlist(
@@ -23,9 +34,14 @@ class MergeKids(transaction.OriginatorRole):
             parent=controller.new_handle(self._absorbee_id),
             absorber=controller.transfer_handle(self._absorber, self._absorbee_id)))
 
-    await controller.listen(type='goodbye_parent', node_id=self._absorbee_id)
-    await controller.listen(type='finished_absorbing', node_id=self._absorber_id)
-    self._node._kids.pop(self._absorbee_id)
+    await controller.listen(type='goodbye_parent')
+    await controller.listen(type='finished_absorbing')
+
+    controller.node._kids.pop(self._absorbee_id)
+    controller.node._kid_summaries.pop(self._absorbee_id)
+
+    controller.node._send_kid_summary()
+    controller.logger.info("Finished absorbing.")
 
 
 class Absorber(transaction.ParticipantRole):
@@ -37,13 +53,13 @@ class Absorber(transaction.ParticipantRole):
   async def run(self, controller: 'TransactionRoleController'):
     controller.send(self.parent, messages.io.hello_parent(controller.new_handle(self.parent['id'])))
 
-    kid_ids_list = await controller.listen(type='absorb_these_kids')
-    kid_ids = set(kid_ids_list)
+    absorb_these_kids, _sender_id = await controller.listen(type='absorb_these_kids')
+    kid_ids = set(absorb_these_kids['kid_ids'])
 
     while kid_ids:
-      kid, kid_id = await controller.listen(type='hello_parent')
+      hello_parent, kid_id = await controller.listen(type='hello_parent')
       kid_ids.remove(kid_id)
-      controller.node._kids[kid_id] = kid
+      controller.node._kids[kid_id] = hello_parent['kid']
 
     controller.send(self.parent, messages.io.finished_absorbing())
 
