@@ -126,6 +126,22 @@ def hello_parent(kid):
   return {'type': 'hello_parent', 'kid': kid}
 
 
+def absorb_these_kids(kid_ids):
+  '''
+  Indicates to an Absorber which kid ids it should wait for before it is finished.
+
+  :param list[str] kid_ids: The ids of the kids that the `Absorber` must adopt before its role in the transaction is finished.
+  '''
+  return {'type': 'absorb_these_kids', 'kid_ids': kid_ids}
+
+
+def finished_absorbing():
+  '''
+  Indicates to the parent of an `Absorber` node that the absorber has finished absorbing everything it needs to absorb.
+  '''
+  return {'type': 'finished_absorbing'}
+
+
 def goodbye_parent():
   '''
   Sent by a leaf node to inform its parent `DataNode` that it has left the system.

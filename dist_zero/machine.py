@@ -169,37 +169,14 @@ class MachineController(object):
 
     :return: A function to cancel the periodic calls.
     '''
-    over = asyncio.get_event_loop().create_future()
+    raise RuntimeError("Abstract Superclass")
 
-    async def _loop():
-      while True:
-        f()
-        done, pending = await asyncio.wait([self.sleep_ms(interval_ms), over], return_when=asyncio.FIRST_COMPLETED)
-        if over in done:
-          return
-        else:
-          runloop = asyncio.get_event_loop()
-          if runloop.is_running():
-            continue
-          else:
-            return
-
-    task = asyncio.get_event_loop().create_task(_loop())
-
-    def _cancel():
-      runloop = asyncio.get_event_loop()
-      if runloop.is_running():
-        if not over.done():
-          over.set_result(True)
-      else:
-        task.cancel()
-
-      if _cancel in self._cancellables:
-        self._cancellables.remove(_cancel)
-
-    self._cancellables.add(_cancel)
-
-    return _cancel
+  def create_task(self, awaitable):
+    '''
+    Ensure the await is run.
+    Cancel it when this controller is terminated.
+    '''
+    raise RuntimeError("Abstract Superclass")
 
 
 class NodeManager(MachineController):
@@ -572,3 +549,47 @@ class NodeManager(MachineController):
   def new_load_balancer_frontend(self, domain_name, height):
     self._ensure_machine_runner()
     return self._machine_runner.new_load_balancer_frontend(domain_name, height)
+
+  def periodically(self, interval_ms, f):
+    over, cancel = self._future_that_resolves_on_cleanup()
+
+    async def _loop():
+      while True:
+        f()
+        done, pending = await asyncio.wait([self.sleep_ms(interval_ms), over], return_when=asyncio.FIRST_COMPLETED)
+        if over in done:
+          return
+        else:
+          runloop = asyncio.get_event_loop()
+          if runloop.is_running():
+            continue
+          else:
+            return
+
+    task = asyncio.get_event_loop().create_task(_loop())
+
+    return cancel
+
+  def _future_that_resolves_on_cleanup(self):
+    over = asyncio.get_event_loop().create_future()
+
+    def _cancel():
+      runloop = asyncio.get_event_loop()
+      if runloop.is_running():
+        if not over.done():
+          over.set_result(True)
+
+      if _cancel in self._cancellables:
+        self._cancellables.remove(_cancel)
+
+    self._cancellables.add(_cancel)
+
+    return over, _cancel
+
+  def create_task(self, awaitable):
+    over, _cancel = self._future_that_resolves_on_cleanup()
+
+    async def _f():
+      await asyncio.wait([awaitable, over], return_when=asyncio.FIRST_COMPLETED)
+
+    asyncio.get_event_loop().create_task(_f())

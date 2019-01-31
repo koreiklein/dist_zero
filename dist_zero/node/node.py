@@ -23,7 +23,8 @@ class Node(object):
 
     self.least_unused_sequence_number = 0
 
-    self._transaction_queue = [] # Queue of transaction roles to run.  If nonempty, the first is active.
+    # Queue of transaction roles to run.  Iff nonempty, a coroutine is running self._transaction_role_queue[0]
+    self._transaction_role_queue = []
 
     self.migrators = {}
     '''
@@ -204,23 +205,17 @@ class Node(object):
 
   # Methods relevant to transactions
 
-  def start_transaction_eventually(self, originator_role: 'dist_zero.transaction.OriginatorRole'):
-    self._transaction_queue.append(originator_role)
-    self._maybe_initialize_next_transaction()
-
-  def _maybe_initialize_next_transaction(self):
-    if len(self._transaction_queue) >= 1:
-      self._transaction_queue[0].initialize(transaction.TransactionController(self))
-
-  def _active_role(self):
-    if len(self._transaction_queue) >= 1:
-      return self._transaction_queue[0]
+  def start_transaction_role_eventually(self, role: 'dist_zero.transaction.TransactionRole'):
+    self._transaction_role_queue.append(role)
+    if len(self._transaction_role_queue) == 1:
+      # No coroutine is running transactions (the queue used to be empty), we need to create one
+      self._controller.create_task(self._run_transaction_roles())
     else:
-      return None
+      # A coroutine is already running transactions, it will eventually get to ``role``
+      pass
 
-  def finish_role(self, role):
-    if role != self._active_role():
-      raise errors.InternalError("Can't finish a role when it is not active.")
-    else:
-      self._transaction_queue.pop(0)
-      self._maybe_initialize_next_transaction()
+  async def _run_transaction_roles(self):
+    while len(self._transaction_role_queue) > 0:
+      # Note that while awaiting the below call to ``run``, more roles may be added
+      await self._transaction_role_queue[0].run(transaction.TransactionController(self))
+      self._transaction_role_queue.pop(0)
