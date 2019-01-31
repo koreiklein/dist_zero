@@ -99,12 +99,6 @@ class DataNode(Node):
     proxy will be taking.
     '''
 
-    self._root_consuming_proxy_id = None
-    '''
-    While in the process of decreasing its height, the root node sets this to the id of the proxy node that it is
-    consuming.
-    '''
-
     # To limit excessive warnings regarding being at low capacity.
     self._warned_low_capacity = False
 
@@ -221,9 +215,6 @@ class DataNode(Node):
       raise errors.InternalError("height 0 DataNode instances can not spawn kids")
     elif self._root_proxy_id is not None:
       raise errors.InternalError("Root nodes may not spawn new kids while their are bumping their height.")
-    elif self._root_consuming_proxy_id is not None:
-      raise errors.InternalError("Root nodes may not spawn new kids while their are decreasing their height "
-                                 "by consuming a proxy.")
     else:
       node_id = ids.new_id("DataNode_kid")
       self._pending_spawned_kids.add(node_id)
@@ -247,7 +238,7 @@ class DataNode(Node):
       self._check_for_low_capacity()
 
   def _get_proxy(self):
-    if len(self._kids) == 1 and not self._root_consuming_proxy_id and self._height > 2:
+    if len(self._kids) == 1 and self._height > 2:
       return next(iter(self._kids.values()))
     else:
       return None
@@ -260,21 +251,8 @@ class DataNode(Node):
         self._time_since_no_consumable_proxy += ms
         if self._time_since_no_consumable_proxy >= TIME_TO_WAIT_BEFORE_CONSUME_PROXY_MS:
           self.start_transaction_eventually(consume_proxy.ConsumeProxy())
-          #self._consume_proxy()
       else:
         self._time_since_no_consumable_proxy = 0
-
-  def _consume_proxy(self):
-    '''Method for a root node to absorb its unique kid.'''
-    if self._parent is not None or len(self._kids) != 1:
-      raise errors.InternalError("Must have a unique kid and be root to consume a proxy.")
-
-    if self._root_consuming_proxy_id is not None:
-      raise errors.InternalError("Root node is already in the process of consuming a separate proxy node.")
-
-    proxy = self._get_proxy()
-    self._root_consuming_proxy_id = proxy['id']
-    self.send(proxy, messages.io.merge_with(self.new_handle(proxy['id'])))
 
   def _check_for_mergeable_kids(self, ms):
     '''Check whether any two kids should be merged.'''
@@ -498,8 +476,6 @@ class DataNode(Node):
         self._leaving_kids.remove(sender_id)
         self._maybe_kids_have_left()
 
-      if sender_id == self._root_consuming_proxy_id:
-        self._complete_consuming_proxy()
       self._send_kid_summary()
     elif message['type'] == 'kid_summary':
       if message != self._kid_summaries.get(sender_id, None):
@@ -543,14 +519,6 @@ class DataNode(Node):
       self._send_hello_parent()
     else:
       super(DataNode, self).receive(message=message, sender_id=sender_id)
-
-  def _complete_consuming_proxy(self):
-    if self._parent is not None:
-      raise errors.InternalError("Only root nodes should complete consuming a proxy node.")
-    if self._height < 3:
-      raise errors.InternalError("A root node should have a height >= 3 when it completes consuming its proxy.")
-    self._height -= 1
-    self._root_consuming_proxy_id = None
 
   def _set_input(self, node):
     if self._importer is not None:

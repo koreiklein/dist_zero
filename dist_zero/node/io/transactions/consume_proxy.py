@@ -1,27 +1,10 @@
 from dist_zero import transaction, messages
 from .merge_kids import Absorbee
-'''
-Old structure:
-  root  ---> proxy --> kid0
-                   --> kid1
-                   --> kid2
-                   --> kid3
-                   ...
-
-Old way of doing it:
-  - root sets root._root_consuming_proxy_id
-  - root sends merge_with to proxy
-  - proxy has its kids switch their parent to the root and terminates sending goodbye_parent
-  - root gets goodbye_parent, decrements its height and goes back to the old state
-
-New way of doing it:
-  - root starts a transaction ConsumeProxy
-  - root enlists its proxy as an Absorbee
-  - proxy enlists kids as FosterChild
-'''
 
 
 class ConsumeProxy(transaction.OriginatorRole):
+  '''A transaction that absorbs the unique child of a root node into the root node itself.'''
+
   async def run(self, controller: 'TransactionRoleController'):
     proxy = controller.node._get_proxy()
     if proxy is None:
