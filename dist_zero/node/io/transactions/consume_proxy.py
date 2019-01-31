@@ -25,7 +25,9 @@ class ConsumeProxy(transaction.OriginatorRole):
     while kid_ids:
       hello_parent, kid_id = await controller.listen(type='hello_parent')
       kid_ids.remove(kid_id)
-      controller.node._kids[kid_id] = hello_parent['kid']
+      controller.node._kids[kid_id] = controller.role_handle_to_node_handle(hello_parent['kid'])
+      if hello_parent['kid_summary']:
+        controller.node._kid_summaries[kid_id] = hello_parent['kid_summary']
 
     await controller.listen(type='goodbye_parent')
 

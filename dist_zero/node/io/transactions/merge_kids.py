@@ -58,7 +58,9 @@ class Absorber(transaction.ParticipantRole):
     while kid_ids:
       hello_parent, kid_id = await controller.listen(type='hello_parent')
       kid_ids.remove(kid_id)
-      controller.node._kids[kid_id] = hello_parent['kid']
+      controller.node._kids[kid_id] = controller.role_handle_to_node_handle(hello_parent['kid'])
+      if hello_parent['kid_summary']:
+        controller.node._kid_summaries[kid_id] = hello_parent['kid_summary']
 
     controller.send(self.parent, messages.io.finished_absorbing())
 
@@ -98,6 +100,11 @@ class FosterChild(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     controller.send(self.old_parent, messages.io.goodbye_parent())
-    controller.send(self.new_parent, messages.io.hello_parent(controller.new_handle(self.new_parent['id'])))
+    controller.send(
+        self.new_parent,
+        messages.io.hello_parent(
+            controller.new_handle(self.new_parent['id']),
+            kid_summary=controller.node._kid_summary_message(),
+        ))
     controller.node._parent = controller.role_handle_to_node_handle(self.new_parent)
     controller.node._send_kid_summary()

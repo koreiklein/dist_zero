@@ -42,7 +42,19 @@ class TransactionRoleController(object):
   def role_handle_to_node_handle(self, role_handle):
     return {key: value for key, value in role_handle.items() if key != 'transaction_id'}
 
-  def enlist(self, node_handle, participant_typename: str, args: dict):
+  def spawn_enlist(self, node_config: object, participant_typename: str, args: dict):
+    new_config = {
+        'start_participant_role':
+        messages.transaction.start_participant_role(
+            transaction_id=self.transaction_id,
+            typename=participant_typename,
+            args=args,
+        )
+    }
+    new_config.update(node_config)
+    self.node._controller.spawn_node(new_config)
+
+  def enlist(self, node_handle: object, participant_typename: str, args: dict):
     self.node.send(
         node_handle,
         messages.transaction.start_participant_role(

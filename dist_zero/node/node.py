@@ -167,10 +167,7 @@ class Node(object):
       else:
         self.migrators[migration_id].receive(sender_id=sender_id, message=migration_message)
     elif message['type'] == 'start_participant_role':
-      from dist_zero.transaction import ParticipantRole
-      self._start_transaction_participant_eventually(
-          transaction_id=message['transaction_id'],
-          role=ParticipantRole.from_config(typename=message['typename'], args=message['args']))
+      self.start_participant_role(message)
     elif message['type'] == 'transaction_message':
       if len(self._transaction_role_queue) > 0:
         active_role, active_role_controller = self._transaction_role_queue[0]
@@ -181,6 +178,12 @@ class Node(object):
           self._postponed_transaction_messages[message['transaction_id']].append((message['message'], sender_id))
     else:
       raise errors.InternalError("Unrecognized message type {}".format(message['type']))
+
+  def start_participant_role(self, message):
+    from dist_zero.transaction import ParticipantRole
+    self._start_transaction_participant_eventually(
+        transaction_id=message['transaction_id'],
+        role=ParticipantRole.from_config(typename=message['typename'], args=message['args']))
 
   def checkpoint(self, before=None):
     '''

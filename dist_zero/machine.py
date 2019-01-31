@@ -343,6 +343,13 @@ class NodeManager(MachineController):
     return len(self._node_by_id)
 
   def parse_node(self, node_config):
+    node = self._parse_node_config_without_role(node_config)
+    if 'start_participant_role' in node_config:
+      node.start_participant_role(node_config['start_participant_role'])
+
+    return node
+
+  def _parse_node_config_without_role(self, node_config):
     if node_config['type'] == 'DataNode':
       return io.DataNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'AdopterNode':
