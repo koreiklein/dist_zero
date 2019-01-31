@@ -284,7 +284,7 @@ class DataNode(Node):
         self._time_since_no_mergable_kids_ms += ms
 
         if self._time_since_no_mergable_kids_ms >= TIME_TO_WAIT_BEFORE_KID_MERGE_MS:
-          #self.start_transaction_role_eventually(merge_kids.MergeKids(*best_pair))
+          #self.start_transaction_eventually(merge_kids.MergeKids(*best_pair))
           self._merge_kids(*best_pair)
 
   def _merge_kids(self, left_kid_id, right_kid_id):

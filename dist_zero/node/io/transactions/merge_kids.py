@@ -10,7 +10,7 @@ class MergeKids(transaction.OriginatorRole):
     self._absorbee_id = left_kid_id
     self._absorber_id = right_kid_id
 
-  async def run(self, controller: 'TransactionController'):
+  async def run(self, controller: 'TransactionRoleController'):
     controller.enlist(controller.node._kids[self._absorber_id], 'Absorber',
                       dict(parent=controller.new_handle(self._absorber_id)))
 
@@ -34,7 +34,7 @@ class Absorber(transaction.ParticipantRole):
   def __init__(self, parent):
     self.parent = parent
 
-  async def run(self, controller: 'TransactionController'):
+  async def run(self, controller: 'TransactionRoleController'):
     controller.send(self.parent, messages.io.hello_parent(controller.new_handle(self.parent['id'])))
 
     kid_ids_list = await controller.listen(type='absorb_these_kids')
@@ -55,7 +55,7 @@ class Absorbee(transaction.ParticipantRole):
     self.parent = parent
     self.absorber = absorber
 
-  async def run(self, controller: 'TransactionController'):
+  async def run(self, controller: 'TransactionRoleController'):
     kid_ids = set()
     controller.send(self.absorber, messages.io.absorb_these_kids(list(controller.node._kids.keys())))
     for kid in controller.node._kids.values():
@@ -81,7 +81,7 @@ class FosterChild(transaction.ParticipantRole):
     self.old_parent = old_parent
     self.new_parent = new_parent
 
-  async def run(self, controller: 'TransactionController'):
+  async def run(self, controller: 'TransactionRoleController'):
     controller.send(self.old_parent, messages.io.goodbye_parent())
     controller.send(self.new_parent, messages.io.hello_parent(controller.new_handle(self.new_parent['id'])))
     controller.node._parent = controller.role_handle_to_node_handle(self.new_parent)

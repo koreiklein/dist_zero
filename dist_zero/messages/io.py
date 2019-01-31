@@ -2,8 +2,6 @@
 Messages to be received by input and output nodes.
 '''
 
-from dist_zero import errors
-
 
 def route_dns(domain_name):
   '''

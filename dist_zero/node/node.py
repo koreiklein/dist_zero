@@ -6,7 +6,7 @@ from collections import defaultdict
 from cryptography.fernet import Fernet
 
 import dist_zero.logging
-from dist_zero import messages, linker, migration, deltas, errors, transaction
+from dist_zero import messages, linker, migration, deltas, errors, ids, transaction
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,10 @@ class Node(object):
 
     # Queue of transaction roles to run.  Iff nonempty, a coroutine is running self._transaction_role_queue[0]
     self._transaction_role_queue = []
+    # Maps transaction_id to ordered list of messages that have
+    #  - been received while that transaction was not active
+    #  - not yet been delivered
+    self._postponed_transaction_messages = defaultdict(list)
 
     self.migrators = {}
     '''
@@ -162,6 +166,19 @@ class Node(object):
             })
       else:
         self.migrators[migration_id].receive(sender_id=sender_id, message=migration_message)
+    elif message['type'] == 'start_participant_role':
+      from dist_zero.transaction import ParticipantRole
+      self._start_transaction_participant_eventually(
+          transaction_id=message['transaction_id'],
+          role=ParticipantRole.from_config(typename=message['typename'], args=message['args']))
+    elif message['type'] == 'transaction_message':
+      if len(self._transaction_role_queue) > 0:
+        active_role, active_role_controller = self._transaction_role_queue[0]
+
+        if active_role_controller.transaction_id == message['transaction_id']:
+          active_role_controller.deliver(message['message'])
+        else:
+          self._postponed_transaction_messages[message['transaction_id']].append(message['message'])
     else:
       raise errors.InternalError("Unrecognized message type {}".format(message['type']))
 
@@ -205,17 +222,36 @@ class Node(object):
 
   # Methods relevant to transactions
 
-  def start_transaction_role_eventually(self, role: 'dist_zero.transaction.TransactionRole'):
-    self._transaction_role_queue.append(role)
+  def start_transaction_eventually(self, role: 'dist_zero.transaction.OriginatorRole'):
+    controller = transaction.TransactionRoleController(self, ids.new_id(f'Transaction__{role.__class__.__name__}'))
+    self._start_role_eventually(role, controller)
+
+  def _start_role_eventually(self, role, controller):
+    self._transaction_role_queue.append((role, controller))
     if len(self._transaction_role_queue) == 1:
       # No coroutine is running transactions (the queue used to be empty), we need to create one
-      self._controller.create_task(self._run_transaction_roles())
+      self._controller.create_task(self._run_transaction_roles_till_empty())
     else:
       # A coroutine is already running transactions, it will eventually get to ``role``
       pass
 
-  async def _run_transaction_roles(self):
+  def _start_transaction_participant_eventually(self, transaction_id: str,
+                                                role: 'dist_zero.transaction.ParticipantRole'):
+    controller = transaction.TransactionRoleController(self, transaction_id)
+    self._start_role_eventually((role, controller))
+
+  async def _run_transaction_roles_till_empty(self):
     while len(self._transaction_role_queue) > 0:
       # Note that while awaiting the below call to ``run``, more roles may be added
-      await self._transaction_role_queue[0].run(transaction.TransactionController(self))
+      await self._run_transaction_role(*self._transaction_role_queue[0])
       self._transaction_role_queue.pop(0)
+
+  async def _deliver_postponed_transaction_messages(self, role_controller, msgs):
+    for msg in msgs:
+      role_controller.deliver(msg)
+
+  async def _run_transaction_role(self, role, controller):
+    if transaction_id in self._postponed_transaction_messages:
+      msgs = self._postponed_transaction_messages.pop(controller.transaction_id)
+      self._controller.create_task(self._deliver_postponed_transaction_messages(controller, msgs))
+    await role.run(controller)
