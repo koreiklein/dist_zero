@@ -1,12 +1,13 @@
 import logging
 
-from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids
+from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids, transaction
 from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
 from dist_zero.node.io import leaf_html
 from dist_zero.node.io import leaf
 
 from .monitor import Monitor
+from .transactions import remove_leaf
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,6 @@ class DataNode(Node):
     '''
     self._controller = controller
     self._parent = parent
-    self._sent_hello = False
     self._variant = variant
     self._height = height
     self._leaf_config = leaf_config
@@ -167,22 +167,7 @@ class DataNode(Node):
       self.send(kid, messages.migration.switch_flows(migration_id))
 
   def initialize(self):
-    if self._parent is None and self._height > 1 and len(self._kids) == 0:
-      # unless we are height 0, we must have a new kid.
-      # FIXME(KK): Remove this once all nodes are initialized.
-      #   For the momemnt, we need it so that root nodes (not currently started via a role) will
-      #   spawn necessary kids.
-      self._monitor._spawn_kid()
-
-    if self._parent is not None and self._height == 0:
-      self._send_hello_parent()
-
-  def _send_hello_parent(self):
-    if not self._sent_hello:
-      self._sent_hello = True
-      self.send(self._parent, messages.io.hello_parent(self.new_handle(self._parent['id'])))
-    else:
-      raise errors.InternalError("Already sent hello")
+    pass
 
   def _get_proxy(self):
     if len(self._kids) == 1 and self._height > 2:
@@ -293,20 +278,8 @@ class DataNode(Node):
         self._set_input(node)
     elif message['type'] == 'routing_start':
       self._on_routing_start(message=message, sender_id=sender_id)
-    elif message['type'] == 'hello_parent':
-      self._finish_adding_kid(message['kid'])
-      if self._monitor.out_of_capacity():
-        self._send_kid_summary()
-      else:
-        self._updated_summary = True
     elif message['type'] == 'goodbye_parent':
-      self._updated_summary = True
-      if sender_id in self._kids:
-        self._kids.pop(sender_id)
-      if sender_id in self._kid_summaries:
-        self._kid_summaries.pop(sender_id)
-
-      self._send_kid_summary()
+      self.start_transaction_eventually(remove_leaf.RemoveLeaf(kid_id=sender_id))
     elif message['type'] == 'kid_summary':
       if message != self._kid_summaries.get(sender_id, None):
         if sender_id in self._kids:
@@ -334,14 +307,6 @@ class DataNode(Node):
               )
           ]))
       self._added_sender_respond_to = message['respond_to']
-    elif message['type'] == 'adopt':
-      if self._parent is None:
-        raise errors.InternalError("Root nodes may not adopt a new parent.")
-      self.send(self._parent, messages.io.goodbye_parent())
-      self._parent = message['new_parent']
-      self._updated_summary = True
-      self._sent_hello = False
-      self._send_hello_parent()
     else:
       super(DataNode, self).receive(message=message, sender_id=sender_id)
 
@@ -548,12 +513,13 @@ class DataNode(Node):
             'node_name': name
         })
 
-    return messages.io.data_node_config(
-        node_id=node_id,
-        parent=self.new_handle(node_id),
-        variant=self._variant,
-        height=0,
-        leaf_config=self._leaf_config)
+    parent = self.new_handle(node_id)
+    return transaction.add_participant_role_to_node_config(
+        node_config=messages.io.data_node_config(
+            node_id=node_id, parent=parent, variant=self._variant, height=0, leaf_config=self._leaf_config),
+        transaction_id=ids.new_id('AddLeafTransaction'),
+        participant_typename='AddLeaf',
+        args=dict(parent=parent))
 
   def deliver(self, message, sequence_number, sender_id):
     if self._variant != 'output' or self._height != 0:

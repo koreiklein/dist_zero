@@ -45,15 +45,7 @@ class TransactionRoleController(object):
   def spawn_enlist(self, node_config: object, participant, args: dict):
     participant_typename = self._participant_typename(participant)
 
-    new_config = {
-        'start_participant_role':
-        messages.transaction.start_participant_role(
-            transaction_id=self.transaction_id,
-            typename=participant_typename,
-            args=args,
-        )
-    }
-    new_config.update(node_config)
+    new_config = add_participant_role_to_node_config(node_config, self.transaction_id, participant_typename, args)
     self.node._controller.spawn_node(new_config)
 
   def _participant_typename(self, participant):
@@ -167,3 +159,16 @@ class ParticipantRole(TransactionRole):
     else:
       raise errors.InternalError(
           f"Unrecognized transaction type name \"{typename}\" not found in dist_zero.all_transactions.")
+
+
+def add_participant_role_to_node_config(node_config, transaction_id, participant_typename, args):
+  new_config = {
+      'start_participant_role':
+      messages.transaction.start_participant_role(
+          transaction_id=transaction_id,
+          typename=participant_typename,
+          args=args,
+      )
+  }
+  new_config.update(node_config)
+  return new_config

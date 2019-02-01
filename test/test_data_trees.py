@@ -21,7 +21,7 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
       random_seed='test_add_one_leaf_to_empty_input_tree')
   await demo.run_for(ms=200)
   root_input_node_id = dist_zero.ids.new_id('DataNode_input')
-  demo.system.spawn_node(
+  demo.system.spawn_dataset(
       on_machine=machine,
       node_config=messages.io.data_node_config(
           root_input_node_id, parent=None, height=2, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
@@ -63,7 +63,7 @@ async def test_scale_unconnected_io_tree(demo):
       random_seed='test_scale_unconnected_io_tree')
   await demo.run_for(ms=200)
   root_input_node_id = dist_zero.ids.new_id('DataNode_input')
-  demo.system.spawn_node(
+  demo.system.spawn_dataset(
       on_machine=machine,
       node_config=messages.io.data_node_config(
           root_input_node_id, parent=None, height=2, leaf_config=messages.io.sum_leaf_config(0), variant='input'))

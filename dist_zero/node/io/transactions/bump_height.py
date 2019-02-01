@@ -42,6 +42,8 @@ class BumpHeight(transaction.OriginatorRole):
 
     proxy_node = controller.role_handle_to_node_handle(proxy)
 
+    # Restore node state
+
     controller.node._height += 1
     controller.node._kids = {proxy['id']: proxy_node}
     controller.node._kid_summaries = {}
