@@ -64,6 +64,8 @@ class Absorber(transaction.ParticipantRole):
 
     controller.send(self.parent, messages.io.finished_absorbing())
 
+    controller.node._send_kid_summary()
+
 
 class Absorbee(transaction.ParticipantRole):
   '''Transfer all of a node's kids to an `Absorber`'''

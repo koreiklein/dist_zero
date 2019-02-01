@@ -1,14 +1,3 @@
-'''
-How it works now:
-  - parent spawns a kid node with the proper config
-  - kid sends hello_parent
-  - parent gets info from kid
-
-  ! Also, if the kid starts up and decides it can't be childless,
-    then it waits until it has spawned its own kid before sending its hello_parent.
-    - This behavior involves the startup_kid parameter.
-'''
-
 from dist_zero import transaction, messages, ids, errors
 
 
@@ -51,12 +40,14 @@ class StartDataNode(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     controller.node._parent = controller.role_handle_to_node_handle(self._parent)
-    controller.logger.info("Starting a new data node.")
 
     if controller.node._height > 1 and len(controller.node._kids) == 0:
       # In this case, this node should start with at least one kid.
       # Include the logic of a SpawnKid transaction as part of this transaction.
+      controller.logger.info("Starting a new data node with a single kid.")
       await SpawnKid(False).run(controller)
+    else:
+      controller.logger.info("Starting a new data node without additional kids.")
 
     controller.send(
         self._parent,

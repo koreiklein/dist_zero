@@ -82,7 +82,7 @@ async def test_scale_unconnected_io_tree(demo):
     await create_new_leaf(name='test_leaf_{}'.format(i))
     await demo.run_for(ms=1000)
 
-  await demo.run_for(ms=4000)
+  await demo.run_for(ms=6000)
 
   assert 3 == demo.system.get_capacity(root_input_node_id)['height']
 
@@ -91,7 +91,7 @@ async def test_scale_unconnected_io_tree(demo):
     await create_new_leaf(name='test_leaf_{}'.format(i))
     await demo.run_for(ms=1000)
 
-  await demo.run_for(ms=4000)
+  await demo.run_for(ms=6000)
 
   assert 4 == demo.system.get_capacity(root_input_node_id)['height']
 

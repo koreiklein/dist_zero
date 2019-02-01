@@ -6,7 +6,7 @@ from dist_zero.node.node import Node
 from dist_zero.node.io import leaf_html
 from dist_zero.node.io import leaf
 
-from .transactions import merge_kids, consume_proxy, spawn_kid
+from .monitor import Monitor
 
 logger = logging.getLogger(__name__)
 
@@ -78,22 +78,6 @@ class DataNode(Node):
     and use it configure the appropriate DNS mapping.
     '''
 
-    self._graph = NetworkGraph()
-
-    self._root_proxy_id = None
-    '''
-    While in the process of bumping its height, the root node sets this to the id of the node that will take over as its
-    proxy.
-    '''
-    self._kids_for_proxy_to_adopt = None
-    '''
-    While in the process of bumping its height, the root node sets this to the list of handles of the kids that the
-    proxy will be taking.
-    '''
-
-    # To limit excessive warnings regarding being at low capacity.
-    self._warned_low_capacity = False
-
     self._http_server_for_adding_leaves = None
     '''
     Height 0 `DataNode` instances when bound to a domain name will bind an http server
@@ -109,11 +93,10 @@ class DataNode(Node):
     if self._recorded_user is not None:
       self._recorded_user.simulate(self._controller, self._receive_input_action)
 
-    self._stop_checking_limits = self._controller.periodically(CHECK_INTERVAL,
-                                                               lambda: self._check_limits(CHECK_INTERVAL))
+    self._monitor = Monitor(self)
 
-    self._time_since_no_mergable_kids_ms = 0
-    self._time_since_no_consumable_proxy = 0
+    self._stop_checking_limits = self._controller.periodically(CHECK_INTERVAL,
+                                                               lambda: self._monitor._check_limits(CHECK_INTERVAL))
 
   def _receive_input_action(self, message):
     if self._variant != 'input':
@@ -189,7 +172,7 @@ class DataNode(Node):
       # FIXME(KK): Remove this once all nodes are initialized.
       #   For the momemnt, we need it so that root nodes (not currently started via a role) will
       #   spawn necessary kids.
-      self._spawn_kid()
+      self._monitor._spawn_kid()
 
     if self._parent is not None:
       self._send_hello_parent()
@@ -201,45 +184,11 @@ class DataNode(Node):
     else:
       raise errors.InternalError("Already sent hello")
 
-  def _spawn_kid(self):
-    self.start_transaction_eventually(spawn_kid.SpawnKid())
-
-  def _check_for_kid_limits(self):
-    '''In case the kids of self are hitting any limits, address them.'''
-    if self._height > 1:
-      self._check_for_low_capacity()
-
   def _get_proxy(self):
     if len(self._kids) == 1 and self._height > 2:
       return next(iter(self._kids.values()))
     else:
       return None
-
-  def _check_for_consumable_proxy(self, ms):
-    TIME_TO_WAIT_BEFORE_CONSUME_PROXY_MS = 4 * 1000
-
-    if self._parent is None:
-      if self._get_proxy():
-        self._time_since_no_consumable_proxy += ms
-        if self._time_since_no_consumable_proxy >= TIME_TO_WAIT_BEFORE_CONSUME_PROXY_MS:
-          self.start_transaction_eventually(consume_proxy.ConsumeProxy())
-      else:
-        self._time_since_no_consumable_proxy = 0
-
-  def _check_for_mergeable_kids(self, ms):
-    '''Check whether any two kids should be merged.'''
-    TIME_TO_WAIT_BEFORE_KID_MERGE_MS = 2 * 1000
-
-    if self._height > 1:
-      best_pair = self._best_mergeable_kids()
-      if best_pair is None:
-        self._time_since_no_mergable_kids_ms = 0
-      else:
-        self._time_since_no_mergable_kids_ms += ms
-
-        if self._time_since_no_mergable_kids_ms >= TIME_TO_WAIT_BEFORE_KID_MERGE_MS:
-          self._time_since_no_mergable_kids_ms = 0
-          self.start_transaction_eventually(merge_kids.MergeKids(*best_pair))
 
   def _remove_kid(self, kid_id):
     if kid_id in self._kids:
@@ -280,88 +229,10 @@ class DataNode(Node):
         self._kid_summaries[left_id]['n_kids'] <= self.MERGEABLE_N_KIDS_FIRST and \
         self._kid_summaries[right_id]['n_kids'] <= self.MERGEABLE_N_KIDS_SECOND
 
-  def _check_for_low_capacity(self):
-    '''Check whether the total capacity of this node's kids is too low.'''
-    if set(self._kid_summaries.keys()) < set(self._kids.keys()):
-      return # Wait till we have summaries for all our kids
-
-    total_kid_capacity = sum(
-        self._kid_capacity_limit - kid_summary['size'] for kid_summary in self._kid_summaries.values())
-
-    if total_kid_capacity <= self.system_config['TOTAL_KID_CAPACITY_TRIGGER']:
-      if len(self._kids) < self.system_config['DATA_NODE_KIDS_LIMIT']:
-        if self._root_proxy_id is None:
-          self._spawn_kid()
-        else:
-          self.logger.warning("Can't spawn children while bumping root node height.")
-      else:
-        if self._parent is None:
-          if self._root_proxy_id is None:
-            self._bump_height()
-          else:
-            # This happens when we've tried to bump the height once already, and the trigger fires again
-            # while the newly spawned node bumping the height has not yet confirmed that it is running properly.
-            self.logger.warning("Can't bump root node height, as we are waiting for a proxy to spawn.")
-        else:
-          if not self._warned_low_capacity:
-            self._warned_low_capacity = True
-            self.logger.warning("nonroot DataNode instance had too little capacity and no room to spawn more kids. "
-                                "Capacity is remaining low and is not being increased.")
-    else:
-      self._warned_low_capacity = False
-
-  def _bump_height(self):
-    if self._parent is not None:
-      raise errors.InternalError("Only the root node may bump its height.")
-
-    self.logger.info("Root node is starting to bump its height in response to low capacity.")
-
-    self._root_proxy_id = ids.new_id('DataNode_root_proxy')
-    self._kids_for_proxy_to_adopt = list(self._kids.values())
-    self._height += 1
-    self._kid_summaries = {}
-    self._updated_summary = True
-    self._controller.spawn_node(
-        messages.io.adopter_node_config(
-            adoptees=[self.transfer_handle(kid, self._root_proxy_id) for kid in self._kids_for_proxy_to_adopt],
-            data_node_config=messages.io.data_node_config(
-                node_id=self._root_proxy_id,
-                parent=self.new_handle(self._root_proxy_id),
-                variant=self._variant,
-                leaf_config=self._leaf_config,
-                height=self._height - 1,
-            )))
-
-  def _finish_bumping_height(self, proxy):
-    self._kid_summaries = {}
-    self._updated_summary = True
-    self._kids = {proxy['id']: proxy}
-    self._graph = NetworkGraph()
-    self._graph.add_node(proxy['id'])
-    if self._adjacent is not None:
-      self.send(
-          self._adjacent,
-          messages.io.bumped_height(
-              proxy=self.transfer_handle(proxy, self._adjacent['id']),
-              kid_ids=[kid['id'] for kid in self._kids_for_proxy_to_adopt],
-              variant=self._variant))
-
-    self._root_proxy_id = None
-    self._kids_for_proxy_to_adopt = None
-
-  def set_initial_kids(self, kids):
-    if self._kids:
-      raise errors.InternalError("DataNode already has kids")
-
-    self._kids = kids
-    for kid_id in kids.keys():
-      self._graph.add_node(kid_id)
-
   def _finish_adding_kid(self, kid):
     kid_id = kid['id']
     self._updated_summary = True
     self._kids[kid_id] = kid
-    self._graph.add_node(kid_id)
 
     if self._exporter is not None:
       self.send(
@@ -381,8 +252,6 @@ class DataNode(Node):
               parent_id=self.id,
               new_kids=[self.transfer_handle(kid, self._importer.sender_id)],
               new_height=self._height))
-
-    self._graph.add_node(kid_id)
 
   def _terminate(self):
     self._stop_checking_limits()
@@ -424,10 +293,7 @@ class DataNode(Node):
     elif message['type'] == 'routing_start':
       self._on_routing_start(message=message, sender_id=sender_id)
     elif message['type'] == 'hello_parent':
-      if sender_id == self._root_proxy_id:
-        self._finish_bumping_height(message['kid'])
-      else:
-        self._finish_adding_kid(message['kid'])
+      self._finish_adding_kid(message['kid'])
       self._updated_summary = True
     elif message['type'] == 'goodbye_parent':
       self._updated_summary = True
@@ -506,14 +372,6 @@ class DataNode(Node):
 
   def elapse(self, ms):
     self.linker.elapse(ms)
-
-  def _check_limits(self, ms):
-    if self._updated_summary or self._height == 1:
-      self._send_kid_summary()
-      self._updated_summary = False
-    self._check_for_kid_limits()
-    self._check_for_mergeable_kids(ms)
-    self._check_for_consumable_proxy(ms)
 
   def _kid_summary_message(self):
     return messages.io.kid_summary(
