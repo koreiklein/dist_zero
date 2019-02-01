@@ -1,7 +1,7 @@
 import pytest
 
 import dist_zero.ids
-from dist_zero import messages, types
+from dist_zero import messages, types, errors
 from dist_zero.recorded import RecordedUser
 
 from .common import Utils
@@ -88,7 +88,7 @@ async def test_scale_unconnected_io_tree(demo):
 
   n_new_leaves = 27 - 9
   for i in range(n_new_leaves):
-    await create_new_leaf(name='test_leaf_{}'.format(i))
+    await create_new_leaf(name='test_leaf_{}'.format(i + 9))
     await demo.run_for(ms=1000)
 
   await demo.run_for(ms=6000)

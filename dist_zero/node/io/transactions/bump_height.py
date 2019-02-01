@@ -1,33 +1,5 @@
 from dist_zero import transaction, messages, ids, errors
 from dist_zero.network_graph import NetworkGraph
-'''
-Old bump height transaction:
-  - parent sets _root_proxy_id
-  - parent spawns a proxy node using adopter_node_config with its kids as adoptees
-    - that config contains within it the data_node_config
-  - when the adopter starts, it sends adopt messages to all of the old root's kids
-  - each kid says goodbye to the root, and hello to the proxy
-  - the proxy says hello to the root
-  - the root receives that hello, and calls _finish_bumping_height which sets up a lot of important state
-
-New plan for the BumpHeight transaction:
-  - BumpHeight starts on the root
-  - the root starts a proxy with spawn_enlist to run an Absorber role.
-  - The absorber says hello to the root
-  - The root gets the hello, and
-    - enlists all of its kids into FosterChild roles.
-    - sends absorb_these_kids to the proxy
-  - The proxy absorbs all the kids, then sends finished_absorbing to the root and terminates
-  - The root waits for all of the goodbyes from its old kids, and the finished_absorbing from the proxy
-  - The root finishes by setting up all the same state that was required before
-
-TODOS:
-  - maybe remove any of the following
-    - the adopt message
-    - the AdopterNode class and module
-    - def change_node
-
-'''
 
 
 class BumpHeight(transaction.OriginatorRole):
@@ -55,10 +27,10 @@ class BumpHeight(transaction.OriginatorRole):
     controller.send(proxy, messages.io.absorb_these_kids(kids_to_absorb))
 
     kid_ids = set(kids_to_absorb)
-    for kid in controller.node._kids.values():
+    for kid_id in kids_to_absorb:
       controller.enlist(
-          kid, 'FosterChild',
-          dict(old_parent=controller.new_handle(kid['id']), new_parent=controller.transfer_handle(proxy, kid['id'])))
+          controller.node._kids[kid_id], 'FosterChild',
+          dict(old_parent=controller.new_handle(kid_id), new_parent=controller.transfer_handle(proxy, kid_id)))
 
     while kid_ids:
       _goodbye_parent, kid_id = await controller.listen(type='goodbye_parent')
@@ -69,8 +41,10 @@ class BumpHeight(transaction.OriginatorRole):
     proxy_node = controller.role_handle_to_node_handle(proxy)
 
     controller.node._height += 1
-    controller.node._kid_summaries = {}
     controller.node._kids = {proxy['id']: proxy_node}
+    controller.node._kid_summaries = {}
+    if proxy_summary is not None:
+      controller.node._kid_summaries[proxy['id']] = proxy_summary
     controller.node._graph = NetworkGraph()
     controller.node._graph.add_node(proxy['id'])
     if controller.node._adjacent is not None:
@@ -80,3 +54,9 @@ class BumpHeight(transaction.OriginatorRole):
               proxy=self.transfer_handle(proxy_node, controller.node._adjacent['id']),
               kid_ids=kids_to_absorb,
               variant=controller.node._variant))
+
+    # After bumping the height, we will certainly need a new kid
+    from .spawn_kid import SpawnKid
+    await SpawnKid(send_summary=False, force=True).run(controller)
+
+    controller.logger.info("Finish BumpHeight")

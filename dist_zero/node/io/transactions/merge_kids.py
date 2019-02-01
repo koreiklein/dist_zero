@@ -50,7 +50,10 @@ class Absorber(transaction.ParticipantRole):
     self.parent = parent
 
   async def run(self, controller: 'TransactionRoleController'):
-    controller.send(self.parent, messages.io.hello_parent(controller.new_handle(self.parent['id'])))
+    controller.send(
+        self.parent,
+        messages.io.hello_parent(
+            controller.new_handle(self.parent['id']), kid_summary=controller.node._kid_summary_message()))
 
     absorb_these_kids, _sender_id = await controller.listen(type='absorb_these_kids')
     kid_ids = set(absorb_these_kids['kid_ids'])

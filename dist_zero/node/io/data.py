@@ -55,7 +55,7 @@ class DataNode(Node):
     self._importer = None
 
     self._updated_summary = True
-    '''Set to true when the currenty summary may have changed.'''
+    '''Set to true when the current summary may have changed.'''
     self._last_kid_summary = None
 
     self._domain_name = None
@@ -96,7 +96,7 @@ class DataNode(Node):
     self._monitor = Monitor(self)
 
     self._stop_checking_limits = self._controller.periodically(CHECK_INTERVAL,
-                                                               lambda: self._monitor._check_limits(CHECK_INTERVAL))
+                                                               lambda: self._monitor.check_limits(CHECK_INTERVAL))
 
   def _receive_input_action(self, message):
     if self._variant != 'input':
@@ -174,7 +174,7 @@ class DataNode(Node):
       #   spawn necessary kids.
       self._monitor._spawn_kid()
 
-    if self._parent is not None:
+    if self._parent is not None and self._height == 0:
       self._send_hello_parent()
 
   def _send_hello_parent(self):
@@ -208,15 +208,16 @@ class DataNode(Node):
   def MERGEABLE_N_KIDS_SECOND(self):
     return self.MERGEABLE_N_KIDS_FIRST
 
-  def _best_mergeable_kids(self):
+  def _best_mergeable_kids(self, do_not_use_ids):
     '''
     Find the best pair of mergeable kids if they exist.
 
     :return: None if no 2 kids are mergable.  Otherwise, a pair of the ids of two mergeable kids.
     '''
     # Current algorithm: 2 kids can be merged if each has n_kids less than 1/3 the max
-    if len(self._kid_summaries) >= 2:
-      n_kids_kid_id_pairs = [(kid_summary['n_kids'], kid_id) for kid_id, kid_summary in self._kid_summaries.items()]
+    n_kids_kid_id_pairs = [(kid_summary['n_kids'], kid_id) for kid_id, kid_summary in self._kid_summaries.items()
+                           if kid_id not in do_not_use_ids]
+    if len(n_kids_kid_id_pairs) >= 2:
       n_kids_kid_id_pairs.sort()
       (least_n_kids, least_id), (next_least_n_kids, next_least_id) = n_kids_kid_id_pairs[:2]
 
@@ -294,7 +295,10 @@ class DataNode(Node):
       self._on_routing_start(message=message, sender_id=sender_id)
     elif message['type'] == 'hello_parent':
       self._finish_adding_kid(message['kid'])
-      self._updated_summary = True
+      if self._monitor.out_of_capacity():
+        self._send_kid_summary()
+      else:
+        self._updated_summary = True
     elif message['type'] == 'goodbye_parent':
       self._updated_summary = True
       if sender_id in self._kids:
@@ -307,8 +311,12 @@ class DataNode(Node):
       if message != self._kid_summaries.get(sender_id, None):
         if sender_id in self._kids:
           self._kid_summaries[sender_id] = message
-          self._updated_summary = True
-          self._check_for_kid_limits()
+          if self._monitor.out_of_capacity():
+            # These updates should be propogated immediately.
+            self._send_kid_summary()
+          else:
+            self._updated_summary = True
+          self._monitor.check_limits(0)
     elif message['type'] == 'configure_right_parent':
       pass
     elif message['type'] == 'added_sender':
@@ -539,7 +547,6 @@ class DataNode(Node):
             'leaf_node_id': node_id,
             'node_name': name
         })
-    self._kids[node_id] = None
 
     return messages.io.data_node_config(
         node_id=node_id,

@@ -2,12 +2,16 @@ from dist_zero import transaction, messages, ids, errors
 
 
 class SpawnKid(transaction.OriginatorRole):
-  def __init__(self, send_summary=True):
+  def __init__(self, send_summary=True, force=False):
     self._send_summary = send_summary
+    self._force = force
 
   async def run(self, controller: 'TransactionRoleController'):
     if controller.node._height == 0:
       raise errors.InternalError("height 0 DataNode instances can not spawn kids")
+    if not self._force and not controller.node._monitor.out_of_capacity():
+      controller.logger.info("Canceling SpawnKid transaction because the spawning node is not out of capacity.")
+      return
 
     controller.logger.info("Starting a SpawnKid transaction.")
 
@@ -45,7 +49,7 @@ class StartDataNode(transaction.ParticipantRole):
       # In this case, this node should start with at least one kid.
       # Include the logic of a SpawnKid transaction as part of this transaction.
       controller.logger.info("Starting a new data node with a single kid.")
-      await SpawnKid(False).run(controller)
+      await SpawnKid(send_summary=False).run(controller)
     else:
       controller.logger.info("Starting a new data node without additional kids.")
 
