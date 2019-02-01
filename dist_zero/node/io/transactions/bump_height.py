@@ -1,6 +1,8 @@
 from dist_zero import transaction, messages, ids, errors
 from dist_zero.network_graph import NetworkGraph
 
+from . import helpers
+
 
 class BumpHeight(transaction.OriginatorRole):
   async def run(self, controller: 'TransactionRoleController'):
@@ -18,7 +20,7 @@ class BumpHeight(transaction.OriginatorRole):
         leaf_config=controller.node._leaf_config,
         height=controller.node._height)
 
-    controller.spawn_enlist(proxy_config, 'Absorber', dict(parent=controller.new_handle(self.proxy_id)))
+    controller.spawn_enlist(proxy_config, helpers.Absorber, dict(parent=controller.new_handle(self.proxy_id)))
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     proxy = hello_parent['kid']
     proxy_summary = hello_parent['kid_summary']
@@ -29,7 +31,7 @@ class BumpHeight(transaction.OriginatorRole):
     kid_ids = set(kids_to_absorb)
     for kid_id in kids_to_absorb:
       controller.enlist(
-          controller.node._kids[kid_id], 'FosterChild',
+          controller.node._kids[kid_id], helpers.FosterChild,
           dict(old_parent=controller.new_handle(kid_id), new_parent=controller.transfer_handle(proxy, kid_id)))
 
     while kid_ids:

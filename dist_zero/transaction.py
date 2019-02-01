@@ -42,7 +42,9 @@ class TransactionRoleController(object):
   def role_handle_to_node_handle(self, role_handle):
     return {key: value for key, value in role_handle.items() if key != 'transaction_id'}
 
-  def spawn_enlist(self, node_config: object, participant_typename: str, args: dict):
+  def spawn_enlist(self, node_config: object, participant, args: dict):
+    participant_typename = self._participant_typename(participant)
+
     new_config = {
         'start_participant_role':
         messages.transaction.start_participant_role(
@@ -54,7 +56,14 @@ class TransactionRoleController(object):
     new_config.update(node_config)
     self.node._controller.spawn_node(new_config)
 
-  def enlist(self, node_handle: object, participant_typename: str, args: dict):
+  def _participant_typename(self, participant):
+    if not issubclass(participant, ParticipantRole):
+      raise errors.InternalError(f"Unrecognized participant {participant} should be a subclass of ParticipantRole")
+    return participant.__name__
+
+  def enlist(self, node_handle: object, participant, args: dict):
+    participant_typename = self._participant_typename(participant)
+
     self.node.send(
         node_handle,
         messages.transaction.start_participant_role(

@@ -1,5 +1,7 @@
 from dist_zero import transaction, messages, ids, errors
 
+from . import helpers
+
 
 class SpawnKid(transaction.OriginatorRole):
   def __init__(self, send_summary=True, force=False):
@@ -23,7 +25,7 @@ class SpawnKid(transaction.OriginatorRole):
         leaf_config=controller.node._leaf_config,
         height=controller.node._height - 1)
 
-    controller.spawn_enlist(node_config, 'StartDataNode', dict(parent=controller.new_handle(node_id), ))
+    controller.spawn_enlist(node_config, helpers.StartDataNode, dict(parent=controller.new_handle(node_id), ))
 
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     if hello_parent['kid_summary']:
@@ -36,24 +38,3 @@ class SpawnKid(transaction.OriginatorRole):
       controller.node._send_kid_summary()
 
     controller.logger.info("Finishing a SpawnKid transaction.")
-
-
-class StartDataNode(transaction.ParticipantRole):
-  def __init__(self, parent):
-    self._parent = parent
-
-  async def run(self, controller: 'TransactionRoleController'):
-    controller.node._parent = controller.role_handle_to_node_handle(self._parent)
-
-    if controller.node._height > 1 and len(controller.node._kids) == 0:
-      # In this case, this node should start with at least one kid.
-      # Include the logic of a SpawnKid transaction as part of this transaction.
-      controller.logger.info("Starting a new data node with a single kid.")
-      await SpawnKid(send_summary=False).run(controller)
-    else:
-      controller.logger.info("Starting a new data node without additional kids.")
-
-    controller.send(
-        self._parent,
-        messages.io.hello_parent(
-            controller.new_handle(self._parent['id']), kid_summary=controller.node._kid_summary_message()))

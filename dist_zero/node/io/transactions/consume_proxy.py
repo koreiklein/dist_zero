@@ -1,5 +1,6 @@
 from dist_zero import transaction, messages
-from .merge_kids import Absorbee
+
+from . import helpers
 
 
 class ConsumeProxy(transaction.OriginatorRole):
@@ -17,7 +18,7 @@ class ConsumeProxy(transaction.OriginatorRole):
         })
 
     my_handle = controller.new_handle(proxy['id'])
-    controller.enlist(proxy, 'Absorbee', dict(parent=my_handle, absorber=my_handle))
+    controller.enlist(proxy, helpers.Absorbee, dict(parent=my_handle, absorber=my_handle))
 
     absorb_these_kids, _sender_id = await controller.listen(type='absorb_these_kids')
     kid_ids = set(absorb_these_kids['kid_ids'])
