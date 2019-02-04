@@ -393,6 +393,7 @@ class DataNode(Node):
           highest_capacity_kid_id, max_kid_capacity = kid_id, kid_capacity
 
       if highest_capacity_kid_id is None:
+        self.logger.error("No capacity exists to add a kid to this DataNode")
         raise errors.NoCapacityError()
       else:
         highest_capacity_kid = self._kids[highest_capacity_kid_id]

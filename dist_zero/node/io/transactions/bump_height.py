@@ -23,7 +23,6 @@ class BumpHeight(transaction.OriginatorRole):
     controller.spawn_enlist(proxy_config, helpers.Absorber, dict(parent=controller.new_handle(self.proxy_id)))
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     proxy = hello_parent['kid']
-    proxy_summary = hello_parent['kid_summary']
 
     kids_to_absorb = list(controller.node._kids.keys())
     controller.send(proxy, messages.io.absorb_these_kids(kids_to_absorb))
@@ -38,7 +37,7 @@ class BumpHeight(transaction.OriginatorRole):
       _goodbye_parent, kid_id = await controller.listen(type='goodbye_parent')
       kid_ids.remove(kid_id)
 
-    await controller.listen(type='finished_absorbing')
+    finished_absorbing, _sender_id = await controller.listen(type='finished_absorbing')
 
     proxy_node = controller.role_handle_to_node_handle(proxy)
 
@@ -47,15 +46,14 @@ class BumpHeight(transaction.OriginatorRole):
     controller.node._height += 1
     controller.node._kids = {proxy['id']: proxy_node}
     controller.node._kid_summaries = {}
-    if proxy_summary is not None:
-      controller.node._kid_summaries[proxy['id']] = proxy_summary
+    controller.node._kid_summaries[proxy['id']] = finished_absorbing['summary']
     controller.node._graph = NetworkGraph()
     controller.node._graph.add_node(proxy['id'])
     if controller.node._adjacent is not None:
       controller.node.send(
           controller.node._adjacent,
           messages.io.bumped_height(
-              proxy=self.transfer_handle(proxy_node, controller.node._adjacent['id']),
+              proxy=controller.node.transfer_handle(proxy_node, controller.node._adjacent['id']),
               kid_ids=kids_to_absorb,
               variant=controller.node._variant))
 

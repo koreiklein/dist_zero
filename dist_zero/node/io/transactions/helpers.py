@@ -46,7 +46,7 @@ class Absorber(transaction.ParticipantRole):
       if hello_parent['kid_summary']:
         controller.node._kid_summaries[kid_id] = hello_parent['kid_summary']
 
-    controller.send(self.parent, messages.io.finished_absorbing())
+    controller.send(self.parent, messages.io.finished_absorbing(controller.node._kid_summary_message()))
 
     controller.node._send_kid_summary()
 

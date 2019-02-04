@@ -123,11 +123,13 @@ def absorb_these_kids(kid_ids):
   return {'type': 'absorb_these_kids', 'kid_ids': kid_ids}
 
 
-def finished_absorbing():
+def finished_absorbing(summary):
   '''
   Indicates to the parent of an `Absorber` node that the absorber has finished absorbing everything it needs to absorb.
+
+  :param object summary: The summary of the state of the `Absorber` node.
   '''
-  return {'type': 'finished_absorbing'}
+  return {'type': 'finished_absorbing', 'summary': summary}
 
 
 def goodbye_parent():

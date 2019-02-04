@@ -1,4 +1,4 @@
-from dist_zero import transaction, errors
+from dist_zero import transaction, errors, messages
 
 from . import helpers
 

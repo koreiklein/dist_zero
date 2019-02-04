@@ -37,8 +37,8 @@ class MergeKids(transaction.OriginatorRole):
             absorber=controller.transfer_handle(self._absorber, self._absorbee_id)))
 
     await controller.listen(type='goodbye_parent')
-    await controller.listen(type='finished_absorbing')
-
+    finshed_absorbing, _sender_id = await controller.listen(type='finished_absorbing')
+    controller.node._kid_summaries[self._absorber_id] = finished_absorbing['summary']
     controller.node._remove_kid(self._absorbee_id)
 
     controller.node._send_kid_summary()
