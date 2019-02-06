@@ -50,6 +50,29 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
 
 
 @pytest.mark.asyncio
+async def test_single_node(demo):
+  system_config = messages.machine.std_system_config()
+  machine, = await demo.new_machine_controllers(
+      1,
+      base_config={
+          'system_config': system_config,
+          'network_errors_config': messages.machine.std_simulated_network_errors_config(),
+      },
+      random_seed='test_single_node')
+  await demo.run_for(ms=200)
+  root_input_node_id = dist_zero.ids.new_id('DataNode_input')
+  demo.system.spawn_dataset(
+      on_machine=machine,
+      node_config=messages.io.data_node_config(
+          root_input_node_id, parent=None, height=0, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
+
+  await demo.run_for(ms=200)
+
+  kids = demo.system.get_kids(root_input_node_id)
+  assert 0 == len(kids)
+
+
+@pytest.mark.asyncio
 async def test_scale_unconnected_io_tree(demo):
   system_config = messages.machine.std_system_config()
   system_config['DATA_NODE_KIDS_LIMIT'] = 3
