@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 
 import docker
 import docker.errors
@@ -67,6 +68,10 @@ class DockerSpawner(spawner.Spawner):
     '''
     The total number of messages sent to all `MachineController`s.
     '''
+
+  @property
+  def dz_time(self):
+    return time.time()
 
   def _remote_spawner_json(self):
     '''Generate a `DockerSpawner` config for a new container.'''

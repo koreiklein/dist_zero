@@ -398,7 +398,11 @@ class SinkMigrator(migrator.Migrator):
           messages.migration.attach_migrator(
               messages.migration.sink_migrator_config(
                   migration=self._node.transfer_handle(self._migration, kid['id']),
-                  old_flow_sender_ids=self._node._graph.node_senders(kid['id']),
+                  #old_flow_sender_ids=self._node._graph.node_senders(kid['id']),
+                  # NOTE(KK): Because of how sink migrators currently start up,
+                  #   the empty list will work, but migrator should be removed or refactored to simplify
+                  #   this logic.
+                  old_flow_sender_ids=[],
                   new_flow_senders=None,
                   will_sync=self._will_sync)))
 

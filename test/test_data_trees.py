@@ -1,7 +1,7 @@
 import pytest
 
 import dist_zero.ids
-from dist_zero import messages, types
+from dist_zero import messages, types, errors
 from dist_zero.recorded import RecordedUser
 
 from .common import Utils
@@ -21,7 +21,7 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
       random_seed='test_add_one_leaf_to_empty_input_tree')
   await demo.run_for(ms=200)
   root_input_node_id = dist_zero.ids.new_id('DataNode_input')
-  demo.system.spawn_node(
+  demo.system.spawn_dataset(
       on_machine=machine,
       node_config=messages.io.data_node_config(
           root_input_node_id, parent=None, height=2, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
@@ -63,7 +63,7 @@ async def test_scale_unconnected_io_tree(demo):
       random_seed='test_scale_unconnected_io_tree')
   await demo.run_for(ms=200)
   root_input_node_id = dist_zero.ids.new_id('DataNode_input')
-  demo.system.spawn_node(
+  demo.system.spawn_dataset(
       on_machine=machine,
       node_config=messages.io.data_node_config(
           root_input_node_id, parent=None, height=2, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
@@ -82,16 +82,16 @@ async def test_scale_unconnected_io_tree(demo):
     await create_new_leaf(name='test_leaf_{}'.format(i))
     await demo.run_for(ms=1000)
 
-  await demo.run_for(ms=4000)
+  await demo.run_for(ms=6000)
 
   assert 3 == demo.system.get_capacity(root_input_node_id)['height']
 
   n_new_leaves = 27 - 9
   for i in range(n_new_leaves):
-    await create_new_leaf(name='test_leaf_{}'.format(i))
+    await create_new_leaf(name='test_leaf_{}'.format(i + 9))
     await demo.run_for(ms=1000)
 
-  await demo.run_for(ms=4000)
+  await demo.run_for(ms=6000)
 
   assert 4 == demo.system.get_capacity(root_input_node_id)['height']
 
@@ -99,6 +99,6 @@ async def test_scale_unconnected_io_tree(demo):
     demo.system.kill_node(leaf_ids.pop())
     await demo.run_for(ms=1000)
 
-  await demo.run_for(ms=60 * 1000)
+  await demo.run_for(ms=50 * 1000)
 
   assert 2 == demo.system.get_capacity(root_input_node_id)['height']

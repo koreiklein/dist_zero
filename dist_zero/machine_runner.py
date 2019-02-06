@@ -192,7 +192,7 @@ class MachineRunner(object):
     }
     if settings.LOGZ_IO_TOKEN:
       context['token'] = settings.LOGZ_IO_TOKEN
-    context_filter = dist_zero.logging.ContextFilter(context)
+    context_filter = dist_zero.logging.ContextFilter(context, self.node_manager._spawner)
 
     # Formatters
     human_formatter = dist_zero.logging.HUMAN_FORMATTER

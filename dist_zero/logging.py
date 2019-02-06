@@ -29,10 +29,12 @@ class LoggerAdapter(logging.LoggerAdapter):
 
 
 class ContextFilter(logging.Filter):
-  def __init__(self, context):
+  def __init__(self, context, spawner):
     self.context = context
+    self.spawner = spawner
 
   def filter(self, record):
+    record.dz_time = self.spawner.dz_time
     for key, value in self.context.items():
       setattr(record, key, value)
 

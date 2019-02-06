@@ -6,7 +6,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 
 import dist_zero.logging
 
-from dist_zero import machine, settings, errors, messages, spawners, transport
+from dist_zero import machine, settings, errors, messages, spawners, transport, transaction, ids
 
 
 class SystemController(object):
@@ -151,6 +151,15 @@ class SystemController(object):
       node_config['recorded_user_json'] = recorded_user.to_json()
     return self.spawn_node(on_machine=machine_id, node_config=node_config)
 
+  def spawn_dataset(self, node_config, on_machine):
+    return self.spawn_node(
+        node_config=transaction.add_participant_role_to_node_config(
+            node_config=node_config,
+            transaction_id=ids.new_id('NewDataset'),
+            participant_typename='NewDataset',
+            args={}),
+        on_machine=on_machine)
+
   def spawn_node(self, node_config, on_machine):
     '''
     Start a node on a particular machine's container.
@@ -290,7 +299,7 @@ class SystemController(object):
     }
     if settings.LOGZ_IO_TOKEN:
       context['token'] = settings.LOGZ_IO_TOKEN
-    context_filter = dist_zero.logging.ContextFilter(context)
+    context_filter = dist_zero.logging.ContextFilter(context, self._spawner)
 
     # Formatters
     human_formatter = dist_zero.logging.HUMAN_FORMATTER

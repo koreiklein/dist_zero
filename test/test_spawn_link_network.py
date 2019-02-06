@@ -147,8 +147,6 @@ class TestSpawnSumLinkNetwork(Utils):
     await self.spawn_users(self.root_output, n_users=new_outputs)
     await demo.run_for(ms=1000)
 
-    demo.render_network(self.root_link)
-
     await self.spawn_users(
         self.root_input,
         n_users=new_inputs,

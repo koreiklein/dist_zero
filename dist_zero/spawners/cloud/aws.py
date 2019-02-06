@@ -66,6 +66,10 @@ class Ec2Spawner(spawner.Spawner):
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY_ID)
 
+  @property
+  def dz_time(self):
+    return time.time()
+
   def sleep_ms(self, ms):
     return asyncio.sleep(ms / 1000)
 

@@ -2,8 +2,6 @@
 Messages to be received by input and output nodes.
 '''
 
-from dist_zero import errors
-
 
 def route_dns(domain_name):
   '''
@@ -98,16 +96,6 @@ def data_node_config(node_id, parent, variant, height, leaf_config, recorded_use
   }
 
 
-def merge_with(node):
-  '''
-  Indicates to the receiver that it should merge with one of its sibling nodes.
-
-  :param node: The :ref:`handle` of the sibling node to merge with.
-  :type node: :ref:`handle`
-  '''
-  return {'type': 'merge_with', 'node': node}
-
-
 def sum_leaf_config(initial_state):
   return {'type': 'sum_leaf_config', 'initial_state': initial_state}
 
@@ -116,14 +104,32 @@ def collect_leaf_config():
   return {'type': 'collect_leaf_config'}
 
 
-def hello_parent(kid):
+def hello_parent(kid, kid_summary=None):
   '''
   Sent by a newly spawned kid node to its parent to indicate that it is now live.
 
   :param kid: The :ref:`handle` of the newly added kid.
   :type kid: :ref:`handle`
   '''
-  return {'type': 'hello_parent', 'kid': kid}
+  return {'type': 'hello_parent', 'kid': kid, 'kid_summary': kid_summary}
+
+
+def absorb_these_kids(kid_ids):
+  '''
+  Indicates to an Absorber which kid ids it should wait for before it is finished.
+
+  :param list[str] kid_ids: The ids of the kids that the `Absorber` must adopt before its role in the transaction is finished.
+  '''
+  return {'type': 'absorb_these_kids', 'kid_ids': kid_ids}
+
+
+def finished_absorbing(summary):
+  '''
+  Indicates to the parent of an `Absorber` node that the absorber has finished absorbing everything it needs to absorb.
+
+  :param object summary: The summary of the state of the `Absorber` node.
+  '''
+  return {'type': 'finished_absorbing', 'summary': summary}
 
 
 def goodbye_parent():
