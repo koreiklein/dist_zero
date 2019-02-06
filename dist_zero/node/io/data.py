@@ -1,6 +1,6 @@
 import logging
 
-from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids, transaction
+from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids, transaction, message_rate_tracker
 from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
 from dist_zero.node.io import leaf_html
@@ -48,6 +48,9 @@ class DataNode(Node):
     self.id = node_id
     self._kids = {}
     self._kid_summaries = {}
+
+    if self._height == 0:
+      self._message_rate_tracker = message_rate_tracker.MessageRateTracker()
 
     self._added_sender_respond_to = None
 
@@ -165,9 +168,6 @@ class DataNode(Node):
 
     for kid in self._kids.values():
       self.send(kid, messages.migration.switch_flows(migration_id))
-
-  def initialize(self):
-    pass
 
   def _get_proxy(self):
     if len(self._kids) == 1 and self._height > 2:
@@ -346,11 +346,19 @@ class DataNode(Node):
   def elapse(self, ms):
     self.linker.elapse(ms)
 
+  def _estimated_messages_per_second(self):
+    if self._height == 0:
+      return self._message_rate_tracker.estimate_rate_hz(self._linker.now_ms)
+    else:
+      return sum(kid_summary['messages_per_second'] for kid_summary in self._kid_summaries.values())
+
   def _kid_summary_message(self):
     return messages.io.kid_summary(
         size=(sum(kid_summary['size']
                   for kid_summary in self._kid_summaries.values()) if self._height > 1 else len(self._kids)),
         n_kids=len(self._kids),
+        height=self._height,
+        messages_per_second=self._estimated_messages_per_second(),
         availability=self.availability())
 
   def _send_kid_summary(self):
@@ -525,6 +533,9 @@ class DataNode(Node):
   def deliver(self, message, sequence_number, sender_id):
     if self._variant != 'output' or self._height != 0:
       raise errors.InternalError("Only 'output' variant leaf nodes may receive output actions")
+
+    if self._height == 0:
+      self._message_rate_tracker.increment(self._linker.now_ms)
 
     self._leaf.update_current_state(message)
 

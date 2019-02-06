@@ -25,6 +25,9 @@ def std_system_config():
 
   When an `DataNode` has this many kids, it will trigger a split.
 
+  **LINK_NODE_KIDS_WIDTH_LIMIT**
+  A limit on the number of kids a link node may put in a single layer.
+
   **KID_SUMMARY_INTERVAL**
 
   Every time this many milliseconds pass on a data node, it should send a kid_summary message
@@ -53,6 +56,7 @@ def std_system_config():
   return {
       # When an `DataNode` has this many kids, it will trigger a split.
       'DATA_NODE_KIDS_LIMIT': 200,
+      'LINK_NODE_KIDS_WIDTH_LIMIT': 200,
 
       # Every time this many milliseconds pass on a data node, it should send a kid_summary message
       # to its parent.

@@ -1,3 +1,94 @@
+def new_link_node_config(node_id, left_is_data, right_is_data, leaf_config, height=None):
+  '''A config for a `Link` node.'''
+  return {
+      'type': 'Link',
+      'id': node_id,
+      'height': height,
+      'left_is_data': left_is_data,
+      'right_is_data': right_is_data,
+      'leaf_config': leaf_config,
+  }
+
+
+def load(messages_per_second):
+  '''
+  Return a load object to describe the expected load along a subscription.
+
+  :param float messages_per_second: An estimate of the total messages per second through the subscription.
+  '''
+  return {'messages_per_second': messages_per_second}
+
+
+def start_subscription(subscriber, load, kids=None):
+  '''
+  Request to start a subscription between the sender and the receiver.
+  Only the node to the left (the node sending the data) should send start_subscription,
+  and only the node to the right (the node receiving the data) should receive start_subscription.
+
+  :param object subscriber: The role handle of the node to the left that would like to subscribe.
+  :param load: Describes the total load the sender anticipates will be sent over this subscription.
+  :param list kids: If provided, gives the exact list of kid node ids of the sender.
+  '''
+  return {'type': 'start_subscription', 'subscriber': subscriber, 'load': load, 'kids': kids}
+
+
+def subscription_started(leftmost_kids):
+  '''
+  Sent in response to start_subscription by the node to the right to indicate that
+  the subscription from the node to the left has started.
+
+  :param list leftmost_kids: A list of role handles of the kids of this node.
+  '''
+  return {'type': 'subscription_started', 'leftmost_kids': leftmost_kids}
+
+
+def subscribe_to(target):
+  '''
+  Indicates to the SendStartSubscription role which target node it should send the start_subscription message.
+
+  :param object target: The role handle of the node to subscribe to.
+  '''
+  return {'type': 'subscribe_to', 'target': target}
+
+
+def set_link_neighbors(left_roles, right_roles):
+  '''
+  Sent by a `Link` node's parent to inform the link which nodes will be to its left and right.
+
+  :param list left_roles: The list of handles of the roles of nodes to the immediate left of this one.
+  :param list right_roles: The list of handles of the roles of nodes to the immediate right of this one.
+  '''
+  return {'type': 'set_link_neighbors', 'left_roles': left_roles, 'right_roles': right_roles}
+
+
+def hello_link_parent(kid):
+  '''
+  Sent by link nodes to their parents immediately after starting to indicate that they are up.
+
+  :param kid: The handle for the role of this kid.
+  '''
+  return {'type': 'hello_link_parent', 'kid': kid}
+
+
+def link_started():
+  '''
+  Sent by a link to its parent once it's finished spawning and connecting its entire graph.
+  This message marks the end of a child's role in a `CreateLink` transaction.
+  '''
+  return {'type': 'link_started'}
+
+
+# ============================================================================
+# ============================================================================
+# ============================================================================
+# ============================================================================
+# FIXME(KK): Old Code Below!  Please remove it!!
+# ============================================================================
+# ============================================================================
+# ============================================================================
+# ============================================================================
+
+
 def link_node_config(node_id,
                      left_is_data,
                      right_is_data,

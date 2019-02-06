@@ -10,6 +10,8 @@ from . import link_leaf
 
 logger = logging.getLogger(__name__)
 
+# FIXME(KK): Old code.  Remove this entire module in favor of dist_zero/node/link/link.py
+
 
 class LinkNode(Node):
   '''

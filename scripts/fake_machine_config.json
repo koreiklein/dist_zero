@@ -46,6 +46,7 @@
     },
     "system_config": {
         "DATA_NODE_KIDS_LIMIT": 200,
+        "LINK_NODE_KIDS_WIDTH_LIMIT": 200,
         "KID_SUMMARY_INTERVAL": 600,
         "TOTAL_KID_CAPACITY_TRIGGER": 5,
         "SUM_NODE_SENDER_LIMIT": 15,
