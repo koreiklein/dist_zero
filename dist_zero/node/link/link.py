@@ -1,7 +1,7 @@
 from ..node import Node
 
 
-class Link(Node):
+class LinkNode(Node):
   def __init__(self, node_id, height, left_is_data, right_is_data, leaf_config, controller):
     self.id = node_id
     self._height = height

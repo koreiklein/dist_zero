@@ -10,7 +10,7 @@ from random import Random
 from dist_zero import errors, messages, dns, settings
 
 from .node import io
-from .node.link import LinkNode
+from .node.link.link import LinkNode
 from .migration.migration_node import MigrationNode
 
 logger = logging.getLogger(__name__)

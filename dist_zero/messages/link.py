@@ -1,5 +1,5 @@
 def new_link_node_config(node_id, left_is_data, right_is_data, leaf_config, height=None):
-  '''A config for a `Link` node.'''
+  '''A config for a `LinkNode`.'''
   return {
       'type': 'Link',
       'id': node_id,
@@ -27,9 +27,9 @@ def start_subscription(subscriber, load, kids=None):
 
   :param object subscriber: The role handle of the node to the left that would like to subscribe.
   :param load: Describes the total load the sender anticipates will be sent over this subscription.
-  :param list kids: If provided, gives the exact list of kid node ids of the sender.
+  :param list kid_ids: If provided, gives the exact list of kid node ids of the sender.
   '''
-  return {'type': 'start_subscription', 'subscriber': subscriber, 'load': load, 'kids': kids}
+  return {'type': 'start_subscription', 'subscriber': subscriber, 'load': load, 'kid_ids': kid_ids}
 
 
 def subscription_started(leftmost_kids):
@@ -42,18 +42,31 @@ def subscription_started(leftmost_kids):
   return {'type': 'subscription_started', 'leftmost_kids': leftmost_kids}
 
 
-def subscribe_to(target):
+def subscription_edges(edges):
+  '''
+  Sent by the left node of a subscription to the right node to indicate which of the left node's
+  rightmost kids will be subscribing to which of the right node's leftmost kids.
+
+  :param dict[str,list] edges: An edge map.  For each kid in the 'leftmost_kids' argument to the
+    preceeding subscription_started message, it should map that kid's node_id to the list of
+    role handles the sender has assigned to send to that kid.
+  '''
+  return {'type': 'subscription_edges', 'edges': edges}
+
+
+def subscribe_to(target, height):
   '''
   Indicates to the SendStartSubscription role which target node it should send the start_subscription message.
 
   :param object target: The role handle of the node to subscribe to.
+  :param int height: The height of the ``target`` node.
   '''
   return {'type': 'subscribe_to', 'target': target}
 
 
 def set_link_neighbors(left_roles, right_roles):
   '''
-  Sent by a `Link` node's parent to inform the link which nodes will be to its left and right.
+  Sent by a `LinkNode` instance's parent to inform the link which nodes will be to its left and right.
 
   :param list left_roles: The list of handles of the roles of nodes to the immediate left of this one.
   :param list right_roles: The list of handles of the roles of nodes to the immediate right of this one.

@@ -57,6 +57,8 @@ def std_system_config():
       # When an `DataNode` has this many kids, it will trigger a split.
       'DATA_NODE_KIDS_LIMIT': 200,
       'LINK_NODE_KIDS_WIDTH_LIMIT': 200,
+      'LINK_NODE_MAX_SENDERS': 200,
+      'LINK_NODE_MAX_RECEIVERS': 200,
 
       # Every time this many milliseconds pass on a data node, it should send a kid_summary message
       # to its parent.
