@@ -4,6 +4,32 @@ Prototype code for solving the wooden blocks problem.
 This script is meant to explore the kind of solution DistZero might use
 for determining the network to use when connecting source and target neighbors's kids
 of a LinkNode when all these kids are associated with a half-open-rectangle in the (source_keys X target_keys) keyspace.
+
+
+Statement of wooden blocks problem:
+
+
+You are given two constants, max_above and max_below.
+There are two square sushi mats made of thin bamboo rectangles.
+One mat is on top of the other. The lines on the mats are arranged perpendicular to each other.
+The task is to lift one mat up, and to fill the space between them with wooden blocks so that
+  - Each block is a rectangular prism, oriented according to the same x-y-z axes as the mats
+  - All the space between them is filled with wood.
+  - The top surface of each wooden block is touching no more than max_above other blocks.
+  - The bottom surface of each wooden block is touching no more than max_below other blocks.
+
+This problem is relevant to connecting the left neighbors' kids of a `LinkNode` with its right neighbors' kids.
+The x dimension in the wooden blocks problem is analogous to the keyspace of the source dataset.
+The y dimension in the wooden blocks problem is analogous to the keyspace of the target dataset.
+The z dimension in the wooden blocks problem is analogous to the layer index from source to target.
+The bottom and top bamboo mats represent the source and target neighbors' kids repectively.
+The z-width of a rectangle is meaningless.
+The touching of the top face of a block with the bottom face of another block is analogous to a connection
+between two LinkNodes.
+max_above and max_below correspond to maximum out degree and in degree in the connection graph respectively.
+
+The below prototype solution is meant to inspire a full solution to be added to DistZero and used by LinkNodes.
+
 '''
 import bisect
 
