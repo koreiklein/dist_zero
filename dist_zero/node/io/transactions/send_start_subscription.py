@@ -24,6 +24,7 @@ class SendStartSubscription(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     controller.send(
+        self._parent,
         messages.io.hello_parent(
             kid=controller.new_handle(self._parent['id']), kid_summary=controller.node._kid_summary_message()))
 
@@ -46,7 +47,7 @@ class SendStartSubscription(transaction.ParticipantRole):
             # We use this node as the unique kid of itself to even out mismatched heights.
             kid_ids=[controller.node.id]))
 
-    subscription_started, _sender_id = controller.listen(type='subscription_started')
+    subscription_started, _sender_id = await controller.listen(type='subscription_started')
     proxies = subscription_started['leftmost_kids']
     if len(proxies) != 1:
       raise errors.InternalError(
@@ -81,7 +82,7 @@ class SendStartSubscription(transaction.ParticipantRole):
             load=messages.link.load(messages_per_second=controller.node._estimated_messages_per_second()),
             kid_ids=list(self._kid_ids)))
 
-    subscription_started, _sender_id = controller.listen(type='subscription_started')
+    subscription_started, _sender_id = await controller.listen(type='subscription_started')
     self._kids_to_match = subscription_started['leftmost_kids']
 
     if len(self._kids_to_match) != len(self._kid_ids):

@@ -8,7 +8,7 @@ from collections import defaultdict
 
 import dist_zero.ids
 
-from dist_zero import spawners, messages, types
+from dist_zero import spawners, messages, types, transaction
 from dist_zero.recorded import RecordedUser
 from dist_zero.system_controller import SystemController
 from dist_zero.spawners.simulator import SimulatedSpawner
@@ -212,40 +212,20 @@ class Demo(object):
 
   def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, leaf_config,
                                        connector_type):
-    root_link_node_id = dist_zero.ids.new_id('LinkNode_root')
-    input_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_id)
-    output_handle_for_migration = self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_output_id)
-
-    self.system.spawn_node(
-        on_machine=machine,
-        node_config=messages.migration.migration_node_config(
-            node_id=node_id,
-            source_nodes=[(input_handle_for_migration, messages.migration.source_migrator_config(will_sync=False, ))],
-            sink_nodes=[(output_handle_for_migration,
-                         messages.migration.sink_migrator_config(
-                             new_flow_senders=[root_link_node_id],
-                             old_flow_sender_ids=[],
-                             will_sync=False,
-                         ))],
-            removal_nodes=[],
-            sync_pairs=[],
-            insertion_node_configs=[
-                messages.link.link_node_config(
-                    node_id=root_link_node_id,
-                    height=2,
-                    parent=None,
-                    left_is_data=True,
-                    right_is_data=True,
-                    configure_right_parent_ids=[node_id],
-                    senders=[input_handle_for_migration],
-                    left_ids=[input_handle_for_migration['id']],
-                    receiver_ids=None,
-                    migrator=messages.migration.insertion_migrator_config(),
-                    leaf_config=leaf_config,
-                    connector_type=connector_type,
-                )
-            ]))
-    return root_link_node_id
+    node_config = transaction.add_participant_role_to_node_config(
+        node_config=messages.link.new_link_node_config(
+            node_id=dist_zero.ids.new_id('LinkNode_root'),
+            left_is_data=True,
+            right_is_data=True,
+            leaf_config=leaf_config),
+        transaction_id=dist_zero.ids.new_id('NewLink'),
+        participant_typename='CreateLink',
+        args=dict(
+            src=self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_input_id),
+            tgt=self.system.generate_new_handle(new_node_id=node_id, existing_node_id=root_output_id),
+        ))
+    self.system.spawn_node(on_machine=machine, node_config=node_config)
+    return node_config['id']
 
   def all_io_kids(self, data_node_id):
     if self.system.get_stats(data_node_id)['height'] == 1:

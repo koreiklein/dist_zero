@@ -1,7 +1,7 @@
 def new_link_node_config(node_id, left_is_data, right_is_data, leaf_config, height=None):
   '''A config for a `LinkNode`.'''
   return {
-      'type': 'Link',
+      'type': 'LinkNode',
       'id': node_id,
       'height': height,
       'left_is_data': left_is_data,
@@ -19,7 +19,7 @@ def load(messages_per_second):
   return {'messages_per_second': messages_per_second}
 
 
-def start_subscription(subscriber, load, kids=None):
+def start_subscription(subscriber, load, kid_ids=None):
   '''
   Request to start a subscription between the sender and the receiver.
   Only the node to the left (the node sending the data) should send start_subscription,
@@ -61,7 +61,7 @@ def subscribe_to(target, height):
   :param object target: The role handle of the node to subscribe to.
   :param int height: The height of the ``target`` node.
   '''
-  return {'type': 'subscribe_to', 'target': target}
+  return {'type': 'subscribe_to', 'target': target, 'height': height}
 
 
 def set_link_neighbors(left_roles, right_roles):
@@ -138,6 +138,7 @@ def link_node_config(node_id,
   :param object connector: Serializable json object representing the `Connector` instance of the newly spawned
       `LinkNode`.
   '''
+  raise RuntimeError("FIXME(KK): Remove this function.")
   return {
       'type': 'LinkNode',
       'id': node_id,

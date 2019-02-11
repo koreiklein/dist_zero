@@ -123,7 +123,7 @@ class Node(object):
 
   def initialize(self):
     '''Called exactly once, when a node starts to run.'''
-    pass
+    self.linker.initialize()
 
   def elapse(self, ms):
     '''

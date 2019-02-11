@@ -29,14 +29,14 @@ class CreateLink(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     controller.enlist(self._src, SendStartSubscription, dict(parent=controller.new_handle(self._src['id'])))
-    controller.enlist(self._tgt, ReceiveStartSubscription, {})
+    controller.enlist(self._tgt, ReceiveStartSubscription, dict(requester=controller.new_handle(self._tgt['id'])))
 
     self._hello_parent = {}
     for i in range(2):
       hello_parent, kid_id = await controller.listen(type='hello_parent')
       self._hello_parent[kid_id] = hello_parent
 
-    if set(self._hello_parent.keys()) != set(self._src['id'], self._tgt['id']):
+    if set(self._hello_parent.keys()) != set([self._src['id'], self._tgt['id']]):
       raise errors.InternalError("Should have received hello_parent messages from exactly the src and tgt nodes.")
 
     controller.node._height = max(hello_parent['kid_summary']['height'] for hello_parent in self._hello_parent.values())
@@ -49,7 +49,7 @@ class CreateLink(transaction.ParticipantRole):
 
     left_neighbors = [src_role]
     right_neighbors = [tgt_role]
-    StartLinkNode(parent=None, neighbors=(left_neighbors, right_neighbors)).run(controller)
+    await StartLinkNode(parent=None, neighbors=(left_neighbors, right_neighbors)).run(controller)
 
 
 class StartLinkNode(transaction.ParticipantRole):
@@ -109,6 +109,8 @@ class StartLinkNode(transaction.ParticipantRole):
     await self._send_subscription_edges()
     await self._receive_link_started_from_all_kids()
     await self._send_link_started_to_parent()
+
+    self._node.start_leaf()
 
   async def _send_hello_to_parent(self):
     if self._parent is not None:
@@ -309,7 +311,7 @@ class StartLinkNode(transaction.ParticipantRole):
           "Leftmost kids can be spawned by exact match only when there is a unique left adjacent node."
           f" Got {len(self._start_subscription)}.")
 
-    start_subscription = next(iter(self._start_subscription))
+    start_subscription = next(iter(self._start_subscription.values()))
 
     kids = await self._spawn_and_await_kids(dict(leftmost=True) for kid_id in start_subscription['kid_ids'])
     self._leftmost_kids.extend(kids)

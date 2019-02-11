@@ -15,7 +15,7 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
         messages.io.hello_parent(
             kid=controller.new_handle(self._requester['id']), kid_summary=controller.node._kid_summary_message()))
 
-    ReceiveStartSubscriptionHelper().run(controller)
+    await ReceiveStartSubscriptionHelper().run(controller)
 
 
 class ReceiveStartSubscriptionHelper(transaction.ParticipantRole):

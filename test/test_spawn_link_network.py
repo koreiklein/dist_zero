@@ -46,6 +46,9 @@ class TestSpawnSumLinkNetwork(Utils):
     self.demo.system.get_senders(root_output)
     self.demo.system.get_receivers(root_input)
 
+    self.demo.render_network(self.root_link)
+    import ipdb
+    ipdb.set_trace()
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 

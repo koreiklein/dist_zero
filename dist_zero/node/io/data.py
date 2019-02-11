@@ -348,7 +348,7 @@ class DataNode(Node):
 
   def _estimated_messages_per_second(self):
     if self._height == 0:
-      return self._message_rate_tracker.estimate_rate_hz(self._linker.now_ms)
+      return self._message_rate_tracker.estimate_rate_hz(self.linker.now_ms)
     else:
       return sum(kid_summary['messages_per_second'] for kid_summary in self._kid_summaries.values())
 
@@ -535,7 +535,7 @@ class DataNode(Node):
       raise errors.InternalError("Only 'output' variant leaf nodes may receive output actions")
 
     if self._height == 0:
-      self._message_rate_tracker.increment(self._linker.now_ms)
+      self._message_rate_tracker.increment(self.linker.now_ms)
 
     self._leaf.update_current_state(message)
 
