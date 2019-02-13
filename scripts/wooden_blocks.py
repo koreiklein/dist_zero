@@ -79,6 +79,9 @@ class Column(object):
     self.yh_list = [] if yh_list is None else yh_list
     self.finished_updating_yh_list()
 
+  def size(self):
+    return len(self.yh_list)
+
   @property
   def h(self):
     y, h = self.yh_list[-1]
@@ -102,6 +105,9 @@ class Layer(object):
     self.right_endpoints = [column.right for column in self.columns]
 
     self._h = None
+
+  def size(self):
+    return sum(column.size() for column in self.columns)
 
   def _calculate_height(self):
     height = self.columns[0].h
@@ -170,6 +176,9 @@ class RectangleSolver(object):
     if abs(self.h - self.tgt_layer.h) >= epsilon:
       raise RuntimeError("Bad inputs to RectangleSolver: Src and Tgt layers"
                          f" have different heights: {self.h} != {self.tgt_layer.h}")
+
+  def size(self):
+    return sum(layer.size() for layer in self.layers)
 
   def solve(self):
     while not self._tgt_layer_fits():
@@ -246,8 +255,9 @@ def initial(nsrcs, ntgts, max_above=10, max_below=10):
 
 
 def demo_solver():
-  solver = initial(nsrcs=128, ntgts=100, max_above=4, max_below=4)
+  solver = initial(nsrcs=400, ntgts=428, max_above=11, max_below=11)
   layers = solver.solve()
+  print(f'total blocks = {solver.size()}')
   for layer in reversed(layers):
     layer.plot()
   plt.show()
