@@ -2,11 +2,11 @@ import blist
 
 from collections import defaultdict
 
-#import numpy as np
-#import matplotlib.pyplot as plt
-#import matplotlib.colors as colors
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 
-#PALLETTE = list(colors.TABLEAU_COLORS.values())
+PALLETTE = list(colors.TABLEAU_COLORS.values())
 
 epsilon = 0.0001
 
@@ -17,6 +17,9 @@ class Coords(object):
     self.src_width = src_width
     self.tgt_start = tgt_start
     self.tgt_width = tgt_width
+
+  def aspect(self):
+    return self.src_width / self.tgt_width
 
   @property
   def src_stop(self):
@@ -79,17 +82,30 @@ class LinkGraphManager(object):
       self._coords[tgt] = Coords(src_start=src_min, src_width=src_total_width, tgt_start=start, tgt_width=width)
 
   def layers(self):
-    block_to_index = {}
-    for src in self._sources:
-      for tgt in self._targets:
-        for i, block in enumerate(self.path(src, tgt)):
-          block_to_index[block] = min(i, block_to_index.get(block, 10000000))
+    cur_layer = set(self._sources)
+    remaining_targets = set(self._targets)
+    result = [cur_layer]
+    processed = set()
+    while remaining_targets:
+      next_layer = set()
+      for x in cur_layer:
+        if x in processed:
+          continue
+        else:
+          processed.add(x)
+        if x in self._targets:
+          if x in remaining_targets:
+            remaining_targets.remove(x)
+        else:
+          for y in self._above[x]:
+            next_layer.add(y)
+            if y in remaining_targets:
+              remaining_targets.remove(y)
+      cur_layer = next_layer
+      result.append(cur_layer)
 
-    index_to_blocks = defaultdict(list)
-    for block, i in block_to_index.items():
-      index_to_blocks[i].append(block)
-
-    return [index_to_blocks[i] for i in sorted(index_to_blocks.keys())]
+    result.append(self._targets)
+    return result
 
   def path(self, source, target):
     coords = self._coords[target]
@@ -159,6 +175,13 @@ class LinkGraphManager(object):
         self._queue.append(block)
         self._queue.append(new)
 
+  def _validate(self):
+    for x, vals in self._above.items():
+      for y in vals:
+        if self._coords[x].aspect() > self._coords[y].aspect():
+          import ipdb
+          ipdb.set_trace()
+
   def _try_split_x(self, block):
     if any(len(self._below[x]) >= self._constraints.max_below for x in self._above[block] if x in self._targets):
       return False # Can't split block if an above target node has already maxed out its connections
@@ -183,17 +206,47 @@ class LinkGraphManager(object):
 
       return True
 
-  def _validate(self):
-    for x, coords in self._coords.items():
-      if x not in self._sources and x not in self._targets:
-        above_total = sum(self._coords[t].tgt_width for t in self._above[x])
-        below_total = sum(self._coords[t].src_width for t in self._below[x])
-        if abs(above_total - coords.tgt_width) >= 0.001:
-          import ipdb
-          ipdb.set_trace()
-        if abs(below_total - coords.src_width) >= 0.001:
-          import ipdb
-          ipdb.set_trace()
+  def split_src(self, source, new_source, new_width):
+    self._sources.add(new_source)
+
+    coords = self._coords[source]
+
+    self._coords[new_source] = Coords(
+        src_start=coords.src_stop - new_width,
+        src_width=new_width,
+        tgt_start=coords.tgt_start,
+        tgt_width=coords.tgt_width,
+    )
+    coords.src_width -= new_width
+    above = self._above[source]
+    self._above[new_source] = above[:]
+    for x in above:
+      self._below[x].add(new)
+      if x not in self._targets:
+        self._queue.append(x)
+
+    self._flush_queue()
+
+  def split_tgt(self, target, new_target, new_width):
+    self._targets.add(new_target)
+
+    coords = self._coords[target]
+
+    self._coords[new_target] = Coords(
+        tgt_start=coords.tgt_stop - new_width,
+        tgt_width=new_width,
+        src_start=coords.src_start,
+        src_width=coords.src_width,
+    )
+    coords.tgt_width -= new_width
+    below = self._below[target]
+    self._below[new_target] = below[:]
+    for x in below:
+      self._above[x].add(new)
+      if x not in self._sources:
+        self._queue.append(x)
+
+    self._flush_queue()
 
   def _split_x(self, block):
     below = self._below[block]
@@ -312,8 +365,8 @@ def test_demo_solver():
       result.width = width
       yield result
 
-  sources = list(new_ends(400))
-  targets = list(new_ends(428))
+  sources = list(new_ends(200))
+  targets = list(new_ends(228))
   manager = LinkGraphManager(
       sources=sources,
       targets=targets,
@@ -329,12 +382,14 @@ def test_demo_solver():
           max_mass=100,
       ))
   manager.fill_in()
-  return
   n_blocks = len(manager._coords)
-  worst_path = max(len(list(manager.path(src, tgt))) for src in sources for tgt in targets)
-  print(f"Total blocks = {n_blocks}.\nWorst path length = {worst_path}")
-  return
-  for layer in reversed(manager.layers()[0:-1]):
+  print('running validation checks')
+  manager._validate()
+  print('getting layers')
+
+  layers = manager.layers()
+  print(f"Total blocks = {n_blocks}.\nn_layers = {len(layers)}")
+  for layer in reversed(layers):
     plt.figure(figsize=(18, 10))
     for i, block in enumerate(layer):
       manager._coords[block].plot(PALLETTE[i % len(PALLETTE)])
@@ -344,7 +399,7 @@ def test_demo_solver():
 
 
 def run():
-  demo_solver()
+  test_demo_solver()
 
 
 if __name__ == '__main__':

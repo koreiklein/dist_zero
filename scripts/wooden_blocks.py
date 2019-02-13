@@ -255,8 +255,9 @@ def initial(nsrcs, ntgts, max_above=10, max_below=10):
 
 
 def demo_solver():
-  solver = initial(nsrcs=128, ntgts=100, max_above=4, max_below=4)
+  solver = initial(nsrcs=400, ntgts=428, max_above=11, max_below=11)
   layers = solver.solve()
+  print(f'total blocks = {solver.size()}')
   for layer in reversed(layers):
     layer.plot()
   plt.show()
