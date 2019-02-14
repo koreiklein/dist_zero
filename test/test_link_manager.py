@@ -30,18 +30,18 @@ def manager_B():
 def _merge_some_srcs_in_A(manager):
   n_removed = 0
   for start, stop in [(3, 20), (26, 40), (80, 93)]:
-    for i in range(start + 1, stop):
+    for i in range(stop - 1, start, -1):
       n_removed += 1
-      manager.merge_src(start, i)
+      manager.merge_src(i, stop)
   return n_removed
 
 
 def _merge_some_tgts_in_A(manager):
   n_removed = 0
-  for start, stop in [(6, 22), (33, 58), (100, 110)]:
-    for i in range(start + 1, stop):
+  for start, stop in [(6, 22), (33, 58), (100, 109)]:
+    for i in range(stop - 1, start, -1):
       n_removed += 1
-      manager.merge_tgt(start, i)
+      manager.merge_tgt(i, stop)
   return n_removed
 
 
@@ -70,10 +70,12 @@ def demo_link_manager_A():
 def demo_link_manager_B():
   from . import link_manager_plots
   manager = manager_B()
-  manager.merge_src(8, 9)
+  manager.merge_src(9, 10)
   manager.merge_src(8, 10)
+  manager.merge_src(7, 10)
+  manager.merge_src(6, 10)
   link_manager_plots.plot_manager_layers(manager)
 
 
 if __name__ == '__main__':
-  demo_link_manager_B()
+  demo_link_manager_A()

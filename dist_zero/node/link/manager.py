@@ -19,8 +19,8 @@ class LinkGraphManager(object):
     }
 
     self._queue = blist.blist()
-    self._source_block_to_updaters = {src: [] for src in self._source_object_to_block.values()}
-    self._target_block_to_updaters = {tgt: [] for tgt in self._target_object_to_block.values()}
+    self._source_block_to_updaters = {src: {} for src in self._source_object_to_block.values()}
+    self._target_block_to_updaters = {tgt: {} for tgt in self._target_object_to_block.values()}
 
     center = self._new_block(
         x_start=MinusInf,
@@ -42,35 +42,67 @@ class LinkGraphManager(object):
     self._queue.append(center)
     self._flush_queue() # Generates all the other blocks
 
-  def merge_src(self, left, right):
-    left = self._source_object_to_block[left]
-    right = self._source_object_to_block.pop(right)
-    right.is_removed = True
+  def _remove_block(self, block):
+    '''
+    Remove a block from those above and below it; remove its updaters, and mark it as removed.
+    Also, put affected blocks into the self._queue.
+    This method does not do any of the cleanup associated with removing source or target blocks.
+    '''
+    for x in block.above[:]:
+      self._queue.append(x)
+      _disconnect(block, x)
+    for x in block.below[:]:
+      self._queue.append(x)
+      _disconnect(x, block)
+    block.is_removed = True
 
-    for x in right.above[:]:
-      _disconnect(right, x)
-      if x not in left.above:
-        _connect(left, x)
-    left.width += right.width
-    for updater in self._source_block_to_updaters.pop(right):
-      updater(left)
-    self._queue.extend(left.above)
+    empty = {}
+    self._source_block_to_updaters.get(block.x_start, empty).pop(block, None)
+    self._source_block_to_updaters.get(block.x_stop, empty).pop(block, None)
+    self._target_block_to_updaters.get(block.y_start, empty).pop(block, None)
+    self._target_block_to_updaters.get(block.y_stop, empty).pop(block, None)
+
+  def merge_src(self, left, right):
+    '''
+    Merge the ``left`` source into the ``right`` source. 
+    This operation removes the ``left`` target and grows the size of the ``right`` target.
+
+    :param object left: A source
+    :param object right: The source immediately after ``left``
+    '''
+    left = self._source_object_to_block.pop(left)
+    right = self._source_object_to_block[right]
+    self._remove_block(left)
+    self._queue.extend(right.above)
     self._flush_queue()
+
+    # Do these updates at the end to keep the sortedlist objects from getting into a bad state
+    # during the removal of blocks
+    right.start -= left.width
+    right.width += left.width
+    for updater in self._source_block_to_updaters.pop(left).values():
+      updater(right)
 
   def merge_tgt(self, left, right):
-    left = self._target_object_to_block[left]
-    right = self._target_object_to_block.pop(right)
-    right.is_removed = True
+    '''
+    Merge the ``left`` target into the ``right`` target.
+    This operation removes the ``left`` target and grows the size of the ``right`` target.
 
-    for x in right.below[:]:
-      _disconnect(x, right)
-      if x not in left.below:
-        _connect(x, left)
-    left.width += right.width
-    for updater in self._target_block_to_updaters.pop(right):
-      updater(left)
-    self._queue.extend(left.below)
+    :param object left: A target
+    :param object right: The target immediately after ``left``
+    '''
+    left = self._target_object_to_block.pop(left)
+    right = self._target_object_to_block[right]
+    self._remove_block(left)
+    self._queue.extend(right.below)
     self._flush_queue()
+
+    # Do these updates at the end to keep the sortedlist objects from getting into a bad state
+    # during the removal of blocks
+    right.start -= left.width
+    right.width += left.width
+    for updater in self._target_block_to_updaters.pop(left).values():
+      updater(right)
 
   def layers(self):
     '''
@@ -124,9 +156,13 @@ class LinkGraphManager(object):
       return self._try_split_x(block) or self._try_split_y(block)
 
   def _check_block_for_constraints(self, block):
-    if not block.is_target and not block.is_source and self._overloaded(block):
-      if not self._try_split_x_or_y(block):
-        self._split_z(block)
+    if not block.is_removed and not block.is_target and not block.is_source:
+      if not block.below or not block.above:
+        # This block has an area of 0 and should be removed
+        self._remove_block(block)
+      elif self._overloaded(block):
+        if not self._try_split_x_or_y(block):
+          self._split_z(block)
 
   def _try_split_x(self, block):
     if any(len(x.below) >= self._constraints.max_below for x in block.above if x.is_target):
@@ -165,25 +201,25 @@ class LinkGraphManager(object):
       if not result.is_removed:
         result.x_start = value
         if value != MinusInf:
-          self._source_block_to_updaters[value].append(_set_x_start)
+          self._source_block_to_updaters[value][result] = _set_x_start
 
     def _set_x_stop(value):
       if not result.is_removed:
         result.x_stop = value
         if value != Inf:
-          self._source_block_to_updaters[value].append(_set_x_stop)
+          self._source_block_to_updaters[value][result] = _set_x_stop
 
     def _set_y_start(value):
       if not result.is_removed:
         result.y_start = value
         if value != MinusInf:
-          self._target_block_to_updaters[value].append(_set_y_start)
+          self._target_block_to_updaters[value][result] = _set_y_start
 
     def _set_y_stop(value):
       if not result.is_removed:
         result.y_stop = value
         if value != Inf:
-          self._target_block_to_updaters[value].append(_set_y_stop)
+          self._target_block_to_updaters[value][result] = _set_y_stop
 
     _set_x_start(x_start)
     _set_x_stop(x_stop)
@@ -196,7 +232,7 @@ class LinkGraphManager(object):
     index = self._x_split_index(block)
     new = self._new_block(
         x_start=block.below[index].x_start, x_stop=block.x_stop, y_start=block.y_start, y_stop=block.y_stop)
-    block.x_stop = block.below[index - 1].x_stop
+    block.x_stop = block.below[index].x_start
 
     for x in block.below[index:]:
       _disconnect(x, block)
@@ -212,7 +248,7 @@ class LinkGraphManager(object):
     index = self._y_split_index(block)
     new = self._new_block(
         x_start=block.x_start, x_stop=block.x_stop, y_start=block.above[index].y_start, y_stop=block.y_stop)
-    block.y_stop = block.above[index - 1].y_stop
+    block.y_stop = block.above[index].y_start
 
     for x in block.above[index:]:
       _disconnect(block, x)
@@ -264,6 +300,9 @@ class Block(object):
     self.below = blist.sortedlist([], key=_by_x)
     self.above = blist.sortedlist([], key=_by_y)
     self.is_removed = False
+
+  def __repr__(self):
+    return f"{self.__class__.__name__}(x_start={self.x_start.start}, x_stop={self.x_stop.start}, y_start={self.y_start.start}, y_stop={self.y_stop.start})"
 
   @property
   def is_source(self):
@@ -360,6 +399,10 @@ class _Inf(object):
   def __gt__(self, other):
     return other != Inf
 
+  @property
+  def start(self):
+    return 'inf'
+
 
 class _MinusInf(object):
   def __le__(self, other):
@@ -373,6 +416,10 @@ class _MinusInf(object):
 
   def __gt__(self, other):
     return False
+
+  @property
+  def start(self):
+    return '-inf'
 
 
 Inf = _Inf()
