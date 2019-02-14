@@ -1,4 +1,4 @@
-from dist_zero.node.link.manager import Inf, MinusInf
+from dist_zero import infinity
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
@@ -19,10 +19,10 @@ def plot_block(block, color, limits):
     y_start = block.start
     y_stop = block.stop
   else:
-    x_start = block.x_start.start if MinusInf != block.x_start else x_min
-    y_start = block.y_start.start if MinusInf != block.y_start else y_min
-    x_stop = block.x_stop.start if Inf != block.x_stop else x_max
-    y_stop = block.y_stop.start if Inf != block.y_stop else y_max
+    x_start = block.x_start.start if infinity.Min != block.x_start else x_min
+    y_start = block.y_start.start if infinity.Min != block.y_start else y_min
+    x_stop = block.x_stop.start if infinity.Max != block.x_stop else x_max
+    y_stop = block.y_stop.start if infinity.Max != block.y_stop else y_max
 
   x = [x_start, x_stop, x_stop, x_start]
   y = [y_start, y_start, y_stop, y_stop]

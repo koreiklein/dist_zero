@@ -1,5 +1,7 @@
 import blist
 
+from dist_zero import infinity
+
 
 class LinkGraphManager(object):
   '''
@@ -35,10 +37,10 @@ class LinkGraphManager(object):
     self._target_block_to_updaters = {tgt: {} for tgt in self._target_object_to_block.values()}
 
     center = self._new_block(
-        x_start=MinusInf,
-        x_stop=Inf,
-        y_start=MinusInf,
-        y_stop=Inf,
+        x_start=infinity.Min,
+        x_stop=infinity.Max,
+        y_start=infinity.Min,
+        y_stop=infinity.Max,
         # FIXME(KK): Double check whether it's proper to use infinities or the extreme provided srcs and tgts
         #x_start=self._source_object_to_block[source_object_intervals[0][0]],
         #x_stop=self._source_object_to_block[source_object_intervals[-1][0]],
@@ -256,25 +258,25 @@ class LinkGraphManager(object):
     def _set_x_start(value):
       if not result.is_removed:
         result.x_start = value
-        if value != MinusInf:
+        if value != infinity.Min:
           self._source_block_to_updaters[value][result] = _set_x_start
 
     def _set_x_stop(value):
       if not result.is_removed:
         result.x_stop = value
-        if value != Inf:
+        if value != infinity.Max:
           self._source_block_to_updaters[value][result] = _set_x_stop
 
     def _set_y_start(value):
       if not result.is_removed:
         result.y_start = value
-        if value != MinusInf:
+        if value != infinity.Min:
           self._target_block_to_updaters[value][result] = _set_y_start
 
     def _set_y_stop(value):
       if not result.is_removed:
         result.y_stop = value
-        if value != Inf:
+        if value != infinity.Max:
           self._target_block_to_updaters[value][result] = _set_y_stop
 
     _set_x_start(x_start)
@@ -424,8 +426,8 @@ class SourceBlock(SourceOrTargetBlock):
   def __init__(self, *args, **kwargs):
     self.x_start = self
     self.x_stop = self
-    self.y_start = MinusInf
-    self.y_stop = Inf
+    self.y_start = infinity.Min
+    self.y_stop = infinity.Max
     super(SourceBlock, self).__init__(*args, **kwargs)
 
   def __repr__(self):
@@ -440,8 +442,8 @@ class TargetBlock(SourceOrTargetBlock):
   '''Target block'''
 
   def __init__(self, *args, **kwargs):
-    self.x_start = MinusInf
-    self.x_stop = Inf
+    self.x_start = infinity.Min
+    self.x_stop = infinity.Max
     self.y_start = self
     self.y_stop = self
     super(TargetBlock, self).__init__(*args, **kwargs)
@@ -452,45 +454,3 @@ class TargetBlock(SourceOrTargetBlock):
   @property
   def is_target(self):
     return True
-
-
-class _Inf(object):
-  def __le__(self, other):
-    return other == Inf
-
-  def __ge__(self, other):
-    return True
-
-  def __lt__(self, other):
-    return False
-
-  def __gt__(self, other):
-    return other != Inf
-
-  @property
-  def start(self):
-    return 'inf'
-
-
-class _MinusInf(object):
-  def __le__(self, other):
-    return True
-
-  def __ge__(self, other):
-    return other == MinusInf
-
-  def __lt__(self, other):
-    return other != MinusInf
-
-  def __gt__(self, other):
-    return False
-
-  @property
-  def start(self):
-    return '-inf'
-
-
-Inf = _Inf()
-'''Inifinity.  A special object greater than everything else.'''
-MinusInf = _MinusInf()
-'''Minus Inifinity.  A special object less than everything else.'''
