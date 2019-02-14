@@ -27,6 +27,14 @@ def manager_B():
       constraints=Constraints(max_above=2, max_below=2))
 
 
+@pytest.fixture
+def manager_C():
+  return LinkGraphManager(
+      source_object_intervals=_partition(1),
+      target_object_intervals=_partition(1),
+      constraints=Constraints(max_above=10, max_below=10))
+
+
 def _merge_some_srcs_in_A(manager):
   n_removed = 0
   for start, stop in [(3, 20), (26, 40), (80, 93)]:
@@ -59,6 +67,21 @@ def test_empty_link_manager():
       source_object_intervals=[], target_object_intervals=[], constraints=Constraints(max_above=10, max_below=10))
 
 
+def _split_C_src(manager, n_parts):
+  for i, (start, width) in _partition(n_parts)[1:]:
+    manager.split_src(i - 1, i, (n_parts - i) * width)
+
+
+def _split_C_tgt(manager, n_parts):
+  for i, (start, width) in _partition(n_parts)[1:]:
+    manager.split_tgt(i - 1, i, (n_parts - i) * width)
+
+
+def test_grow_link_manager_with_splits(manager_C):
+  _split_C_src(manager_C, n_parts=120)
+  _split_C_tgt(manager_C, n_parts=110)
+
+
 def demo_link_manager_A():
   from . import link_manager_plots
   manager = manager_A()
@@ -77,5 +100,13 @@ def demo_link_manager_B():
   link_manager_plots.plot_manager_layers(manager)
 
 
+def demo_link_manager_C():
+  from . import link_manager_plots
+  manager = manager_C()
+  _split_C_tgt(manager, n_parts=120)
+  _split_C_src(manager, n_parts=110)
+  link_manager_plots.plot_manager_layers(manager)
+
+
 if __name__ == '__main__':
-  demo_link_manager_A()
+  demo_link_manager_C()

@@ -62,6 +62,50 @@ class LinkGraphManager(object):
     self._target_block_to_updaters.get(block.y_start, empty).pop(block, None)
     self._target_block_to_updaters.get(block.y_stop, empty).pop(block, None)
 
+  def split_src(self, source_value, new_source_value, new_width):
+    '''
+    Split the source block identified by ``source_value`` in two, allocating the rightmost ``new_width`` to
+    the new block.
+
+    :param object source_value: The source
+    :param object new_source_value: The python object to use as the new source
+    :param float new_width: The amount of space on the right of ``source_value`` to allocate to ``new_source_value``
+    '''
+    source = self._source_object_to_block[source_value]
+    new_source = self._source_object_to_block[new_source_value] = SourceBlock(
+        value=new_source_value, start=source.stop - new_width, width=new_width)
+    self._source_block_to_updaters[new_source] = {}
+
+    for x in source.above:
+      _connect(new_source, x)
+      self._queue.append(x)
+
+    self._flush_queue()
+
+    source.width -= new_width
+
+  def split_tgt(self, target_value, new_target_value, new_width):
+    '''
+    Split the target block identified by ``target_value`` in two, allocating the rightmost ``new_width`` to
+    the new block.
+
+    :param object target_value: The target
+    :param object new_target_value: The python object to use as the new target
+    :param float new_width: The amount of space on the right of ``target_value`` to allocate to ``new_target_value``
+    '''
+    target = self._target_object_to_block[target_value]
+    new_target = self._target_object_to_block[new_target_value] = TargetBlock(
+        value=new_target_value, start=target.stop - new_width, width=new_width)
+    self._target_block_to_updaters[new_target] = {}
+
+    for x in target.below:
+      _connect(x, new_target)
+      self._queue.append(x)
+
+    self._flush_queue()
+
+    target.width -= new_width
+
   def merge_src(self, left, right):
     '''
     Merge the ``left`` source into the ``right`` source. 
@@ -366,6 +410,9 @@ class SourceBlock(SourceOrTargetBlock):
     self.y_stop = Inf
     super(SourceBlock, self).__init__(*args, **kwargs)
 
+  def __repr__(self):
+    return f"{self.__class__.__name__}(x_start={self.start}, x_stop={self.stop}, y_start={self.y_start.start}, y_stop={self.y_stop.start})"
+
   @property
   def is_source(self):
     return True
@@ -380,6 +427,9 @@ class TargetBlock(SourceOrTargetBlock):
     self.y_start = self
     self.y_stop = self
     super(TargetBlock, self).__init__(*args, **kwargs)
+
+  def __repr__(self):
+    return f"{self.__class__.__name__}(x_start={self.start}, x_stop={self.stop}, y_start={self.start}, y_stop={self.stop})"
 
   @property
   def is_target(self):
