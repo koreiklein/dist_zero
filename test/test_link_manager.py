@@ -6,6 +6,11 @@ import pytest
 from dist_zero.node.link.manager import LinkGraphManager, Constraints
 
 
+def plot_manager_layers(manager):
+  from . import link_manager_plots
+  link_manager_plots.plot_manager_layers(manager)
+
+
 def _partition(n):
   width = 1.0 / n
   return [(i, (i * width, width)) for i in range(n)]
@@ -83,30 +88,27 @@ def test_grow_link_manager_with_splits(manager_C):
 
 
 def demo_link_manager_A():
-  from . import link_manager_plots
   manager = manager_A()
   _merge_some_srcs_in_A(manager)
   _merge_some_tgts_in_A(manager)
-  link_manager_plots.plot_manager_layers(manager)
+  plot_manager_layers(manager)
 
 
 def demo_link_manager_B():
-  from . import link_manager_plots
   manager = manager_B()
   manager.merge_src(9, 10)
   manager.merge_src(8, 10)
   manager.merge_src(7, 10)
   manager.merge_src(6, 10)
-  link_manager_plots.plot_manager_layers(manager)
+  plot_manager_layers(manager)
 
 
 def demo_link_manager_C():
-  from . import link_manager_plots
   manager = manager_C()
   _split_C_tgt(manager, n_parts=120)
   _split_C_src(manager, n_parts=110)
-  link_manager_plots.plot_manager_layers(manager)
+  plot_manager_layers(manager)
 
 
 if __name__ == '__main__':
-  demo_link_manager_C()
+  demo_link_manager_A()
