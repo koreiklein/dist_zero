@@ -11,6 +11,33 @@ PALLETTE = list(colors.TABLEAU_COLORS.values())
 epsilon = 0.0001
 
 
+class SourceOrTarget(object):
+  def __init__(self, value, start, width):
+    self.value = value
+    self.start = start
+    self.width = width
+
+  def __le__(self, other):
+    return self.start <= other.start
+
+  def __lt__(self, other):
+    return self.start < other.start
+
+  def __ge__(self, other):
+    return self.start >= other.start
+
+  def __gt__(self, other):
+    return self.start > other.start
+
+
+class Source(SourceOrTarget):
+  pass
+
+
+class Target(SourceOrTarget):
+  pass
+
+
 class Coords(object):
   def __init__(self, src_start, src_width, tgt_start, tgt_width):
     self.src_start = src_start
@@ -104,7 +131,6 @@ class LinkGraphManager(object):
       cur_layer = next_layer
       result.append(cur_layer)
 
-    result.append(self._targets)
     return result
 
   def path(self, source, target):
@@ -205,6 +231,81 @@ class LinkGraphManager(object):
       self._queue.append(new)
 
       return True
+
+  def merge_src(self, left_source, right_source):
+    '''Remove the right_source and grow the left_source to include its range'''
+    new_width = self._coords[right_source].src_width
+
+    self._grow_x_width(left_source, new_width)
+    self._shrink_x_width(right_source, new_width)
+
+    self._remove_block(right_source)
+
+    self._sources.remove(right_source)
+
+  def merge_tgt(self, left_target, right_target):
+    '''Remove the right_target and grow the left_target to include its range'''
+    new_width = self._coords[right_target].tgt_width
+
+    self._grow_y_width(left_target, new_width)
+    self._shrink_y_width(right_target, new_width)
+
+    self._remove_block(right_target)
+    self._targets.remove(right_target)
+
+  def _grow_x_width(self, block, width):
+    '''Add extra width to the right of the rectangle for this block'''
+    for parent in self._above[block]:
+      if self._below[parent][-1] == block:
+        self._grow_x_width(parent, width)
+
+    self._coords[block].src_width += width
+
+  def _grow_y_width(self, block, width):
+    '''Add extra width to the top of the rectangle for this block'''
+    for child in self._below[block]:
+      if self._above[child][-1] == block:
+        self._grow_y_width(child, width)
+
+    self._coords[block].tgt_width += width
+
+  def _shrink_x_width(self, block, width):
+    '''Remove width from the left of the rectangle for this block'''
+    new_width = self._coords[block].src_width - width
+
+    for parent in self._above[block]:
+      if self._below[parent][0] == block:
+        self._shrink_x_width(parent, width)
+
+    self._coords[block].src_start += width
+    self._coords[block].src_width = new_width
+
+  def _shrink_y_width(self, block, width):
+    '''Remove width from the bottom of the rectangle for this block'''
+    new_width = self._coords[block].tgt_width - width
+
+    for child in self._below[block]:
+      if self._above[child][0] == block:
+        self._shrink_y_width(child, width)
+
+    self._coords[block].tgt_start += width
+    self._coords[block].tgt_width = new_width
+
+  def _remove_block(self, block):
+    if block not in self._targets:
+      for parent in self._above.pop(block):
+        if block not in self._below[parent]:
+          import ipdb
+          ipdb.set_trace()
+        self._below[parent].remove(block)
+    if block not in self._sources:
+      for child in self._below.pop(block):
+        if block not in self._above[child]:
+          import ipdb
+          ipdb.set_trace()
+        self._above[child].remove(block)
+
+    self._coords.pop(block)
 
   def split_src(self, source, new_source, new_width):
     self._sources.add(new_source)
@@ -365,8 +466,8 @@ def test_demo_solver():
       result.width = width
       yield result
 
-  sources = list(new_ends(200))
-  targets = list(new_ends(228))
+  sources = list(new_ends(50))
+  targets = list(new_ends(60))
   manager = LinkGraphManager(
       sources=sources,
       targets=targets,
@@ -382,6 +483,10 @@ def test_demo_solver():
           max_mass=100,
       ))
   manager.fill_in()
+  for to_merge in [4, 10, 11, 2, 28, 2, 2]:
+    manager.merge_src(sources[to_merge], sources.pop(to_merge + 1))
+  for to_merge in [4, 10, 11, 2, 28, 2, 2, 5, 5, 5]:
+    manager.merge_tgt(targets[to_merge], targets.pop(to_merge + 1))
   n_blocks = len(manager._coords)
   print('running validation checks')
   manager._validate()
@@ -390,7 +495,7 @@ def test_demo_solver():
   layers = manager.layers()
   print(f"Total blocks = {n_blocks}.\nn_layers = {len(layers)}")
   for layer in reversed(layers):
-    plt.figure(figsize=(18, 10))
+    plt.figure(figsize=(10, 8))
     for i, block in enumerate(layer):
       manager._coords[block].plot(PALLETTE[i % len(PALLETTE)])
   plt.show()
