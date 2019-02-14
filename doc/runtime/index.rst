@@ -11,8 +11,9 @@ translate `dist_zero.expression.Expression` instances into running distributed p
 
    abstracting_hardware/index
 
-   datasets
-   links
+   transactions
+   datasets/index
+   links/index
 
    retransmission
    migrations

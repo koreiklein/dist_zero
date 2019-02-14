@@ -357,7 +357,7 @@ class Function(expression.Expression):
     self.docstring = docstring
     self.retType = retType
     self.args = args
-    self._block = statement.Block(self.program, root=True)
+    self._block = statement.CodeBlock(self.program, root=True)
 
   def SelfArg(self):
     if len(self.args) >= 1 and self.args[0].name == 'self':
