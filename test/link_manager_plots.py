@@ -30,6 +30,7 @@ def plot_layer(layer, limits):
 def plot_manager_layers(manager):
   limits = manager.x_min(), manager.x_max(), manager.y_min(), manager.y_max()
   layers = manager.layers()
-  for layer in reversed(layers):
+  for layer in layers:
+    plt.figure(figsize=(10, 8))
     plot_layer(layer, limits)
-    plt.show()
+  plt.show()

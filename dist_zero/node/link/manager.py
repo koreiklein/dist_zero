@@ -18,12 +18,11 @@ class LinkGraphManager(object):
         for value, (start, width) in target_object_intervals
     }
 
-    self._source_blocks = set(self._source_object_to_block.values())
-    self._target_blocks = set(self._target_object_to_block.values())
-
     self._queue = blist.blist()
+    self._source_block_to_updaters = {src: [] for src in self._source_object_to_block.values()}
+    self._target_block_to_updaters = {tgt: [] for tgt in self._target_object_to_block.values()}
 
-    center = InternalBlock(
+    center = self._new_block(
         x_start=MinusInf,
         x_stop=Inf,
         y_start=MinusInf,
@@ -35,13 +34,43 @@ class LinkGraphManager(object):
         #y_stop=self._target_object_to_block[target_object_intervals[-1][0]],
     )
 
-    for src in self._source_blocks:
+    for src in self._source_block_to_updaters:
       _connect(src, center)
-    for tgt in self._target_blocks:
+    for tgt in self._target_block_to_updaters:
       _connect(center, tgt)
 
     self._queue.append(center)
     self._flush_queue() # Generates all the other blocks
+
+  def merge_src(self, left, right):
+    left = self._source_object_to_block[left]
+    right = self._source_object_to_block.pop(right)
+    right.is_removed = True
+
+    for x in right.above[:]:
+      _disconnect(right, x)
+      if x not in left.above:
+        _connect(left, x)
+    left.width += right.width
+    for updater in self._source_block_to_updaters.pop(right):
+      updater(left)
+    self._queue.extend(left.above)
+    self._flush_queue()
+
+  def merge_tgt(self, left, right):
+    left = self._target_object_to_block[left]
+    right = self._target_object_to_block.pop(right)
+    right.is_removed = True
+
+    for x in right.below[:]:
+      _disconnect(x, right)
+      if x not in left.below:
+        _connect(x, left)
+    left.width += right.width
+    for updater in self._target_block_to_updaters.pop(right):
+      updater(left)
+    self._queue.extend(left.below)
+    self._flush_queue()
 
   def layers(self):
     '''
@@ -52,7 +81,7 @@ class LinkGraphManager(object):
     '''
     # Current algorithm: Each block is given the layer corresponding to the minimum path length between
     # it and any source node.
-    result = [set(self._source_blocks)]
+    result = [set(self._source_block_to_updaters)]
     seen = set()
     while True:
       next_layer = set()
@@ -67,16 +96,16 @@ class LinkGraphManager(object):
         return result
 
   def x_min(self):
-    return min(block.start for block in self._source_blocks)
+    return min(block.start for block in self._source_block_to_updaters)
 
   def x_max(self):
-    return min(block.stop for block in self._source_blocks)
+    return min(block.stop for block in self._source_block_to_updaters)
 
   def y_min(self):
-    return min(block.start for block in self._target_blocks)
+    return min(block.start for block in self._target_block_to_updaters)
 
   def y_max(self):
-    return min(block.stop for block in self._target_blocks)
+    return min(block.stop for block in self._target_block_to_updaters)
 
   def _flush_queue(self):
     while self._queue:
@@ -95,11 +124,9 @@ class LinkGraphManager(object):
       return self._try_split_x(block) or self._try_split_y(block)
 
   def _check_block_for_constraints(self, block):
-    if self._overloaded(block):
+    if not block.is_target and not block.is_source and self._overloaded(block):
       if not self._try_split_x_or_y(block):
-        new = self._split_z(block)
-        self._queue.append(block)
-        self._queue.append(new)
+        self._split_z(block)
 
   def _try_split_x(self, block):
     if any(len(x.below) >= self._constraints.max_below for x in block.above if x.is_target):
@@ -107,9 +134,7 @@ class LinkGraphManager(object):
     elif len(block.below) <= 1:
       return False # Not enough space to split
     else:
-      new = self._split_x(block)
-      self._queue.append(block)
-      self._queue.append(new)
+      self._split_x(block)
 
       return True
 
@@ -119,9 +144,7 @@ class LinkGraphManager(object):
     elif len(block.above) <= 1:
       return False # Not enough space to split
     else:
-      new = self._split_y(block)
-      self._queue.append(block)
-      self._queue.append(new)
+      self._split_y(block)
 
       return True
 
@@ -135,9 +158,43 @@ class LinkGraphManager(object):
     # FIXME(KK): Use mass here to pick a better index
     return len(block.above) // 2
 
+  def _new_block(self, x_start, x_stop, y_start, y_stop):
+    result = InternalBlock()
+
+    def _set_x_start(value):
+      if not result.is_removed:
+        result.x_start = value
+        if value != MinusInf:
+          self._source_block_to_updaters[value].append(_set_x_start)
+
+    def _set_x_stop(value):
+      if not result.is_removed:
+        result.x_stop = value
+        if value != Inf:
+          self._source_block_to_updaters[value].append(_set_x_stop)
+
+    def _set_y_start(value):
+      if not result.is_removed:
+        result.y_start = value
+        if value != MinusInf:
+          self._target_block_to_updaters[value].append(_set_y_start)
+
+    def _set_y_stop(value):
+      if not result.is_removed:
+        result.y_stop = value
+        if value != Inf:
+          self._target_block_to_updaters[value].append(_set_y_stop)
+
+    _set_x_start(x_start)
+    _set_x_stop(x_stop)
+    _set_y_start(y_start)
+    _set_y_stop(y_stop)
+
+    return result
+
   def _split_x(self, block):
     index = self._x_split_index(block)
-    new = InternalBlock(
+    new = self._new_block(
         x_start=block.below[index].x_start, x_stop=block.x_stop, y_start=block.y_start, y_stop=block.y_stop)
     block.x_stop = block.below[index - 1].x_stop
 
@@ -146,12 +203,14 @@ class LinkGraphManager(object):
       _connect(x, new)
     for x in block.above:
       _connect(new, x)
+      self._queue.append(x)
 
-    return new
+    self._queue.append(block)
+    self._queue.append(new)
 
   def _split_y(self, block):
     index = self._y_split_index(block)
-    new = InternalBlock(
+    new = self._new_block(
         x_start=block.x_start, x_stop=block.x_stop, y_start=block.above[index].y_start, y_stop=block.y_stop)
     block.y_stop = block.above[index - 1].y_stop
 
@@ -160,16 +219,19 @@ class LinkGraphManager(object):
       _connect(new, x)
     for x in block.below:
       _connect(x, new)
+      self._queue.append(x)
 
-    return new
+    self._queue.append(block)
+    self._queue.append(new)
 
   def _split_z(self, block):
-    new = InternalBlock(x_start=block.x_start, x_stop=block.x_stop, y_start=block.y_start, y_stop=block.y_stop)
+    new = self._new_block(x_start=block.x_start, x_stop=block.x_stop, y_start=block.y_start, y_stop=block.y_stop)
     for x in block.above[:]:
       _disconnect(block, x)
       _connect(new, x)
     _connect(block, new)
-    return new
+    self._queue.append(block)
+    self._queue.append(new)
 
 
 class Constraints(object):
@@ -201,6 +263,7 @@ class Block(object):
   def __init__(self):
     self.below = blist.sortedlist([], key=_by_x)
     self.above = blist.sortedlist([], key=_by_y)
+    self.is_removed = False
 
   @property
   def is_source(self):
@@ -213,14 +276,7 @@ class Block(object):
 
 class InternalBlock(Block):
   '''Blocks created and maintained by this manager.'''
-
-  def __init__(self, x_start, x_stop, y_start, y_stop):
-    self.x_start = x_start
-    self.x_stop = x_stop
-    self.y_start = y_start
-    self.y_stop = y_stop
-
-    super(InternalBlock, self).__init__()
+  pass
 
 
 class SourceOrTargetBlock(Block):
