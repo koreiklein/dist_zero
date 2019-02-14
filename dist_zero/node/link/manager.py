@@ -7,6 +7,18 @@ class LinkGraphManager(object):
   '''
 
   def __init__(self, source_object_intervals, target_object_intervals, constraints):
+    '''
+    Initialize a manager to connect source objects to target objects.
+    Upon initialization, the `LinkGraphManager` will calculate a potentially very large number of
+    `InternalBlock` instances to insert between the sources and targets.
+
+    :param list[tuple[object,tuple[float,float]]] source_object_intervals: List of triplets (source, interval)
+      where source is any python object to identify that source, and interval is a pair
+      (start, width) giving the start point and width of the interval that source should manage.
+    :param list[tuple[object,tuple[float,float]]] target_object_intervals: List of triplets for targets.
+    :param constraints: Constraints on what kind of graphs are allowed.
+    :type constraints: `Constraints`
+    '''
     self._constraints = constraints
 
     self._source_object_to_block = {
@@ -319,8 +331,11 @@ class Constraints(object):
 
   def __init__(self, max_above, max_below, max_connections=None):
     self.max_above = max_above
+    '''Maxmimum number of `Blocks <Block>` allowed to sit above any block.'''
     self.max_below = max_below
+    '''Maxmimum number of `Blocks <Block>` allowed to sit below any block.'''
     self.max_connections = max_connections if max_connections is not None else self.max_above + self.max_below
+    '''Maxmimum number of `Blocks <Block>` allowed to sit adjacent (above or below) any block.'''
 
 
 _by_x = lambda block: block.x_start
@@ -358,7 +373,10 @@ class Block(object):
 
 
 class InternalBlock(Block):
-  '''Blocks created and maintained by this manager.'''
+  '''
+  Blocks created and maintained by this manager.
+  All blocks that do not correspond to a source or a target will be `InternalBlock` instances.
+  '''
   pass
 
 

@@ -12,6 +12,9 @@ how to maintain those connections as source and target nodes split and merge.
 DEPRECATED Connector classes
 ----------------------------------------------
 
+These Connnector classes are an older idea.  They are now deprecated in favor
+of the `LinkGraphManager` class.
+
 .. automodule:: dist_zero.connector.connector
   :members:
 
