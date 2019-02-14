@@ -3,7 +3,7 @@
 Links
 ========
 
-Fundamental to the DistZero runtime is the notion of a link between two :doc:`distributed datasets <datasets>`.
+Fundamental to the DistZero runtime is the notion of a link between two :doc:`distributed datasets </doc/runtime/datasets/index>`.
 Links are effectively used to route messages from the leaf nodes of one "source" dataset to the appropriate leaf nodes
 of another "target" dataset.
 
@@ -11,7 +11,7 @@ For example, if the source dataset consists of all the active web browser tabs i
 dataset consists of all the unique user profiles, then it would make sense to have a link between them that would
 route login attempts from browser tabs to user profiles based on a ``username`` parameter provided by the user.
 
-Just as with :doc:`datasets <datasets>`, each link is represented internally as a **singly rooted tree** of `LinkNode`
+Just as with :doc:`datasets </doc/runtime/datasets/index>`, each link is represented internally as a **singly rooted tree** of `LinkNode`
 instances.  Link nodes of height > 0 are "manager" nodes, and link nodes of height 0 are
 "leaf" nodes.
 
@@ -27,20 +27,11 @@ of the nodes to its left to the children of the nodes to its right.
 The logic that manager link nodes use to maintain their networks of kids is encapsulated in several `Connector`
 classes.
 
-.. automodule:: dist_zero.node.link.standard
-   :members:
+.. toctree::
+   :maxdepth: 2
 
-
-Connector classes
-----------------------------------------------
-
-.. automodule:: dist_zero.connector.connector
-  :members:
-
-.. automodule:: dist_zero.connector.all_to_all
-  :members:
-
-.. automodule:: dist_zero.connector.all_to_one_available
-  :members:
+   link_nodes
+   transactions
+   connecting
 
 

@@ -17,6 +17,11 @@ Machine messages
 .. automodule:: dist_zero.messages.machine
    :members:
 
+Transaction messages
+----------------------
+.. automodule:: dist_zero.messages.transaction
+   :members:
+
 IO Tree messages
 ----------------
 .. automodule:: dist_zero.messages.io

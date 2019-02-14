@@ -50,12 +50,9 @@ Two operations will decrease the size of the tree:
 These rules ensure that no io tree will be overly provisioned for very long after the number of leaf nodes has
 dropped.
 
-.. automodule:: dist_zero.node.io.data
-   :members:
+.. toctree::
+   :maxdepth: 2
 
-.. automodule:: dist_zero.node.io.leaf
-   :members:
-
-.. automodule:: dist_zero.node.io.adopter
-   :members:
+   dataset_nodes
+   transactions
 

@@ -4,7 +4,7 @@ from . import expression, lvalue, type
 from .common import INDENT, inc_i
 
 
-class Block(object):
+class CodeBlock(object):
   '''A block of C code.'''
 
   def __init__(self, program, root=False):
@@ -124,13 +124,13 @@ class Switch(Statement):
     if self._default_case_block is not None:
       raise RuntimeError("The default case was already added to this switch statement.")
 
-    self._default_case_block = Block(self.program)
+    self._default_case_block = CodeBlock(self.program)
     return self._default_case_block
 
   def AddCase(self, value):
     if not (isinstance(value, expression.Constant) or isinstance(value, expression.StrConstant)):
       raise RuntimeError(f"Case in switch statement must use a constant value.  Got {value}")
-    case_block = Block(self.program)
+    case_block = CodeBlock(self.program)
     self._cases.append((value, case_block))
     return case_block
 
@@ -151,7 +151,7 @@ class While(Statement):
   def __init__(self, condition, program):
     self.program = program
     self.condition = condition
-    self.block = Block(self.program)
+    self.block = CodeBlock(self.program)
 
   def to_c_string(self, indent):
     yield f"{indent}while ({self.condition.to_c_string(root=True)})\n"
@@ -162,7 +162,7 @@ class If(Statement):
   def __init__(self, condition, program):
     self.program = program
     self.condition = condition
-    self._consequent = Block(self.program)
+    self._consequent = CodeBlock(self.program)
     self._alternate = None
 
   @property
@@ -172,7 +172,7 @@ class If(Statement):
   @property
   def alternate(self):
     if self._alternate is None:
-      self._alternate = Block(self.program)
+      self._alternate = CodeBlock(self.program)
     return self._alternate
 
   def to_c_string(self, indent):
