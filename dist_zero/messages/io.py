@@ -104,14 +104,23 @@ def collect_leaf_config():
   return {'type': 'collect_leaf_config'}
 
 
-def hello_parent(kid, kid_summary=None):
+def hello_parent(kid, kid_summary=None, interval=None):
   '''
   Sent by a newly spawned kid node to its parent to indicate that it is now live.
 
   :param kid: The :ref:`handle` of the newly added kid.
   :type kid: :ref:`handle`
+  :param tuple interval: A pair of the start and end point of this kid if provided.
   '''
-  return {'type': 'hello_parent', 'kid': kid, 'kid_summary': kid_summary}
+  return {'type': 'hello_parent', 'kid': kid, 'kid_summary': kid_summary, 'interval': interval}
+
+
+def set_leaf_key(key):
+  '''
+  Sent by an `AddLeafParent` node to the leaf it is adding to inform its new leaf
+  what key it has been assigned.
+  '''
+  return {'type': 'set_leaf_key', 'key': key}
 
 
 def absorb_these_kids(kid_ids):
@@ -123,13 +132,14 @@ def absorb_these_kids(kid_ids):
   return {'type': 'absorb_these_kids', 'kid_ids': kid_ids}
 
 
-def finished_absorbing(summary):
+def finished_absorbing(summary, new_interval):
   '''
   Indicates to the parent of an `Absorber` node that the absorber has finished absorbing everything it needs to absorb.
 
   :param object summary: The summary of the state of the `Absorber` node.
+  :param tuple new_interval: The new interval the absorber is now responsible for
   '''
-  return {'type': 'finished_absorbing', 'summary': summary}
+  return {'type': 'finished_absorbing', 'summary': summary, 'new_interval': new_interval}
 
 
 def goodbye_parent():
@@ -137,6 +147,13 @@ def goodbye_parent():
   Sent by a leaf node to inform its parent `DataNode` that it has left the system.
   '''
   return {'type': 'goodbye_parent'}
+
+
+def finished_splitting(summary):
+  '''
+  Sent by a `SplitNode` role when it finishes splitting.
+  '''
+  return {'type': 'finished_splitting', 'summary': summary}
 
 
 def kid_summary(size, n_kids, availability, messages_per_second, height):

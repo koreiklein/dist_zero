@@ -11,6 +11,9 @@ class RemoveLeaf(transaction.OriginatorRole):
     controller.node._updated_summary = True
     if self._kid_id in controller.node._kids:
       controller.node._kids.pop(self._kid_id)
+      start, stop = controller.node._kid_to_interval.pop(self._kid_id)
+      controller.node._kid_intervals.remove([start, stop, self._kid_id])
+
     if self._kid_id in controller.node._kid_summaries:
       controller.node._kid_summaries.pop(self._kid_id)
 

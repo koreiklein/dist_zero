@@ -19,10 +19,11 @@ class AddLeaf(transaction.ParticipantRole):
 
     controller.enlist(
         self._parent, AddLeafParent,
-        dict(
-            kid=controller.new_handle(self._parent['id']),
-            kid_summary=controller.node._kid_summary_message(),
-        ))
+        dict(kid=controller.new_handle(self._parent['id']), kid_summary=controller.node._kid_summary_message()))
+
+    leaf_key, _sender_id = await controller.listen(type='set_leaf_key')
+    # Leaves have None as their interval's stop coordinate
+    controller.node._interval = [leaf_key['key'], None]
 
 
 class AddLeafParent(transaction.ParticipantRole):
@@ -45,6 +46,11 @@ class AddLeafParent(transaction.ParticipantRole):
 
     controller.node._kids[kid['id']] = kid
     controller.node._kid_summaries[kid['id']] = self._kid_summary
+    key = controller.node._next_leaf_key()
+    interval = [key, None] # Leaves have None as their interval's stop coordinate
+    controller.node._kid_to_interval[kid['id']] = interval
+    controller.node._kid_intervals.add([key, None, kid['id']])
+    controller.send(self._kid, messages.io.set_leaf_key(key=key))
 
     if controller.node._exporter is not None:
       controller.node.send(

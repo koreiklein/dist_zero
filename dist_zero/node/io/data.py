@@ -1,6 +1,8 @@
+import blist
 import logging
 
-from dist_zero import settings, messages, errors, recorded, importer, exporter, misc, ids, transaction, message_rate_tracker
+from dist_zero import settings, messages, errors, recorded, \
+    importer, exporter, misc, ids, transaction, message_rate_tracker, infinity
 from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
 from dist_zero.node.io import leaf_html
@@ -48,6 +50,15 @@ class DataNode(Node):
     self.id = node_id
     self._kids = {}
     self._kid_summaries = {}
+
+    # The role to start this node should set self._interval to a pair (left, right)
+    # Giving the interval this node is responsible for.
+    # Leaf nodes are identified only by their left coordinate, and right will always be None
+    self._interval = None
+    # List of triples (start, stop, kid_id), sorted by start
+    # They should form a partition of self._interval
+    self._initialize_kid_intervals()
+    self._kid_to_interval = {} # map each kid id to its (start, stop) interval
 
     if self._height == 0:
       self._message_rate_tracker = message_rate_tracker.MessageRateTracker()
@@ -100,6 +111,32 @@ class DataNode(Node):
 
     self._stop_checking_limits = self._controller.periodically(CHECK_INTERVAL,
                                                                lambda: self._monitor.check_limits(CHECK_INTERVAL))
+
+  def _initialize_kid_intervals(self):
+    self._kid_intervals = blist.sortedlist([], key=lambda item: item[0])
+
+  def _random_key(self):
+    left = 0.0 if self._interval[0] == infinity.Min else self._interval[0]
+    right = 1.0 if self._interval[1] == infinity.Max else self._interval[1]
+    return self._controller.random.uniform(left, right)
+
+  def _next_leaf_key(self):
+    if self._height != 1:
+      raise errors.InternalError("Only height 1 DataNodes should be generating _next_leaf_key")
+
+    result = self._random_key()
+
+    while self._key_occurs_in_kid_intervals(result) or result == self._interval[1]:
+      result = self._random_key()
+
+    return result
+
+  def _key_occurs_in_kid_intervals(self, key):
+    if not self._kid_intervals:
+      return False
+    else:
+      i = self._kid_intervals.bisect_left((key, None))
+      return not i == len(self._kid_intervals) and self._kid_intervals[i][0] == key
 
   def _receive_input_action(self, message):
     if self._variant != 'input':
@@ -199,16 +236,18 @@ class DataNode(Node):
 
     :return: None if no 2 kids are mergable.  Otherwise, a pair of the ids of two mergeable kids.
     '''
-    # Current algorithm: 2 kids can be merged if each has n_kids less than 1/3 the max
-    n_kids_kid_id_pairs = [(kid_summary['n_kids'], kid_id) for kid_id, kid_summary in self._kid_summaries.items()
-                           if kid_id not in do_not_use_ids]
-    if len(n_kids_kid_id_pairs) >= 2:
-      n_kids_kid_id_pairs.sort()
-      (least_n_kids, least_id), (next_least_n_kids, next_least_id) = n_kids_kid_id_pairs[:2]
+    ordered_kid_ids = [kid_id for a, b, kid_id in self._kid_intervals]
+    best_pair = None
+    least_total_kids = None
+    for left_id, right_id in zip(ordered_kid_ids, ordered_kid_ids[1:]):
+      if left_id not in do_not_use_ids and right_id not in do_not_use_ids:
+        if self._kids_are_mergeable(left_id, right_id):
+          total_kids = self._kid_summaries[left_id]['n_kids'] + self._kid_summaries[right_id]['n_kids']
+          if best_pair is None or total_kids < least_total_kids:
+            best_pair = (left_id, right_id)
+            least_total_kids = total_kids
 
-      if self._kids_are_mergeable(least_id, next_least_id):
-        return least_id, next_least_id
-    return None
+    return best_pair
 
   def _kids_are_mergeable(self, left_id, right_id):
     return left_id in self._kid_summaries and right_id in self._kid_summaries and \
@@ -345,6 +384,15 @@ class DataNode(Node):
 
   def elapse(self, ms):
     self.linker.elapse(ms)
+
+  def _interval_json(self):
+    return infinity.interval_json(self._interval)
+
+  def _set_interval(self, interval_json):
+    if self._interval is not None:
+      raise errors.InternalError("Node interval had already been set.")
+
+    self._interval = infinity.parse_interval(interval_json)
 
   def _estimated_messages_per_second(self):
     if self._height == 0:

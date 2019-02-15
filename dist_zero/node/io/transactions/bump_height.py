@@ -1,4 +1,6 @@
-from dist_zero import transaction, messages, ids, errors
+import blist
+
+from dist_zero import transaction, messages, ids, errors, infinity
 from dist_zero.network_graph import NetworkGraph
 
 from . import helpers
@@ -20,7 +22,9 @@ class BumpHeight(transaction.OriginatorRole):
         leaf_config=controller.node._leaf_config,
         height=controller.node._height)
 
-    controller.spawn_enlist(proxy_config, helpers.Absorber, dict(parent=controller.new_handle(self.proxy_id)))
+    controller.spawn_enlist(
+        proxy_config, helpers.Absorber,
+        dict(parent=controller.new_handle(self.proxy_id), interval=infinity.interval_json(controller.node._interval)))
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     proxy = hello_parent['kid']
 
@@ -47,6 +51,10 @@ class BumpHeight(transaction.OriginatorRole):
     controller.node._kids = {proxy['id']: proxy_node}
     controller.node._kid_summaries = {}
     controller.node._kid_summaries[proxy['id']] = finished_absorbing['summary']
+    proxy_interval = list(controller.node._interval)
+    controller.node._kid_to_interval = {proxy['id']: proxy_interval}
+    controller.node._initialize_kid_intervals()
+    controller.node._kid_intervals.add([proxy_interval[0], proxy_interval[1], proxy['id']])
     controller.node._graph = NetworkGraph()
     controller.node._graph.add_node(proxy['id'])
     if controller.node._adjacent is not None:
@@ -58,7 +66,7 @@ class BumpHeight(transaction.OriginatorRole):
               variant=controller.node._variant))
 
     # After bumping the height, we will certainly need a new kid
-    from .spawn_kid import SpawnKid
-    await SpawnKid(send_summary=False, force=True).run(controller)
+    from .split_kid import SplitKid
+    await SplitKid(kid_id=proxy['id']).run(controller)
 
     controller.logger.info("Finish BumpHeight")

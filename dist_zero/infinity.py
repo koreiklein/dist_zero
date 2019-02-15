@@ -3,6 +3,33 @@ Objects to represent various infinities.
 '''
 
 
+def key_to_json(key):
+  if key == Min:
+    return str(Min)
+  elif key == Max:
+    return str(Max)
+  else:
+    return key
+
+
+def json_to_key(j):
+  if j == str(Min):
+    return Min
+  elif j == str(Max):
+    return Max
+  else:
+    return j
+
+
+def interval_json(interval):
+  return (key_to_json(interval[0]), key_to_json(interval[1]))
+
+
+def parse_interval(interval_json):
+  left, right = interval_json
+  return [json_to_key(left), json_to_key(right)]
+
+
 class _Inf(object):
   def __le__(self, other):
     return other == Max
@@ -18,6 +45,9 @@ class _Inf(object):
 
   @property
   def start(self):
+    return 'inf'
+
+  def __str__(self):
     return 'inf'
 
 
@@ -36,6 +66,9 @@ class _MinusInf(object):
 
   @property
   def start(self):
+    return '-inf'
+
+  def __str__(self):
     return '-inf'
 
 

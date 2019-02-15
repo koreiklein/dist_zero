@@ -1,4 +1,4 @@
-from dist_zero import transaction, messages
+from dist_zero import transaction, messages, infinity, errors
 
 from . import helpers
 
@@ -23,8 +23,14 @@ class ConsumeProxy(transaction.OriginatorRole):
     absorb_these_kids, _sender_id = await controller.listen(type='absorb_these_kids')
     kid_ids = set(absorb_these_kids['kid_ids'])
 
+    controller.node._initialize_kid_intervals()
+    controller.node._kid_to_interval = {}
+
     while kid_ids:
       hello_parent, kid_id = await controller.listen(type='hello_parent')
+      start, stop = infinity.parse_interval(hello_parent['interval'])
+      controller.node._kid_to_interval[kid_id] = [start, stop]
+      controller.node._kid_intervals.add([start, stop, kid_id])
       kid_ids.remove(kid_id)
       controller.node._kids[kid_id] = controller.role_handle_to_node_handle(hello_parent['kid'])
       if hello_parent['kid_summary']:

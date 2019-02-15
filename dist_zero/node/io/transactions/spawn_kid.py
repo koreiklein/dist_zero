@@ -11,6 +11,11 @@ class SpawnKid(transaction.OriginatorRole):
   async def run(self, controller: 'TransactionRoleController'):
     if controller.node._height == 0:
       raise errors.InternalError("height 0 DataNode instances can not spawn kids")
+
+    if controller.node._kids:
+      # Should have used SplitKid instead
+      raise errors.InternalError("DataNode with existing kids should not run a SpawnKid transaction.")
+
     if not self._force and not controller.node._monitor.out_of_capacity():
       controller.logger.info("Canceling SpawnKid transaction because the spawning node is not out of capacity.")
       return
@@ -25,7 +30,8 @@ class SpawnKid(transaction.OriginatorRole):
         leaf_config=controller.node._leaf_config,
         height=controller.node._height - 1)
 
-    controller.spawn_enlist(node_config, helpers.StartDataNode, dict(parent=controller.new_handle(node_id), ))
+    controller.spawn_enlist(node_config, helpers.StartDataNode,
+                            dict(parent=controller.new_handle(node_id), interval=controller.node._interval_json()))
 
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     if hello_parent['kid_summary']:
@@ -34,6 +40,8 @@ class SpawnKid(transaction.OriginatorRole):
       controller.node._kid_summaries[node_id] = messages.io.kid_summary(
           size=0, n_kids=0, availability=controller.node._leaf_availability * controller.node._kid_capacity_limit)
     controller.node._kids[node_id] = controller.role_handle_to_node_handle(hello_parent['kid'])
+    controller.node._kid_to_interval[node_id] = list(controller.node._interval)
+    controller.node._kid_intervals.add([controller.node._interval[0], controller.node._interval[1], node_id])
     if self._send_summary:
       controller.node._send_kid_summary()
 

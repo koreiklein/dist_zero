@@ -10,6 +10,9 @@ Dataset Transactions and Roles
 .. automodule:: dist_zero.node.io.transactions.merge_kids
   :members:
 
+.. automodule:: dist_zero.node.io.transactions.split_kid
+  :members:
+
 .. automodule:: dist_zero.node.io.transactions.receive_start_subscription
   :members:
 
@@ -30,5 +33,6 @@ Dataset Transactions and Roles
 
 .. automodule:: dist_zero.node.io.transactions.spawn_kid
   :members:
+
 
 
