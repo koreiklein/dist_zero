@@ -120,9 +120,14 @@ class DataNode(Node):
     right = 1.0 if self._interval[1] == infinity.Max else self._interval[1]
     return self._controller.random.uniform(left, right)
 
-  def _next_leaf_key(self):
+  def _truncate_interval(self):
+    key = self._new_kid_key()
+    self._interval[1] = key
+    return key
+
+  def _new_kid_key(self):
     if self._height != 1:
-      raise errors.InternalError("Only height 1 DataNodes should be generating _next_leaf_key")
+      raise errors.InternalError("Only height 1 DataNodes should be generating _new_kid_key")
 
     result = self._random_key()
 

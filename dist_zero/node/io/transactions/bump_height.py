@@ -29,7 +29,10 @@ class BumpHeight(transaction.OriginatorRole):
     proxy = hello_parent['kid']
 
     kids_to_absorb = list(controller.node._kids.keys())
-    controller.send(proxy, messages.io.absorb_these_kids(kids_to_absorb))
+    controller.send(
+        proxy,
+        messages.io.absorb_these_kids(
+            kid_ids=kids_to_absorb, left_endpoint=infinity.key_to_json(controller.node._interval[0])))
 
     kid_ids = set(kids_to_absorb)
     for kid_id in kids_to_absorb:

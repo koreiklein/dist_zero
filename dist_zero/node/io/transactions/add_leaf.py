@@ -46,7 +46,7 @@ class AddLeafParent(transaction.ParticipantRole):
 
     controller.node._kids[kid['id']] = kid
     controller.node._kid_summaries[kid['id']] = self._kid_summary
-    key = controller.node._next_leaf_key()
+    key = controller.node._new_kid_key()
     interval = [key, None] # Leaves have None as their interval's stop coordinate
     controller.node._kid_to_interval[kid['id']] = interval
     controller.node._kid_intervals.add([key, None, kid['id']])

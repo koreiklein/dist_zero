@@ -97,11 +97,11 @@ def data_node_config(node_id, parent, variant, height, leaf_config, recorded_use
 
 
 def sum_leaf_config(initial_state):
-  return {'type': 'sum_leaf_config', 'initial_state': initial_state}
+  return {'type': 'sum_leaf_config', 'initial_state': initial_state, 'interval_type': 'point'}
 
 
 def collect_leaf_config():
-  return {'type': 'collect_leaf_config'}
+  return {'type': 'collect_leaf_config', 'interval_type': 'interval'}
 
 
 def hello_parent(kid, kid_summary=None, interval=None):
@@ -123,13 +123,15 @@ def set_leaf_key(key):
   return {'type': 'set_leaf_key', 'key': key}
 
 
-def absorb_these_kids(kid_ids):
+def absorb_these_kids(kid_ids, left_endpoint):
   '''
   Indicates to an Absorber which kid ids it should wait for before it is finished.
 
   :param list[str] kid_ids: The ids of the kids that the `Absorber` must adopt before its role in the transaction is finished.
+  :param left_endpoint: The leftmost endpoint of the interval the absorbed kids cover.  
+  :type left_endpoint: float or `infinity.Min`
   '''
-  return {'type': 'absorb_these_kids', 'kid_ids': kid_ids}
+  return {'type': 'absorb_these_kids', 'kid_ids': kid_ids, 'left_endpoint': left_endpoint}
 
 
 def finished_absorbing(summary, new_interval):

@@ -60,8 +60,7 @@ class Absorber(transaction.ParticipantRole):
       if hello_parent['kid_summary']:
         controller.node._kid_summaries[kid_id] = hello_parent['kid_summary']
 
-    if controller.node._kid_intervals and controller.node._interval[0] > controller.node._kid_intervals[0][0]:
-      controller.node._interval[0] = controller.node._kid_intervals[0][0]
+    controller.node._interval[0] = infinity.json_to_key(absorb_these_kids['left_endpoint'])
 
     controller.send(
         self.parent,
@@ -82,7 +81,11 @@ class Absorbee(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     kid_ids = set()
-    controller.send(self.absorber, messages.io.absorb_these_kids(list(controller.node._kids.keys())))
+    controller.send(
+        self.absorber,
+        messages.io.absorb_these_kids(
+            kid_ids=list(controller.node._kids.keys()),
+            left_endpoint=infinity.key_to_json(controller.node._interval[0])))
     for kid in controller.node._kids.values():
       kid_ids.add(kid['id'])
       controller.enlist(

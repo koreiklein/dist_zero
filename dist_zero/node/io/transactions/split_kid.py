@@ -76,15 +76,26 @@ class SplitNode(transaction.ParticipantRole):
 
     controller.send(self._parent, messages.io.finished_splitting(summary=controller.node._kid_summary_message()))
 
-  async def _nonzero_height_split(self, controller: 'TransactionRoleController'):
-    # FIXME(KK): Figure out what to do about this case.
-    raise RuntimeError("Not Yet Implemented")
+  async def _zero_height_split(self, controller: 'TransactionRoleController'):
+    interval_type = controller.node._leaf_config['interval_type']
+    if interval_type == 'interval':
+      controller.send(
+          self._absorber,
+          messages.io.absorb_these_kids(
+              kid_ids=[], left_endpoint=infinity.key_to_json(controller.node._truncate_interval())))
+    else:
+      raise errors.InternalError(f"Unable to split a height 0 Node with interval_type \"{interval_type}\" != interval")
 
   async def _nonzero_height_split(self, controller: 'TransactionRoleController'):
     n_kids = len(controller.node._kid_intervals)
     n_to_keep = n_kids // 2
     leaving_kid_ids = [kid_id for start, stop, kid_id in controller.node._kid_intervals[n_to_keep:]]
-    controller.send(self._absorber, messages.io.absorb_these_kids(leaving_kid_ids))
+    controller.send(
+        self._absorber,
+        messages.io.absorb_these_kids(
+            kid_ids=leaving_kid_ids,
+            left_endpoint=infinity.key_to_json(controller.node._kid_intervals[n_to_keep][0] if controller.node.
+                                               _kid_intervals else controller.node._truncate_interval())))
 
     for kid_id in leaving_kid_ids:
       controller.enlist(
