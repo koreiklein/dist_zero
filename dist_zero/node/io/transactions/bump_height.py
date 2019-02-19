@@ -1,3 +1,5 @@
+import blist
+
 from dist_zero import transaction, messages, ids, errors
 from dist_zero.network_graph import NetworkGraph
 
@@ -20,12 +22,15 @@ class BumpHeight(transaction.OriginatorRole):
         leaf_config=controller.node._leaf_config,
         height=controller.node._height)
 
-    controller.spawn_enlist(proxy_config, helpers.Absorber, dict(parent=controller.new_handle(self.proxy_id)))
+    controller.spawn_enlist(
+        proxy_config, helpers.NewAbsorber,
+        dict(parent=controller.new_handle(self.proxy_id), interval=controller.node._interval_json()))
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     proxy = hello_parent['kid']
 
-    kids_to_absorb = list(controller.node._kids.keys())
-    controller.send(proxy, messages.io.absorb_these_kids(kids_to_absorb))
+    kids_to_absorb = list(controller.node._kids)
+    controller.send(
+        proxy, messages.io.absorb_these_kids(kid_ids=kids_to_absorb, left_endpoint=controller.node._interval_json()[0]))
 
     kid_ids = set(kids_to_absorb)
     for kid_id in kids_to_absorb:
@@ -44,9 +49,10 @@ class BumpHeight(transaction.OriginatorRole):
     # Restore node state
 
     controller.node._height += 1
-    controller.node._kids = {proxy['id']: proxy_node}
-    controller.node._kid_summaries = {}
-    controller.node._kid_summaries[proxy['id']] = finished_absorbing['summary']
+    interval = controller.node._interval()
+    controller.node._kids.clear()
+    controller.node._kids.add_kid(kid=proxy_node, interval=interval, summary=finished_absorbing['summary'])
+
     controller.node._graph = NetworkGraph()
     controller.node._graph.add_node(proxy['id'])
     if controller.node._adjacent is not None:
@@ -58,7 +64,7 @@ class BumpHeight(transaction.OriginatorRole):
               variant=controller.node._variant))
 
     # After bumping the height, we will certainly need a new kid
-    from .spawn_kid import SpawnKid
-    await SpawnKid(send_summary=False, force=True).run(controller)
+    from .split_kid import SplitKid
+    await SplitKid(kid_id=proxy['id']).run(controller)
 
     controller.logger.info("Finish BumpHeight")

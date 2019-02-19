@@ -1,5 +1,5 @@
 from dist_zero import errors, transaction
-from .transactions import merge_kids, consume_proxy, spawn_kid, bump_height
+from .transactions import split_kid, merge_kids, consume_proxy, spawn_kid, bump_height
 
 
 class Monitor(object):
@@ -29,7 +29,7 @@ class Monitor(object):
 
   def out_of_capacity(self):
     total_kid_capacity = sum(
-        self._node._kid_capacity_limit - kid_summary['size'] for kid_summary in self._node._kid_summaries.values())
+        self._node._kid_capacity_limit - kid_summary['size'] for kid_summary in self._node._kids.summaries.values())
 
     if total_kid_capacity <= self._node.system_config['TOTAL_KID_CAPACITY_TRIGGER']:
       return True
@@ -41,7 +41,7 @@ class Monitor(object):
     if self._node._height <= 1:
       return # Nodes of height <= 1 never address low capacity themselves
 
-    if set(self._node._kid_summaries.keys()) < set(self._node._kids.keys()):
+    if set(self._node._kids.summaries.keys()) < set(self._node._kids):
       return # Wait till we have summaries for all our kids
 
     if self.out_of_capacity():
@@ -60,7 +60,22 @@ class Monitor(object):
       self._warned_low_capacity = False
 
   def _spawn_kid(self):
-    self._node.start_transaction_eventually(spawn_kid.SpawnKid())
+    best_kid_id = None
+    fitness = 0
+    for kid_id, summary in self._node._kids.summaries.items():
+      kid_fitness = summary['n_kids'] # The more kids, the fitter for splitting.
+      if kid_fitness >= fitness:
+        fitness = kid_fitness
+        best_kid_id = kid_id
+
+    if best_kid_id is None:
+      raise errors.InternalError("Monitor should not attempt to spawn kids when no suitable kids exist.")
+    if fitness <= 1:
+      # _spawn_kid should only be called when we are low on capacaity.  That should imply that there are many
+      # kids which themselves have more than one kid.
+      raise errors.InternalError("Monitor should not attempt to spawn kids when no kid has more than one kid.")
+
+    self._node.start_transaction_eventually(split_kid.SplitKid(kid_id=best_kid_id))
 
   def _check_for_consumable_proxy(self, ms):
     TIME_TO_WAIT_BEFORE_CONSUME_PROXY_MS = 4 * 1000

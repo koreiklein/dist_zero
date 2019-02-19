@@ -1,4 +1,5 @@
 from dist_zero import transaction, errors, messages
+from dist_zero.node.io.kids import DataNodeKids
 
 from . import helpers
 
@@ -21,8 +22,12 @@ class AddLeaf(transaction.ParticipantRole):
         self._parent, AddLeafParent,
         dict(
             kid=controller.new_handle(self._parent['id']),
-            kid_summary=controller.node._kid_summary_message(),
-        ))
+            kid_summary=messages.io.kid_summary(
+                size=0, n_kids=0, height=0, messages_per_second=0, availability=controller.node._leaf_availability)))
+
+    leaf_key, _sender_id = await controller.listen(type='set_leaf_key')
+    # Leaves have None as their interval's stop coordinate
+    controller.node._kids = DataNodeKids(leaf_key['key'], None, controller=controller.node._controller)
 
 
 class AddLeafParent(transaction.ParticipantRole):
@@ -43,8 +48,9 @@ class AddLeafParent(transaction.ParticipantRole):
     kid = controller.role_handle_to_node_handle(self._kid)
     controller.node._updated_summary = True
 
-    controller.node._kids[kid['id']] = kid
-    controller.node._kid_summaries[kid['id']] = self._kid_summary
+    key = controller.node._kids.new_kid_key()
+    controller.node._kids.add_kid(kid=kid, interval=[key, None], summary=self._kid_summary)
+    controller.send(self._kid, messages.io.set_leaf_key(key=key))
 
     if controller.node._exporter is not None:
       controller.node.send(

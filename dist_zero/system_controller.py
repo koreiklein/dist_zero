@@ -6,7 +6,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 
 import dist_zero.logging
 
-from dist_zero import machine, settings, errors, messages, spawners, transport, transaction, ids
+from dist_zero import machine, settings, errors, messages, spawners, transport, transaction, ids, intervals
 
 
 class SystemController(object):
@@ -56,6 +56,9 @@ class SystemController(object):
     else:
       self._add_node_machine_mapping(adjacent_handle)
       return adjacent_handle['id']
+
+  def get_interval(self, node_id):
+    return intervals.parse_interval(self.send_api_message(node_id, messages.machine.get_interval()))
 
   def get_kids(self, node_id):
     result = self.send_api_message(node_id, messages.machine.get_kids())

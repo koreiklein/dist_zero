@@ -65,9 +65,10 @@ class SendStartSubscription(transaction.ParticipantRole):
     self._target_height -= 1
 
   async def _subscribe_to_same_height_target(self, controller):
-    self._kid_ids = list(controller.node._kids.keys())
-    for kid in controller.node._kids.values():
-      controller.enlist(kid, SendStartSubscription, dict(parent=controller.new_handle(kid['id'])))
+    self._kid_ids = list(controller.node._kids)
+    for kid_id in self._kid_ids:
+      controller.enlist(controller.node._kids[kid_id], SendStartSubscription,
+                        dict(parent=controller.new_handle(kid_id)))
 
     self._kid_roles = {}
     while len(self._kid_roles) < len(self._kid_ids):

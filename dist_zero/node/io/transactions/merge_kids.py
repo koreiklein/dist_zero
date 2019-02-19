@@ -1,4 +1,4 @@
-from dist_zero import transaction, messages
+from dist_zero import transaction, messages, errors
 
 from . import helpers
 
@@ -24,7 +24,7 @@ class MergeKids(transaction.OriginatorRole):
             'absorber_id': self._absorber_id,
         })
 
-    controller.enlist(controller.node._kids[self._absorber_id], helpers.Absorber,
+    controller.enlist(controller.node._kids[self._absorber_id], helpers.GrowAbsorber,
                       dict(parent=controller.new_handle(self._absorber_id)))
 
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
@@ -37,9 +37,9 @@ class MergeKids(transaction.OriginatorRole):
             absorber=controller.transfer_handle(self._absorber, self._absorbee_id)))
 
     await controller.listen(type='goodbye_parent')
-    finshed_absorbing, _sender_id = await controller.listen(type='finished_absorbing')
-    controller.node._kid_summaries[self._absorber_id] = finished_absorbing['summary']
-    controller.node._remove_kid(self._absorbee_id)
+    finished_absorbing, _sender_id = await controller.listen(type='finished_absorbing')
+    controller.node._kids.set_summary(self._absorbee_id, finished_absorbing['summary'])
+    controller.node._kids.merge_right(self._absorbee_id)
 
     controller.node._send_kid_summary()
     controller.logger.info("Finished MergeKids transaction.")
