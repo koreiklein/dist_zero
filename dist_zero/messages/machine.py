@@ -229,6 +229,11 @@ def get_kids():
   return {'type': 'get_kids'}
 
 
+def get_interval():
+  '''API message to a node to get its pair of left,right endpoints of its interval.'''
+  return {'type': 'get_interval'}
+
+
 def get_senders():
   '''API message to a node to get its dictionary of senders.'''
   return {'type': 'get_senders'}

@@ -72,6 +72,25 @@ async def test_single_node(demo):
   assert 0 == len(kids)
 
 
+def _validate_intervals(demo, node_id):
+  starts, stops = set(), set()
+  start, stop = demo.system.get_interval(node_id)
+  for kid_id in demo.system.get_kids(node_id):
+    kid_start, kid_stop = _validate_intervals(demo, kid_id)
+    assert start <= kid_start
+    assert kid_start not in starts
+    starts.add(kid_start)
+    if kid_stop == None:
+      assert kid_start <= stop
+    else:
+      assert kid_start <= kid_stop
+      assert kid_stop <= stop
+      assert kid_stop not in stops
+      stops.add(kid_stop)
+
+  return start, stop
+
+
 @pytest.mark.asyncio
 async def test_scale_unconnected_io_tree(demo):
   system_config = messages.machine.std_system_config()
@@ -117,6 +136,7 @@ async def test_scale_unconnected_io_tree(demo):
   await demo.run_for(ms=6000)
 
   assert 4 == demo.system.get_capacity(root_input_node_id)['height']
+  _validate_intervals(demo, root_input_node_id)
 
   for i in range(27):
     demo.system.kill_node(leaf_ids.pop())

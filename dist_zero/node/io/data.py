@@ -407,6 +407,8 @@ class DataNode(Node):
       return self._get_capacity()
     elif message['type'] == 'get_kids':
       return {kid_id: self._kids[kid_id] for kid_id in self._kids}
+    elif message['type'] == 'get_interval':
+      return self._interval_json()
     elif message['type'] == 'get_senders':
       if self._importer is None:
         return {}
