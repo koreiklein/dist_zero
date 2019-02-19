@@ -1,7 +1,7 @@
 import pytest
 
 import dist_zero.ids
-from dist_zero import messages, types, errors
+from dist_zero import messages, types, errors, intervals
 from dist_zero.recorded import RecordedUser
 
 from .common import Utils
@@ -137,6 +137,9 @@ async def test_scale_unconnected_io_tree(demo):
 
   assert 4 == demo.system.get_capacity(root_input_node_id)['height']
   _validate_intervals(demo, root_input_node_id)
+  root_start, root_stop = demo.system.get_interval(root_input_node_id)
+  assert intervals.Min == root_start
+  assert intervals.Max == root_stop
 
   for i in range(27):
     demo.system.kill_node(leaf_ids.pop())
