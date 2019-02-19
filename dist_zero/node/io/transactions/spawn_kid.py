@@ -4,6 +4,8 @@ from . import helpers
 
 
 class SpawnKid(transaction.OriginatorRole):
+  '''Spawn the unique kid of a newly started interval `DataNode`.'''
+
   def __init__(self, send_summary=True, force=False):
     self._send_summary = send_summary
     self._force = force
@@ -12,7 +14,7 @@ class SpawnKid(transaction.OriginatorRole):
     if controller.node._height == 0:
       raise errors.InternalError("height 0 DataNode instances can not spawn kids")
 
-    if controller.node._kids:
+    if controller.node._data_node_kids:
       # Should have used SplitKid instead
       raise errors.InternalError("DataNode with existing kids should not run a SpawnKid transaction.")
 
@@ -35,13 +37,14 @@ class SpawnKid(transaction.OriginatorRole):
 
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     if hello_parent['kid_summary']:
-      controller.node._kid_summaries[node_id] = hello_parent['kid_summary']
+      summary = hello_parent['kid_summary']
     else:
-      controller.node._kid_summaries[node_id] = messages.io.kid_summary(
+      summary = messages.io.kid_summary(
           size=0, n_kids=0, availability=controller.node._leaf_availability * controller.node._kid_capacity_limit)
-    controller.node._kids[node_id] = controller.role_handle_to_node_handle(hello_parent['kid'])
-    controller.node._kid_to_interval[node_id] = list(controller.node._interval)
-    controller.node._kid_intervals.add([controller.node._interval[0], controller.node._interval[1], node_id])
+    controller.node._data_node_kids.add_kid(
+        kid=controller.role_handle_to_node_handle(hello_parent['kid']),
+        interval=controller.node._interval(),
+        summary=summary)
     if self._send_summary:
       controller.node._send_kid_summary()
 

@@ -28,8 +28,8 @@ class Monitor(object):
     self._check_for_consumable_proxy(ms)
 
   def out_of_capacity(self):
-    total_kid_capacity = sum(
-        self._node._kid_capacity_limit - kid_summary['size'] for kid_summary in self._node._kid_summaries.values())
+    total_kid_capacity = sum(self._node._kid_capacity_limit - kid_summary['size']
+                             for kid_summary in self._node._data_node_kids.summaries.values())
 
     if total_kid_capacity <= self._node.system_config['TOTAL_KID_CAPACITY_TRIGGER']:
       return True
@@ -41,11 +41,11 @@ class Monitor(object):
     if self._node._height <= 1:
       return # Nodes of height <= 1 never address low capacity themselves
 
-    if set(self._node._kid_summaries.keys()) < set(self._node._kids.keys()):
+    if set(self._node._data_node_kids.summaries.keys()) < set(self._node._data_node_kids):
       return # Wait till we have summaries for all our kids
 
     if self.out_of_capacity():
-      if len(self._node._kids) < self._node.system_config['DATA_NODE_KIDS_LIMIT']:
+      if len(self._node._data_node_kids) < self._node.system_config['DATA_NODE_KIDS_LIMIT']:
         self._spawn_kid()
       else:
         if self._node._parent is None:
@@ -62,7 +62,7 @@ class Monitor(object):
   def _spawn_kid(self):
     best_kid_id = None
     fitness = 0
-    for kid_id, summary in self._node._kid_summaries.items():
+    for kid_id, summary in self._node._data_node_kids.summaries.items():
       kid_fitness = summary['n_kids'] # The more kids, the fitter for splitting.
       if kid_fitness >= fitness:
         fitness = kid_fitness

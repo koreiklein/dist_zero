@@ -1,4 +1,5 @@
 from dist_zero import transaction, messages, infinity, errors
+from dist_zero.node.io.kids import DataNodeKids
 
 from . import helpers
 
@@ -23,23 +24,19 @@ class ConsumeProxy(transaction.OriginatorRole):
     absorb_these_kids, _sender_id = await controller.listen(type='absorb_these_kids')
     kid_ids = set(absorb_these_kids['kid_ids'])
 
-    controller.node._initialize_kid_intervals()
-    controller.node._kid_to_interval = {}
+    controller.node._data_node_kids.clear()
 
     while kid_ids:
       hello_parent, kid_id = await controller.listen(type='hello_parent')
-      start, stop = infinity.parse_interval(hello_parent['interval'])
-      controller.node._kid_to_interval[kid_id] = [start, stop]
-      controller.node._kid_intervals.add([start, stop, kid_id])
+      controller.node._data_node_kids.add_kid(
+          kid=controller.role_handle_to_node_handle(hello_parent['kid']),
+          interval=infinity.parse_interval(hello_parent['interval']),
+          summary=hello_parent['kid_summary'])
       kid_ids.remove(kid_id)
-      controller.node._kids[kid_id] = controller.role_handle_to_node_handle(hello_parent['kid'])
-      if hello_parent['kid_summary']:
-        controller.node._kid_summaries[kid_id] = hello_parent['kid_summary']
 
     await controller.listen(type='goodbye_parent')
 
     controller.node._height -= 1
-    controller.node._remove_kid(proxy['id'])
     controller.logger.info(
         "Finished ConsumeProxy transaction.", extra={
             'proxy_id': proxy['id'],

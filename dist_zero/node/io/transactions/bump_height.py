@@ -23,21 +23,19 @@ class BumpHeight(transaction.OriginatorRole):
         height=controller.node._height)
 
     controller.spawn_enlist(
-        proxy_config, helpers.Absorber,
-        dict(parent=controller.new_handle(self.proxy_id), interval=infinity.interval_json(controller.node._interval)))
+        proxy_config, helpers.NewAbsorber,
+        dict(parent=controller.new_handle(self.proxy_id), interval=controller.node._interval_json()))
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     proxy = hello_parent['kid']
 
-    kids_to_absorb = list(controller.node._kids.keys())
+    kids_to_absorb = list(controller.node._data_node_kids)
     controller.send(
-        proxy,
-        messages.io.absorb_these_kids(
-            kid_ids=kids_to_absorb, left_endpoint=infinity.key_to_json(controller.node._interval[0])))
+        proxy, messages.io.absorb_these_kids(kid_ids=kids_to_absorb, left_endpoint=controller.node._interval_json()[0]))
 
     kid_ids = set(kids_to_absorb)
     for kid_id in kids_to_absorb:
       controller.enlist(
-          controller.node._kids[kid_id], helpers.FosterChild,
+          controller.node._data_node_kids[kid_id], helpers.FosterChild,
           dict(old_parent=controller.new_handle(kid_id), new_parent=controller.transfer_handle(proxy, kid_id)))
 
     while kid_ids:
@@ -51,13 +49,10 @@ class BumpHeight(transaction.OriginatorRole):
     # Restore node state
 
     controller.node._height += 1
-    controller.node._kids = {proxy['id']: proxy_node}
-    controller.node._kid_summaries = {}
-    controller.node._kid_summaries[proxy['id']] = finished_absorbing['summary']
-    proxy_interval = list(controller.node._interval)
-    controller.node._kid_to_interval = {proxy['id']: proxy_interval}
-    controller.node._initialize_kid_intervals()
-    controller.node._kid_intervals.add([proxy_interval[0], proxy_interval[1], proxy['id']])
+    interval = controller.node._interval()
+    controller.node._data_node_kids.clear()
+    controller.node._data_node_kids.add_kid(kid=proxy_node, interval=interval, summary=finished_absorbing['summary'])
+
     controller.node._graph = NetworkGraph()
     controller.node._graph.add_node(proxy['id'])
     if controller.node._adjacent is not None:

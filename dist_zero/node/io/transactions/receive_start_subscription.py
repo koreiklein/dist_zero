@@ -15,11 +15,6 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
         messages.io.hello_parent(
             kid=controller.new_handle(self._requester['id']), kid_summary=controller.node._kid_summary_message()))
 
-    await ReceiveStartSubscriptionHelper().run(controller)
-
-
-class ReceiveStartSubscriptionHelper(transaction.ParticipantRole):
-  async def run(self, controller: 'TransactionRoleController'):
     start_subscription, _sender_id = await controller.listen(type='start_subscription')
     subscriber = start_subscription['subscriber']
     while start_subscription['height'] > controller.node._height:
@@ -36,11 +31,18 @@ class ReceiveStartSubscriptionHelper(transaction.ParticipantRole):
       start_subscription, _sender_id = await controller.listen(type='start_subscription') # It will come from proxy
       subscriber = start_subscription['subscriber']
 
-    kids = list(controller.node._kids.values())
-    for kid in kids:
-      controller.enlist(kid, ReceiveStartSubscriptionHelper, {})
+    kid_ids = set(controller.node._data_node_kids)
+    for kid_id in kid_ids:
+      kid = controller.node._data_node_kids[kid_id]
+      controller.enlist(kid, ReceiveStartSubscription, {})
 
-    controller.send(subscriber, messages.link.subscription_started(leftmost_kids=kids))
+    leftmost_kids = []
+    while kid_ids:
+      hello_parent, kid_id = await controller.listen(type='hello_parent')
+      kid_ids.remove(kid_id)
+      leftmost_kids.append(controller.transfer_handle(hello_parent['kid'], subscriber['id']))
+
+    controller.send(subscriber, messages.link.subscription_started(leftmost_kids=leftmost_kids))
 
     await controller.listen(type='subscription_edges')
     # We don't actually need to do anything with these edges and only listen for this

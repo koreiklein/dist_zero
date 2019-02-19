@@ -1,4 +1,5 @@
 from dist_zero import transaction, messages, errors, infinity
+from dist_zero.node.io.kids import DataNodeKids
 
 from .spawn_kid import SpawnKid
 
@@ -10,9 +11,10 @@ class StartDataNode(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     controller.node._parent = controller.role_handle_to_node_handle(self._parent)
-    controller.node._set_interval(self._interval_json)
+    controller.node._data_node_kids = DataNodeKids(
+        *infinity.parse_interval(self._interval_json), controller=controller.node._controller)
 
-    if controller.node._height > 1 and len(controller.node._kids) == 0:
+    if controller.node._height > 1:
       # In this case, this node should start with at least one kid.
       # Include the logic of a SpawnKid transaction as part of this transaction.
       controller.logger.info("Starting a new data node with a single kid.")
@@ -28,39 +30,42 @@ class StartDataNode(transaction.ParticipantRole):
             interval=self._interval_json))
 
 
-class Absorber(transaction.ParticipantRole):
-  '''Adopt all the kids from another role.'''
+class NewAbsorber(transaction.ParticipantRole):
+  '''Like `GrowAbsorber`, but for starting up a new node.'''
 
   def __init__(self, parent, interval=None):
     self.parent = parent
     self.interval = interval
 
   async def run(self, controller: 'TransactionRoleController'):
-    if self.interval is not None:
-      controller.node._interval = infinity.parse_interval(self.interval)
+    controller.node._data_node_kids = DataNodeKids(
+        *infinity.parse_interval(self.interval), controller=controller.node._controller)
+    await GrowAbsorber(parent=self.parent).run(controller)
 
+
+class GrowAbsorber(transaction.ParticipantRole):
+  '''Adopt all the kids from another role.'''
+
+  def __init__(self, parent):
+    self.parent = parent
+
+  async def run(self, controller: 'TransactionRoleController'):
     controller.send(
         self.parent,
         messages.io.hello_parent(
             controller.new_handle(self.parent['id']), kid_summary=controller.node._kid_summary_message()))
 
     absorb_these_kids, _sender_id = await controller.listen(type='absorb_these_kids')
+    controller.node._data_node_kids.grow_left(infinity.json_to_key(absorb_these_kids['left_endpoint']))
     kid_ids = set(absorb_these_kids['kid_ids'])
 
     while kid_ids:
       hello_parent, kid_id = await controller.listen(type='hello_parent')
-      if 'interval' not in hello_parent:
-        raise errors.InternalError("Each new kid must send its interval to Absorber.")
-
       kid_ids.remove(kid_id)
-      controller.node._kids[kid_id] = controller.role_handle_to_node_handle(hello_parent['kid'])
-      interval = infinity.parse_interval(hello_parent['interval'])
-      controller.node._kid_to_interval[kid_id] = interval
-      controller.node._kid_intervals.add([interval[0], interval[1], kid_id])
-      if hello_parent['kid_summary']:
-        controller.node._kid_summaries[kid_id] = hello_parent['kid_summary']
-
-    controller.node._interval[0] = infinity.json_to_key(absorb_these_kids['left_endpoint'])
+      controller.node._data_node_kids.add_kid(
+          kid=controller.role_handle_to_node_handle(hello_parent['kid']),
+          interval=infinity.parse_interval(hello_parent['interval']),
+          summary=hello_parent['kid_summary'])
 
     controller.send(
         self.parent,
@@ -84,15 +89,12 @@ class Absorbee(transaction.ParticipantRole):
     controller.send(
         self.absorber,
         messages.io.absorb_these_kids(
-            kid_ids=list(controller.node._kids.keys()),
-            left_endpoint=infinity.key_to_json(controller.node._interval[0])))
-    for kid in controller.node._kids.values():
-      kid_ids.add(kid['id'])
+            kid_ids=list(controller.node._data_node_kids), left_endpoint=controller.node._interval_json()[0]))
+    for kid_id in controller.node._data_node_kids:
+      kid_ids.add(kid_id)
       controller.enlist(
-          kid, FosterChild,
-          dict(
-              old_parent=controller.new_handle(kid['id']),
-              new_parent=controller.transfer_handle(self.absorber, kid['id'])))
+          controller.node._data_node_kids[kid_id], FosterChild,
+          dict(old_parent=controller.new_handle(kid_id), new_parent=controller.transfer_handle(self.absorber, kid_id)))
 
     while kid_ids:
       _goodbye_parent, kid_id = await controller.listen(type='goodbye_parent')

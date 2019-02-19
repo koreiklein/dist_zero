@@ -230,6 +230,7 @@ class Node(object):
     self._start_role_eventually(role, controller)
 
   def _start_role_eventually(self, role, controller):
+    self.logger.info("Equeueing role {role_name}", extra={'role_name': role.__class__.__name__})
     self._transaction_role_queue.append((role, controller))
     if len(self._transaction_role_queue) == 1:
       # No coroutine is running transactions (the queue used to be empty), we need to create one
