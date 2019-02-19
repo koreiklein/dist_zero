@@ -1,4 +1,4 @@
-from dist_zero import transaction, messages, infinity, errors
+from dist_zero import transaction, messages, intervals, errors
 from dist_zero.node.io.kids import DataNodeKids
 
 from . import helpers
@@ -30,7 +30,7 @@ class ConsumeProxy(transaction.OriginatorRole):
       hello_parent, kid_id = await controller.listen(type='hello_parent')
       controller.node._kids.add_kid(
           kid=controller.role_handle_to_node_handle(hello_parent['kid']),
-          interval=infinity.parse_interval(hello_parent['interval']),
+          interval=intervals.parse_interval(hello_parent['interval']),
           summary=hello_parent['kid_summary'])
       kid_ids.remove(kid_id)
 

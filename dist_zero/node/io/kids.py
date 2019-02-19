@@ -1,5 +1,5 @@
 import blist
-from dist_zero import errors, infinity
+from dist_zero import errors, intervals
 
 
 class DataNodeKids(object):
@@ -73,7 +73,7 @@ class DataNodeKids(object):
       self._summaries[kid_id] = summary
 
   def interval_json(self):
-    return infinity.interval_json(self._interval)
+    return intervals.interval_json(self._interval)
 
   def interval(self):
     return list(self._interval)
@@ -158,8 +158,8 @@ class DataNodeKids(object):
     return self._right
 
   def _random_key(self):
-    left = 0.0 if self._left == infinity.Min else self._left
-    right = 1.0 if self._right == infinity.Max else self._right
+    left = 0.0 if self._left == intervals.Min else self._left
+    right = 1.0 if self._right == intervals.Max else self._right
     return self._controller.random.uniform(left, right)
 
   def _truncate_interval_right(self):

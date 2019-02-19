@@ -1,6 +1,6 @@
 import blist
 
-from dist_zero import transaction, messages, ids, errors, infinity
+from dist_zero import transaction, messages, ids, errors
 from dist_zero.network_graph import NetworkGraph
 
 from . import helpers

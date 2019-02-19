@@ -1,7 +1,7 @@
 import logging
 
 from dist_zero import settings, messages, errors, recorded, \
-    importer, exporter, misc, ids, transaction, message_rate_tracker, infinity
+    importer, exporter, misc, ids, transaction, message_rate_tracker
 from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
 from dist_zero.node.io import leaf_html

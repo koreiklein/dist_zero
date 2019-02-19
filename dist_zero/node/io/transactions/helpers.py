@@ -1,4 +1,4 @@
-from dist_zero import transaction, messages, errors, infinity
+from dist_zero import transaction, messages, errors, intervals
 from dist_zero.node.io.kids import DataNodeKids
 
 from .spawn_kid import SpawnKid
@@ -12,7 +12,7 @@ class StartDataNode(transaction.ParticipantRole):
   async def run(self, controller: 'TransactionRoleController'):
     controller.node._parent = controller.role_handle_to_node_handle(self._parent)
     controller.node._kids = DataNodeKids(
-        *infinity.parse_interval(self._interval_json), controller=controller.node._controller)
+        *intervals.parse_interval(self._interval_json), controller=controller.node._controller)
 
     if controller.node._height > 1:
       # In this case, this node should start with at least one kid.
@@ -39,7 +39,7 @@ class NewAbsorber(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     controller.node._kids = DataNodeKids(
-        *infinity.parse_interval(self.interval), controller=controller.node._controller)
+        *intervals.parse_interval(self.interval), controller=controller.node._controller)
     await GrowAbsorber(parent=self.parent).run(controller)
 
 
@@ -56,7 +56,7 @@ class GrowAbsorber(transaction.ParticipantRole):
             controller.new_handle(self.parent['id']), kid_summary=controller.node._kid_summary_message()))
 
     absorb_these_kids, _sender_id = await controller.listen(type='absorb_these_kids')
-    controller.node._kids.grow_left(infinity.json_to_key(absorb_these_kids['left_endpoint']))
+    controller.node._kids.grow_left(intervals.json_to_key(absorb_these_kids['left_endpoint']))
     kid_ids = set(absorb_these_kids['kid_ids'])
 
     while kid_ids:
@@ -64,7 +64,7 @@ class GrowAbsorber(transaction.ParticipantRole):
       kid_ids.remove(kid_id)
       controller.node._kids.add_kid(
           kid=controller.role_handle_to_node_handle(hello_parent['kid']),
-          interval=infinity.parse_interval(hello_parent['interval']),
+          interval=intervals.parse_interval(hello_parent['interval']),
           summary=hello_parent['kid_summary'])
 
     controller.send(

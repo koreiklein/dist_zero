@@ -129,7 +129,7 @@ def absorb_these_kids(kid_ids, left_endpoint):
 
   :param list[str] kid_ids: The ids of the kids that the `Absorber` must adopt before its role in the transaction is finished.
   :param left_endpoint: The leftmost endpoint of the interval the absorbed kids cover.  
-  :type left_endpoint: float or `infinity.Min`
+  :type left_endpoint: float or `intervals.Min`
   '''
   return {'type': 'absorb_these_kids', 'kid_ids': kid_ids, 'left_endpoint': left_endpoint}
 

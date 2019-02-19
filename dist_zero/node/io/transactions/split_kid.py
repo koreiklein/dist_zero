@@ -1,4 +1,4 @@
-from dist_zero import transaction, messages, ids, errors, infinity
+from dist_zero import transaction, messages, ids, errors, intervals
 
 from . import helpers
 
@@ -34,7 +34,7 @@ class SplitKid(transaction.OriginatorRole):
         dict(
             parent=controller.new_handle(new_id),
             # Start with an empty interval, the left side will grow to the left
-            interval=infinity.interval_json([old_kid_stop, old_kid_stop])))
+            interval=intervals.interval_json([old_kid_stop, old_kid_stop])))
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     new = hello_parent['kid']
 
@@ -46,7 +46,7 @@ class SplitKid(transaction.OriginatorRole):
         ))
 
     finished_absorbing, sender_id = await controller.listen(type='finished_absorbing')
-    start, stop = infinity.parse_interval(finished_absorbing['new_interval'])
+    start, stop = intervals.parse_interval(finished_absorbing['new_interval'])
     controller.node._kids.set_summary(sender_id, finished_absorbing['summary'])
 
     finished_splitting, sender_id = await controller.listen(type='finished_splitting')
@@ -69,7 +69,7 @@ class SplitNode(transaction.ParticipantRole):
     leaving_kid_ids = [kid['id'] for kid in leaving_kids]
 
     controller.send(self._absorber,
-                    messages.io.absorb_these_kids(kid_ids=leaving_kid_ids, left_endpoint=infinity.key_to_json(mid)))
+                    messages.io.absorb_these_kids(kid_ids=leaving_kid_ids, left_endpoint=intervals.key_to_json(mid)))
 
     for kid in leaving_kids:
       controller.enlist(
