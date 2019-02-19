@@ -13,13 +13,13 @@ class SplitKid(transaction.OriginatorRole):
     if controller.node._height == 0:
       raise errors.InternalError("height 0 DataNode instances can not split their kids")
 
-    self._kid = controller.node._data_node_kids.get(self._kid_id, None)
+    self._kid = controller.node._kids.get(self._kid_id, None)
     if self._kid is None:
       controller.logger.info(
           "Canceling SplitKid transaction because the kid was not present when the transaction started.")
       return
 
-    old_kid_stop = controller.node._data_node_kids.right_endpoint(self._kid_id)
+    old_kid_stop = controller.node._kids.right_endpoint(self._kid_id)
 
     new_id = ids.new_id('DataNode')
     node_config = messages.io.data_node_config(
@@ -47,10 +47,10 @@ class SplitKid(transaction.OriginatorRole):
 
     finished_absorbing, sender_id = await controller.listen(type='finished_absorbing')
     start, stop = infinity.parse_interval(finished_absorbing['new_interval'])
-    controller.node._data_node_kids.set_summary(sender_id, finished_absorbing['summary'])
+    controller.node._kids.set_summary(sender_id, finished_absorbing['summary'])
 
     finished_splitting, sender_id = await controller.listen(type='finished_splitting')
-    controller.node._data_node_kids.split(
+    controller.node._kids.split(
         kid_id=self._kid_id,
         mid=start,
         new_kid=controller.role_handle_to_node_handle(new),
@@ -65,7 +65,7 @@ class SplitNode(transaction.ParticipantRole):
   async def run(self, controller: 'TransactionRoleController'):
     if controller.node._height == 0 and controller.node._leaf_config['interval_type'] != 'interval':
       raise errors.InternalError(f"Unable to split a height 0 Node with interval_type \"{interval_type}\" != interval")
-    mid, leaving_kids = controller.node._data_node_kids.shrink_right()
+    mid, leaving_kids = controller.node._kids.shrink_right()
     leaving_kid_ids = [kid['id'] for kid in leaving_kids]
 
     controller.send(self._absorber,

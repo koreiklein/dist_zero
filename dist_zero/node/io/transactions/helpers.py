@@ -11,7 +11,7 @@ class StartDataNode(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     controller.node._parent = controller.role_handle_to_node_handle(self._parent)
-    controller.node._data_node_kids = DataNodeKids(
+    controller.node._kids = DataNodeKids(
         *infinity.parse_interval(self._interval_json), controller=controller.node._controller)
 
     if controller.node._height > 1:
@@ -38,7 +38,7 @@ class NewAbsorber(transaction.ParticipantRole):
     self.interval = interval
 
   async def run(self, controller: 'TransactionRoleController'):
-    controller.node._data_node_kids = DataNodeKids(
+    controller.node._kids = DataNodeKids(
         *infinity.parse_interval(self.interval), controller=controller.node._controller)
     await GrowAbsorber(parent=self.parent).run(controller)
 
@@ -56,13 +56,13 @@ class GrowAbsorber(transaction.ParticipantRole):
             controller.new_handle(self.parent['id']), kid_summary=controller.node._kid_summary_message()))
 
     absorb_these_kids, _sender_id = await controller.listen(type='absorb_these_kids')
-    controller.node._data_node_kids.grow_left(infinity.json_to_key(absorb_these_kids['left_endpoint']))
+    controller.node._kids.grow_left(infinity.json_to_key(absorb_these_kids['left_endpoint']))
     kid_ids = set(absorb_these_kids['kid_ids'])
 
     while kid_ids:
       hello_parent, kid_id = await controller.listen(type='hello_parent')
       kid_ids.remove(kid_id)
-      controller.node._data_node_kids.add_kid(
+      controller.node._kids.add_kid(
           kid=controller.role_handle_to_node_handle(hello_parent['kid']),
           interval=infinity.parse_interval(hello_parent['interval']),
           summary=hello_parent['kid_summary'])
@@ -89,11 +89,11 @@ class Absorbee(transaction.ParticipantRole):
     controller.send(
         self.absorber,
         messages.io.absorb_these_kids(
-            kid_ids=list(controller.node._data_node_kids), left_endpoint=controller.node._interval_json()[0]))
-    for kid_id in controller.node._data_node_kids:
+            kid_ids=list(controller.node._kids), left_endpoint=controller.node._interval_json()[0]))
+    for kid_id in controller.node._kids:
       kid_ids.add(kid_id)
       controller.enlist(
-          controller.node._data_node_kids[kid_id], FosterChild,
+          controller.node._kids[kid_id], FosterChild,
           dict(old_parent=controller.new_handle(kid_id), new_parent=controller.transfer_handle(self.absorber, kid_id)))
 
     while kid_ids:

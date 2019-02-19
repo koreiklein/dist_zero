@@ -31,9 +31,9 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
       start_subscription, _sender_id = await controller.listen(type='start_subscription') # It will come from proxy
       subscriber = start_subscription['subscriber']
 
-    kid_ids = set(controller.node._data_node_kids)
+    kid_ids = set(controller.node._kids)
     for kid_id in kid_ids:
-      kid = controller.node._data_node_kids[kid_id]
+      kid = controller.node._kids[kid_id]
       controller.enlist(kid, ReceiveStartSubscription, {})
 
     leftmost_kids = []

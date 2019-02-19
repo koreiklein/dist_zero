@@ -24,11 +24,11 @@ class ConsumeProxy(transaction.OriginatorRole):
     absorb_these_kids, _sender_id = await controller.listen(type='absorb_these_kids')
     kid_ids = set(absorb_these_kids['kid_ids'])
 
-    controller.node._data_node_kids.clear()
+    controller.node._kids.clear()
 
     while kid_ids:
       hello_parent, kid_id = await controller.listen(type='hello_parent')
-      controller.node._data_node_kids.add_kid(
+      controller.node._kids.add_kid(
           kid=controller.role_handle_to_node_handle(hello_parent['kid']),
           interval=infinity.parse_interval(hello_parent['interval']),
           summary=hello_parent['kid_summary'])

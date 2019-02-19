@@ -14,7 +14,7 @@ class SpawnKid(transaction.OriginatorRole):
     if controller.node._height == 0:
       raise errors.InternalError("height 0 DataNode instances can not spawn kids")
 
-    if controller.node._data_node_kids:
+    if controller.node._kids:
       # Should have used SplitKid instead
       raise errors.InternalError("DataNode with existing kids should not run a SpawnKid transaction.")
 
@@ -41,7 +41,7 @@ class SpawnKid(transaction.OriginatorRole):
     else:
       summary = messages.io.kid_summary(
           size=0, n_kids=0, availability=controller.node._leaf_availability * controller.node._kid_capacity_limit)
-    controller.node._data_node_kids.add_kid(
+    controller.node._kids.add_kid(
         kid=controller.role_handle_to_node_handle(hello_parent['kid']),
         interval=controller.node._interval(),
         summary=summary)

@@ -27,7 +27,7 @@ class AddLeaf(transaction.ParticipantRole):
 
     leaf_key, _sender_id = await controller.listen(type='set_leaf_key')
     # Leaves have None as their interval's stop coordinate
-    controller.node._data_node_kids = DataNodeKids(leaf_key['key'], None, controller=controller.node._controller)
+    controller.node._kids = DataNodeKids(leaf_key['key'], None, controller=controller.node._controller)
 
 
 class AddLeafParent(transaction.ParticipantRole):
@@ -48,8 +48,8 @@ class AddLeafParent(transaction.ParticipantRole):
     kid = controller.role_handle_to_node_handle(self._kid)
     controller.node._updated_summary = True
 
-    key = controller.node._data_node_kids.new_kid_key()
-    controller.node._data_node_kids.add_kid(kid=kid, interval=[key, None], summary=self._kid_summary)
+    key = controller.node._kids.new_kid_key()
+    controller.node._kids.add_kid(kid=kid, interval=[key, None], summary=self._kid_summary)
     controller.send(self._kid, messages.io.set_leaf_key(key=key))
 
     if controller.node._exporter is not None:

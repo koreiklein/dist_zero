@@ -9,7 +9,7 @@ class RemoveLeaf(transaction.OriginatorRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     controller.node._updated_summary = True
-    if self._kid_id in controller.node._data_node_kids:
-      controller.node._data_node_kids.remove_kid(self._kid_id)
+    if self._kid_id in controller.node._kids:
+      controller.node._kids.remove_kid(self._kid_id)
 
     controller.node._send_kid_summary()

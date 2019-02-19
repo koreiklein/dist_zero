@@ -48,11 +48,11 @@ class DataNode(Node):
 
     self.id = node_id
 
-    # The role to start this node should initialize _data_node_kids
+    # The role to start this node should initialize _kids
     # Giving the interval this node is responsible for.
     # Leaf nodes with an interval_type of 'point' are identified only by their left coordinate,
     # their right interval coordinate will always be None
-    self._data_node_kids = None
+    self._kids = None
 
     if self._height == 0:
       self._message_rate_tracker = message_rate_tracker.MessageRateTracker()
@@ -179,14 +179,13 @@ class DataNode(Node):
 
     :return: None if no 2 kids are mergable.  Otherwise, a pair of the ids of two mergeable kids.
     '''
-    ordered_kid_ids = list(self._data_node_kids)
+    ordered_kid_ids = list(self._kids)
     best_pair = None
     least_total_kids = None
     for left_id, right_id in zip(ordered_kid_ids, ordered_kid_ids[1:]):
       if left_id not in do_not_use_ids and right_id not in do_not_use_ids:
         if self._kids_are_mergeable(left_id, right_id):
-          total_kids = self._data_node_kids.summaries[left_id]['n_kids'] + self._data_node_kids.summaries[right_id][
-              'n_kids']
+          total_kids = self._kids.summaries[left_id]['n_kids'] + self._kids.summaries[right_id]['n_kids']
           if best_pair is None or total_kids < least_total_kids:
             best_pair = (left_id, right_id)
             least_total_kids = total_kids
@@ -194,9 +193,9 @@ class DataNode(Node):
     return best_pair
 
   def _kids_are_mergeable(self, left_id, right_id):
-    return left_id in self._data_node_kids.summaries and right_id in self._data_node_kids.summaries and \
-        self._data_node_kids.summaries[left_id]['n_kids'] <= self.MERGEABLE_N_KIDS_FIRST and \
-        self._data_node_kids.summaries[right_id]['n_kids'] <= self.MERGEABLE_N_KIDS_SECOND
+    return left_id in self._kids.summaries and right_id in self._kids.summaries and \
+        self._kids.summaries[left_id]['n_kids'] <= self.MERGEABLE_N_KIDS_FIRST and \
+        self._kids.summaries[right_id]['n_kids'] <= self.MERGEABLE_N_KIDS_SECOND
 
   def _terminate(self):
     self._stop_checking_limits()
@@ -211,9 +210,9 @@ class DataNode(Node):
     elif message['type'] == 'goodbye_parent':
       self.start_transaction_eventually(remove_leaf.RemoveLeaf(kid_id=sender_id))
     elif message['type'] == 'kid_summary':
-      if sender_id in self._data_node_kids:
-        if message != self._data_node_kids.summaries.get(sender_id, None):
-          self._data_node_kids.set_summary(sender_id, message)
+      if sender_id in self._kids:
+        if message != self._kids.summaries.get(sender_id, None):
+          self._kids.set_summary(sender_id, message)
           if self._monitor.out_of_capacity():
             # These updates should be propogated immediately.
             self._send_kid_summary()
@@ -262,22 +261,22 @@ class DataNode(Node):
     self.linker.elapse(ms)
 
   def _interval_json(self):
-    return self._data_node_kids.interval_json()
+    return self._kids.interval_json()
 
   def _interval(self):
-    return self._data_node_kids.interval()
+    return self._kids.interval()
 
   def _estimated_messages_per_second(self):
     if self._height == 0:
       return self._message_rate_tracker.estimate_rate_hz(self.linker.now_ms)
     else:
-      return sum(kid_summary['messages_per_second'] for kid_summary in self._data_node_kids.summaries.values())
+      return sum(kid_summary['messages_per_second'] for kid_summary in self._kids.summaries.values())
 
   def _kid_summary_message(self):
     return messages.io.kid_summary(
-        size=(sum(kid_summary['size'] for kid_summary in self._data_node_kids.summaries.values())
-              if self._height > 1 else len(self._data_node_kids)),
-        n_kids=len(self._data_node_kids),
+        size=(sum(kid_summary['size']
+                  for kid_summary in self._kids.summaries.values()) if self._height > 1 else len(self._kids)),
+        n_kids=len(self._kids),
         height=self._height,
         messages_per_second=self._estimated_messages_per_second(),
         availability=self.availability())
@@ -306,16 +305,16 @@ class DataNode(Node):
       # FIXME(KK): Remove availability based on how many nodes are sending to self.
       return self._leaf_availability
     else:
-      from_spawned_kids = sum(kid_summary['availability'] for kid_summary in self._data_node_kids.summaries.values())
+      from_spawned_kids = sum(kid_summary['availability'] for kid_summary in self._kids.summaries.values())
       from_space_to_spawn_new_kids = self._leaf_availability * self._kid_capacity_limit * (
-          self._branching_factor - len(self._data_node_kids.summaries))
+          self._branching_factor - len(self._kids.summaries))
       return from_spawned_kids + from_space_to_spawn_new_kids
 
   def _get_capacity(self):
     # find the best kid
     highest_capacity_kid_id, highest_capacity_kid, max_kid_capacity, size = None, None, 0, 0
     if self._height != 1:
-      for kid_id, kid_summary in self._data_node_kids.summaries.items():
+      for kid_id, kid_summary in self._kids.summaries.items():
         size += kid_summary['size']
         kid_capacity = self._kid_capacity_limit - kid_summary['size']
         if kid_capacity > max_kid_capacity:
@@ -325,7 +324,7 @@ class DataNode(Node):
         self.logger.error("No capacity exists to add a kid to this DataNode")
         raise errors.NoCapacityError()
       else:
-        highest_capacity_kid = self._data_node_kids[highest_capacity_kid_id]
+        highest_capacity_kid = self._kids[highest_capacity_kid_id]
 
     return {
         'height': self._height,
@@ -391,7 +390,7 @@ class DataNode(Node):
 
   def _get_proxy(self):
     if self._height > 2:
-      return self._data_node_kids.get_proxy()
+      return self._kids.get_proxy()
     else:
       return None
 
@@ -407,7 +406,7 @@ class DataNode(Node):
     elif message['type'] == 'get_capacity':
       return self._get_capacity()
     elif message['type'] == 'get_kids':
-      return {kid_id: self._data_node_kids[kid_id] for kid_id in self._data_node_kids}
+      return {kid_id: self._kids[kid_id] for kid_id in self._kids}
     elif message['type'] == 'get_senders':
       if self._importer is None:
         return {}
@@ -472,11 +471,11 @@ class DataNode(Node):
 class RoutingKidsListener(object):
   def __init__(self, node):
     self._node = node
-    self._kid_to_address = {node_id: None for node_id in node._data_node_kids}
+    self._kid_to_address = {node_id: None for node_id in node._kids}
 
   def start(self):
-    for node_id in self._node._data_node_kids:
-      self._node.send(self._node._data_node_kids[node_id], messages.io.routing_start(self._node._domain_name))
+    for node_id in self._node._kids:
+      self._node.send(self._node._kids[node_id], messages.io.routing_start(self._node._domain_name))
 
   def receive(self, message, sender_id):
     if message['type'] == 'routing_started':

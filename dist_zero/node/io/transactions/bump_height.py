@@ -28,14 +28,14 @@ class BumpHeight(transaction.OriginatorRole):
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     proxy = hello_parent['kid']
 
-    kids_to_absorb = list(controller.node._data_node_kids)
+    kids_to_absorb = list(controller.node._kids)
     controller.send(
         proxy, messages.io.absorb_these_kids(kid_ids=kids_to_absorb, left_endpoint=controller.node._interval_json()[0]))
 
     kid_ids = set(kids_to_absorb)
     for kid_id in kids_to_absorb:
       controller.enlist(
-          controller.node._data_node_kids[kid_id], helpers.FosterChild,
+          controller.node._kids[kid_id], helpers.FosterChild,
           dict(old_parent=controller.new_handle(kid_id), new_parent=controller.transfer_handle(proxy, kid_id)))
 
     while kid_ids:
@@ -50,8 +50,8 @@ class BumpHeight(transaction.OriginatorRole):
 
     controller.node._height += 1
     interval = controller.node._interval()
-    controller.node._data_node_kids.clear()
-    controller.node._data_node_kids.add_kid(kid=proxy_node, interval=interval, summary=finished_absorbing['summary'])
+    controller.node._kids.clear()
+    controller.node._kids.add_kid(kid=proxy_node, interval=interval, summary=finished_absorbing['summary'])
 
     controller.node._graph = NetworkGraph()
     controller.node._graph.add_node(proxy['id'])

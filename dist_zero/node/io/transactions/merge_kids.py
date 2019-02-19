@@ -24,22 +24,22 @@ class MergeKids(transaction.OriginatorRole):
             'absorber_id': self._absorber_id,
         })
 
-    controller.enlist(controller.node._data_node_kids[self._absorber_id], helpers.GrowAbsorber,
+    controller.enlist(controller.node._kids[self._absorber_id], helpers.GrowAbsorber,
                       dict(parent=controller.new_handle(self._absorber_id)))
 
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     self._absorber = hello_parent['kid']
 
     controller.enlist(
-        controller.node._data_node_kids[self._absorbee_id], helpers.Absorbee,
+        controller.node._kids[self._absorbee_id], helpers.Absorbee,
         dict(
             parent=controller.new_handle(self._absorbee_id),
             absorber=controller.transfer_handle(self._absorber, self._absorbee_id)))
 
     await controller.listen(type='goodbye_parent')
     finished_absorbing, _sender_id = await controller.listen(type='finished_absorbing')
-    controller.node._data_node_kids.set_summary(self._absorbee_id, finished_absorbing['summary'])
-    controller.node._data_node_kids.merge_right(self._absorbee_id)
+    controller.node._kids.set_summary(self._absorbee_id, finished_absorbing['summary'])
+    controller.node._kids.merge_right(self._absorbee_id)
 
     controller.node._send_kid_summary()
     controller.logger.info("Finished MergeKids transaction.")
