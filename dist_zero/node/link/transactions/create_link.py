@@ -369,11 +369,8 @@ class StartLinkNode(transaction.ParticipantRole):
 
   def _max_message_rate_per_kid(self):
     kid_height = self._node._height - 1
-    max_descendant_width = self._system_config['LINK_NODE_KIDS_WIDTH_LIMIT']**kid_height
+    max_descendant_width = self._system_config['LINK_NODE_MAX_SENDERS']**kid_height
     return StartLinkNode.MAX_MESSAGE_RATE_PER_NODE_HZ * max_descendant_width
-
-  def _partition_interval(self, interval, n_parts):
-    start, stop = interval
 
   def _validate_start_subscription_columns(self):
     cur_source_key = self._node._source_interval[0]
