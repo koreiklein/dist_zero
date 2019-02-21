@@ -59,12 +59,6 @@ class Linker(object):
       that sent_sequence_number was generated.
     '''
 
-  def initialize(self):
-    if self._initialized:
-      raise errors.InternalError("linker has already been initialized")
-
-    self._initialized = True
-
   def remove_exporters(self, receiver_ids):
     for receiver_id in receiver_ids:
       self._exporters.pop(receiver_id)

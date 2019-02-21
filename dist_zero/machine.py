@@ -346,7 +346,6 @@ class NodeManager(MachineController):
     node = self.parse_node(node_config)
 
     self._node_by_id[node.id] = node
-    node.initialize()
     return node
 
   def handle_api_message(self, message):

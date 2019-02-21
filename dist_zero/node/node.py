@@ -94,10 +94,6 @@ class Node(object):
         'fernet_key': self._fernet_key,
     }
 
-  def initialize(self):
-    '''Called exactly once, when a node starts to run.'''
-    self.linker.initialize()
-
   def elapse(self, ms):
     '''
     Elapse ms of time on this node.
