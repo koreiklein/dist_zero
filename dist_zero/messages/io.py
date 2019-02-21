@@ -60,18 +60,6 @@ def set_adjacent(node):
   return {'type': 'set_adjacent', 'node': node}
 
 
-def adopter_node_config(adoptees, data_node_config):
-  '''
-  An `AdopterNode` that will wait until some nodes child nodes have been adopted, and 
-  '''
-  return {
-      'type': 'AdopterNode',
-      'id': data_node_config['id'],
-      'adoptees': adoptees,
-      'data_node_config': data_node_config
-  }
-
-
 def data_node_config(node_id, parent, variant, height, leaf_config, recorded_user_json=None):
   '''
   A node config for creating a data node to manage a new list of io nodes.

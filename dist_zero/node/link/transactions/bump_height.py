@@ -112,20 +112,7 @@ class BumpHeightTransaction(object):
                 self._node.transfer_handle(kid, self._proxy_id) for kid in self._node.kids.values()
                 if kid['id'] != self._proxy_adjacent['id']
             ],
-            data_node_config=messages.link.link_node_config(
-                node_id=self._proxy_id,
-                parent=self._node.new_handle(self._proxy_id),
-                height=self._node.height,
-                leaf_config=self._node._leaf_config,
-                left_is_data=False,
-                right_is_data=False,
-                configure_right_parent_ids=[self._node.id],
-                connector=self._node._connector.non_left_part_json(),
-                left_ids=left_ids,
-                senders=senders,
-                receiver_ids=[], # Make sure not actually send based on the right config for a differently layered parent.
-                connector_type=self._node._connector_type,
-                migrator=None)))
+            data_node_config='FIXME(KK): Remove this'))
 
   def start(self):
     '''Called in response to an adjacent node informing self that it has bumped its height.'''
@@ -157,17 +144,4 @@ class BumpHeightTransaction(object):
                 self._node.transfer_handle(self._node.kids[adoptee_id], self._proxy_adjacent_id)
                 for adoptee_id in adoptee_ids
             ],
-            data_node_config=messages.link.link_node_config(
-                node_id=self._proxy_adjacent_id,
-                parent=self._node.new_handle(self._proxy_adjacent_id),
-                left_is_data=self._proxy_adjacent_variant == 'input',
-                right_is_data=self._proxy_adjacent_variant == 'output',
-                leaf_config=self._node._leaf_config,
-                configure_right_parent_ids=configure_right_parent_ids,
-                left_ids=left_ids,
-                height=self._node.height,
-                connector=self._node._connector.left_part_json(parent_id=self._proxy_id),
-                senders=senders,
-                receiver_ids=None,
-                connector_type=self._node._connector_type,
-                migrator=None)))
+            data_node_config='FIXME Remove this'))

@@ -352,8 +352,6 @@ class NodeManager(MachineController):
   def _parse_node_config_without_role(self, node_config):
     if node_config['type'] == 'DataNode':
       return io.DataNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'AdopterNode':
-      return io.AdopterNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'MigrationNode':
       return MigrationNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'LinkNode':

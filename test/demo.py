@@ -213,7 +213,7 @@ class Demo(object):
   def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, leaf_config,
                                        connector_type):
     node_config = transaction.add_participant_role_to_node_config(
-        node_config=messages.link.new_link_node_config(
+        node_config=messages.link.link_node_config(
             node_id=dist_zero.ids.new_id('LinkNode_root'),
             left_is_data=True,
             right_is_data=True,

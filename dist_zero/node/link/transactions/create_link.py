@@ -330,7 +330,7 @@ class StartLinkNode(transaction.ParticipantRole):
     return result
 
   def _spawn_kid(self, source_interval, target_interval, node_id, leftmost=False, rightmost=False):
-    node_config = messages.link.new_link_node_config(
+    node_config = messages.link.link_node_config(
         node_id=node_id,
         left_is_data=leftmost and self._node._left_is_data,
         right_is_data=rightmost and self._node._right_is_data,
