@@ -249,11 +249,6 @@ def get_capacity():
   return {'type': 'get_capacity'}
 
 
-def get_adjacent_handle():
-  '''API message to a node to get the handle of its adjacent (for data and leaf nodes).'''
-  return {'type': 'get_adjacent_handle'}
-
-
 def create_kid_config(new_node_name, machine_id):
   '''
   Create a node_config for a new kid node of a data io node.

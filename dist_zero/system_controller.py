@@ -49,14 +49,6 @@ class SystemController(object):
     '''
     self.send_api_message(node_id, messages.io.route_dns(domain_name=domain_name))
 
-  def get_adjacent(self, node_id):
-    adjacent_handle = self.send_api_message(node_id, messages.machine.get_adjacent_handle())
-    if adjacent_handle is None:
-      return None
-    else:
-      self._add_node_machine_mapping(adjacent_handle)
-      return adjacent_handle['id']
-
   def get_interval(self, node_id):
     return intervals.parse_interval(self.send_api_message(node_id, messages.machine.get_interval()))
 

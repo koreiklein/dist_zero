@@ -48,18 +48,6 @@ def output_action(number):
   return {'type': 'output_action', 'number': number}
 
 
-def set_adjacent(node):
-  '''
-  Inform a node of its adjacent node.
-  This will activate the node and it will start sending all its messages
-  to the new adjacent node.
-
-  :param node: The handle of the new node
-  :type node: :ref:`handle`
-  '''
-  return {'type': 'set_adjacent', 'node': node}
-
-
 def data_node_config(node_id, parent, variant, height, leaf_config, recorded_user_json=None):
   '''
   A node config for creating a data node to manage a new list of io nodes.
