@@ -19,7 +19,7 @@ def load(messages_per_second):
   return {'messages_per_second': messages_per_second}
 
 
-def start_subscription(subscriber, load, kid_ids=None):
+def start_subscription(subscriber, load, source_interval, kid_intervals=None):
   '''
   Request to start a subscription between the sender and the receiver.
   Only the node to the left (the node sending the data) should send start_subscription,
@@ -27,19 +27,27 @@ def start_subscription(subscriber, load, kid_ids=None):
 
   :param object subscriber: The role handle of the node to the left that would like to subscribe.
   :param load: Describes the total load the sender anticipates will be sent over this subscription.
-  :param list kid_ids: If provided, gives the exact list of kid node ids of the sender.
+  :param tuple source_interval: A pair of keys giving the interval that the subscriber will send from.
+  :param list kid_intervals: If provided, gives the exact list of intervals managed by each kid of the sender.
   '''
-  return {'type': 'start_subscription', 'subscriber': subscriber, 'load': load, 'kid_ids': kid_ids}
+  return {
+      'type': 'start_subscription',
+      'subscriber': subscriber,
+      'load': load,
+      'source_interval': source_interval,
+      'kid_intervals': kid_intervals
+  }
 
 
-def subscription_started(leftmost_kids):
+def subscription_started(leftmost_kids, target_intervals):
   '''
   Sent in response to start_subscription by the node to the right to indicate that
   the subscription from the node to the left has started.
 
   :param list leftmost_kids: A list of role handles of the kids of this node.
+  :param dict[str, tuple] target_intervals: A dictionary mapping each kid_id in ``leftmost_kids`` to its target interval
   '''
-  return {'type': 'subscription_started', 'leftmost_kids': leftmost_kids}
+  return {'type': 'subscription_started', 'leftmost_kids': leftmost_kids, 'target_intervals': target_intervals}
 
 
 def subscription_edges(edges):

@@ -30,6 +30,12 @@ def parse_interval(interval_json):
   return [json_to_key(left), json_to_key(right)]
 
 
+def is_subinterval(smaller, larger):
+  smaller_left, smaller_right = smaller
+  larger_left, larger_right = larger
+  return larger_left <= smaller_left and smaller_right <= larger_right
+
+
 class _Inf(object):
   def __le__(self, other):
     return other == Max

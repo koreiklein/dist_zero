@@ -31,6 +31,9 @@ class DataNodeKids(object):
     start, stop = self._kid_to_interval[kid_id]
     return stop
 
+  def kid_interval(self, kid_id):
+    return list(self._kid_to_interval[kid_id])
+
   def grow_left(self, key):
     self._left = key
     self._interval[0] = key

@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from dist_zero import transaction, messages, errors
+from dist_zero import transaction, messages, errors, intervals
 
 
 class SendStartSubscription(transaction.ParticipantRole):
@@ -39,13 +39,15 @@ class SendStartSubscription(transaction.ParticipantRole):
   async def _subscribe_to_greater_height_target(self, controller):
     controller.logger.info(
         "Data node starting subscription to overly high target {target_id}", extra={'target_id': self._targets['id']})
+    interval = intervals.interval_json(controller.node._source_interval)
     controller.send(
         self._target,
         messages.link.start_subscription(
             subscriber=controller.new_handle(self._target['id']),
             load=messages.link.load(messages_per_second=controller.node._estimated_messages_per_second()),
+            source_interval=interval,
             # We use this node as the unique kid of itself to even out mismatched heights.
-            kid_ids=[controller.node.id]))
+            kid_intervals=[interval]))
 
     subscription_started, _sender_id = await controller.listen(type='subscription_started')
     proxies = subscription_started['leftmost_kids']
@@ -81,7 +83,10 @@ class SendStartSubscription(transaction.ParticipantRole):
         messages.link.start_subscription(
             subscriber=controller.new_handle(self._target['id']),
             load=messages.link.load(messages_per_second=controller.node._estimated_messages_per_second()),
-            kid_ids=list(self._kid_ids)))
+            source_interval=intervals.interval_json(controller.node._source_interval),
+            kid_intervals=[
+                intervals.interval_json(controller.node._kids.kid_interval(kid_id)) for kid_id in self._kid_ids
+            ]))
 
     subscription_started, _sender_id = await controller.listen(type='subscription_started')
     self._kids_to_match = subscription_started['leftmost_kids']

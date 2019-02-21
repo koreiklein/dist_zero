@@ -19,6 +19,13 @@ class LinkNode(Node):
 
     self._kids = {}
 
+    # These will be set by the role that starts this LinkNode
+    self._source_interval = None
+    self._target_interval = None
+
+    # The LinkGraphManager instance to manage this node's kids.
+    self._manager = None
+
     # FIXME(KK): This is all specific to summing.  Please remove it once leaves implement general reactive graphs.
     self._current_state = 0
     '''For when sum link nodes (of height 0) track their internal state'''
@@ -70,7 +77,7 @@ class LinkNode(Node):
   def deliver(self, message, sequence_number, sender_id):
     self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
 
-  def start_leaf(self):
+  def maybe_start_leaf(self):
     if self._height == 0:
       self._leaf = link_leaf.from_config(leaf_config=self._leaf_config, node=self)
       self._controller.periodically(LinkNode.SEND_INTERVAL_MS,

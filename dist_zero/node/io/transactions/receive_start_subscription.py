@@ -8,8 +8,21 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
 
   def __init__(self, requester):
     self._requester = requester
+    self._controller = None
+
+  @property
+  def _node(self):
+    return self._controller.node
+
+  def _subscription_started(self, leftmost_kids):
+    return messages.link.subscription_started(
+        leftmost_kids=leftmost_kids,
+        target_intervals={kid['id']: self._node._kids.interval_json()
+                          for kid in leftmost_kids})
 
   async def run(self, controller: 'TransactionRoleController'):
+    self._controller = controller
+
     controller.send(
         self._requester,
         messages.io.hello_parent(
@@ -19,8 +32,7 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
     subscriber = start_subscription['subscriber']
     while start_subscription['height'] > controller.node._height:
       # The subscriber has too great a height, tell it to have its kids subscribe to this node again.
-      controller.send(subscriber,
-                      messages.link.subscription_started(leftmost_kids=[controller.new_handle(subscriber['id'])]))
+      controller.send(subscriber, self._subscription_started([controller.new_handle(subscriber['id'])]))
       edges, sender_id = await controller.listen(type='subscription_edges')
       proxies = edges[controller.node.id]
       if len(proxies) != 1:
@@ -42,7 +54,7 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
       kid_ids.remove(kid_id)
       leftmost_kids.append(controller.transfer_handle(hello_parent['kid'], subscriber['id']))
 
-    controller.send(subscriber, messages.link.subscription_started(leftmost_kids=leftmost_kids))
+    controller.send(subscriber, self._subscription_started(leftmost_kids))
 
     await controller.listen(type='subscription_edges')
     # We don't actually need to do anything with these edges and only listen for this
