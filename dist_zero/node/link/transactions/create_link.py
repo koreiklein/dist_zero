@@ -5,7 +5,7 @@ from dist_zero import transaction, messages, errors, ids, intervals
 from dist_zero.node.io.transactions.send_start_subscription import SendStartSubscription
 from dist_zero.node.io.transactions.receive_start_subscription import ReceiveStartSubscription
 
-from . import manager
+from dist_zero.node.link import manager
 
 
 class CreateLink(transaction.ParticipantRole):
