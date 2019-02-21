@@ -15,7 +15,6 @@ class SendStartSubscription(transaction.ParticipantRole):
     # except in cases where the connected link is of a greater height than this node.
     self._targets = None
     self._target_height = None # The height of self._targets[-1]
-    self._kid_ids = None # The kids of our kids at the 'time' we try to subscribe.
     self._kid_roles = None
 
   @property
@@ -66,16 +65,38 @@ class SendStartSubscription(transaction.ParticipantRole):
     self._targets.append(proxy)
     self._target_height -= 1
 
-  async def _subscribe_to_same_height_target(self, controller):
-    self._kid_ids = list(controller.node._kids)
-    for kid_id in self._kid_ids:
+  def _make_matches(self, subscription_started):
+    '''
+    yield pairs (my_kid_id, other_kid_handle)
+    that form a bijection between the kids of this node and the kids in ``subscription_started``.
+    Kids should be matched by the start point.
+    '''
+    other_target_interval = subscription_started['target_intervals']
+    my_kid_id_by_start = {controller.node._kids.left_endpoint(kid_id): kid_id for kid_id in controller.node._kids}
+    for other_kid in subscription_started['leftmost_kids']:
+      other_kid_start = other_target_interval[other_kid['id']][0]
+      my_kid_id = my_kid_id_by_start.pop(other_kid_start, None)
+      if my_kid_id is None:
+        raise errors.InternalError("Mismatched adjacent leftmost kids: "
+                                   "Could not find the left endpoint in my_kid_id_by_start")
+      yield my_kid_id, other_kid
+
+    if kid_id_by_start:
+      raise errors.InternalError("Mismatched adjacent leftmost kids: "
+                                 "Extra kids remained unmatched in kid_id_by_start")
+
+  async def _enlist_kids_and_await_hellos(self, controller):
+    for kid_id in controller.node._kids:
       controller.enlist(controller.node._kids[kid_id], SendStartSubscription,
                         dict(parent=controller.new_handle(kid_id)))
 
     self._kid_roles = {}
-    while len(self._kid_roles) < len(self._kid_ids):
+    while len(self._kid_roles) < len(controller.node._kids):
       hello_parent, kid_id = await controller.listen(type='hello_parent')
       self._kid_roles[kid_id] = hello_parent['kid']
+
+  async def _subscribe_to_same_height_target(self, controller):
+    await self._enlist_kids_and_await_hellos(controller)
 
     controller.logger.info("Data node starting subscription to {target_id}", extra={'target_id': self._target['id']})
     controller.send(
@@ -85,27 +106,19 @@ class SendStartSubscription(transaction.ParticipantRole):
             load=messages.link.load(messages_per_second=controller.node._estimated_messages_per_second()),
             source_interval=intervals.interval_json(controller.node._source_interval),
             kid_intervals=[
-                intervals.interval_json(controller.node._kids.kid_interval(kid_id)) for kid_id in self._kid_ids
+                intervals.interval_json(controller.node._kids.kid_interval(kid_id)) for kid_id in controller.node._kids
             ]))
 
     subscription_started, _sender_id = await controller.listen(type='subscription_started')
-    self._kids_to_match = subscription_started['leftmost_kids']
-
-    if len(self._kids_to_match) != len(self._kid_ids):
-      raise errors.InternalError(
-          "Data node started a subscription but was not given the proper number of kids to connect to.",
-          extra={
-              'n_my_kids': len(self._kid_ids),
-              'n_other_kids': len(self._kids_to_match)
-          })
 
     edges = defaultdict(list)
-    for kid_id, matched_kid in zip(self._kid_ids, self._kids_to_match):
-      kid = self._kid_roles[kid_id]
-      edges[matched_kid['id']].append(controller.transfer_handle(kid, self._target['id']))
+
+    for my_kid_id, other_kid in self._make_matches(subscription_started):
+      my_kid = self._kid_roles[my_kid_id]
+      edges[other_kid['id']].append(controller.transfer_handle(my_kid, self._target['id']))
       controller.send(
-          kid,
+          my_kid,
           messages.link.subscribe_to(
-              target=controller.transfer_handle(matched_kid, kid_id), height=controller.node._height - 1))
+              target=controller.transfer_handle(other_kid, my_kid_id), height=controller.node._height - 1))
 
     controller.send(self._target, messages.link.subscription_edges(edges=edges))
