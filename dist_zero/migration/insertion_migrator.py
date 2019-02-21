@@ -1,7 +1,6 @@
 import itertools
 
 from dist_zero import errors, deltas, messages, linker, settings
-from dist_zero.network_graph import NetworkGraph
 
 from . import migrator
 from .. import connector

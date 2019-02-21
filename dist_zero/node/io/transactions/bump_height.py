@@ -1,7 +1,6 @@
 import blist
 
 from dist_zero import transaction, messages, ids, errors
-from dist_zero.network_graph import NetworkGraph
 
 from . import helpers
 
@@ -53,7 +52,6 @@ class BumpHeight(transaction.OriginatorRole):
     controller.node._kids.clear()
     controller.node._kids.add_kid(kid=proxy_node, interval=interval, summary=finished_absorbing['summary'])
 
-    controller.node._graph = NetworkGraph()
     controller.node._graph.add_node(proxy['id'])
     if controller.node._adjacent is not None:
       controller.node.send(

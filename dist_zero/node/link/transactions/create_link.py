@@ -1,7 +1,6 @@
 from collections import defaultdict
 
 from dist_zero import transaction, messages, errors, ids, intervals
-from dist_zero.network_graph import NetworkGraph
 
 from dist_zero.node.io.transactions.send_start_subscription import SendStartSubscription
 from dist_zero.node.io.transactions.receive_start_subscription import ReceiveStartSubscription
@@ -204,14 +203,13 @@ class StartLinkNode(transaction.ParticipantRole):
   async def _send_subscription_edges(self):
     for right in self._right_neighbors:
       subscription_started = self._subscription_started[right['id']]
+      senders = lambda kid_id: (self._kids[self._block_to_node_id[below]] for below in self._manager.target_block(kid_id).below)
       self._controller.send(
           right,
           messages.link.subscription_edges(
               edges={
-                  right_kid['id']: [
-                      self._controller.transfer_handle(self._kids[sender_id], right_kid['id'])
-                      for sender_id in self._graph.node_senders(right_kid['id'])
-                  ]
+                  right_kid['id']:
+                  [self._controller.transfer_handle(sender, right_kid['id']) for sender in senders(right_kid['id'])]
                   for right_kid in subscription_started['leftmost_kids']
               }))
 
