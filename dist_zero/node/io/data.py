@@ -58,9 +58,6 @@ class DataNode(Node):
 
     self._added_sender_respond_to = None
 
-    self._exporter = None
-    self._importer = None
-
     self._updated_summary = True
     '''Set to true when the current summary may have changed.'''
     self._last_kid_summary = None
@@ -109,13 +106,8 @@ class DataNode(Node):
     if self._variant != 'input':
       raise errors.InternalError("Only 'input' variant nodes may receive input actions")
 
-    if self._exporter is not None:
-      self.logger.debug(
-          "Leaf node is forwarding input_action of {number} via exporter", extra={'number': message['number']})
-      self._exporter.export_message(message=message, sequence_number=self.linker.advance_sequence_number())
-    else:
-      self.logger.warning(
-          "Leaf node is not generating an input_action message send since it does not yet have an exporter.")
+    self.logger.warning(
+        "Leaf node is not generating an input_action message send since it does not yet have an exporter.")
 
   def is_data(self):
     return True
@@ -131,34 +123,8 @@ class DataNode(Node):
   def height(self):
     return self._height
 
-  @property
-  def _adjacent(self):
-    if self._variant == 'input':
-      if self._exporter is None:
-        return None
-      else:
-        return self._exporter.receiver
-    elif self._variant == 'output':
-      if self._importer is None:
-        return None
-      else:
-        return self._importer.sender
-    else:
-      raise errors.InternalError(f"Unrecognized variant {self._variant}")
-
   def checkpoint(self, before=None):
     pass
-
-  def sink_swap(self, deltas, old_sender_ids, new_senders, new_importers, linker):
-    if self._variant == 'output':
-      if len(new_senders) != 1:
-        raise errors.InternalError(
-            "sink_swap should be called on an edge data node only when there is a unique new sender.")
-      self._set_input(new_senders[0])
-    elif self._variant == 'input':
-      raise errors.InternalError("An input DataNode should never function as a sink node in a migration.")
-    else:
-      raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
   @property
   def MERGEABLE_N_KIDS_FIRST(self):
@@ -222,28 +188,6 @@ class DataNode(Node):
       pass
     else:
       super(DataNode, self).receive(message=message, sender_id=sender_id)
-
-  def _set_input(self, node):
-    if self._importer is not None:
-      raise errors.InternalError("DataNodes have only a single input node."
-                                 "  Can not add a new one once an input already exists")
-    if self._variant != 'output':
-      raise errors.InternalError("Only output DataNodes can set their input.")
-
-    self._importer = self.linker.new_importer(node)
-    if self._added_sender_respond_to:
-      self.send(self._added_sender_respond_to, messages.migration.finished_adding_sender(sender_id=node['id']))
-      self._added_sender_respond_to = None
-
-  def _set_output(self, node):
-    if self._exporter is not None:
-      if node['id'] != self._exporter.receiver_id:
-        raise errors.InternalError("DataNodes have only a single output node."
-                                   "  Can not add a new one once an output already exists")
-    else:
-      if self._variant != 'input':
-        raise errors.InternalError("Only input DataNodes can set their output.")
-      self._exporter = self.linker.new_exporter(node)
 
   @staticmethod
   def from_config(node_config, controller):
@@ -414,12 +358,7 @@ class DataNode(Node):
       else:
         return {self._importer.sender_id: self._importer.sender}
     elif message['type'] == 'get_receivers':
-      if self._exporter is None:
-        return {}
-      else:
-        return {self._exporter.receiver_id: self._exporter.receiver}
-    elif message['type'] == 'get_adjacent_handle':
-      return self._adjacent
+      return {}
     elif message['type'] == 'get_output_state':
       if self._height != 0:
         raise errors.InternalError("Can't get output state for a DataNode with height > 0")

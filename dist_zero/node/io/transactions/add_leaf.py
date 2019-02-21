@@ -52,26 +52,5 @@ class AddLeafParent(transaction.ParticipantRole):
     controller.node._kids.add_kid(kid=kid, interval=[key, None], summary=self._kid_summary)
     controller.send(self._kid, messages.io.set_leaf_key(key=key))
 
-    if controller.node._exporter is not None:
-      controller.node.send(
-          controller.node._exporter.receiver,
-          messages.migration.update_left_configuration(
-              parent_id=controller.node.id,
-              new_kids=[{
-                  'connection_limit':
-                  controller.node.system_config['SUM_NODE_SENDER_LIMIT'],
-                  'handle':
-                  controller.node.transfer_handle(handle=kid, for_node_id=controller.node._exporter.receiver_id)
-              }],
-              new_height=controller.node._height))
-
-    if controller.node._importer is not None:
-      controller.node.send(
-          controller.node._importer.sender,
-          messages.migration.update_right_configuration(
-              parent_id=controller.node.id,
-              new_kids=[controller.node.transfer_handle(kid, controller.node._importer.sender_id)],
-              new_height=controller.node._height))
-
     if controller.node._monitor.out_of_capacity():
       controller.node._send_kid_summary()

@@ -52,14 +52,6 @@ class BumpHeight(transaction.OriginatorRole):
     controller.node._kids.clear()
     controller.node._kids.add_kid(kid=proxy_node, interval=interval, summary=finished_absorbing['summary'])
 
-    if controller.node._adjacent is not None:
-      controller.node.send(
-          controller.node._adjacent,
-          messages.io.bumped_height(
-              proxy=controller.node.transfer_handle(proxy_node, controller.node._adjacent['id']),
-              kid_ids=kids_to_absorb,
-              variant=controller.node._variant))
-
     # After bumping the height, we will certainly need a new kid
     from .split_kid import SplitKid
     await SplitKid(kid_id=proxy['id']).run(controller)

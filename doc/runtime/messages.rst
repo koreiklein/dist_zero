@@ -42,11 +42,6 @@ Link node messages
 .. automodule:: dist_zero.messages.link
    :members:
 
-Messages relating to migrations
----------------------------------
-.. automodule:: dist_zero.messages.migration
-   :members:
-
 Common messages
 -----------------
 .. automodule:: dist_zero.messages.common

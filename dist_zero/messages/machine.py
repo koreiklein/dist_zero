@@ -41,7 +41,7 @@ def std_system_config():
   **SUM_NODE_SENDER_LIMIT, SUM_NODE_RECEIVER_LIMIT**
 
   If a sum node has more than this many senders/receivers, it will trigger a
-  "sum node split migration" to create a middle layer of senders/receivers.
+  transaction that should create a middle layer of senders/receivers.
 
   **SUM_NODE_SPLIT_N_NEW_NODES**
 
@@ -51,7 +51,7 @@ def std_system_config():
 
   If a sum node has fewer than ``SUM_NODE_RECEIVER_LOWER_LIMIT`` receivers and ``SUM_NODE_SENDER_LOWER_LIMIT`` senders
   for more than ``SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS`` milliseconds,
-  it will trigger a migration to excise the sum node.
+  it will trigger a transaction to excise the sum node.
   '''
   return {
       # When an `DataNode` has this many kids, it will trigger a split.
@@ -69,7 +69,7 @@ def std_system_config():
       'TOTAL_KID_CAPACITY_TRIGGER': 5,
 
       # If a sum node has more than this many senders/receivers, it will trigger a
-      # "sum node split migration" to create a middle layer of senders/receivers.
+      # transaction to create a middle layer of senders/receivers.
       'SUM_NODE_SENDER_LIMIT': 15,
       'SUM_NODE_RECEIVER_LIMIT': 15,
 
@@ -78,7 +78,7 @@ def std_system_config():
 
       # If a sum node has fewer than SUM_NODE_RECEIVER_LOWER_LIMIT receivers and SUM_NODE_SENDER_LOWER_LIMIT senders
       # for more than SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS milliseconds,
-      # it will trigger a migration to excise the sum node.
+      # it will trigger a transaction to excise the sum node.
       'SUM_NODE_RECEIVER_LOWER_LIMIT': 3,
       'SUM_NODE_SENDER_LOWER_LIMIT': 3,
       'SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS': 3 * 1000,

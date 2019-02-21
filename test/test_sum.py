@@ -77,7 +77,7 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
 
   await demo.run_for(ms=200)
 
-  # Set up the sum link with a migration:
+  # Set up the sum link
   root_link_node_id = demo.connect_trees_with_sum_network(root_input_node_id, root_output_node_id, machine_b)
 
   await demo.run_for(ms=2000)

@@ -124,20 +124,16 @@ class Linker(object):
     self._importers[sender['id']] = result
     return result
 
-  def new_exporter(self, receiver, migration_id=None):
+  def new_exporter(self, receiver):
     '''
     Generate and return a new `Exporter` instance.
 
     :param receiver: The :ref:`handle` of the node that will receive for this exporter.
     :type receiver: :ref:`handle`
-
-    :param str migration_id: If the exporter will be running as part of the new flow during a migration,
-      then the id of the migration.  Otherwise, `None`
     '''
     result = exporter.Exporter(
         linker=self,
         receiver=receiver,
-        migration_id=migration_id,
     )
     self._exporters[receiver['id']] = result
     return result

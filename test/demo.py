@@ -185,7 +185,7 @@ class Demo(object):
 
   def connect_trees_with_collect_network(self, root_input_id, root_output_id, machine):
     return self._connect_trees_with_link_network(
-        node_id=dist_zero.ids.new_id('MigrationNode_add_collect_link'),
+        node_id=dist_zero.ids.new_id('add_collect_link'),
         root_input_id=root_input_id,
         root_output_id=root_output_id,
         machine=machine,
@@ -203,7 +203,7 @@ class Demo(object):
     :rtype: str
     '''
     return self._connect_trees_with_link_network(
-        node_id=dist_zero.ids.new_id('MigrationNode_add_sum_link'),
+        node_id=dist_zero.ids.new_id('add_sum_link'),
         root_input_id=root_input_id,
         root_output_id=root_output_id,
         machine=machine,

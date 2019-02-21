@@ -3,7 +3,7 @@ Functions to build standard messages.
 '''
 from .common import ENCODING
 
-from . import common, migration, sum, machine, io, linker, link, hourglass, transaction
+from . import common, sum, machine, io, linker, link, hourglass, transaction
 
 # Actions
 

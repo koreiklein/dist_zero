@@ -12,11 +12,6 @@ class Exporter(object):
   and watch to see whether the message is acknowleded.  If after enough time the message is not acknowledged,
   it will resubmit it.
 
-  Duplication:
-
-  During migrations, a single `Exporter` instance may duplicate all its messages to other `Exporter` instances for a while.
-  Each of the duplicate `Exporter` instances is responsible for retransmitting its own messages.
-
   '''
 
   PENDING_EXPIRATION_TIME_MS = 2 * 1000
@@ -28,20 +23,15 @@ class Exporter(object):
   Expired messages will be retransmitted during calls to `Exporter.retransmit_expired_pending_messages`
   '''
 
-  def __init__(self, receiver, linker, migration_id):
+  def __init__(self, receiver, linker):
     '''
     :param receiver: The :ref:`handle` of the node receiving from this data node.
     :type receiver: :ref:`handle`
 
     :param linker: The linker associated with this exporter
     :type linker: `Linker`
-
-    :param str migration_id: If the exporter will be running as part of the new flow during a migration,
-      then the id of the migration.  Otherwise, `None`
     '''
     self._receiver = receiver
-
-    self._migration_id = migration_id
 
     self._linker = linker
     self.logger = self._linker.logger
@@ -165,6 +155,4 @@ class Exporter(object):
     '''
     self._pending_messages.append((self._linker.now_ms, internal_sequence_number, message))
     sequence_message = messages.linker.sequence_message_send(message=message, sequence_number=internal_sequence_number)
-    if self._migration_id is not None:
-      sequence_message = messages.migration.migration_message(self._migration_id, sequence_message)
     self._linker.send(self._receiver, sequence_message)
