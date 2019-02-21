@@ -184,8 +184,6 @@ class DataNode(Node):
           else:
             self._updated_summary = True
           self._monitor.check_limits(0)
-    elif message['type'] == 'configure_right_parent':
-      pass
     else:
       super(DataNode, self).receive(message=message, sender_id=sender_id)
 
