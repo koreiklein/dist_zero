@@ -6,7 +6,7 @@ from collections import defaultdict
 from cryptography.fernet import Fernet
 
 import dist_zero.logging
-from dist_zero import messages, linker, migration, deltas, errors, ids, transaction
+from dist_zero import messages, linker, deltas, errors, ids, transaction
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +29,6 @@ class Node(object):
     #  - been received while that transaction was not active
     #  - not yet been delivered
     self._postponed_transaction_messages = defaultdict(list)
-
-    self.migrators = {}
-    '''
-    A map from migration id to `Migrator` instance.
-    It gives the migrators for the set of migrations that are currently migrating this `Node`
-    '''
 
     self.linker = linker.Linker(self, logger=self.logger, deliver=self.deliver)
     self.system_config = self._controller.system_config
@@ -100,27 +94,6 @@ class Node(object):
         'fernet_key': self._fernet_key,
     }
 
-  def attach_migrator(self, migrator_config):
-    migration_id = migrator_config['migration']['id']
-    if len(self.migrators) > 0:
-      # At some point, it may make sense to allow multiple migrators to run at once.  For now,
-      # we disallow doing so.
-      raise errors.InternalError("Not allowing more than a single migrator to run on a node at a given time.")
-    elif migration_id in self.migrators:
-      self.logger.error(
-          "There is already a migration running on {cur_node_id} for migration {migration_id}",
-          extra={'migration_id': migration_id})
-      return self.migrators[migration_id]
-    else:
-      migrator = migration.migrator_from_config(migrator_config=migrator_config, node=self)
-      self.migrators[migration_id] = migrator
-      migrator.initialize()
-      return migrator
-
-  def remove_migrator(self, migration_id):
-    '''Remove a migrator for self.migrators.'''
-    self.migrators.pop(migration_id)
-
   def initialize(self):
     '''Called exactly once, when a node starts to run.'''
     self.linker.initialize()
@@ -149,23 +122,6 @@ class Node(object):
     '''
     if message['type'] == 'sequence_message':
       self.linker.receive_sequence_message(message['value'], sender_id)
-    elif message['type'] == 'attach_migrator':
-      self.attach_migrator(message['migrator_config'])
-    elif message['type'] == 'migration':
-      migration_id, migration_message = message['migration_id'], message['message']
-      if migration_id is None:
-        self.receive(message=migration_message, sender_id=sender_id)
-      elif migration_id not in self.migrators:
-        # Possible, when a migration was removed at about the same time as some of the last few
-        # acknowledgement or retransmission messages came through.
-        self.logger.warning(
-            "Got a migration message for a migration which is not running on this node.",
-            extra={
-                'migration_id': migration_id,
-                'migration_message_type': migration_message['type']
-            })
-      else:
-        self.migrators[migration_id].receive(sender_id=sender_id, message=migration_message)
     elif message['type'] == 'start_participant_role':
       self.start_participant_role(message)
     elif message['type'] == 'transaction_message':

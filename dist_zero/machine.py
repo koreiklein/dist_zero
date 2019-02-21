@@ -11,7 +11,6 @@ from dist_zero import errors, messages, dns, settings
 
 from .node import io
 from .node.link.link import LinkNode
-from .migration.migration_node import MigrationNode
 
 logger = logging.getLogger(__name__)
 
@@ -331,8 +330,6 @@ class NodeManager(MachineController):
   def _parse_node_config_without_role(self, node_config):
     if node_config['type'] == 'DataNode':
       return io.DataNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'MigrationNode':
-      return MigrationNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'LinkNode':
       return LinkNode.from_config(node_config, controller=self)
     else:
