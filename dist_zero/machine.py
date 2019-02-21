@@ -61,17 +61,6 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
-  def change_node(self, node_id, node):
-    '''
-    Stop sending messages to the node currently identified node_id, and send them instead to a new node.
-    Do not try to initialize the node.
-
-    :param str node_id: The id of a running node.
-    :param node: A `Node` instance with the same id.
-    :type node: `Node`
-    '''
-    raise RuntimeError("Abstract Superclass")
-
   def parse_node(self, node_config):
     '''
     Generate a node from any node_config, but do not add on initialize it.
@@ -315,16 +304,6 @@ class NodeManager(MachineController):
     self.start_node(node_config)
 
     return node_config['id']
-
-  def change_node(self, node_id, node):
-    if node_id not in self._node_by_id:
-      raise errors.InternalError(f"Can't change_node for {node_id}, as no node by that id is currently running.")
-
-    if node_id != node.id:
-      raise errors.InternalError(f"Can't change_node for {node_id}, as the new node has a different id {node.id}")
-
-    node.set_fernet(self._node_by_id[node_id])
-    self._node_by_id[node_id] = node
 
   def terminate_node(self, node_id):
     self._node_by_id.pop(node_id)
