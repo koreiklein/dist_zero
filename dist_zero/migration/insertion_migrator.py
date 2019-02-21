@@ -4,7 +4,7 @@ from dist_zero import errors, deltas, messages, linker, settings
 from dist_zero.network_graph import NetworkGraph
 
 from . import migrator
-from .. import topology_picker, connector
+from .. import connector
 from .right_configuration import RightConfigurationReceiver
 
 
@@ -133,9 +133,10 @@ class InsertionMigrator(migrator.Migrator):
         self._node._TESTING_swapped_once = True
 
       for exporter in self._node._exporters.values():
-        self._node.send(exporter.receiver,
-                        messages.migration.swapped_to_duplicate(
-                            self.migration_id, first_live_sequence_number=exporter._internal_sequence_number))
+        self._node.send(
+            exporter.receiver,
+            messages.migration.swapped_to_duplicate(
+                self.migration_id, first_live_sequence_number=exporter._internal_sequence_number))
 
       self._waiting_for_swap = False
       self._node.activate_swap(self.migration_id, kids=self._kids)

@@ -1,7 +1,6 @@
 import logging
 
 from dist_zero import messages, ids, errors, network_graph, connector, settings
-from dist_zero import topology_picker
 from dist_zero.migration.right_configuration import ConfigurationReceiver
 
 from ..node import Node
