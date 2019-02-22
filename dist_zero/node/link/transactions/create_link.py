@@ -274,7 +274,7 @@ class StartLinkNode(transaction.ParticipantRole):
       kid_args.append(
           dict(
               node_id=node_id,
-              rightmost=block.is_target,
+              rightmost=any(above.is_target for above in block.above),
               source_interval=source_interval,
               target_interval=target_interval))
 
@@ -322,7 +322,8 @@ class StartLinkNode(transaction.ParticipantRole):
 
     result = []
     while node_ids:
-      hello_link_parent, kid_id = await self._controller.listen(type='hello_link_parent')
+      hello_link_parent, node_id = await self._controller.listen(type='hello_link_parent')
+      node_ids.remove(node_id)
       kid = hello_link_parent['kid']
       self._kids[kid['id']] = kid
       result.append(kid)

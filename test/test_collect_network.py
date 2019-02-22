@@ -46,10 +46,9 @@ def test_weighted_rr(n_kids, weights, tolerance):
 
 class TestSpawnCollectLinkNetwork(Utils):
   async def _create_collect_network(self, n_inputs, n_outputs):
-    self.root_input = await self.root_io_tree(
-        machine=self.machine_ids[0], variant='input', leaf_config=messages.io.sum_leaf_config(0))
+    self.root_input = await self.root_io_tree(machine=self.machine_ids[0], leaf_config=messages.io.sum_leaf_config(0))
     self.root_output = await self.root_io_tree(
-        machine=self.machine_ids[0], variant='output', leaf_config=messages.io.collect_leaf_config())
+        machine=self.machine_ids[0], leaf_config=messages.io.collect_leaf_config())
 
     await self.demo.run_for(ms=200)
     await self.spawn_users(self.root_output, n_users=n_outputs)

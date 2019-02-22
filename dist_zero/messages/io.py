@@ -48,14 +48,13 @@ def output_action(number):
   return {'type': 'output_action', 'number': number}
 
 
-def data_node_config(node_id, parent, variant, height, leaf_config, recorded_user_json=None):
+def data_node_config(node_id, parent, height, leaf_config, recorded_user_json=None):
   '''
   A node config for creating a data node to manage a new list of io nodes.
 
   :param str node_id: The id of the new node.
   :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
   :type parent: :ref:`handle` or `None`
-  :param str variant: 'input' or 'output'
   :param int height: The height of the node in the tree.  See `DataNode`
   :param object leaf_config: Configuration information for what kind of leaf nodes to run.
   :param object initial_state: The initial state to use for new nodes.
@@ -65,7 +64,6 @@ def data_node_config(node_id, parent, variant, height, leaf_config, recorded_use
       'type': 'DataNode',
       'id': node_id,
       'parent': parent,
-      'variant': variant,
       'height': height,
       'leaf_config': leaf_config,
       'recorded_user_json': recorded_user_json,
@@ -158,14 +156,13 @@ def kid_summary(size, n_kids, availability, messages_per_second, height):
   }
 
 
-def bumped_height(proxy, kid_ids, variant):
+def bumped_height(proxy, kid_ids):
   '''
   Sent by an `DataNode` to its adjacent node to inform it that the data node has bumped its height
   and now has a single child as its proxy.
 
-  :param str variant: 'input' or 'output' according to the variant of the adjacent `DataNode`.
   :param list[str] kid_ids: The ids of the `DataNode`'s kids which are being adopted by the proxy node.
   :param proxy: The :ref:`handle` of the new proxy node.
   :type proxy: :ref:`handle`
   '''
-  return {'type': 'bumped_height', 'proxy': proxy, 'variant': variant, 'kid_ids': kid_ids}
+  return {'type': 'bumped_height', 'proxy': proxy, 'kid_ids': kid_ids}

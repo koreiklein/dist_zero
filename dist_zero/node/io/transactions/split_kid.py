@@ -25,7 +25,6 @@ class SplitKid(transaction.OriginatorRole):
     node_config = messages.io.data_node_config(
         node_id=new_id,
         parent=controller.node.new_handle(new_id),
-        variant=controller.node._variant,
         leaf_config=controller.node._leaf_config,
         height=controller.node._height - 1)
     controller.spawn_enlist(

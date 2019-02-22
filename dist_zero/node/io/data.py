@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class DataNode(Node):
   '''
-  The root of a tree of leaf instances of the same ``variant``.
+  The root of a dataset subtree.  It may or may not be the root of the entire tree.
 
   Each `DataNode` instance is responsible for keeping track of the state of its subtree, and for growing
   or shrinking it as necessary.  In particular, when new leaves are created, `DataNode.create_kid_config` must
@@ -24,12 +24,11 @@ class DataNode(Node):
   minimal assignment such that n.height+1 == n.parent.height for every node n that has a parent.
   '''
 
-  def __init__(self, node_id, parent, controller, variant, leaf_config, height, recorded_user_json):
+  def __init__(self, node_id, parent, controller, leaf_config, height, recorded_user_json):
     '''
     :param str node_id: The id to use for this node
     :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
     :type parent: :ref:`handle` or `None`
-    :param str variant: 'input' or 'output'
     :param int height: The height of the node in the tree.  See `DataNode`
     :param `MachineController` controller: The controller for this node.
     :param objcect leaf_config: Configuration information for how to run a leaf.
@@ -37,7 +36,6 @@ class DataNode(Node):
     '''
     self._controller = controller
     self._parent = parent
-    self._variant = variant
     self._height = height
     self._leaf_config = leaf_config
     if self._height == 0:
@@ -103,9 +101,6 @@ class DataNode(Node):
                                                                lambda: self._monitor.check_limits(CHECK_INTERVAL))
 
   def _receive_input_action(self, message):
-    if self._variant != 'input':
-      raise errors.InternalError("Only 'input' variant nodes may receive input actions")
-
     self.logger.warning(
         "Leaf node is not generating an input_action message send since it does not yet have an exporter.")
 
@@ -194,7 +189,6 @@ class DataNode(Node):
         parent=node_config['parent'],
         controller=controller,
         leaf_config=node_config['leaf_config'],
-        variant=node_config['variant'],
         height=node_config['height'],
         recorded_user_json=node_config['recorded_user_json'])
 
@@ -389,15 +383,12 @@ class DataNode(Node):
     parent = self.new_handle(node_id)
     return transaction.add_participant_role_to_node_config(
         node_config=messages.io.data_node_config(
-            node_id=node_id, parent=parent, variant=self._variant, height=0, leaf_config=self._leaf_config),
+            node_id=node_id, parent=parent, height=0, leaf_config=self._leaf_config),
         transaction_id=ids.new_id('AddLeafTransaction'),
         participant_typename='AddLeaf',
         args=dict(parent=parent))
 
   def deliver(self, message, sequence_number, sender_id):
-    if self._variant != 'output' or self._height != 0:
-      raise errors.InternalError("Only 'output' variant leaf nodes may receive output actions")
-
     if self._height == 0:
       self._message_rate_tracker.increment(self.linker.now_ms)
 
