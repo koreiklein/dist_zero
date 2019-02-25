@@ -69,7 +69,7 @@ class TestSpawnCollectLinkNetwork(Utils):
     await self.demo.run_for(ms=8000)
 
     all_actions = [action['number'] for action in self.demo.all_recorded_actions()]
-    self.output_leaves = self.demo.all_io_kids(self.root_output)
+    self.output_leaves = self.demo.get_leaves(self.root_output)
     assert n_outputs == len(self.output_leaves)
 
     all_outputs = [output for leaf in self.output_leaves for output in self.demo.system.get_output_state(leaf)]

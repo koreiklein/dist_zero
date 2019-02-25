@@ -54,8 +54,14 @@ class LinkGraphManager(object):
   def source_block(self, value):
     return self._source_object_to_block[value]
 
+  def source_objects(self):
+    return self._source_object_to_block.keys()
+
   def target_block(self, value):
     return self._target_object_to_block[value]
+
+  def target_objects(self):
+    return self._target_object_to_block.keys()
 
   def _remove_block(self, block):
     '''

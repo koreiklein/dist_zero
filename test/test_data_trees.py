@@ -27,7 +27,7 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
           root_input_node_id, parent=None, height=2, leaf_config=messages.io.sum_leaf_config(0)))
   await demo.run_for(ms=2000)
 
-  leaves = demo.all_io_kids(root_input_node_id)
+  leaves = demo.get_leaves(root_input_node_id)
   assert 0 == len(leaves)
 
   leaf_ids = []
@@ -45,7 +45,7 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
   create_new_leaf('LeafNode_test')
   await demo.run_for(ms=2000)
 
-  leaves = demo.all_io_kids(root_input_node_id)
+  leaves = demo.get_leaves(root_input_node_id)
   assert 1 == len(leaves)
 
 

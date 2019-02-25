@@ -51,8 +51,12 @@ class LinkNode(Node):
   def handle_api_message(self, message):
     # FIXME(KK): This logic is from the old LinkNode code and is horribly broken.  Fix it!
     if message['type'] == 'get_kids':
-      return {key: value for key, value in self.kids.items() if value is not None}
+      return {key: self._kids[value] for key in self._kids}
+    elif message['type'] == 'get_leftmost_kids':
+      return {key: self._kids[key] for key in self._manager.source_objects()}
     elif message['type'] == 'get_senders':
+      import ipdb
+      ipdb.set_trace()
       return {importer.sender_id: importer.sender for importer in self._importers.values()}
     elif message['type'] == 'get_receivers':
       return self._receivers if self._receivers is not None else {}
@@ -80,8 +84,7 @@ class LinkNode(Node):
   def maybe_start_leaf(self):
     if self._height == 0:
       self._leaf = link_leaf.from_config(leaf_config=self._leaf_config, node=self)
-      self._controller.periodically(LinkNode.SEND_INTERVAL_MS,
-                                    lambda: self._maybe_send_forward_messages(LinkNode.SEND_INTERVAL_MS))
+      # FIXME(KK): Should we not somehow initialize the activities of the leaf?
 
   def _maybe_send_forward_messages(self, ms):
     '''Called periodically to give leaf nodes an opportunity to send their messages.'''

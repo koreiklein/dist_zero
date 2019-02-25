@@ -183,35 +183,15 @@ class Demo(object):
     controllers = await self.new_machine_controllers(1)
     return controllers[0]
 
-  def connect_trees_with_collect_network(self, root_input_id, root_output_id, machine):
+  def link_datasets(self, root_input_id, root_output_id, machine, name=None):
     return self._connect_trees_with_link_network(
-        node_id=dist_zero.ids.new_id('add_collect_link'),
+        node_id=dist_zero.ids.new_id(name if name is not None else "LinkRoot"),
         root_input_id=root_input_id,
         root_output_id=root_output_id,
         machine=machine,
-        leaf_config=messages.link.forward_to_any_leaf(),
-        connector_type=messages.link.all_to_one_available_connector_type())
+        leaf_config=messages.link.forward_to_any_leaf())
 
-  def connect_trees_with_sum_network(self, root_input_id, root_output_id, machine):
-    '''
-    Create a sum network between input and output trees.
-
-    :param str root_input_id: The id of the root of a data tree.
-    :param str root_output_id: The id of the root of a data tree.
-
-    :return: The id of the root link node for the newly spawned network.
-    :rtype: str
-    '''
-    return self._connect_trees_with_link_network(
-        node_id=dist_zero.ids.new_id('add_sum_link'),
-        root_input_id=root_input_id,
-        root_output_id=root_output_id,
-        machine=machine,
-        leaf_config=messages.link.sum_leaf(),
-        connector_type=messages.link.all_to_all_connector_type())
-
-  def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, leaf_config,
-                                       connector_type):
+  def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, leaf_config):
     node_config = transaction.add_participant_role_to_node_config(
         node_config=messages.link.link_node_config(
             node_id=dist_zero.ids.new_id('LinkNode_root'),
@@ -227,11 +207,31 @@ class Demo(object):
     self.system.spawn_node(on_machine=machine, node_config=node_config)
     return node_config['id']
 
-  def all_io_kids(self, data_node_id):
-    if self.system.get_stats(data_node_id)['height'] == 1:
-      return self.system.get_kids(data_node_id)
-    else:
-      return [descendant for kid_id in self.system.get_kids(data_node_id) for descendant in self.all_io_kids(kid_id)]
+  def create_dataset(self, machine, name, height):
+    return self.system.spawn_dataset(
+        on_machine=machine,
+        node_config=messages.io.data_node_config(
+            dist_zero.ids.new_id(name), parent=None, height=height, leaf_config=messages.io.sum_leaf_config(0)))
+
+  def get_leftmost_leaves(self, link_root_id):
+    def _loop(node_id):
+      if 0 == self.system.get_height(node_id):
+        yield node_id
+      else:
+        for kid_id in self.system.get_leftmost_kids(node_id):
+          yield from _loop(kid_id)
+
+    return list(_loop(root_id))
+
+  def get_leaves(self, root_id):
+    def _loop(node_id):
+      if 0 == self.system.get_height(node_id):
+        yield node_id
+      else:
+        for kid_id in self.system.get_kids(node_id):
+          yield from _loop(kid_id)
+
+    return list(_loop(root_id))
 
   def new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms, send_after=0):
     time_message_pairs = []

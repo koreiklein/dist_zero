@@ -141,20 +141,22 @@ class StartLinkNode(transaction.ParticipantRole):
       self._neighbors = (set_link_neighbors['left_roles'], set_link_neighbors['right_roles'])
 
   async def _receive_all_start_subscriptions(self):
-    start_subscription_by_subscriber_id = {}
-    while len(self._start_subscription) < len(self._left_neighbors):
-      start_subscription, subscriber_id = await self._controller.listen('start_subscription')
-      start_subscription_by_subscriber_id[subscriber_id] = start_subscription
+    start_subscriptions = []
+    for i in self._left_neighbors:
+      start_subscription, _subscriber_id = await self._controller.listen('start_subscription')
+      start_subscriptions.append(start_subscription)
 
     self._start_subscription_columns = list(
         sorted(((intervals.parse_interval(start_subscription['source_interval']), start_subscription)
-                for start_subscription in start_subscription_by_subscriber_id.items()),
+                for start_subscription in start_subscriptions),
                key=lambda pair: pair[0][0]))
+    if not self._start_subscription_columns:
+      raise errors.Inte
 
     self._validate_start_subscription_columns()
 
-    self._total_messages_per_second = sum(start_subscription['load']['messages_per_second']
-                                          for start_subscription in start_subscription_by_subscriber_id.values())
+    self._total_messages_per_second = sum(
+        start_subscription['load']['messages_per_second'] for start_subscription in start_subscriptions)
 
   async def _spawn_leftmost_kids(self):
     self._leftmost_kids = []
@@ -190,6 +192,7 @@ class StartLinkNode(transaction.ParticipantRole):
           right_neighbor,
           messages.link.start_subscription(
               subscriber=self._controller.new_handle(right_neighbor['id']),
+              height=self._node._height,
               load=load_per_right_neighbor,
               source_interval=intervals.interval_json(self._source_interval),
               kid_intervals=None, # link nodes do not send their kids in the start_subscription message

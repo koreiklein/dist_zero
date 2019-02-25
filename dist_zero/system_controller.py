@@ -52,6 +52,13 @@ class SystemController(object):
   def get_interval(self, node_id):
     return intervals.parse_interval(self.send_api_message(node_id, messages.machine.get_interval()))
 
+  def get_leftmost_kids(self, node_id):
+    result = self.send_api_message(node_id, messages.machine.get_leftmost_kids())
+    for handle in result.values():
+      self._add_node_machine_mapping(handle)
+
+    return list(result.keys())
+
   def get_kids(self, node_id):
     result = self.send_api_message(node_id, messages.machine.get_kids())
     for handle in result.values():
@@ -243,6 +250,9 @@ class SystemController(object):
     :return: The stats of that node at about the current time.
     '''
     return self.send_api_message(node_id, messages.machine.get_stats())
+
+  def get_height(self, node_id):
+    return self.get_stats(node_id)['height']
 
   def send_api_message(self, node_id, message):
     return self._send_to_machine(

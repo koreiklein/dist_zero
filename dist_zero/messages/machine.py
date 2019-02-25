@@ -227,6 +227,11 @@ def get_kids():
   return {'type': 'get_kids'}
 
 
+def get_leftmost_kids():
+  '''API message to a link node to get its dictionary of leftmost kids.'''
+  return {'type': 'get_leftmost_kids'}
+
+
 def get_interval():
   '''API message to a node to get its pair of left,right endpoints of its interval.'''
   return {'type': 'get_interval'}

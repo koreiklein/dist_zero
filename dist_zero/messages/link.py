@@ -19,13 +19,14 @@ def load(messages_per_second):
   return {'messages_per_second': messages_per_second}
 
 
-def start_subscription(subscriber, load, source_interval, kid_intervals=None):
+def start_subscription(subscriber, load, height, source_interval, kid_intervals=None):
   '''
   Request to start a subscription between the sender and the receiver.
   Only the node to the left (the node sending the data) should send start_subscription,
   and only the node to the right (the node receiving the data) should receive start_subscription.
 
   :param object subscriber: The role handle of the node to the left that would like to subscribe.
+  :param height: The height of the subscriber.
   :param load: Describes the total load the sender anticipates will be sent over this subscription.
   :param tuple source_interval: A pair of keys giving the interval that the subscriber will send from.
   :param list kid_intervals: If provided, gives the exact list of intervals managed by each kid of the sender.
@@ -33,6 +34,7 @@ def start_subscription(subscriber, load, source_interval, kid_intervals=None):
   return {
       'type': 'start_subscription',
       'subscriber': subscriber,
+      'height': height,
       'load': load,
       'source_interval': source_interval,
       'kid_intervals': kid_intervals

@@ -16,39 +16,42 @@ class SendStartSubscription(transaction.ParticipantRole):
     self._targets = None
     self._target_height = None # The height of self._targets[-1]
     self._kid_roles = None
+    self._controller = None
 
   @property
   def _target(self):
     return self._targets[-1]
 
   async def run(self, controller: 'TransactionRoleController'):
-    controller.send(
+    self._controller = controller
+    self._controller.send(
         self._parent,
         messages.io.hello_parent(
-            kid=controller.new_handle(self._parent['id']), kid_summary=controller.node._kid_summary_message()))
+            kid=self._controller.new_handle(self._parent['id']), kid_summary=self._node._kid_summary_message()))
 
-    subscribe_to, _sender_id = await controller.listen(type='subscribe_to')
+    subscribe_to, _sender_id = await self._controller.listen(type='subscribe_to')
     self._targets = [subscribe_to['target']]
     self._target_height = subscribe_to['height']
-    while self._target_height > controller.node._height:
-      await self._subscribe_to_greater_height_target(controller)
+    while self._target_height > self._node._height:
+      await self._subscribe_to_greater_height_target()
 
-    await self._subscribe_to_same_height_target(controller)
+    await self._subscribe_to_same_height_target()
 
-  async def _subscribe_to_greater_height_target(self, controller):
-    controller.logger.info(
+  async def _subscribe_to_greater_height_target(self):
+    self._controller.logger.info(
         "Data node starting subscription to overly high target {target_id}", extra={'target_id': self._targets['id']})
-    interval = intervals.interval_json(controller.node._source_interval)
-    controller.send(
+    interval = intervals.interval_json(self._node._source_interval)
+    self._controller.send(
         self._target,
         messages.link.start_subscription(
-            subscriber=controller.new_handle(self._target['id']),
-            load=messages.link.load(messages_per_second=controller.node._estimated_messages_per_second()),
+            subscriber=self._controller.new_handle(self._target['id']),
+            load=messages.link.load(messages_per_second=self._node._estimated_messages_per_second()),
+            height=self._node._height,
             source_interval=interval,
             # We use this node as the unique kid of itself to even out mismatched heights.
             kid_intervals=[interval]))
 
-    subscription_started, _sender_id = await controller.listen(type='subscription_started')
+    subscription_started, _sender_id = await self._controller.listen(type='subscription_started')
     proxies = subscription_started['leftmost_kids']
     if len(proxies) != 1:
       raise errors.InternalError(
@@ -57,10 +60,10 @@ class SendStartSubscription(transaction.ParticipantRole):
 
     # Inform the target to connect its proxy to this node (not one of its kids)
     # so as to balance out the mismatched heights.
-    controller.send(self._target,
-                    messages.link.subscription_edges(edges={
-                        proxy['id']: [self.new_handle(self._target['id'])],
-                    }))
+    self._controller.send(
+        self._target, messages.link.subscription_edges(edges={
+            proxy['id']: [self.new_handle(self._target['id'])],
+        }))
 
     self._targets.append(proxy)
     self._target_height -= 1
@@ -72,7 +75,7 @@ class SendStartSubscription(transaction.ParticipantRole):
     Kids should be matched by the start point.
     '''
     other_target_interval = subscription_started['target_intervals']
-    my_kid_id_by_start = {controller.node._kids.left_endpoint(kid_id): kid_id for kid_id in controller.node._kids}
+    my_kid_id_by_start = {self._node._kids.left_endpoint(kid_id): kid_id for kid_id in self._node._kids}
     for other_kid in subscription_started['leftmost_kids']:
       other_kid_start = other_target_interval[other_kid['id']][0]
       my_kid_id = my_kid_id_by_start.pop(other_kid_start, None)
@@ -81,44 +84,50 @@ class SendStartSubscription(transaction.ParticipantRole):
                                    "Could not find the left endpoint in my_kid_id_by_start")
       yield my_kid_id, other_kid
 
-    if kid_id_by_start:
+    if my_kid_id_by_start:
       raise errors.InternalError("Mismatched adjacent leftmost kids: "
-                                 "Extra kids remained unmatched in kid_id_by_start")
+                                 "Extra kids remained unmatched in my_kid_id_by_start")
 
-  async def _enlist_kids_and_await_hellos(self, controller):
-    for kid_id in controller.node._kids:
-      controller.enlist(controller.node._kids[kid_id], SendStartSubscription,
-                        dict(parent=controller.new_handle(kid_id)))
+  async def _enlist_kids_and_await_hellos(self):
+    for kid_id in self._node._kids:
+      self._controller.enlist(self._node._kids[kid_id], SendStartSubscription,
+                              dict(parent=self._controller.new_handle(kid_id)))
 
     self._kid_roles = {}
-    while len(self._kid_roles) < len(controller.node._kids):
-      hello_parent, kid_id = await controller.listen(type='hello_parent')
+    while len(self._kid_roles) < len(self._node._kids):
+      hello_parent, kid_id = await self._controller.listen(type='hello_parent')
       self._kid_roles[kid_id] = hello_parent['kid']
 
-  async def _subscribe_to_same_height_target(self, controller):
-    await self._enlist_kids_and_await_hellos(controller)
+  @property
+  def _node(self):
+    return self._controller.node
 
-    controller.logger.info("Data node starting subscription to {target_id}", extra={'target_id': self._target['id']})
-    controller.send(
+  async def _subscribe_to_same_height_target(self):
+    await self._enlist_kids_and_await_hellos()
+
+    self._controller.logger.info(
+        "Data node starting subscription to {target_id}", extra={'target_id': self._target['id']})
+    self._controller.send(
         self._target,
         messages.link.start_subscription(
-            subscriber=controller.new_handle(self._target['id']),
-            load=messages.link.load(messages_per_second=controller.node._estimated_messages_per_second()),
-            source_interval=intervals.interval_json(controller.node._source_interval),
+            subscriber=self._controller.new_handle(self._target['id']),
+            load=messages.link.load(messages_per_second=self._node._estimated_messages_per_second()),
+            height=self._node._height,
+            source_interval=self._node._interval_json(),
             kid_intervals=[
-                intervals.interval_json(controller.node._kids.kid_interval(kid_id)) for kid_id in controller.node._kids
+                intervals.interval_json(self._node._kids.kid_interval(kid_id)) for kid_id in self._node._kids
             ]))
 
-    subscription_started, _sender_id = await controller.listen(type='subscription_started')
+    subscription_started, _sender_id = await self._controller.listen(type='subscription_started')
 
     edges = defaultdict(list)
 
     for my_kid_id, other_kid in self._make_matches(subscription_started):
       my_kid = self._kid_roles[my_kid_id]
-      edges[other_kid['id']].append(controller.transfer_handle(my_kid, self._target['id']))
-      controller.send(
+      edges[other_kid['id']].append(self._controller.transfer_handle(my_kid, self._target['id']))
+      self._controller.send(
           my_kid,
           messages.link.subscribe_to(
-              target=controller.transfer_handle(other_kid, my_kid_id), height=controller.node._height - 1))
+              target=self._controller.transfer_handle(other_kid, my_kid_id), height=self._node._height - 1))
 
-    controller.send(self._target, messages.link.subscription_edges(edges=edges))
+    self._controller.send(self._target, messages.link.subscription_edges(edges=edges))
