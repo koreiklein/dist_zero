@@ -207,11 +207,17 @@ class Demo(object):
     self.system.spawn_node(on_machine=machine, node_config=node_config)
     return node_config['id']
 
-  def create_dataset(self, machine, name, height):
+  def create_dataset(self, machine, name, height, input_link_keys=None, output_link_keys=None):
     return self.system.spawn_dataset(
         on_machine=machine,
         node_config=messages.io.data_node_config(
-            dist_zero.ids.new_id(name), parent=None, height=height, leaf_config=messages.io.sum_leaf_config(0)))
+            node_id=dist_zero.ids.new_id(name),
+            parent=None,
+            height=height,
+            dataset_program_config=messages.io.demo_dataset_program_config(
+                input_link_keys=input_link_keys if input_link_keys is not None else [],
+                output_link_keys=output_link_keys if output_link_keys is not None else [],
+            )))
 
   def get_leftmost_leaves(self, link_root_id):
     def _loop(node_id):

@@ -26,7 +26,10 @@ class SpawnKid(transaction.OriginatorRole):
 
     node_id = ids.new_id("DataNode_kid")
     node_config = messages.io.data_node_config(
-        node_id=node_id, parent=None, leaf_config=controller.node._leaf_config, height=controller.node._height - 1)
+        node_id=node_id,
+        parent=None,
+        dataset_program_config=controller.node._dataset_program_config,
+        height=controller.node._height - 1)
 
     controller.spawn_enlist(node_config, helpers.StartDataNode,
                             dict(parent=controller.new_handle(node_id), interval=controller.node._interval_json()))

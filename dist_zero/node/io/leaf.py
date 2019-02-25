@@ -12,13 +12,8 @@ class Leaf(object):
   '''Class for managing the state associated with a leaf node'''
 
   @staticmethod
-  def from_config(leaf_config):
-    if leaf_config['type'] == 'sum_leaf_config':
-      return SumLeaf(leaf_config['initial_state'])
-    elif leaf_config['type'] == 'collect_leaf_config':
-      return CollectLeaf()
-    else:
-      raise errors.InternalError(f"Unrecognized leaf type '{leaf_config['type']}'.")
+  def from_config(dataset_program_config):
+    raise errors.InternalError(f"Unrecognized leaf type '{dataset_program_config['type']}'.")
 
   @property
   def state(self):

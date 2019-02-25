@@ -1,4 +1,4 @@
-def link_node_config(node_id, left_is_data, right_is_data, leaf_config, height=None):
+def link_node_config(node_id, left_is_data, right_is_data, dataset_program_config, height=None):
   '''A config for a `LinkNode`.'''
   return {
       'type': 'LinkNode',
@@ -6,7 +6,7 @@ def link_node_config(node_id, left_is_data, right_is_data, leaf_config, height=N
       'height': height,
       'left_is_data': left_is_data,
       'right_is_data': right_is_data,
-      'leaf_config': leaf_config,
+      'dataset_program_config': dataset_program_config,
   }
 
 
@@ -99,11 +99,3 @@ def link_started():
   This message marks the end of a child's role in a `CreateLink` transaction.
   '''
   return {'type': 'link_started'}
-
-
-def sum_leaf():
-  return {'type': 'sum_link_leaf'}
-
-
-def forward_to_any_leaf():
-  return {'type': 'forward_to_any_link_leaf'}

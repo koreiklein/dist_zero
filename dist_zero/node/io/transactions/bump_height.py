@@ -17,7 +17,7 @@ class BumpHeight(transaction.OriginatorRole):
     proxy_config = messages.io.data_node_config(
         node_id=self.proxy_id,
         parent=controller.node.new_handle(self.proxy_id),
-        leaf_config=controller.node._leaf_config,
+        dataset_program_config=controller.node._dataset_program_config,
         height=controller.node._height)
 
     controller.spawn_enlist(

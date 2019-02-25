@@ -24,22 +24,22 @@ class DataNode(Node):
   minimal assignment such that n.height+1 == n.parent.height for every node n that has a parent.
   '''
 
-  def __init__(self, node_id, parent, controller, leaf_config, height, recorded_user_json):
+  def __init__(self, node_id, parent, controller, dataset_program_config, height, recorded_user_json):
     '''
     :param str node_id: The id to use for this node
     :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
     :type parent: :ref:`handle` or `None`
     :param int height: The height of the node in the tree.  See `DataNode`
     :param `MachineController` controller: The controller for this node.
-    :param objcect leaf_config: Configuration information for how to run a leaf.
+    :param objcect dataset_program_config: Configuration information for how to run a leaf.
     :param object recorded_user_json: None, or configuration for a recorded user.  Only allowed if this is a height 0 Node.
     '''
     self._controller = controller
     self._parent = parent
     self._height = height
-    self._leaf_config = leaf_config
+    self._dataset_program_config = dataset_program_config
     if self._height == 0:
-      self._leaf = leaf.Leaf.from_config(leaf_config)
+      self._leaf = leaf.Leaf.from_config(dataset_program_config)
     else:
       self._leaf = None
 
@@ -188,7 +188,7 @@ class DataNode(Node):
         node_id=node_config['id'],
         parent=node_config['parent'],
         controller=controller,
-        leaf_config=node_config['leaf_config'],
+        dataset_program_config=node_config['dataset_program_config'],
         height=node_config['height'],
         recorded_user_json=node_config['recorded_user_json'])
 
@@ -383,7 +383,7 @@ class DataNode(Node):
     parent = self.new_handle(node_id)
     return transaction.add_participant_role_to_node_config(
         node_config=messages.io.data_node_config(
-            node_id=node_id, parent=parent, height=0, leaf_config=self._leaf_config),
+            node_id=node_id, parent=parent, height=0, dataset_program_config=self._dataset_program_config),
         transaction_id=ids.new_id('AddLeafTransaction'),
         participant_typename='AddLeaf',
         args=dict(parent=parent))

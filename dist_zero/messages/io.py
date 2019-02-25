@@ -48,7 +48,16 @@ def output_action(number):
   return {'type': 'output_action', 'number': number}
 
 
-def data_node_config(node_id, parent, height, leaf_config, recorded_user_json=None):
+# FIXME(KK): Use actual program configs, containing reactive graphs.
+def demo_dataset_program_config(input_link_keys, output_link_keys):
+  return {
+      'type': 'demo_dataset_program_config',
+      'input_link_keys': input_link_keys,
+      'output_link_keys': output_link_keys
+  }
+
+
+def data_node_config(node_id, parent, height, dataset_program_config, recorded_user_json=None):
   '''
   A node config for creating a data node to manage a new list of io nodes.
 
@@ -56,7 +65,7 @@ def data_node_config(node_id, parent, height, leaf_config, recorded_user_json=No
   :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
   :type parent: :ref:`handle` or `None`
   :param int height: The height of the node in the tree.  See `DataNode`
-  :param object leaf_config: Configuration information for what kind of leaf nodes to run.
+  :param object dataset_program_config: Configuration information for what kind of leaf nodes to run.
   :param object initial_state: The initial state to use for new nodes.
   :param json recorded_user_json: json for a recorded user instance to initialize on the new node.
   '''
@@ -65,13 +74,9 @@ def data_node_config(node_id, parent, height, leaf_config, recorded_user_json=No
       'id': node_id,
       'parent': parent,
       'height': height,
-      'leaf_config': leaf_config,
+      'dataset_program_config': dataset_program_config,
       'recorded_user_json': recorded_user_json,
   }
-
-
-def sum_leaf_config(initial_state):
-  return {'type': 'sum_leaf_config', 'initial_state': initial_state, 'interval_type': 'point'}
 
 
 def collect_leaf_config():

@@ -338,7 +338,7 @@ class StartLinkNode(transaction.ParticipantRole):
         node_id=node_id,
         left_is_data=leftmost and self._node._left_is_data,
         right_is_data=rightmost and self._node._right_is_data,
-        leaf_config=self._node._leaf_config,
+        dataset_program_config=self._node._dataset_program_config,
         height=self._node._height - 1)
 
     self._rectangle[node_id] = (source_interval, target_interval)

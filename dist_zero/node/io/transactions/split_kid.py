@@ -25,7 +25,7 @@ class SplitKid(transaction.OriginatorRole):
     node_config = messages.io.data_node_config(
         node_id=new_id,
         parent=controller.node.new_handle(new_id),
-        leaf_config=controller.node._leaf_config,
+        dataset_program_config=controller.node._dataset_program_config,
         height=controller.node._height - 1)
     controller.spawn_enlist(
         node_config,
@@ -62,7 +62,7 @@ class SplitNode(transaction.ParticipantRole):
     self._absorber = absorber
 
   async def run(self, controller: 'TransactionRoleController'):
-    if controller.node._height == 0 and controller.node._leaf_config['interval_type'] != 'interval':
+    if controller.node._height == 0 and controller.node._dataset_program_config['interval_type'] != 'interval':
       raise errors.InternalError(f"Unable to split a height 0 Node with interval_type \"{interval_type}\" != interval")
     mid, leaving_kids = controller.node._kids.shrink_right()
     leaving_kid_ids = [kid['id'] for kid in leaving_kids]
