@@ -9,13 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 class LinkNode(Node):
-  def __init__(self, node_id, height, left_is_data, right_is_data, dataset_program_config, controller):
+  def __init__(self, node_id, height, left_is_data, right_is_data, link_key, controller):
     self.id = node_id
     self._height = height
     self._left_is_data = left_is_data
     self._right_is_data = right_is_data
-    self._dataset_program_config = dataset_program_config
     self._controller = controller
+    self._link_key = link_key
 
     self._kids = {}
 
@@ -37,9 +37,9 @@ class LinkNode(Node):
     return LinkNode(
         node_id=node_config['id'],
         height=node_config['height'],
+        link_key=node_config['link_key'],
         left_is_data=node_config['left_is_data'],
         right_is_data=node_config['right_is_data'],
-        dataset_program_config=node_config['dataset_program_config'],
         controller=controller)
 
   def elapse(self, ms):
@@ -83,7 +83,7 @@ class LinkNode(Node):
 
   def maybe_start_leaf(self):
     if self._height == 0:
-      self._leaf = link_leaf.from_config(dataset_program_config=self._dataset_program_config, node=self)
+      self._leaf = link_leaf.from_config(node=self)
       # FIXME(KK): Should we not somehow initialize the activities of the leaf?
 
   def _maybe_send_forward_messages(self, ms):

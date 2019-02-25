@@ -28,8 +28,11 @@ class CreateLink(transaction.ParticipantRole):
     self._hello_parent = None
 
   async def run(self, controller: 'TransactionRoleController'):
-    controller.enlist(self._src, SendStartSubscription, dict(parent=controller.new_handle(self._src['id'])))
-    controller.enlist(self._tgt, ReceiveStartSubscription, dict(requester=controller.new_handle(self._tgt['id'])))
+    link_key = controller.node._link_key
+    controller.enlist(self._src, SendStartSubscription,
+                      dict(parent=controller.new_handle(self._src['id']), link_key=link_key))
+    controller.enlist(self._tgt, ReceiveStartSubscription,
+                      dict(requester=controller.new_handle(self._tgt['id']), link_key=link_key))
 
     self._hello_parent = {}
     for i in range(2):
@@ -144,6 +147,8 @@ class StartLinkNode(transaction.ParticipantRole):
     start_subscriptions = []
     for i in self._left_neighbors:
       start_subscription, _subscriber_id = await self._controller.listen('start_subscription')
+      if start_subscription['link_key'] != self._node._link_key:
+        raise errors.InternalError("Mismatched link keys.")
       start_subscriptions.append(start_subscription)
 
     self._start_subscription_columns = list(
@@ -181,8 +186,9 @@ class StartLinkNode(transaction.ParticipantRole):
           target_intervals[kid_id] = intervals.interval_json(kid_target_interval)
 
       self._controller.send(
-          subscriber, messages.link.subscription_started(
-              leftmost_kids=leftmost_kids, target_intervals=target_intervals))
+          subscriber,
+          messages.link.subscription_started(
+              leftmost_kids=leftmost_kids, link_key=self._node._link_key, target_intervals=target_intervals))
 
   async def _subscribe_to_right_neighbors(self):
     load_per_right_neighbor = messages.link.load(
@@ -192,6 +198,7 @@ class StartLinkNode(transaction.ParticipantRole):
           right_neighbor,
           messages.link.start_subscription(
               subscriber=self._controller.new_handle(right_neighbor['id']),
+              link_key=self._node._link_key,
               height=self._node._height,
               load=load_per_right_neighbor,
               source_interval=intervals.interval_json(self._source_interval),
@@ -201,6 +208,8 @@ class StartLinkNode(transaction.ParticipantRole):
     self._subscription_started = {}
     while len(self._subscription_started) < len(self._right_neighbors):
       subscription_started, right_id = await self._controller.listen('subscription_started')
+      if subscription_started['link_key'] != self._node._link_key:
+        raise errors.InternalError("Mismatched link keys.")
       self._subscription_started[right_id] = subscription_started
 
   async def _send_subscription_edges(self):

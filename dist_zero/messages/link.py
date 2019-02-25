@@ -1,4 +1,4 @@
-def link_node_config(node_id, left_is_data, right_is_data, dataset_program_config, height=None):
+def link_node_config(node_id, left_is_data, right_is_data, link_key, height=None):
   '''A config for a `LinkNode`.'''
   return {
       'type': 'LinkNode',
@@ -6,7 +6,7 @@ def link_node_config(node_id, left_is_data, right_is_data, dataset_program_confi
       'height': height,
       'left_is_data': left_is_data,
       'right_is_data': right_is_data,
-      'dataset_program_config': dataset_program_config,
+      'link_key': link_key,
   }
 
 
@@ -19,13 +19,14 @@ def load(messages_per_second):
   return {'messages_per_second': messages_per_second}
 
 
-def start_subscription(subscriber, load, height, source_interval, kid_intervals=None):
+def start_subscription(subscriber, link_key, load, height, source_interval, kid_intervals=None):
   '''
   Request to start a subscription between the sender and the receiver.
   Only the node to the left (the node sending the data) should send start_subscription,
   and only the node to the right (the node receiving the data) should receive start_subscription.
 
   :param object subscriber: The role handle of the node to the left that would like to subscribe.
+  :param str link_key: The key identifying the link this subscription is a part of
   :param height: The height of the subscriber.
   :param load: Describes the total load the sender anticipates will be sent over this subscription.
   :param tuple source_interval: A pair of keys giving the interval that the subscriber will send from.
@@ -34,6 +35,7 @@ def start_subscription(subscriber, load, height, source_interval, kid_intervals=
   return {
       'type': 'start_subscription',
       'subscriber': subscriber,
+      'link_key': link_key,
       'height': height,
       'load': load,
       'source_interval': source_interval,
@@ -41,15 +43,21 @@ def start_subscription(subscriber, load, height, source_interval, kid_intervals=
   }
 
 
-def subscription_started(leftmost_kids, target_intervals):
+def subscription_started(leftmost_kids, link_key, target_intervals):
   '''
   Sent in response to start_subscription by the node to the right to indicate that
   the subscription from the node to the left has started.
 
   :param list leftmost_kids: A list of role handles of the kids of this node.
+  :param str link_key: The key identifying the link this subscription is a part of
   :param dict[str, tuple] target_intervals: A dictionary mapping each kid_id in ``leftmost_kids`` to its target interval
   '''
-  return {'type': 'subscription_started', 'leftmost_kids': leftmost_kids, 'target_intervals': target_intervals}
+  return {
+      'type': 'subscription_started',
+      'leftmost_kids': leftmost_kids,
+      'link_key': link_key,
+      'target_intervals': target_intervals
+  }
 
 
 def subscription_edges(edges):

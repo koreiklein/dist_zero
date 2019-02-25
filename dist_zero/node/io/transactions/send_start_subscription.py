@@ -8,8 +8,9 @@ class SendStartSubscription(transaction.ParticipantRole):
   Transaction role to have a (sub)tree of data nodes to send start_subscription messages.
   '''
 
-  def __init__(self, parent):
+  def __init__(self, parent, link_key):
     self._parent = parent
+    self._link_key = link_key
 
     # List of role handles of the nodes we will subscribe to.  There is often just one,
     # except in cases where the connected link is of a greater height than this node.
@@ -45,13 +46,16 @@ class SendStartSubscription(transaction.ParticipantRole):
         self._target,
         messages.link.start_subscription(
             subscriber=self._controller.new_handle(self._target['id']),
+            link_key=self._link_key,
             load=messages.link.load(messages_per_second=self._node._estimated_messages_per_second()),
             height=self._node._height,
             source_interval=interval,
-            # We use this node as the unique kid of itself to even out mismatched heights.
-            kid_intervals=[interval]))
+            kid_intervals=[interval], # We use this node as the unique kid of itself to even out mismatched heights.
+        ))
 
     subscription_started, _sender_id = await self._controller.listen(type='subscription_started')
+    self._validate_subscription_started(subscription_started)
+
     proxies = subscription_started['leftmost_kids']
     if len(proxies) != 1:
       raise errors.InternalError(
@@ -91,7 +95,7 @@ class SendStartSubscription(transaction.ParticipantRole):
   async def _enlist_kids_and_await_hellos(self):
     for kid_id in self._node._kids:
       self._controller.enlist(self._node._kids[kid_id], SendStartSubscription,
-                              dict(parent=self._controller.new_handle(kid_id)))
+                              dict(parent=self._controller.new_handle(kid_id), link_key=self._link_key))
 
     self._kid_roles = {}
     while len(self._kid_roles) < len(self._node._kids):
@@ -102,6 +106,10 @@ class SendStartSubscription(transaction.ParticipantRole):
   def _node(self):
     return self._controller.node
 
+  def _validate_subscription_started(self, subscription_started):
+    if subscription_started['link_key'] != self._link_key:
+      raise errors.InternalError("Mismatched link keys")
+
   async def _subscribe_to_same_height_target(self):
     await self._enlist_kids_and_await_hellos()
 
@@ -111,6 +119,7 @@ class SendStartSubscription(transaction.ParticipantRole):
         self._target,
         messages.link.start_subscription(
             subscriber=self._controller.new_handle(self._target['id']),
+            link_key=self._link_key,
             load=messages.link.load(messages_per_second=self._node._estimated_messages_per_second()),
             height=self._node._height,
             source_interval=self._node._interval_json(),
@@ -119,6 +128,7 @@ class SendStartSubscription(transaction.ParticipantRole):
             ]))
 
     subscription_started, _sender_id = await self._controller.listen(type='subscription_started')
+    self._validate_subscription_started(subscription_started)
 
     edges = defaultdict(list)
 

@@ -185,19 +185,16 @@ class Demo(object):
 
   def link_datasets(self, root_input_id, root_output_id, machine, name=None):
     return self._connect_trees_with_link_network(
-        node_id=dist_zero.ids.new_id(name if name is not None else "LinkRoot"),
+        node_id=dist_zero.ids.new_id(name if name is not None else 'LinkRoot'),
         root_input_id=root_input_id,
         root_output_id=root_output_id,
         machine=machine,
-        leaf_config=messages.link.forward_to_any_leaf())
+        link_key=dist_zero.ids.new_id(name if name is not None else 'LinkKey'))
 
-  def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, leaf_config):
+  def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, link_key):
     node_config = transaction.add_participant_role_to_node_config(
         node_config=messages.link.link_node_config(
-            node_id=dist_zero.ids.new_id('LinkNode_root'),
-            left_is_data=True,
-            right_is_data=True,
-            leaf_config=leaf_config),
+            node_id=dist_zero.ids.new_id('LinkNode_root'), left_is_data=True, right_is_data=True, link_key=link_key),
         transaction_id=dist_zero.ids.new_id('NewLink'),
         participant_typename='CreateLink',
         args=dict(
