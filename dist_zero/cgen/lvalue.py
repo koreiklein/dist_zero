@@ -120,9 +120,6 @@ Deref = _Deref()
 class CreateVar(Lvalue):
   def __init__(self, var):
     self.var = var
-    if self.var.__class__ == CreateVar:
-      import ipdb
-      ipdb.set_trace()
 
   def add_includes(self, program):
     self.var.add_includes(program)
