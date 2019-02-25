@@ -51,7 +51,7 @@ class LinkNode(Node):
   def handle_api_message(self, message):
     # FIXME(KK): This logic is from the old LinkNode code and is horribly broken.  Fix it!
     if message['type'] == 'get_kids':
-      return {key: self._kids[value] for key in self._kids}
+      return {key: self._kids[key] for key in self._kids}
     elif message['type'] == 'get_leftmost_kids':
       return {key: self._kids[key] for key in self._manager.source_objects()}
     elif message['type'] == 'get_senders':

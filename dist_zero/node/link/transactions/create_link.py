@@ -319,11 +319,7 @@ class StartLinkNode(transaction.ParticipantRole):
         for subscription_started in self._subscription_started.values() for kid in subscription_started['leftmost_kids']
     }
 
-    def _get_receiver_handle(node_id):
-      if node_id in rightmost:
-        return rightmost[node_id]
-      else:
-        return self._kids[node_id]
+    _get_receiver_handle = lambda node_id: rightmost[node_id] if node_id in rightmost else self._kids[node_id]
 
     # Inform the leftmost kids of their neighbors
     for kid in self._leftmost_kids:
