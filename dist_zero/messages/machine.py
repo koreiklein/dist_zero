@@ -204,15 +204,6 @@ def new_handle(new_node_id):
   return {'type': 'new_handle', 'new_node_id': new_node_id}
 
 
-def get_output_state():
-  '''
-  Get and return the current output state for an output node.
-  :return: The current output state of that node.
-  :rtype: object
-  '''
-  return {'type': 'get_output_state'}
-
-
 def get_stats():
   '''
   Get and return the stats for a `Node` in the network.
@@ -220,6 +211,16 @@ def get_stats():
   :rtype: dict
   '''
   return {'type': 'get_stats'}
+
+
+def get_data_link(link_key, key_type):
+  '''
+  API message to a data node to get the handle of the node subscribed to a particular ``link_key``
+
+  :param str link_key: The link key
+  :param str key_type: 'input' or 'output'
+  '''
+  return {'type': 'get_data_link', 'link_key': link_key, 'key_type': key_type}
 
 
 def get_kids():

@@ -129,8 +129,7 @@ class StartLinkNode(transaction.ParticipantRole):
     await self._send_subscription_edges()
     await self._receive_link_started_from_all_kids()
     await self._send_link_started_to_parent()
-
-    self._node.maybe_start_leaf()
+    self._finish_setting_up_node_state()
 
   async def _send_hello_to_parent(self):
     if self._parent is not None:
@@ -156,7 +155,7 @@ class StartLinkNode(transaction.ParticipantRole):
                 for start_subscription in start_subscriptions),
                key=lambda pair: pair[0][0]))
     if not self._start_subscription_columns:
-      raise errors.Inte
+      raise errors.InternalError("There should be at least one start_subscription message.")
 
     self._validate_start_subscription_columns()
 
@@ -188,7 +187,12 @@ class StartLinkNode(transaction.ParticipantRole):
       self._controller.send(
           subscriber,
           messages.link.subscription_started(
-              leftmost_kids=leftmost_kids, link_key=self._node._link_key, target_intervals=target_intervals))
+              leftmost_kids=leftmost_kids,
+              link_key=self._node._link_key,
+              target_intervals=target_intervals,
+              source_intervals=None if not self._node._left_is_data else
+              {kid['id']: intervals.interval_json(self._rectangle[kid['id']][0])
+               for kid in leftmost_kids}))
 
   async def _subscribe_to_right_neighbors(self):
     load_per_right_neighbor = messages.link.load(
@@ -235,6 +239,24 @@ class StartLinkNode(transaction.ParticipantRole):
     if self._parent is not None:
       self._controller.send(self._parent, messages.link.link_started())
 
+  def _finish_setting_up_node_state(self):
+    self._node._senders = {
+        node['id']: self._controller.role_handle_to_node_handle(node)
+        for node in self._left_neighbors
+    }
+    self._node._receivers = {
+        node['id']: self._controller.role_handle_to_node_handle(node)
+        for node in self._right_neighbors
+    }
+
+    self._node._kids = {
+        node_id: self._controller.role_handle_to_node_handle(node)
+        for node_id, node in self._kids.items()
+    }
+
+    # FIXME(KK): Should we not somehow initialize the activities of the leaf?
+    # Maybe dist_zero/node/link/link_leaf.py can help?
+
   async def _receive_subscription_edges(self):
     self._subscription_edges = {}
     while len(self._subscription_edges) < len(self._left_neighbors):
@@ -272,13 +294,13 @@ class StartLinkNode(transaction.ParticipantRole):
 
     self._block_to_node_id = {}
     for kid_id in left_ids:
-      self._block_to_node_id[self._manager.source_block[kid_id]] = kid_id
-    for kid in right_ids:
-      self._block_to_node_id[self._manager.target_block[kid_id]] = kid_id
+      self._block_to_node_id[self._manager.source_block(kid_id)] = kid_id
+    for kid_id in right_ids:
+      self._block_to_node_id[self._manager.target_block(kid_id)] = kid_id
 
     kid_args = []
     for block in self._manager.internal_blocks():
-      source_interval, target_interval = LinkGraphManager.block_rectangle(block)
+      source_interval, target_interval = manager.LinkGraphManager.block_rectangle(block)
 
       node_id = ids.new_id('LinkNode_internal')
 
@@ -292,10 +314,22 @@ class StartLinkNode(transaction.ParticipantRole):
 
     await self._spawn_and_await_kids(kid_args)
 
+    rightmost = {
+        kid['id']: kid
+        for subscription_started in self._subscription_started.values() for kid in subscription_started['leftmost_kids']
+    }
+
+    def _get_receiver_handle(node_id):
+      if node_id in rightmost:
+        return rightmost[node_id]
+      else:
+        return self._kids[node_id]
+
     # Inform the leftmost kids of their neighbors
     for kid in self._leftmost_kids:
       kid_id = kid['id']
-      receivers = (self._kids[self._block_to_node_id[block]] for block in self._manager.source_block(kid_id).above)
+      receivers = (_get_receiver_handle(self._block_to_node_id[block])
+                   for block in self._manager.source_block(kid_id).above)
       senders = self._left_kid_senders[kid_id]
       self._controller.send(
           kid,
@@ -307,7 +341,7 @@ class StartLinkNode(transaction.ParticipantRole):
     for block in self._manager.internal_blocks():
       node_id = self._block_to_node_id[block]
       senders = (self._kids[self._block_to_node_id[below]] for below in block.below)
-      receivers = (self._kids[self._block_to_node_id[above]] for above in block.above)
+      receivers = (_get_receiver_handle(self._block_to_node_id[above]) for above in block.above)
       self._controller.send(
           self._kids[node_id],
           messages.link.set_link_neighbors(
@@ -345,10 +379,10 @@ class StartLinkNode(transaction.ParticipantRole):
   def _spawn_kid(self, source_interval, target_interval, node_id, leftmost=False, rightmost=False):
     node_config = messages.link.link_node_config(
         node_id=node_id,
+        height=self._node._height - 1,
         left_is_data=leftmost and self._node._left_is_data,
         right_is_data=rightmost and self._node._right_is_data,
-        dataset_program_config=self._node._dataset_program_config,
-        height=self._node._height - 1)
+        link_key=self._node._link_key)
 
     self._rectangle[node_id] = (source_interval, target_interval)
 
@@ -388,15 +422,15 @@ class StartLinkNode(transaction.ParticipantRole):
   def _validate_start_subscription_columns(self):
     cur_source_key = self._node._source_interval[0]
     for (source_start, source_stop), start_subscription in self._start_subscription_columns:
-      if source_start != cur_source_key:
+      if cur_source_key != intervals.Min and source_start != cur_source_key:
         raise errors.InternalError("start_subscription messages to StartLinkNode did not form a valid partition")
       cur_source_key = source_stop
 
-    if cur_source_key != self._node._source_interval[1]:
+    if cur_source_key is not None and cur_source_key != self._node._source_interval[1]:
       raise errors.InternalError(
           "start_subscription messages to StartLinkNode did not form a valid partition at the parent's right endpoint")
 
-  async def _spawn_leftmost_kids_by_load():
+  async def _spawn_leftmost_kids_by_load(self):
     '''
     Spawn the leftmost layer of kids.
     Fewer nodes leads to a more compact network.

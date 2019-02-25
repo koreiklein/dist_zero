@@ -59,6 +59,17 @@ class SystemController(object):
 
     return list(result.keys())
 
+  def get_output_link(self, node_id, link_key):
+    return self.get_link(node_id, link_key, key_type='output')
+
+  def get_input_link(self, node_id, link_key):
+    return self.get_link(node_id, link_key, key_type='input')
+
+  def get_link(self, node_id, link_key, key_type):
+    node = self.send_api_message(node_id, messages.machine.get_data_link(link_key=link_key, key_type=key_type))
+    self._add_node_machine_mapping(node)
+    return node['id'] if node is not None else node
+
   def get_kids(self, node_id):
     result = self.send_api_message(node_id, messages.machine.get_kids())
     for handle in result.values():
@@ -90,7 +101,7 @@ class SystemController(object):
     return result
 
   def _add_node_machine_mapping(self, handle):
-    if handle['id'] not in self._node_id_to_machine_id:
+    if handle is not None and handle['id'] not in self._node_id_to_machine_id:
       self._node_id_to_machine_id[handle['id']] = handle['controller_id']
 
   def create_kid_config(self, data_node_id, new_node_name, machine_id):
@@ -230,16 +241,6 @@ class SystemController(object):
     :rtype: list[str]
     '''
     return await self._spawner.create_machines(machine_configs)
-
-  def get_output_state(self, output_node_id):
-    '''
-    Get the state associated with an output node.
-
-    :param str output_node: The id of a output node.
-
-    :return: The state of that node at about the current time.
-    '''
-    return self.send_api_message(output_node_id, messages.machine.get_output_state())
 
   def get_stats(self, node_id):
     '''

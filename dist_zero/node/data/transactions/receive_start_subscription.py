@@ -28,7 +28,8 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
 
   async def _receive_from_greater_height_source(self, subscriber):
     self._controller.send(subscriber, self._subscription_started([self._controller.new_handle(subscriber['id'])]))
-    edges, sender_id = await self._controller.listen(type='subscription_edges')
+    subscription_edges, sender_id = await self._controller.listen(type='subscription_edges')
+    edges = subscription_edges['edges']
     proxies = edges[self._node.id]
     if len(proxies) != 1:
       raise errors.InternalError(
@@ -60,7 +61,7 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
     # We don't actually need to do anything with these edges and only listen for this
     # message so that it isn't lost.
     await self._controller.listen(type='subscription_edges')
-    self._node._publisher.subscribe_input(self._controller.role_handle_to_node_handle(subscriber))
+    self._node._publisher.subscribe_input(self._link_key, self._controller.role_handle_to_node_handle(subscriber))
 
   async def _enlist_kids_and_await_hellos(self):
     kid_ids = set(self._node._kids)

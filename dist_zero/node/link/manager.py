@@ -190,7 +190,8 @@ class LinkGraphManager(object):
     while queue:
       block = queue.pop()
       if not block.is_target and block not in result:
-        result.add(block)
+        if not block.is_source:
+          result.add(block)
         queue.extend(block.above)
 
     return result
@@ -428,7 +429,10 @@ class SourceOrTargetBlock(Block):
 
   @property
   def stop(self):
-    return self.start + self.width
+    if self.width == intervals.Max:
+      return intervals.Max
+    else:
+      return self.start + self.width
 
   def __le__(self, other):
     if other.__class__ == self.__class__:

@@ -4,7 +4,7 @@ from dist_zero import settings, messages, errors, recorded, \
     importer, exporter, misc, ids, transaction, message_rate_tracker
 from dist_zero.node.node import Node
 from dist_zero.node.data import leaf_html
-from dist_zero.node.data import leaf, publisher
+from dist_zero.node.data import publisher
 
 from .monitor import Monitor
 from .transactions import remove_leaf
@@ -38,12 +38,8 @@ class DataNode(Node):
     self._parent = parent
     self._height = height
     self._dataset_program_config = dataset_program_config
-    if self._height == 0:
-      self._leaf = leaf.Leaf.from_config(dataset_program_config)
-      self._publisher = None
-    else:
-      self._leaf = None
-      self._publisher = publisher.Publisher(self._dataset_program_config)
+    self._publisher = publisher.Publisher(
+        is_leaf=(self._height == 0), dataset_program_config=self._dataset_program_config)
 
     self.id = node_id
 
@@ -108,13 +104,6 @@ class DataNode(Node):
 
   def is_data(self):
     return True
-
-  @property
-  def current_state(self):
-    if self._height != 0:
-      raise errors.InternalError("Non-leaf DataNodes do not maintain a current_state.")
-    else:
-      return self._leaf.state
 
   @property
   def height(self):
@@ -343,21 +332,16 @@ class DataNode(Node):
       self._route_dns(message)
     elif message['type'] == 'get_capacity':
       return self._get_capacity()
+    elif message['type'] == 'get_data_link':
+      return self._publisher.get_linked_handle(link_key=message['link_key'], key_type=message['key_type'])
     elif message['type'] == 'get_kids':
       return {kid_id: self._kids[kid_id] for kid_id in self._kids}
     elif message['type'] == 'get_interval':
       return self._interval_json()
     elif message['type'] == 'get_senders':
-      if self._importer is None:
-        return {}
-      else:
-        return {self._importer.sender_id: self._importer.sender}
+      return {node['id']: node for node in self._publisher.inputs()}
     elif message['type'] == 'get_receivers':
-      return {}
-    elif message['type'] == 'get_output_state':
-      if self._height != 0:
-        raise errors.InternalError("Can't get output state for a DataNode with height > 0")
-      return self._leaf.state
+      return {node['id']: node for node in self._publisher.outputs()}
     else:
       return super(DataNode, self).handle_api_message(message)
 
@@ -394,8 +378,6 @@ class DataNode(Node):
   def deliver(self, message, sequence_number, sender_id):
     if self._height == 0:
       self._message_rate_tracker.increment(self.linker.now_ms)
-
-    self._leaf.update_current_state(message)
 
     self.linker.advance_sequence_number()
 

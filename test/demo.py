@@ -183,13 +183,13 @@ class Demo(object):
     controllers = await self.new_machine_controllers(1)
     return controllers[0]
 
-  def link_datasets(self, root_input_id, root_output_id, machine, name=None):
+  def link_datasets(self, root_input_id, root_output_id, machine, link_key, name=None):
     return self._connect_trees_with_link_network(
         node_id=dist_zero.ids.new_id(name if name is not None else 'LinkRoot'),
         root_input_id=root_input_id,
         root_output_id=root_output_id,
         machine=machine,
-        link_key=dist_zero.ids.new_id(name if name is not None else 'LinkKey'))
+        link_key=link_key)
 
   def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, link_key):
     node_config = transaction.add_participant_role_to_node_config(
@@ -224,7 +224,7 @@ class Demo(object):
         for kid_id in self.system.get_leftmost_kids(node_id):
           yield from _loop(kid_id)
 
-    return list(_loop(root_id))
+    return list(_loop(link_root_id))
 
   def get_leaves(self, root_id):
     def _loop(node_id):

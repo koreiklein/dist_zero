@@ -37,7 +37,7 @@ class SendStartSubscription(transaction.ParticipantRole):
       await self._subscribe_to_greater_height_target()
 
     await self._subscribe_to_same_height_target()
-    self._node._publisher.subscribe_output(self._controller.role_handle_to_node_handle(self._target))
+    self._node._publisher.subscribe_output(self._link_key, self._controller.role_handle_to_node_handle(self._target))
 
   async def _subscribe_to_greater_height_target(self):
     self._controller.logger.info(
@@ -79,10 +79,10 @@ class SendStartSubscription(transaction.ParticipantRole):
     that form a bijection between the kids of this node and the kids in ``subscription_started``.
     Kids should be matched by the start point.
     '''
-    other_target_interval = subscription_started['target_intervals']
+    other_source_interval = subscription_started['source_intervals']
     my_kid_id_by_start = {self._node._kids.left_endpoint(kid_id): kid_id for kid_id in self._node._kids}
     for other_kid in subscription_started['leftmost_kids']:
-      other_kid_start = other_target_interval[other_kid['id']][0]
+      other_kid_start = intervals.json_to_key(other_source_interval[other_kid['id']][0])
       my_kid_id = my_kid_id_by_start.pop(other_kid_start, None)
       if my_kid_id is None:
         raise errors.InternalError("Mismatched adjacent leftmost kids: "
@@ -116,6 +116,16 @@ class SendStartSubscription(transaction.ParticipantRole):
 
     self._controller.logger.info(
         "Data node starting subscription to {target_id}", extra={'target_id': self._target['id']})
+
+    kid_intervals = []
+    for kid_id in self._node._kids:
+      interval = intervals.interval_json(self._node._kids.kid_interval(kid_id))
+      if kid_intervals and kid_intervals[-1][1] is None:
+        kid_intervals[-1][1] = interval[0]
+      kid_intervals.append(list(interval))
+    if kid_intervals and kid_intervals[-1][1] is None:
+      kid_intervals[-1][1] = self._node._interval_json()[1]
+
     self._controller.send(
         self._target,
         messages.link.start_subscription(
@@ -124,9 +134,7 @@ class SendStartSubscription(transaction.ParticipantRole):
             load=messages.link.load(messages_per_second=self._node._estimated_messages_per_second()),
             height=self._node._height,
             source_interval=self._node._interval_json(),
-            kid_intervals=[
-                intervals.interval_json(self._node._kids.kid_interval(kid_id)) for kid_id in self._node._kids
-            ]))
+            kid_intervals=kid_intervals))
 
     subscription_started, _sender_id = await self._controller.listen(type='subscription_started')
     self._validate_subscription_started(subscription_started)

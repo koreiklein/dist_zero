@@ -22,9 +22,9 @@ class LinkNode(Node):
     # These will be set by the role that starts this LinkNode
     self._source_interval = None
     self._target_interval = None
-
-    # The LinkGraphManager instance to manage this node's kids.
-    self._manager = None
+    self._senders = None
+    self._receivers = None
+    self._manager = None # The LinkGraphManager instance to manage this node's kids.
 
     # FIXME(KK): This is all specific to summing.  Please remove it once leaves implement general reactive graphs.
     self._current_state = 0
@@ -55,11 +55,9 @@ class LinkNode(Node):
     elif message['type'] == 'get_leftmost_kids':
       return {key: self._kids[key] for key in self._manager.source_objects()}
     elif message['type'] == 'get_senders':
-      import ipdb
-      ipdb.set_trace()
-      return {importer.sender_id: importer.sender for importer in self._importers.values()}
+      return dict(self._senders)
     elif message['type'] == 'get_receivers':
-      return self._receivers if self._receivers is not None else {}
+      return dict(self._receivers)
     else:
       return super(LinkNode, self).handle_api_message(message)
 
@@ -80,11 +78,6 @@ class LinkNode(Node):
 
   def deliver(self, message, sequence_number, sender_id):
     self._deltas.add_message(sender_id=sender_id, sequence_number=sequence_number, message=message)
-
-  def maybe_start_leaf(self):
-    if self._height == 0:
-      self._leaf = link_leaf.from_config(node=self)
-      # FIXME(KK): Should we not somehow initialize the activities of the leaf?
 
   def _maybe_send_forward_messages(self, ms):
     '''Called periodically to give leaf nodes an opportunity to send their messages.'''

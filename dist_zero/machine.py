@@ -373,9 +373,6 @@ class NodeManager(MachineController):
           'reason': 'Unrecognized message type {}'.format(message['type']),
       }
 
-  def get_output_state(self, node_id):
-    return self._node_by_id[node_id].current_state
-
   def _format_node_id_for_logs(self, node_id):
     if node_id is None:
       return 'None'

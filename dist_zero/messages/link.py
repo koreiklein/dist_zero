@@ -32,6 +32,11 @@ def start_subscription(subscriber, link_key, load, height, source_interval, kid_
   :param tuple source_interval: A pair of keys giving the interval that the subscriber will send from.
   :param list kid_intervals: If provided, gives the exact list of intervals managed by each kid of the sender.
   '''
+  if kid_intervals:
+    for x in kid_intervals:
+      if x[0] is None or x[1] is None:
+        import ipdb
+        ipdb.set_trace()
   return {
       'type': 'start_subscription',
       'subscriber': subscriber,
@@ -43,7 +48,7 @@ def start_subscription(subscriber, link_key, load, height, source_interval, kid_
   }
 
 
-def subscription_started(leftmost_kids, link_key, target_intervals):
+def subscription_started(leftmost_kids, link_key, target_intervals, source_intervals=None):
   '''
   Sent in response to start_subscription by the node to the right to indicate that
   the subscription from the node to the left has started.
@@ -51,12 +56,15 @@ def subscription_started(leftmost_kids, link_key, target_intervals):
   :param list leftmost_kids: A list of role handles of the kids of this node.
   :param str link_key: The key identifying the link this subscription is a part of
   :param dict[str, tuple] target_intervals: A dictionary mapping each kid_id in ``leftmost_kids`` to its target interval
+  :param dict[str, tuple] source_intervals: When sent to a data node, this should by a dictionary mapping
+    each kid_id in the ``leftmost_kids`` to its source interval.  Otherwise, it can be `None`.
   '''
   return {
       'type': 'subscription_started',
       'leftmost_kids': leftmost_kids,
       'link_key': link_key,
-      'target_intervals': target_intervals
+      'target_intervals': target_intervals,
+      'source_intervals': source_intervals
   }
 
 
