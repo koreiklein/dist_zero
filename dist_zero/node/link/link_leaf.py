@@ -43,7 +43,7 @@ class SumLinkLeaf(LinkLeaf):
     if self._node.right_is_data:
       exporter, = self._node._exporters.values()
       exporter.export_message(
-          message=messages.io.output_action(increment),
+          message=messages.data.output_action(increment),
           sequence_number=sequence_number,
       )
     else:

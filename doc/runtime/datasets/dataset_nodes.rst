@@ -1,9 +1,9 @@
 Dataset Nodes
 =================
 
-.. automodule:: dist_zero.node.io.data
+.. automodule:: dist_zero.node.data.data
    :members:
 
-.. automodule:: dist_zero.node.io.leaf
+.. automodule:: dist_zero.node.data.leaf
    :members:
 

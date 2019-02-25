@@ -207,11 +207,11 @@ class Demo(object):
   def create_dataset(self, machine, name, height, input_link_keys=None, output_link_keys=None):
     return self.system.spawn_dataset(
         on_machine=machine,
-        node_config=messages.io.data_node_config(
+        node_config=messages.data.data_node_config(
             node_id=dist_zero.ids.new_id(name),
             parent=None,
             height=height,
-            dataset_program_config=messages.io.demo_dataset_program_config(
+            dataset_program_config=messages.data.demo_dataset_program_config(
                 input_link_keys=input_link_keys if input_link_keys is not None else [],
                 output_link_keys=output_link_keys if output_link_keys is not None else [],
             )))
@@ -244,7 +244,7 @@ class Demo(object):
     for t in times_to_send:
       amount_to_send = int(self._rand.random() * 20)
       self.total_simulated_amount += amount_to_send
-      time_message_pairs.append((t, messages.io.input_action(amount_to_send)))
+      time_message_pairs.append((t, messages.data.input_action(amount_to_send)))
 
     result = RecordedUser(name, 0, types.Int32, time_message_pairs)
     self._recorded_users.append(result)

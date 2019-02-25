@@ -14,7 +14,7 @@ class BumpHeight(transaction.OriginatorRole):
 
     self.proxy_id = ids.new_id('DataNode_proxy')
 
-    proxy_config = messages.io.data_node_config(
+    proxy_config = messages.data.data_node_config(
         node_id=self.proxy_id,
         parent=controller.node.new_handle(self.proxy_id),
         dataset_program_config=controller.node._dataset_program_config,
@@ -28,7 +28,8 @@ class BumpHeight(transaction.OriginatorRole):
 
     kids_to_absorb = list(controller.node._kids)
     controller.send(
-        proxy, messages.io.absorb_these_kids(kid_ids=kids_to_absorb, left_endpoint=controller.node._interval_json()[0]))
+        proxy, messages.data.absorb_these_kids(
+            kid_ids=kids_to_absorb, left_endpoint=controller.node._interval_json()[0]))
 
     kid_ids = set(kids_to_absorb)
     for kid_id in kids_to_absorb:

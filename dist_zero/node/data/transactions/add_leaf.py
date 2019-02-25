@@ -1,5 +1,5 @@
 from dist_zero import transaction, errors, messages
-from dist_zero.node.io.kids import DataNodeKids
+from dist_zero.node.data.kids import DataNodeKids
 
 from . import helpers
 
@@ -22,7 +22,7 @@ class AddLeaf(transaction.ParticipantRole):
         self._parent, AddLeafParent,
         dict(
             kid=controller.new_handle(self._parent['id']),
-            kid_summary=messages.io.kid_summary(
+            kid_summary=messages.data.kid_summary(
                 size=0, n_kids=0, height=0, messages_per_second=0, availability=controller.node._leaf_availability)))
 
     leaf_key, _sender_id = await controller.listen(type='set_leaf_key')
@@ -50,7 +50,7 @@ class AddLeafParent(transaction.ParticipantRole):
 
     key = controller.node._kids.new_kid_key()
     controller.node._kids.add_kid(kid=kid, interval=[key, None], summary=self._kid_summary)
-    controller.send(self._kid, messages.io.set_leaf_key(key=key))
+    controller.send(self._kid, messages.data.set_leaf_key(key=key))
 
     if controller.node._monitor.out_of_capacity():
       controller.node._send_kid_summary()

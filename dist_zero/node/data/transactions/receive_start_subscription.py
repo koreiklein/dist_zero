@@ -42,7 +42,7 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
 
     self._controller.send(
         self._requester,
-        messages.io.hello_parent(
+        messages.data.hello_parent(
             kid=self._controller.new_handle(self._requester['id']), kid_summary=self._node._kid_summary_message()))
 
     start_subscription, _sender_id = await self._controller.listen(type='start_subscription')

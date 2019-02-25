@@ -9,7 +9,7 @@ import sys
 import dist_zero.logging
 import dist_zero.ids
 from dist_zero import machine, errors, settings, spawners
-from dist_zero.node import io
+from dist_zero.node import data
 
 from . import spawner
 

@@ -47,7 +47,7 @@ class SystemController(object):
     :param str node_id: The id of a root input `DataNode` instance.
     :param str domain_name: The domain name to map.
     '''
-    self.send_api_message(node_id, messages.io.route_dns(domain_name=domain_name))
+    self.send_api_message(node_id, messages.data.route_dns(domain_name=domain_name))
 
   def get_interval(self, node_id):
     return intervals.parse_interval(self.send_api_message(node_id, messages.machine.get_interval()))

@@ -254,7 +254,7 @@ def get_capacity():
 
 def create_kid_config(new_node_name, machine_id):
   '''
-  Create a node_config for a new kid node of a data io node.
+  Create a node_config for a new kid node of a data node.
 
   :param str new_node_name: The name to use for the new node.
   :param str machine_id: The id of the machine on which the new node will run.

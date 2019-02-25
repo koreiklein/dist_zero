@@ -16,11 +16,11 @@ class Utils(object):
     }
 
   async def root_io_tree(self, machine, leaf_config):
-    '''spawn a new io tree and return the id of the root.'''
+    '''spawn a new data tree and return the id of the root.'''
     node_id = dist_zero.ids.new_id('DataNode_root')
     self.demo.system.spawn_node(
         on_machine=machine,
-        node_config=messages.io.data_node_config(node_id, parent=None, height=2, leaf_config=leaf_config))
+        node_config=messages.data.data_node_config(node_id, parent=None, height=2, leaf_config=leaf_config))
     await self.demo.run_for(ms=200)
     return node_id
 

@@ -5,7 +5,7 @@ Messages to be received by input and output nodes.
 
 def route_dns(domain_name):
   '''
-  Indicates to a root io node that it should set up DNS to resolve domain_name
+  Indicates to a root data node that it should set up DNS to resolve domain_name
   (possibly via some load balancers) to a server being run by a height 1
   `DataNode` with capacity to add new kids.
   '''
@@ -59,7 +59,7 @@ def demo_dataset_program_config(input_link_keys, output_link_keys):
 
 def data_node_config(node_id, parent, height, dataset_program_config, recorded_user_json=None):
   '''
-  A node config for creating a data node to manage a new list of io nodes.
+  A node config for creating a data node to manage a new list of data nodes.
 
   :param str node_id: The id of the new node.
   :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.

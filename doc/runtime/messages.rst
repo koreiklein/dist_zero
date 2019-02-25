@@ -24,7 +24,7 @@ Transaction messages
 
 IO Tree messages
 ----------------
-.. automodule:: dist_zero.messages.io
+.. automodule:: dist_zero.messages.data
    :members:
 
 Sum node messages

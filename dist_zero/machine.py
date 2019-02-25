@@ -9,7 +9,7 @@ from random import Random
 
 from dist_zero import errors, messages, dns, settings
 
-from .node import io
+from .node import data
 from .node.link.link import LinkNode
 
 logger = logging.getLogger(__name__)
@@ -329,7 +329,7 @@ class NodeManager(MachineController):
 
   def _parse_node_config_without_role(self, node_config):
     if node_config['type'] == 'DataNode':
-      return io.DataNode.from_config(node_config, controller=self)
+      return data.DataNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'LinkNode':
       return LinkNode.from_config(node_config, controller=self)
     else:

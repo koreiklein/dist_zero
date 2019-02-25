@@ -3,8 +3,8 @@ import logging
 from dist_zero import settings, messages, errors, recorded, \
     importer, exporter, misc, ids, transaction, message_rate_tracker
 from dist_zero.node.node import Node
-from dist_zero.node.io import leaf_html
-from dist_zero.node.io import leaf
+from dist_zero.node.data import leaf_html
+from dist_zero.node.data import leaf
 
 from .monitor import Monitor
 from .transactions import remove_leaf
@@ -208,7 +208,7 @@ class DataNode(Node):
       return sum(kid_summary['messages_per_second'] for kid_summary in self._kids.summaries.values())
 
   def _kid_summary_message(self):
-    return messages.io.kid_summary(
+    return messages.data.kid_summary(
         size=(sum(kid_summary['size']
                   for kid_summary in self._kids.summaries.values()) if self._height > 1 else len(self._kids)),
         n_kids=len(self._kids),
@@ -291,7 +291,8 @@ class DataNode(Node):
     if self._height == 1:
       self._http_server_for_adding_leaves = self._controller.new_http_server(
           self._domain_name, lambda request: self._add_leaf_from_http_get(request))
-      self.send(self._parent, messages.io.routing_started(server_address=self._http_server_for_adding_leaves.address()))
+      self.send(self._parent,
+                messages.data.routing_started(server_address=self._http_server_for_adding_leaves.address()))
     else:
       self._routing_kids_listener = RoutingKidsListener(self)
       self._routing_kids_listener.start()
@@ -309,7 +310,7 @@ class DataNode(Node):
 
     if self._parent is not None:
       # Send a routing_started with the address of the load balancer.
-      self.send(self._parent, messages.io.routing_started(self._load_balancer_frontend.address()))
+      self.send(self._parent, messages.data.routing_started(self._load_balancer_frontend.address()))
     else:
       # Configure DNS based on kid_to_addresses (or the load balancer)
       self._map_all_dns_to(self._load_balancer_frontend.address())
@@ -334,7 +335,7 @@ class DataNode(Node):
       return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
     elif message['type'] == 'kill_node':
       if self._parent:
-        self.send(self._parent, messages.io.goodbye_parent())
+        self.send(self._parent, messages.data.goodbye_parent())
       self._terminate()
     elif message['type'] == 'route_dns':
       self._route_dns(message)
@@ -382,7 +383,7 @@ class DataNode(Node):
 
     parent = self.new_handle(node_id)
     return transaction.add_participant_role_to_node_config(
-        node_config=messages.io.data_node_config(
+        node_config=messages.data.data_node_config(
             node_id=node_id, parent=parent, height=0, dataset_program_config=self._dataset_program_config),
         transaction_id=ids.new_id('AddLeafTransaction'),
         participant_typename='AddLeaf',
@@ -404,7 +405,7 @@ class RoutingKidsListener(object):
 
   def start(self):
     for node_id in self._node._kids:
-      self._node.send(self._node._kids[node_id], messages.io.routing_start(self._node._domain_name))
+      self._node.send(self._node._kids[node_id], messages.data.routing_start(self._node._domain_name))
 
   def receive(self, message, sender_id):
     if message['type'] == 'routing_started':
