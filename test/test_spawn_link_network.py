@@ -11,9 +11,11 @@ from .common import Utils
 
 class TestSpawnSumLinkNetwork(Utils):
   async def _connect_and_test_io_trees(self, n_input_leaves, n_output_leaves):
-    root_input = await self.root_io_tree(machine=self.machine_ids[0], leaf_config=messages.data.sum_leaf_config(0))
+    root_input = await self.root_io_tree(
+        machine=self.machine_ids[0], dataset_program_config=messages.data.demo_dataset_program_config())
     self.root_input = root_input
-    root_output = await self.root_io_tree(machine=self.machine_ids[0], leaf_config=messages.data.sum_leaf_config(0))
+    root_output = await self.root_io_tree(
+        machine=self.machine_ids[0], dataset_program_config=messages.data.demo_dataset_program_config())
     self.root_output = root_output
 
     await self.demo.run_for(ms=200)
@@ -57,7 +59,8 @@ class TestSpawnSumLinkNetwork(Utils):
     self.machine_ids = await self.demo.new_machine_controllers(
         1, base_config=self.base_config(), random_seed='test_dns')
 
-    root_input = await self.root_io_tree(machine=self.machine_ids[0], leaf_config=messages.data.sum_leaf_config(0))
+    root_input = await self.root_io_tree(
+        machine=self.machine_ids[0], dataset_program_config=messages.data.demo_dataset_program_config())
     await self.demo.run_for(ms=6000)
     await self.spawn_users(root_input, n_users=2)
     domain_name = 'www.distzerotesting.com'

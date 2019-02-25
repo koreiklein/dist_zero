@@ -49,11 +49,11 @@ def output_action(number):
 
 
 # FIXME(KK): Use actual program configs, containing reactive graphs.
-def demo_dataset_program_config(input_link_keys, output_link_keys):
+def demo_dataset_program_config(input_link_keys=None, output_link_keys=None):
   return {
       'type': 'demo_dataset_program_config',
-      'input_link_keys': input_link_keys,
-      'output_link_keys': output_link_keys
+      'input_link_keys': input_link_keys if input_link_keys is not None else [],
+      'output_link_keys': output_link_keys if output_link_keys is not None else []
   }
 
 
@@ -77,10 +77,6 @@ def data_node_config(node_id, parent, height, dataset_program_config, recorded_u
       'dataset_program_config': dataset_program_config,
       'recorded_user_json': recorded_user_json,
   }
-
-
-def collect_leaf_config():
-  return {'type': 'collect_leaf_config', 'interval_type': 'interval'}
 
 
 def hello_parent(kid, kid_summary=None, interval=None):

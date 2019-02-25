@@ -67,13 +67,17 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
   demo.system.spawn_node(
       on_machine=machine_a,
       node_config=messages.data.data_node_config(
-          root_input_node_id, parent=None, height=2, leaf_config=messages.data.sum_leaf_config(0)))
+          root_input_node_id, parent=None, height=2,
+          dataset_program_config=messages.data.demo_dataset_program_config()))
 
   root_output_node_id = dist_zero.ids.new_id('DataNode_output')
   demo.system.spawn_node(
       on_machine=machine_c,
       node_config=messages.data.data_node_config(
-          root_output_node_id, parent=None, height=2, leaf_config=messages.data.sum_leaf_config(0)))
+          root_output_node_id,
+          parent=None,
+          height=2,
+          dataset_program_config=messages.data.demo_dataset_program_config()))
 
   await demo.run_for(ms=200)
 

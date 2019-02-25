@@ -13,7 +13,11 @@ class Leaf(object):
 
   @staticmethod
   def from_config(dataset_program_config):
-    raise errors.InternalError(f"Unrecognized leaf type '{dataset_program_config['type']}'.")
+    if dataset_program_config['type'] == 'demo_dataset_program_config':
+      # FIXME(KK): Actually initialize from the dataset_program_config
+      pass
+    else:
+      raise errors.InternalError(f"Unrecognized leaf type '{dataset_program_config['type']}'.")
 
   @property
   def state(self):
