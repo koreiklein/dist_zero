@@ -2,8 +2,6 @@ import pytest
 
 from dist_zero import ids, messages
 
-#async def _spawn_tree
-
 
 class TestLinkTrees(object):
   async def _create_new_leaf(self, name, root_id, machine):
@@ -99,8 +97,6 @@ class TestLinkTrees(object):
     if m > 1:
       for i in range(m):
         await self._create_new_leaf(name=f"OutputLeaf_{i}", root_id=root_output_id, machine=machine)
-
-    demo.render_network(root_input_id) # FIXME(KK): Remove
 
     link_id = self.demo.link_datasets(
         root_input_id=root_input_id, root_output_id=root_output_id, machine=machine, name='LinkRoot', link_key=link_key)
