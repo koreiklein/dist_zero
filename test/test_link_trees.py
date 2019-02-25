@@ -1,6 +1,6 @@
 import pytest
 
-from dist_zero import ids
+from dist_zero import ids, messages
 
 #async def _spawn_tree
 
@@ -44,10 +44,47 @@ class TestLinkTrees(object):
   async def test_link_small_one(self, demo):
     await self._link_n_m(demo, n=3, m=1)
 
+  @pytest.mark.asyncio
+  async def test_link_one_small(self, demo):
+    await self._link_n_m(demo, n=1, m=3)
+
+  @pytest.mark.asyncio
+  async def test_link_small_small(self, demo):
+    await self._link_n_m(demo, n=3, m=3)
+
+  @pytest.mark.asyncio
+  async def test_link_small_large(self, demo):
+    await self._link_n_m(demo, n=3, m=16)
+
+  @pytest.mark.asyncio
+  async def test_link_large_small(self, demo):
+    await self._link_n_m(demo, n=16, m=3)
+
+  @pytest.mark.asyncio
+  async def test_link_large_large(self, demo):
+    await self._link_n_m(demo, n=16, m=16)
+
+  @pytest.mark.asyncio
+  async def test_link_large_one(self, demo):
+    await self._link_n_m(demo, n=16, m=1)
+
+  @pytest.mark.asyncio
+  async def test_link_one_large(self, demo):
+    await self._link_n_m(demo, n=1, m=16)
+
+  def _base_config(self):
+    system_config = messages.machine.std_system_config()
+    system_config['DATA_NODE_KIDS_LIMIT'] = 4
+    system_config['TOTAL_KID_CAPACITY_TRIGGER'] = 0
+    return {
+        'system_config': system_config,
+        'network_errors_config': messages.machine.std_simulated_network_errors_config(),
+    }
+
   async def _link_n_m(self, demo, n, m):
     self.leaf_ids = []
     self.demo = demo
-    machine = await self.demo.new_machine_controller()
+    machine = await self.demo.new_machine_controller(base_config=self._base_config())
     link_key = 'my_link'
     root_input_id = self.demo.create_dataset(
         machine=machine, name='DataInputRoot', height=0 if n == 1 else 2, output_link_keys=[link_key])

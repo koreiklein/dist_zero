@@ -422,11 +422,13 @@ class StartLinkNode(transaction.ParticipantRole):
   def _validate_start_subscription_columns(self):
     cur_source_key = self._node._source_interval[0]
     for (source_start, source_stop), start_subscription in self._start_subscription_columns:
-      if cur_source_key != intervals.Min and source_start != cur_source_key:
+      if intervals.Min not in (cur_source_key, source_start) and cur_source_key != source_start:
         raise errors.InternalError("start_subscription messages to StartLinkNode did not form a valid partition")
       cur_source_key = source_stop
 
-    if cur_source_key is not None and cur_source_key != self._node._source_interval[1]:
+    if cur_source_key is not None and \
+        intervals.Max not in (cur_source_key, self._node._source_interval[1]) and \
+        cur_source_key != self._node._source_interval[1]:
       raise errors.InternalError(
           "start_subscription messages to StartLinkNode did not form a valid partition at the parent's right endpoint")
 

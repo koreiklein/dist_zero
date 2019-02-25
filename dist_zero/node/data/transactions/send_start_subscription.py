@@ -41,8 +41,8 @@ class SendStartSubscription(transaction.ParticipantRole):
 
   async def _subscribe_to_greater_height_target(self):
     self._controller.logger.info(
-        "Data node starting subscription to overly high target {target_id}", extra={'target_id': self._targets['id']})
-    interval = intervals.interval_json(self._node._source_interval)
+        "Data node starting subscription to overly high target {target_id}", extra={'target_id': self._target['id']})
+    interval = self._node._interval_json()
     self._controller.send(
         self._target,
         messages.link.start_subscription(
@@ -66,8 +66,9 @@ class SendStartSubscription(transaction.ParticipantRole):
     # Inform the target to connect its proxy to this node (not one of its kids)
     # so as to balance out the mismatched heights.
     self._controller.send(
-        self._target, messages.link.subscription_edges(edges={
-            proxy['id']: [self.new_handle(self._target['id'])],
+        self._target,
+        messages.link.subscription_edges(edges={
+            proxy['id']: [self._controller.new_handle(self._target['id'])],
         }))
 
     self._targets.append(proxy)

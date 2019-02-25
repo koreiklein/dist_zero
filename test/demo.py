@@ -178,9 +178,9 @@ class Demo(object):
     result = await self.system.create_machines(configs)
     return result
 
-  async def new_machine_controller(self):
+  async def new_machine_controller(self, *args, **kwargs):
     '''Like `Demo.new_machine_controllers` but only creates and returns one.'''
-    controllers = await self.new_machine_controllers(1)
+    controllers = await self.new_machine_controllers(1, *args, **kwargs)
     return controllers[0]
 
   def link_datasets(self, root_input_id, root_output_id, machine, link_key, name=None):
