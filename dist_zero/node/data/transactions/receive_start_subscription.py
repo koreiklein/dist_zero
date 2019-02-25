@@ -60,6 +60,7 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
     # We don't actually need to do anything with these edges and only listen for this
     # message so that it isn't lost.
     await self._controller.listen(type='subscription_edges')
+    self._node._publisher.subscribe_input(self._controller.role_handle_to_node_handle(subscriber))
 
   async def _enlist_kids_and_await_hellos(self):
     kid_ids = set(self._node._kids)

@@ -37,6 +37,7 @@ class SendStartSubscription(transaction.ParticipantRole):
       await self._subscribe_to_greater_height_target()
 
     await self._subscribe_to_same_height_target()
+    self._node._publisher.subscribe_output(self._controller.role_handle_to_node_handle(self._target))
 
   async def _subscribe_to_greater_height_target(self):
     self._controller.logger.info(

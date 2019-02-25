@@ -100,9 +100,9 @@ def set_leaf_key(key):
 
 def absorb_these_kids(kid_ids, left_endpoint):
   '''
-  Indicates to an Absorber which kid ids it should wait for before it is finished.
+  Indicates to a `GrowAbsorber` which kid ids it should wait for before it is finished.
 
-  :param list[str] kid_ids: The ids of the kids that the `Absorber` must adopt before its role in the transaction is finished.
+  :param list[str] kid_ids: The ids of the kids that the `GrowAbsorber` must adopt before its role in the transaction is finished.
   :param left_endpoint: The leftmost endpoint of the interval the absorbed kids cover.  
   :type left_endpoint: float or `intervals.Min`
   '''
@@ -111,9 +111,9 @@ def absorb_these_kids(kid_ids, left_endpoint):
 
 def finished_absorbing(summary, new_interval):
   '''
-  Indicates to the parent of an `Absorber` node that the absorber has finished absorbing everything it needs to absorb.
+  Indicates to the parent of an `GrowAbsorber` node that the absorber has finished absorbing everything it needs to absorb.
 
-  :param object summary: The summary of the state of the `Absorber` node.
+  :param object summary: The summary of the state of the `GrowAbsorber` node.
   :param tuple new_interval: The new interval the absorber is now responsible for
   '''
   return {'type': 'finished_absorbing', 'summary': summary, 'new_interval': new_interval}

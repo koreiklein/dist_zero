@@ -4,7 +4,7 @@ from dist_zero import settings, messages, errors, recorded, \
     importer, exporter, misc, ids, transaction, message_rate_tracker
 from dist_zero.node.node import Node
 from dist_zero.node.data import leaf_html
-from dist_zero.node.data import leaf
+from dist_zero.node.data import leaf, publisher
 
 from .monitor import Monitor
 from .transactions import remove_leaf
@@ -40,8 +40,10 @@ class DataNode(Node):
     self._dataset_program_config = dataset_program_config
     if self._height == 0:
       self._leaf = leaf.Leaf.from_config(dataset_program_config)
+      self._publisher = None
     else:
       self._leaf = None
+      self._publisher = publisher.Publisher(self._dataset_program_config)
 
     self.id = node_id
 

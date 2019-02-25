@@ -17,6 +17,7 @@ translate `dist_zero.expression.Expression` instances into running distributed p
 
    retransmission
    messages
+   intervals
 
 
 
