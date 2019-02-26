@@ -131,4 +131,5 @@ class CheckLimitsTransaction(transaction.OriginatorRole):
     return False
 
   async def run(self, controller: 'TransactionRoleController'):
+    controller.logger.debug("Running CheckLimitsTransaction")
     self._monitor._check_limits_inside_transaction(self._ms)
