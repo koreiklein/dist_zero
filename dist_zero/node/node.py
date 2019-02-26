@@ -178,6 +178,12 @@ class Node(object):
   # Methods relevant to transactions
 
   def start_transaction_eventually(self, role: 'dist_zero.transaction.OriginatorRole'):
+    '''
+    Ensure that ``role.run`` will eventually be called with a `TransactionRoleController` for a new transaction on self.
+
+    :param role: The originator role instance defining the behavior of the overall transaction.
+    :type role: `OriginatorRole`
+    '''
     controller = transaction.TransactionRoleController(self, ids.new_id(f'Transaction__{role.__class__.__name__}'))
     self._start_role_eventually(role, controller)
 

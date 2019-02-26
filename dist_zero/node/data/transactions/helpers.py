@@ -78,7 +78,7 @@ class GrowAbsorber(transaction.ParticipantRole):
 
 
 class Absorbee(transaction.ParticipantRole):
-  '''Transfer all of a node's kids to an `Absorber`'''
+  '''Transfer all of a node's kids to a `GrowAbsorber`'''
 
   def __init__(self, parent, absorber):
     self.parent = parent

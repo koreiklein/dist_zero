@@ -1,10 +1,3 @@
-'''
-Distributed Transactions in DistZero.
-
-Each transaction exists not as a single python object, but as a collection
-of related `TransactionRole` instances, each living on its own `Node`
-'''
-
 import asyncio
 from collections import defaultdict
 
@@ -30,19 +23,38 @@ class TransactionRoleController(object):
     self._matcher = _Matcher()
 
   def new_handle(self, for_node_id):
+    '''Create a new role handle that the identified role can use to send to self.'''
     handle = self.node.new_handle(for_node_id)
     handle['transaction_id'] = self.transaction_id
     return handle
 
   def transfer_handle(self, role_handle, for_node_id):
+    '''
+    Convert a role handle that self can use to send to a role ``r`` into a handle that
+    another role can use to send to ``r``
+
+    :param object role_handle: The handle that self can use to send to ``r``.
+    :param str for_node_id: The id of the node that will run some other role ``s``.
+    :return: A role handle that ``s`` can use to send to ``r``.
+    :rtype: object
+    '''
     handle = self.node.transfer_handle(self.role_handle_to_node_handle(role_handle), for_node_id)
     handle['transaction_id'] = self.transaction_id
     return handle
 
   def role_handle_to_node_handle(self, role_handle):
+    '''Turn a role handle into a node handle for the underlying node.'''
     return {key: value for key, value in role_handle.items() if key != 'transaction_id'}
 
   def spawn_enlist(self, node_config: object, participant, args: dict):
+    '''
+    Spawn a new node and immediately enlist it in the current transaction with the provided `ParticipantRole`.
+
+    :param object node_config: The node config describing what kind of node to spawn.
+    :param participant: Identifies which `ParticipantRole` class will run on that node.
+    :type participant: One of the `ParticipantRole` subclasses.
+    :param dict args: Arguments to the ``__init__`` method of the identified `ParticipantRole` subclass.
+    '''
     participant_typename = self._participant_typename(participant)
 
     new_config = add_participant_role_to_node_config(node_config, self.transaction_id, participant_typename, args)
@@ -54,6 +66,21 @@ class TransactionRoleController(object):
     return participant.__name__
 
   def enlist(self, node_handle: object, participant, args: dict):
+    '''
+    Enlist an existing node into this transaction by giving it a role.
+
+    Importantly, across all `Node` instances in DistZero, there must exist a tree
+    of ownership between nodes such that nodes are only even enlisted by their immediate parent.
+
+    The existence of such a tree guarantees that transactions can not wind up in deadlock, as at any point
+    in time, any transaction "lowest" in the tree is guaranteed to make progress.
+
+    :param node_handle: The handle of a node "owned" by self.
+    :type node_handle: :ref:`handle`
+    :param participant: Identifies which `ParticipantRole` class will run on that node.
+    :type participant: One of the `ParticipantRole` subclasses.
+    :param dict args: Arguments to the ``__init__`` method of the identified `ParticipantRole` subclass.
+    '''
     participant_typename = self._participant_typename(participant)
 
     self.node.send(
@@ -65,6 +92,14 @@ class TransactionRoleController(object):
         ))
 
   def send(self, role_handle, message):
+    '''
+    Send a message to the handle of another role in the same transaction.
+
+    The other role can call `TransactionRoleController.listen` to receive the message.
+
+    :param object role_handle: The role handle of another role in the same transaction.
+    :param object message: A serializable message to be sent to the other role.
+    '''
     self.node.send(
         self.role_handle_to_node_handle(role_handle),
         messages.transaction.transaction_message(

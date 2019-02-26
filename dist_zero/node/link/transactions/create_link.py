@@ -29,6 +29,11 @@ class CreateLink(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     link_key = controller.node._link_key
+    # FIXME(KK): Technically, self._src and self._tgt are not owned by self, and therefore
+    #   these calls to enlist could potentially allow for deadlocks, for example when there is
+    #   a cycle of links all started at the same time.
+    #   We should probably find a way to give these nodes a common owner that technically meets
+    #   the proper ownership criteria for enlisting nodes in this transaction.
     controller.enlist(self._src, SendStartSubscription,
                       dict(parent=controller.new_handle(self._src['id']), link_key=link_key))
     controller.enlist(self._tgt, ReceiveStartSubscription,
