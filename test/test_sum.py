@@ -5,7 +5,7 @@ import pytest
 
 import dist_zero.ids
 from dist_zero import messages, errors, types
-from dist_zero.node.io import DataNode
+from dist_zero.node.data import DataNode
 from dist_zero.recorded import RecordedUser
 
 logger = logging.getLogger(__name__)
@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 @pytest.mark.simulated
 def test_times_in_order():
   RecordedUser('user b', 0, types.Int32, [
-      (60, messages.io.input_action(1)),
-      (80, messages.io.input_action(2)),
+      (60, messages.data.input_action(1)),
+      (80, messages.data.input_action(2)),
   ])
 
   with pytest.raises(errors.InternalError):
     RecordedUser('user b', 0, types.Int32, [
-        (80, messages.io.input_action(2)),
-        (60, messages.io.input_action(1)),
+        (80, messages.data.input_action(2)),
+        (60, messages.data.input_action(1)),
     ])
 
 
@@ -66,18 +66,22 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
   root_input_node_id = dist_zero.ids.new_id('DataNode_input')
   demo.system.spawn_node(
       on_machine=machine_a,
-      node_config=messages.io.data_node_config(
-          root_input_node_id, parent=None, height=2, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
+      node_config=messages.data.data_node_config(
+          root_input_node_id, parent=None, height=2,
+          dataset_program_config=messages.data.demo_dataset_program_config()))
 
   root_output_node_id = dist_zero.ids.new_id('DataNode_output')
   demo.system.spawn_node(
       on_machine=machine_c,
-      node_config=messages.io.data_node_config(
-          root_output_node_id, parent=None, height=2, variant='output', leaf_config=messages.io.sum_leaf_config(0)))
+      node_config=messages.data.data_node_config(
+          root_output_node_id,
+          parent=None,
+          height=2,
+          dataset_program_config=messages.data.demo_dataset_program_config()))
 
   await demo.run_for(ms=200)
 
-  # Set up the sum link with a migration:
+  # Set up the sum link
   root_link_node_id = demo.connect_trees_with_sum_network(root_input_node_id, root_output_node_id, machine_b)
 
   await demo.run_for(ms=2000)
@@ -126,17 +130,17 @@ async def test_sum_two_nodes_on_three_machines(demo, drop_rate, network_error_ty
       new_node_name='input_b',
       machine_id=machine_b,
       recorded_user=RecordedUser('user b', 0, types.Int32, [
-          (2030, messages.io.input_action(2)),
-          (2060, messages.io.input_action(1)),
+          (2030, messages.data.input_action(2)),
+          (2060, messages.data.input_action(1)),
       ]))
   user_c_input_id = demo.system.create_kid(
       parent_node_id=input_kid,
       new_node_name='input_c',
       machine_id=machine_c,
       recorded_user=RecordedUser('user c', 0, types.Int32, [
-          (2033, messages.io.input_action(1)),
-          (2043, messages.io.input_action(1)),
-          (2073, messages.io.input_action(1)),
+          (2033, messages.data.input_action(1)),
+          (2043, messages.data.input_action(1)),
+          (2073, messages.data.input_action(1)),
       ]))
 
   await demo.run_for(ms=5000)

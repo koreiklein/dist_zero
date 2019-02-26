@@ -43,7 +43,7 @@ class SumLinkLeaf(LinkLeaf):
     if self._node.right_is_data:
       exporter, = self._node._exporters.values()
       exporter.export_message(
-          message=messages.io.output_action(increment),
+          message=messages.data.output_action(increment),
           sequence_number=sequence_number,
       )
     else:
@@ -66,10 +66,10 @@ class ForwardToAnyLinkLeaf(LinkLeaf):
         exporter.export_message(message=message, sequence_number=sequence_number)
 
 
-def from_config(leaf_config, node):
-  if leaf_config['type'] == 'sum_link_leaf':
+def from_config(dataset_program_config, node):
+  if dataset_program_config['type'] == 'sum_link_leaf':
     return SumLinkLeaf(node)
-  elif leaf_config['type'] == 'forward_to_any_link_leaf':
+  elif dataset_program_config['type'] == 'forward_to_any_link_leaf':
     return ForwardToAnyLinkLeaf(node)
   else:
-    raise errors.InternalError(f"Unrecognized link leaf type '{leaf_config['type']}'")
+    raise errors.InternalError(f"Unrecognized link leaf type '{dataset_program_config['type']}'")

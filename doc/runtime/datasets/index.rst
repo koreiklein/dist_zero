@@ -47,7 +47,7 @@ Two operations will decrease the size of the tree:
   managing the kids that the root could be managing instead.  In this case, the root node will merge with the kid,
   removing it and "adopting" its kids.
 
-These rules ensure that no io tree will be overly provisioned for very long after the number of leaf nodes has
+These rules ensure that no dataset tree will be overly provisioned for very long after the number of leaf nodes has
 dropped.
 
 .. toctree::

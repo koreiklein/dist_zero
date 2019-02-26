@@ -1,1 +1,1 @@
-from .standard import LinkNode
+from .link import LinkNode

@@ -1,5 +1,5 @@
 from dist_zero import transaction, errors, intervals
-from dist_zero.node.io.kids import DataNodeKids
+from dist_zero.node.data.kids import DataNodeKids
 
 from . import helpers, spawn_kid
 

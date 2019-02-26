@@ -2,10 +2,9 @@ import logging
 
 from dist_zero import settings, messages, errors, recorded, \
     importer, exporter, misc, ids, transaction, message_rate_tracker
-from dist_zero.network_graph import NetworkGraph
 from dist_zero.node.node import Node
-from dist_zero.node.io import leaf_html
-from dist_zero.node.io import leaf
+from dist_zero.node.data import leaf_html
+from dist_zero.node.data import publisher
 
 from .monitor import Monitor
 from .transactions import remove_leaf
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class DataNode(Node):
   '''
-  The root of a tree of leaf instances of the same ``variant``.
+  The root of a dataset subtree.  It may or may not be the root of the entire tree.
 
   Each `DataNode` instance is responsible for keeping track of the state of its subtree, and for growing
   or shrinking it as necessary.  In particular, when new leaves are created, `DataNode.create_kid_config` must
@@ -25,26 +24,22 @@ class DataNode(Node):
   minimal assignment such that n.height+1 == n.parent.height for every node n that has a parent.
   '''
 
-  def __init__(self, node_id, parent, controller, variant, leaf_config, height, recorded_user_json):
+  def __init__(self, node_id, parent, controller, dataset_program_config, height, recorded_user_json):
     '''
     :param str node_id: The id to use for this node
     :param parent: If this node is the root, then `None`.  Otherwise, the :ref:`handle` of its parent `Node`.
     :type parent: :ref:`handle` or `None`
-    :param str variant: 'input' or 'output'
     :param int height: The height of the node in the tree.  See `DataNode`
     :param `MachineController` controller: The controller for this node.
-    :param objcect leaf_config: Configuration information for how to run a leaf.
+    :param objcect dataset_program_config: Configuration information for how to run a leaf.
     :param object recorded_user_json: None, or configuration for a recorded user.  Only allowed if this is a height 0 Node.
     '''
     self._controller = controller
     self._parent = parent
-    self._variant = variant
     self._height = height
-    self._leaf_config = leaf_config
-    if self._height == 0:
-      self._leaf = leaf.Leaf.from_config(leaf_config)
-    else:
-      self._leaf = None
+    self._dataset_program_config = dataset_program_config
+    self._publisher = publisher.Publisher(
+        is_leaf=(self._height == 0), dataset_program_config=self._dataset_program_config)
 
     self.id = node_id
 
@@ -58,9 +53,6 @@ class DataNode(Node):
       self._message_rate_tracker = message_rate_tracker.MessageRateTracker()
 
     self._added_sender_respond_to = None
-
-    self._exporter = None
-    self._importer = None
 
     self._updated_summary = True
     '''Set to true when the current summary may have changed.'''
@@ -107,59 +99,18 @@ class DataNode(Node):
                                                                lambda: self._monitor.check_limits(CHECK_INTERVAL))
 
   def _receive_input_action(self, message):
-    if self._variant != 'input':
-      raise errors.InternalError("Only 'input' variant nodes may receive input actions")
-
-    if self._exporter is not None:
-      self.logger.debug(
-          "Leaf node is forwarding input_action of {number} via exporter", extra={'number': message['number']})
-      self._exporter.export_message(message=message, sequence_number=self.linker.advance_sequence_number())
-    else:
-      self.logger.warning(
-          "Leaf node is not generating an input_action message send since it does not yet have an exporter.")
+    self.logger.warning(
+        "Leaf node is not generating an input_action message send since it does not yet have an exporter.")
 
   def is_data(self):
     return True
 
   @property
-  def current_state(self):
-    if self._height != 0:
-      raise errors.InternalError("Non-leaf DataNodes do not maintain a current_state.")
-    else:
-      return self._leaf.state
-
-  @property
   def height(self):
     return self._height
 
-  @property
-  def _adjacent(self):
-    if self._variant == 'input':
-      if self._exporter is None:
-        return None
-      else:
-        return self._exporter.receiver
-    elif self._variant == 'output':
-      if self._importer is None:
-        return None
-      else:
-        return self._importer.sender
-    else:
-      raise errors.InternalError(f"Unrecognized variant {self._variant}")
-
   def checkpoint(self, before=None):
     pass
-
-  def sink_swap(self, deltas, old_sender_ids, new_senders, new_importers, linker):
-    if self._variant == 'output':
-      if len(new_senders) != 1:
-        raise errors.InternalError(
-            "sink_swap should be called on an edge data node only when there is a unique new sender.")
-      self._set_input(new_senders[0])
-    elif self._variant == 'input':
-      raise errors.InternalError("An input DataNode should never function as a sink node in a migration.")
-    else:
-      raise errors.InternalError('Unrecognized variant "{}"'.format(self._variant))
 
   @property
   def MERGEABLE_N_KIDS_FIRST(self):
@@ -219,32 +170,8 @@ class DataNode(Node):
           else:
             self._updated_summary = True
           self._monitor.check_limits(0)
-    elif message['type'] == 'configure_right_parent':
-      pass
     else:
       super(DataNode, self).receive(message=message, sender_id=sender_id)
-
-  def _set_input(self, node):
-    if self._importer is not None:
-      raise errors.InternalError("DataNodes have only a single input node."
-                                 "  Can not add a new one once an input already exists")
-    if self._variant != 'output':
-      raise errors.InternalError("Only output DataNodes can set their input.")
-
-    self._importer = self.linker.new_importer(node)
-    if self._added_sender_respond_to:
-      self.send(self._added_sender_respond_to, messages.migration.finished_adding_sender(sender_id=node['id']))
-      self._added_sender_respond_to = None
-
-  def _set_output(self, node):
-    if self._exporter is not None:
-      if node['id'] != self._exporter.receiver_id:
-        raise errors.InternalError("DataNodes have only a single output node."
-                                   "  Can not add a new one once an output already exists")
-    else:
-      if self._variant != 'input':
-        raise errors.InternalError("Only input DataNodes can set their output.")
-      self._exporter = self.linker.new_exporter(node)
 
   @staticmethod
   def from_config(node_config, controller):
@@ -252,8 +179,7 @@ class DataNode(Node):
         node_id=node_config['id'],
         parent=node_config['parent'],
         controller=controller,
-        leaf_config=node_config['leaf_config'],
-        variant=node_config['variant'],
+        dataset_program_config=node_config['dataset_program_config'],
         height=node_config['height'],
         recorded_user_json=node_config['recorded_user_json'])
 
@@ -273,7 +199,7 @@ class DataNode(Node):
       return sum(kid_summary['messages_per_second'] for kid_summary in self._kids.summaries.values())
 
   def _kid_summary_message(self):
-    return messages.io.kid_summary(
+    return messages.data.kid_summary(
         size=(sum(kid_summary['size']
                   for kid_summary in self._kids.summaries.values()) if self._height > 1 else len(self._kids)),
         n_kids=len(self._kids),
@@ -356,7 +282,8 @@ class DataNode(Node):
     if self._height == 1:
       self._http_server_for_adding_leaves = self._controller.new_http_server(
           self._domain_name, lambda request: self._add_leaf_from_http_get(request))
-      self.send(self._parent, messages.io.routing_started(server_address=self._http_server_for_adding_leaves.address()))
+      self.send(self._parent,
+                messages.data.routing_started(server_address=self._http_server_for_adding_leaves.address()))
     else:
       self._routing_kids_listener = RoutingKidsListener(self)
       self._routing_kids_listener.start()
@@ -374,7 +301,7 @@ class DataNode(Node):
 
     if self._parent is not None:
       # Send a routing_started with the address of the load balancer.
-      self.send(self._parent, messages.io.routing_started(self._load_balancer_frontend.address()))
+      self.send(self._parent, messages.data.routing_started(self._load_balancer_frontend.address()))
     else:
       # Configure DNS based on kid_to_addresses (or the load balancer)
       self._map_all_dns_to(self._load_balancer_frontend.address())
@@ -399,32 +326,22 @@ class DataNode(Node):
       return self.create_kid_config(name=message['new_node_name'], machine_id=message['machine_id'])
     elif message['type'] == 'kill_node':
       if self._parent:
-        self.send(self._parent, messages.io.goodbye_parent())
+        self.send(self._parent, messages.data.goodbye_parent())
       self._terminate()
     elif message['type'] == 'route_dns':
       self._route_dns(message)
     elif message['type'] == 'get_capacity':
       return self._get_capacity()
+    elif message['type'] == 'get_data_link':
+      return self._publisher.get_linked_handle(link_key=message['link_key'], key_type=message['key_type'])
     elif message['type'] == 'get_kids':
       return {kid_id: self._kids[kid_id] for kid_id in self._kids}
     elif message['type'] == 'get_interval':
       return self._interval_json()
     elif message['type'] == 'get_senders':
-      if self._importer is None:
-        return {}
-      else:
-        return {self._importer.sender_id: self._importer.sender}
+      return {node['id']: node for node in self._publisher.inputs()}
     elif message['type'] == 'get_receivers':
-      if self._exporter is None:
-        return {}
-      else:
-        return {self._exporter.receiver_id: self._exporter.receiver}
-    elif message['type'] == 'get_adjacent_handle':
-      return self._adjacent
-    elif message['type'] == 'get_output_state':
-      if self._height != 0:
-        raise errors.InternalError("Can't get output state for a DataNode with height > 0")
-      return self._leaf.state
+      return {node['id']: node for node in self._publisher.outputs()}
     else:
       return super(DataNode, self).handle_api_message(message)
 
@@ -452,20 +369,15 @@ class DataNode(Node):
 
     parent = self.new_handle(node_id)
     return transaction.add_participant_role_to_node_config(
-        node_config=messages.io.data_node_config(
-            node_id=node_id, parent=parent, variant=self._variant, height=0, leaf_config=self._leaf_config),
+        node_config=messages.data.data_node_config(
+            node_id=node_id, parent=parent, height=0, dataset_program_config=self._dataset_program_config),
         transaction_id=ids.new_id('AddLeafTransaction'),
         participant_typename='AddLeaf',
         args=dict(parent=parent))
 
   def deliver(self, message, sequence_number, sender_id):
-    if self._variant != 'output' or self._height != 0:
-      raise errors.InternalError("Only 'output' variant leaf nodes may receive output actions")
-
     if self._height == 0:
       self._message_rate_tracker.increment(self.linker.now_ms)
-
-    self._leaf.update_current_state(message)
 
     self.linker.advance_sequence_number()
 
@@ -477,7 +389,7 @@ class RoutingKidsListener(object):
 
   def start(self):
     for node_id in self._node._kids:
-      self._node.send(self._node._kids[node_id], messages.io.routing_start(self._node._domain_name))
+      self._node.send(self._node._kids[node_id], messages.data.routing_start(self._node._domain_name))
 
   def receive(self, message, sender_id):
     if message['type'] == 'routing_started':

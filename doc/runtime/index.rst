@@ -16,8 +16,8 @@ translate `dist_zero.expression.Expression` instances into running distributed p
    links/index
 
    retransmission
-   migrations
    messages
+   intervals
 
 
 

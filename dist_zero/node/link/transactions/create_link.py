@@ -1,11 +1,11 @@
 from collections import defaultdict
 
-from dist_zero import transaction, messages, errors, ids
-from dist_zero.network_graph import NetworkGraph
-from dist_zero.topology_picker import TopologyPicker
+from dist_zero import transaction, messages, errors, ids, intervals
 
-from dist_zero.node.io.transactions.send_start_subscription import SendStartSubscription
-from dist_zero.node.io.transactions.receive_start_subscription import ReceiveStartSubscription
+from dist_zero.node.data.transactions.send_start_subscription import SendStartSubscription
+from dist_zero.node.data.transactions.receive_start_subscription import ReceiveStartSubscription
+
+from dist_zero.node.link import manager
 
 
 class CreateLink(transaction.ParticipantRole):
@@ -28,8 +28,16 @@ class CreateLink(transaction.ParticipantRole):
     self._hello_parent = None
 
   async def run(self, controller: 'TransactionRoleController'):
-    controller.enlist(self._src, SendStartSubscription, dict(parent=controller.new_handle(self._src['id'])))
-    controller.enlist(self._tgt, ReceiveStartSubscription, dict(requester=controller.new_handle(self._tgt['id'])))
+    link_key = controller.node._link_key
+    # FIXME(KK): Technically, self._src and self._tgt are not owned by self, and therefore
+    #   these calls to enlist could potentially allow for deadlocks, for example when there is
+    #   a cycle of links all started at the same time.
+    #   We should probably find a way to give these nodes a common owner that technically meets
+    #   the proper ownership criteria for enlisting nodes in this transaction.
+    controller.enlist(self._src, SendStartSubscription,
+                      dict(parent=controller.new_handle(self._src['id']), link_key=link_key))
+    controller.enlist(self._tgt, ReceiveStartSubscription,
+                      dict(requester=controller.new_handle(self._tgt['id']), link_key=link_key))
 
     self._hello_parent = {}
     for i in range(2):
@@ -49,14 +57,19 @@ class CreateLink(transaction.ParticipantRole):
 
     left_neighbors = [src_role]
     right_neighbors = [tgt_role]
-    await StartLinkNode(parent=None, neighbors=(left_neighbors, right_neighbors)).run(controller)
+    await StartLinkNode(
+        parent=None,
+        source_interval=intervals.interval_json([intervals.Min, intervals.Max]),
+        target_interval=intervals.interval_json([intervals.Min, intervals.Max]),
+        neighbors=(left_neighbors, right_neighbors),
+    ).run(controller)
 
 
 class StartLinkNode(transaction.ParticipantRole):
   MAX_MESSAGE_RATE_PER_NODE_HZ = 200
   '''The highest message rate we would like to allow for a leaf link node (in hertz)'''
 
-  def __init__(self, parent=None, neighbors=None):
+  def __init__(self, parent, source_interval, target_interval, neighbors=None):
     '''
     :param parent: If provided, this node's parent in the transaction.
     :param neighbors: If provided, a pair of lists (left_roles, right_roles) giving the lists of roles of the nodes to
@@ -67,14 +80,23 @@ class StartLinkNode(transaction.ParticipantRole):
 
     self._controller = None
 
-    # Map each node to the immediate left to its start_subscription message
-    self._start_subscription = None
+    self._source_interval = intervals.parse_interval(source_interval)
+    self._target_interval = intervals.parse_interval(target_interval)
+
+    self._rectangle = {} # Map each kid id to a pair (source_interval, target_interval)
+
+    # list of pairs (source_interval, start_subscription) ordered by source_interval[0]
+    # They should form a partition of self._node._source_interval
+    self._start_subscription_columns = None
     # Map each node to the immediate right to its subscription_started message
     self._subscription_started = None
     # Map each node to the immediate left to its subscription_edges message
     self._subscription_edges = None
     # Map each leftmost kid to the list of roles that will be sending to it
     self._left_kid_senders = None
+
+    # Maps blocks in self._manager to their associated node_id
+    self._block_to_node_id = None
 
     self._kids = {} # Map node id to the role handle for all the kids of self
 
@@ -85,15 +107,18 @@ class StartLinkNode(transaction.ParticipantRole):
     # If that happens, self._leftmost_kids will be a list of their roles.
     self._leftmost_kids = None
 
-    # The NetworkGraph and TopologyPicker instances describing how the kids are arranged
-    # Note that the TopologyPicker itself does not determine the first or last layers of the graph
-    # and that while all but the last layer contain kids of this node, the last layer contains kids of this node's
-    # right neighbors
-    self._graph = None
-    self._picker = None
+  @property
+  def _manager(self):
+    return self._node._manager
+
+  @_manager.setter
+  def _manager(self, value):
+    self._node._manager = value
 
   async def run(self, controller: 'TransactionRoleController'):
     self._controller = controller
+    self._node._source_interval = self._source_interval
+    self._node._target_interval = self._target_interval
 
     # Each of the stages of the process of creating a link is factored into
     # one of the below method calls for readability, better debugging and improved stack traces.
@@ -109,8 +134,7 @@ class StartLinkNode(transaction.ParticipantRole):
     await self._send_subscription_edges()
     await self._receive_link_started_from_all_kids()
     await self._send_link_started_to_parent()
-
-    self._node.start_leaf()
+    self._finish_setting_up_node_state()
 
   async def _send_hello_to_parent(self):
     if self._parent is not None:
@@ -124,13 +148,24 @@ class StartLinkNode(transaction.ParticipantRole):
       self._neighbors = (set_link_neighbors['left_roles'], set_link_neighbors['right_roles'])
 
   async def _receive_all_start_subscriptions(self):
-    self._start_subscription = {}
-    while len(self._start_subscription) < len(self._left_neighbors):
-      start_subscription, subscriber_id = await self._controller.listen('start_subscription')
-      self._start_subscription[subscriber_id] = start_subscription
+    start_subscriptions = []
+    for i in self._left_neighbors:
+      start_subscription, _subscriber_id = await self._controller.listen('start_subscription')
+      if start_subscription['link_key'] != self._node._link_key:
+        raise errors.InternalError("Mismatched link keys.")
+      start_subscriptions.append(start_subscription)
+
+    self._start_subscription_columns = list(
+        sorted(((intervals.parse_interval(start_subscription['source_interval']), start_subscription)
+                for start_subscription in start_subscriptions),
+               key=lambda pair: pair[0][0]))
+    if not self._start_subscription_columns:
+      raise errors.InternalError("There should be at least one start_subscription message.")
+
+    self._validate_start_subscription_columns()
 
     self._total_messages_per_second = sum(
-        start_subscription['load']['messages_per_second'] for start_subscription in self._start_subscription.values())
+        start_subscription['load']['messages_per_second'] for start_subscription in start_subscriptions)
 
   async def _spawn_leftmost_kids(self):
     self._leftmost_kids = []
@@ -143,12 +178,26 @@ class StartLinkNode(transaction.ParticipantRole):
       await self._spawn_leftmost_kids_by_load()
 
   async def _send_subscription_started_to_left_neighbors(self):
-    for start_subscription in self._start_subscription.values():
+    for source_interval, start_subscription in self._start_subscription_columns:
       subscriber = start_subscription['subscriber']
+      target_intervals = {}
+      leftmost_kids = []
+      for kid in self._leftmost_kids:
+        kid_id = kid['id']
+        kid_source_interval, kid_target_interval = self._rectangle[kid_id]
+        if intervals.is_subinterval(kid_source_interval, source_interval):
+          leftmost_kids.append(self._controller.transfer_handle(kid, subscriber['id']))
+          target_intervals[kid_id] = intervals.interval_json(kid_target_interval)
+
       self._controller.send(
           subscriber,
           messages.link.subscription_started(
-              leftmost_kids=[self._controller.transfer_handle(kid, subscriber['id']) for kid in self._leftmost_kids]))
+              leftmost_kids=leftmost_kids,
+              link_key=self._node._link_key,
+              target_intervals=target_intervals,
+              source_intervals=None if not self._node._left_is_data else
+              {kid['id']: intervals.interval_json(self._rectangle[kid['id']][0])
+               for kid in leftmost_kids}))
 
   async def _subscribe_to_right_neighbors(self):
     load_per_right_neighbor = messages.link.load(
@@ -158,26 +207,30 @@ class StartLinkNode(transaction.ParticipantRole):
           right_neighbor,
           messages.link.start_subscription(
               subscriber=self._controller.new_handle(right_neighbor['id']),
+              link_key=self._node._link_key,
+              height=self._node._height,
               load=load_per_right_neighbor,
-              kid_ids=None, # link nodes do not send their kids in the start_subscription message
+              source_interval=intervals.interval_json(self._source_interval),
+              kid_intervals=None, # link nodes do not send their kids in the start_subscription message
           ))
 
     self._subscription_started = {}
     while len(self._subscription_started) < len(self._right_neighbors):
       subscription_started, right_id = await self._controller.listen('subscription_started')
+      if subscription_started['link_key'] != self._node._link_key:
+        raise errors.InternalError("Mismatched link keys.")
       self._subscription_started[right_id] = subscription_started
 
   async def _send_subscription_edges(self):
     for right in self._right_neighbors:
       subscription_started = self._subscription_started[right['id']]
+      senders = lambda kid_id: (self._kids[self._block_to_node_id[below]] for below in self._manager.target_block(kid_id).below)
       self._controller.send(
           right,
           messages.link.subscription_edges(
               edges={
-                  right_kid['id']: [
-                      self._controller.transfer_handle(self._kids[sender_id], right_kid['id'])
-                      for sender_id in self._graph.node_senders(right_kid['id'])
-                  ]
+                  right_kid['id']:
+                  [self._controller.transfer_handle(sender, right_kid['id']) for sender in senders(right_kid['id'])]
                   for right_kid in subscription_started['leftmost_kids']
               }))
 
@@ -190,6 +243,24 @@ class StartLinkNode(transaction.ParticipantRole):
   async def _send_link_started_to_parent(self):
     if self._parent is not None:
       self._controller.send(self._parent, messages.link.link_started())
+
+  def _finish_setting_up_node_state(self):
+    self._node._senders = {
+        node['id']: self._controller.role_handle_to_node_handle(node)
+        for node in self._left_neighbors
+    }
+    self._node._receivers = {
+        node['id']: self._controller.role_handle_to_node_handle(node)
+        for node in self._right_neighbors
+    }
+
+    self._node._kids = {
+        node_id: self._controller.role_handle_to_node_handle(node)
+        for node_id, node in self._kids.items()
+    }
+
+    # FIXME(KK): Should we not somehow initialize the activities of the leaf?
+    # Maybe dist_zero/node/link/link_leaf.py can help?
 
   async def _receive_subscription_edges(self):
     self._subscription_edges = {}
@@ -211,64 +282,77 @@ class StartLinkNode(transaction.ParticipantRole):
     if self._node._height == 0:
       return
 
-    lefts = list(self._leftmost_kids)
-    rights = [
-        kid for subscription_started in self._subscription_started.values()
-        for kid in subscription_started['leftmost_kids']
-    ]
+    left_ids = [kid['id'] for kid in self._leftmost_kids]
+    target_object_intervals = [(kid['id'], intervals.parse_interval(target_intervals[kid['id']]))
+                               for subscription_started in self._subscription_started.values()
+                               for target_intervals in [subscription_started['target_intervals']]
+                               for kid in subscription_started['leftmost_kids']]
+    right_ids = [kid_id for kid_id, _interval in target_object_intervals]
 
-    self._graph = NetworkGraph()
-    self._picker = TopologyPicker(
-        graph=self._graph,
-        lefts=[kid['id'] for kid in lefts],
-        rights=[kid['id'] for kid in rights],
-        max_outputs=self._system_config['LINK_NODE_MAX_RECEIVERS'],
-        max_inputs=self._system_config['LINK_NODE_MAX_SENDERS'],
-        name_prefix="Link")
+    self._manager = manager.LinkGraphManager(
+        source_object_intervals=[(kid_id, self._rectangle[kid_id][0]) for kid_id in left_ids],
+        target_object_intervals=target_object_intervals,
+        constraints=manager.Constraints(
+            max_above=self._system_config['LINK_NODE_MAX_RECEIVERS'],
+            max_below=self._system_config['LINK_NODE_MAX_SENDERS'],
+        ))
 
-    if len(self._picker.layers) < 2:
-      raise errors.InternalError("We should have at least 2 layers")
+    self._block_to_node_id = {}
+    for kid_id in left_ids:
+      self._block_to_node_id[self._manager.source_block(kid_id)] = kid_id
+    for kid_id in right_ids:
+      self._block_to_node_id[self._manager.target_block(kid_id)] = kid_id
 
-    # Spawn kids that have not yet been created
-    await self._spawn_and_await_kids(
-        dict(
-            node_id=node_id,
-            leftmost=False,
-            rightmost=(i == len(self._picker.layers) - 2),
-        ) for i in range(1,
-                         len(self._picker.layers) - 1) for node_id in self._picker.layers[i])
+    kid_args = []
+    for block in self._manager.internal_blocks():
+      source_interval, target_interval = manager.LinkGraphManager.block_rectangle(block)
+
+      node_id = ids.new_id('LinkNode_internal')
+
+      self._block_to_node_id[block] = node_id
+      kid_args.append(
+          dict(
+              node_id=node_id,
+              rightmost=any(above.is_target for above in block.above),
+              source_interval=source_interval,
+              target_interval=target_interval))
+
+    await self._spawn_and_await_kids(kid_args)
+
+    rightmost = {
+        kid['id']: kid
+        for subscription_started in self._subscription_started.values() for kid in subscription_started['leftmost_kids']
+    }
+
+    _get_receiver_handle = lambda node_id: rightmost[node_id] if node_id in rightmost else self._kids[node_id]
 
     # Inform the leftmost kids of their neighbors
     for kid in self._leftmost_kids:
+      kid_id = kid['id']
+      receivers = (_get_receiver_handle(self._block_to_node_id[block])
+                   for block in self._manager.source_block(kid_id).above)
+      senders = self._left_kid_senders[kid_id]
       self._controller.send(
           kid,
           messages.link.set_link_neighbors(
-              left_roles=self._left_kid_senders[kid['id']],
-              right_roles=[
-                  self._controller.transfer_handle(self._kids[receiver_id], kid['id'])
-                  for reciever_id in self._graph.node_receivers(kid['id'])
-              ],
+              left_roles=[self._controller.transfer_handle(sender, kid_id) for sender in senders],
+              right_roles=[self._controller.transfer_handle(receiver, kid_id) for receiver in receivers]))
+
+    # Inform the internal kids of their neighbors
+    for block in self._manager.internal_blocks():
+      node_id = self._block_to_node_id[block]
+      senders = (self._kids[self._block_to_node_id[below]] for below in block.below)
+      receivers = (_get_receiver_handle(self._block_to_node_id[above]) for above in block.above)
+      self._controller.send(
+          self._kids[node_id],
+          messages.link.set_link_neighbors(
+              left_roles=[self._controller.transfer_handle(sender, node_id) for sender in senders],
+              right_roles=[self._controller.transfer_handle(receiver, node_id) for receiver in receivers],
           ))
 
-    # Inform non-leftmost kids of their neighbors
-    for layer in self._picker.layers[1:-1]:
-      for node_id in layer:
-        self._controller.send(
-            self._kids[node_id],
-            messages.link.set_link_neighbors(
-                left_roles=[
-                    self._controller.transfer_handle(self._kids[sender_id], node_id)
-                    for sender_id in self._graph.node_senders(node_id)
-                ],
-                right_roles=[
-                    self._controller.transfer_handle(self._kids[receiver_id], node_id)
-                    for reciever_id in self._graph.node_receivers(node_id)
-                ],
-            ))
-
-    # Since the last layer of nodes in the graph are not our kids, we do not send
-    # them set_link_neighbors messages.  Their linkage information will be sent to their
-    # parent via the subscription_edges message.
+    # Do not inform the manager target nodes of their neighbors, as they have a separate parent.
+    # Their linkage information will be sent to their parent via the subscription_edges message
+    # and forwarded to them by their parent in its own set_link_neighbors message.
 
   @property
   def _system_config(self):
@@ -285,43 +369,71 @@ class StartLinkNode(transaction.ParticipantRole):
 
     result = []
     while node_ids:
-      hello_link_parent, kid_id = await self._controller.listen(type='hello_link_parent')
+      hello_link_parent, node_id = await self._controller.listen(type='hello_link_parent')
+      node_ids.remove(node_id)
       kid = hello_link_parent['kid']
       self._kids[kid['id']] = kid
       result.append(kid)
 
     return result
 
-  def _spawn_kid(self, node_id=None, leftmost=False, rightmost=False):
-    node_config = messages.link.new_link_node_config(
-        node_id=ids.new_id('Link') if node_id is None else node_id,
+  def _spawn_kid(self, source_interval, target_interval, node_id, leftmost=False, rightmost=False):
+    node_config = messages.link.link_node_config(
+        node_id=node_id,
+        height=self._node._height - 1,
         left_is_data=leftmost and self._node._left_is_data,
         right_is_data=rightmost and self._node._right_is_data,
-        leaf_config=self._node._leaf_config,
-        height=self._node._height - 1)
+        link_key=self._node._link_key)
 
-    self._controller.spawn_enlist(node_config, StartLinkNode,
-                                  dict(parent=self._controller.new_handle(node_config['id'])))
+    self._rectangle[node_id] = (source_interval, target_interval)
+
+    self._controller.spawn_enlist(
+        node_config, StartLinkNode,
+        dict(
+            parent=self._controller.new_handle(node_id),
+            source_interval=intervals.interval_json(source_interval),
+            target_interval=intervals.interval_json(target_interval),
+        ))
 
     return node_config['id']
 
   async def _spawn_leftmost_kids_for_data_node(self):
-    if len(self._start_subscription) != 1:
+    if len(self._start_subscription_columns) != 1:
       raise errors.InternalError(
           "Leftmost kids can be spawned by exact match only when there is a unique left adjacent node."
-          f" Got {len(self._start_subscription)}.")
+          f" Got {len(self._start_subscription_columns)}.")
 
-    start_subscription = next(iter(self._start_subscription.values()))
+    _interval, start_subscription = self._start_subscription_columns[0]
 
-    kids = await self._spawn_and_await_kids(dict(leftmost=True) for kid_id in start_subscription['kid_ids'])
+    target_interval = self._node._target_interval
+    kids = await self._spawn_and_await_kids(
+        dict(
+            source_interval=intervals.parse_interval(source_interval_json),
+            target_interval=target_interval,
+            leftmost=True,
+            node_id=ids.new_id('LinkNode_data_leftmost'),
+        ) for source_interval_json in start_subscription['kid_intervals'])
     self._leftmost_kids.extend(kids)
 
   def _max_message_rate_per_kid(self):
     kid_height = self._node._height - 1
-    max_descendant_width = self._system_config['LINK_NODE_KIDS_WIDTH_LIMIT']**kid_height
+    max_descendant_width = self._system_config['LINK_NODE_MAX_SENDERS']**kid_height
     return StartLinkNode.MAX_MESSAGE_RATE_PER_NODE_HZ * max_descendant_width
 
-  async def _spawn_leftmost_kids_by_load():
+  def _validate_start_subscription_columns(self):
+    cur_source_key = self._node._source_interval[0]
+    for (source_start, source_stop), start_subscription in self._start_subscription_columns:
+      if intervals.Min not in (cur_source_key, source_start) and cur_source_key != source_start:
+        raise errors.InternalError("start_subscription messages to StartLinkNode did not form a valid partition")
+      cur_source_key = source_stop
+
+    if cur_source_key is not None and \
+        intervals.Max not in (cur_source_key, self._node._source_interval[1]) and \
+        cur_source_key != self._node._source_interval[1]:
+      raise errors.InternalError(
+          "start_subscription messages to StartLinkNode did not form a valid partition at the parent's right endpoint")
+
+  async def _spawn_leftmost_kids_by_load(self):
     '''
     Spawn the leftmost layer of kids.
     Fewer nodes leads to a more compact network.
@@ -331,11 +443,17 @@ class StartLinkNode(transaction.ParticipantRole):
     the number of kids while ensuring no kid will be overloaded.
     '''
 
-    n_kids = int(self._total_messages_per_second // self._max_message_rate_per_kid())
-    self._controller.logger.info(
-        "Starting link node with {n_leftmost_kids} leftmost kids.", extra={'n_leftmost_kids': n_kids})
+    kids = await self._spawn_and_await_kids(
+        dict(
+            leftmost=True,
+            node_id=ids.new_id('LinkNode_internal_leftmost'),
+            source_interval=source_interval,
+            target_interval=self._target_interval,
+        ) for source_interval, start_subscription in self._start_subscription_columns)
 
-    kids = await self._spawn_and_await_kids(dict(leftmost=True) for i in range(n_kids))
+    self._controller.logger.info(
+        "Starting link node with {n_leftmost_kids} leftmost kids.", extra={'n_leftmost_kids': len(kids)})
+
     self._leftmost_kids.extend(kids)
 
   @property
@@ -345,3 +463,19 @@ class StartLinkNode(transaction.ParticipantRole):
   @property
   def _right_neighbors(self):
     return self._neighbors[1]
+
+
+def _midway(left, right):
+  '''
+  Calculate some key between left and right.
+  The choice of key is rather arbitrary when either argument is an infinity.
+  '''
+  if left == intervals.Min:
+    if right == intervals.Max:
+      return 0.0
+    else:
+      return right - 1.0
+  elif right == intervals.Max:
+    return left + 1.0
+  else:
+    return (left + right) / 2.0

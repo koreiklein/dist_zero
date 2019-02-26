@@ -24,8 +24,6 @@ class Importer(object):
     self._linker = linker
     self._sender = sender
 
-    self._migration_id = None
-
     self.logger = self._linker.logger
 
     self._least_undelivered_remote_sequence_number = first_sequence_number # see `Importer.least_undelivered_remote_sequence_number`
@@ -44,7 +42,6 @@ class Importer(object):
 
   def switch_linker(self, linker):
     self._linker = linker
-    self._migration_id = None
 
   @property
   def least_undelivered_remote_sequence_number(self):

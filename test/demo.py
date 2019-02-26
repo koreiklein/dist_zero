@@ -178,46 +178,23 @@ class Demo(object):
     result = await self.system.create_machines(configs)
     return result
 
-  async def new_machine_controller(self):
+  async def new_machine_controller(self, *args, **kwargs):
     '''Like `Demo.new_machine_controllers` but only creates and returns one.'''
-    controllers = await self.new_machine_controllers(1)
+    controllers = await self.new_machine_controllers(1, *args, **kwargs)
     return controllers[0]
 
-  def connect_trees_with_collect_network(self, root_input_id, root_output_id, machine):
+  def link_datasets(self, root_input_id, root_output_id, machine, link_key, name=None):
     return self._connect_trees_with_link_network(
-        node_id=dist_zero.ids.new_id('MigrationNode_add_collect_link'),
+        node_id=dist_zero.ids.new_id(name if name is not None else 'LinkRoot'),
         root_input_id=root_input_id,
         root_output_id=root_output_id,
         machine=machine,
-        leaf_config=messages.link.forward_to_any_leaf(),
-        connector_type=messages.link.all_to_one_available_connector_type())
+        link_key=link_key)
 
-  def connect_trees_with_sum_network(self, root_input_id, root_output_id, machine):
-    '''
-    Create a sum network between input and output trees.
-
-    :param str root_input_id: The id of the root of a data tree.
-    :param str root_output_id: The id of the root of a data tree.
-
-    :return: The id of the root link node for the newly spawned network.
-    :rtype: str
-    '''
-    return self._connect_trees_with_link_network(
-        node_id=dist_zero.ids.new_id('MigrationNode_add_sum_link'),
-        root_input_id=root_input_id,
-        root_output_id=root_output_id,
-        machine=machine,
-        leaf_config=messages.link.sum_leaf(),
-        connector_type=messages.link.all_to_all_connector_type())
-
-  def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, leaf_config,
-                                       connector_type):
+  def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, link_key):
     node_config = transaction.add_participant_role_to_node_config(
-        node_config=messages.link.new_link_node_config(
-            node_id=dist_zero.ids.new_id('LinkNode_root'),
-            left_is_data=True,
-            right_is_data=True,
-            leaf_config=leaf_config),
+        node_config=messages.link.link_node_config(
+            node_id=dist_zero.ids.new_id('LinkNode_root'), left_is_data=True, right_is_data=True, link_key=link_key),
         transaction_id=dist_zero.ids.new_id('NewLink'),
         participant_typename='CreateLink',
         args=dict(
@@ -227,11 +204,37 @@ class Demo(object):
     self.system.spawn_node(on_machine=machine, node_config=node_config)
     return node_config['id']
 
-  def all_io_kids(self, data_node_id):
-    if self.system.get_stats(data_node_id)['height'] == 1:
-      return self.system.get_kids(data_node_id)
-    else:
-      return [descendant for kid_id in self.system.get_kids(data_node_id) for descendant in self.all_io_kids(kid_id)]
+  def create_dataset(self, machine, name, height, input_link_keys=None, output_link_keys=None):
+    return self.system.spawn_dataset(
+        on_machine=machine,
+        node_config=messages.data.data_node_config(
+            node_id=dist_zero.ids.new_id(name),
+            parent=None,
+            height=height,
+            dataset_program_config=messages.data.demo_dataset_program_config(
+                input_link_keys=input_link_keys if input_link_keys is not None else [],
+                output_link_keys=output_link_keys if output_link_keys is not None else [],
+            )))
+
+  def get_leftmost_leaves(self, link_root_id):
+    def _loop(node_id):
+      if 0 == self.system.get_height(node_id):
+        yield node_id
+      else:
+        for kid_id in self.system.get_leftmost_kids(node_id):
+          yield from _loop(kid_id)
+
+    return list(_loop(link_root_id))
+
+  def get_leaves(self, root_id):
+    def _loop(node_id):
+      if 0 == self.system.get_height(node_id):
+        yield node_id
+      else:
+        for kid_id in self.system.get_kids(node_id):
+          yield from _loop(kid_id)
+
+    return list(_loop(root_id))
 
   def new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms, send_after=0):
     time_message_pairs = []
@@ -241,7 +244,7 @@ class Demo(object):
     for t in times_to_send:
       amount_to_send = int(self._rand.random() * 20)
       self.total_simulated_amount += amount_to_send
-      time_message_pairs.append((t, messages.io.input_action(amount_to_send)))
+      time_message_pairs.append((t, messages.data.input_action(amount_to_send)))
 
     result = RecordedUser(name, 0, types.Int32, time_message_pairs)
     self._recorded_users.append(result)

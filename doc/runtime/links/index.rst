@@ -24,8 +24,8 @@ and manager link nodes meet this repsonsibility
 by maintained a network of "children" (a.k.a. "kid") nodes that collectively forwards messages from the children
 of the nodes to its left to the children of the nodes to its right.
 
-The logic that manager link nodes use to maintain their networks of kids is encapsulated in several `Connector`
-classes.
+The logic that manager link nodes use to maintain their networks of kids is encapsulated in the `LinkGraphManager`
+class.
 
 .. toctree::
    :maxdepth: 2

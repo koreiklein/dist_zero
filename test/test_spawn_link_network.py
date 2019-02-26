@@ -12,10 +12,10 @@ from .common import Utils
 class TestSpawnSumLinkNetwork(Utils):
   async def _connect_and_test_io_trees(self, n_input_leaves, n_output_leaves):
     root_input = await self.root_io_tree(
-        machine=self.machine_ids[0], variant='input', leaf_config=messages.io.sum_leaf_config(0))
+        machine=self.machine_ids[0], dataset_program_config=messages.data.demo_dataset_program_config())
     self.root_input = root_input
     root_output = await self.root_io_tree(
-        machine=self.machine_ids[0], variant='output', leaf_config=messages.io.sum_leaf_config(0))
+        machine=self.machine_ids[0], dataset_program_config=messages.data.demo_dataset_program_config())
     self.root_output = root_output
 
     await self.demo.run_for(ms=200)
@@ -40,15 +40,12 @@ class TestSpawnSumLinkNetwork(Utils):
     else:
       assert self.demo.total_simulated_amount == 0
 
-    output_leaves = self.demo.all_io_kids(root_output)
+    output_leaves = self.demo.get_leaves(root_output)
     self.output_leaves = output_leaves
     assert len(output_leaves) == n_output_leaves
     self.demo.system.get_senders(root_output)
     self.demo.system.get_receivers(root_input)
 
-    self.demo.render_network(self.root_link)
-    import ipdb
-    ipdb.set_trace()
     for leaf in output_leaves:
       assert self.demo.total_simulated_amount == self.demo.system.get_output_state(leaf)
 
@@ -60,7 +57,7 @@ class TestSpawnSumLinkNetwork(Utils):
         1, base_config=self.base_config(), random_seed='test_dns')
 
     root_input = await self.root_io_tree(
-        machine=self.machine_ids[0], variant='input', leaf_config=messages.io.sum_leaf_config(0))
+        machine=self.machine_ids[0], dataset_program_config=messages.data.demo_dataset_program_config())
     await self.demo.run_for(ms=6000)
     await self.spawn_users(root_input, n_users=2)
     domain_name = 'www.distzerotesting.com'
@@ -160,8 +157,8 @@ class TestSpawnSumLinkNetwork(Utils):
 
     await demo.run_for(ms=5000)
 
-    self.output_leaves = self.demo.all_io_kids(self.root_output)
-    self.input_leaves = self.demo.all_io_kids(self.root_input)
+    self.output_leaves = self.demo.get_leaves(self.root_output)
+    self.input_leaves = self.demo.get_leaves(self.root_input)
     assert start_outputs + new_outputs == len(self.output_leaves)
 
     await demo.run_for(ms=8000)

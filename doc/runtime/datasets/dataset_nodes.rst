@@ -1,12 +1,12 @@
 Dataset Nodes
 =================
 
-.. automodule:: dist_zero.node.io.data
+.. automodule:: dist_zero.node.data.data
    :members:
 
-.. automodule:: dist_zero.node.io.leaf
-   :members:
+Publisher
+----------
 
-.. automodule:: dist_zero.node.io.adopter
+.. automodule:: dist_zero.node.data.publisher
    :members:
 

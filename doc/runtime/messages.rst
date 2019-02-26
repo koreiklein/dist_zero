@@ -24,7 +24,7 @@ Transaction messages
 
 IO Tree messages
 ----------------
-.. automodule:: dist_zero.messages.io
+.. automodule:: dist_zero.messages.data
    :members:
 
 Sum node messages
@@ -40,11 +40,6 @@ Linker messages
 Link node messages
 ---------------------------
 .. automodule:: dist_zero.messages.link
-   :members:
-
-Messages relating to migrations
----------------------------------
-.. automodule:: dist_zero.messages.migration
    :members:
 
 Common messages

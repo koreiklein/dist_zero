@@ -4,6 +4,7 @@ Objects to represent various infinities.
 
 
 def key_to_json(key):
+  '''Convert an interval endpoint to json'''
   if key == Min:
     return str(Min)
   elif key == Max:
@@ -13,6 +14,7 @@ def key_to_json(key):
 
 
 def json_to_key(j):
+  '''Convert json to an interval endpoint'''
   if j == str(Min):
     return Min
   elif j == str(Max):
@@ -22,12 +24,27 @@ def json_to_key(j):
 
 
 def interval_json(interval):
+  '''Convert an interval to json'''
   return (key_to_json(interval[0]), key_to_json(interval[1]))
 
 
 def parse_interval(interval_json):
+  '''Convert json to an interval'''
   left, right = interval_json
   return [json_to_key(left), json_to_key(right)]
+
+
+def is_subinterval(smaller, larger):
+  '''
+  :param tuple smaller: An interval.
+  :param tuple larger: An interval.
+
+  :return: True iff ``smaller`` is a subinterval of ``larger``.
+  :rtype: bool
+  '''
+  smaller_left, smaller_right = smaller
+  larger_left, larger_right = larger
+  return larger_left <= smaller_left and smaller_right <= larger_right
 
 
 class _Inf(object):

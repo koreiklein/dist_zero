@@ -23,11 +23,12 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
   root_input_node_id = dist_zero.ids.new_id('DataNode_input')
   demo.system.spawn_dataset(
       on_machine=machine,
-      node_config=messages.io.data_node_config(
-          root_input_node_id, parent=None, height=2, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
+      node_config=messages.data.data_node_config(
+          root_input_node_id, parent=None, height=2,
+          dataset_program_config=messages.data.demo_dataset_program_config()))
   await demo.run_for(ms=2000)
 
-  leaves = demo.all_io_kids(root_input_node_id)
+  leaves = demo.get_leaves(root_input_node_id)
   assert 0 == len(leaves)
 
   leaf_ids = []
@@ -37,15 +38,15 @@ async def test_add_one_leaf_to_empty_input_tree(demo):
       new_node_name=name,
       machine_id=machine,
       recorded_user=RecordedUser('user b', 0, types.Int32, [
-          (330, messages.io.input_action(2)),
-          (660, messages.io.input_action(1)),
+          (330, messages.data.input_action(2)),
+          (660, messages.data.input_action(1)),
       ]),
       ))
 
   create_new_leaf('LeafNode_test')
   await demo.run_for(ms=2000)
 
-  leaves = demo.all_io_kids(root_input_node_id)
+  leaves = demo.get_leaves(root_input_node_id)
   assert 1 == len(leaves)
 
 
@@ -63,8 +64,9 @@ async def test_single_node(demo):
   root_input_node_id = dist_zero.ids.new_id('DataNode_input')
   demo.system.spawn_dataset(
       on_machine=machine,
-      node_config=messages.io.data_node_config(
-          root_input_node_id, parent=None, height=0, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
+      node_config=messages.data.data_node_config(
+          root_input_node_id, parent=None, height=0,
+          dataset_program_config=messages.data.demo_dataset_program_config()))
 
   await demo.run_for(ms=200)
 
@@ -107,8 +109,9 @@ async def test_scale_unconnected_io_tree(demo):
   root_input_node_id = dist_zero.ids.new_id('DataNode_input')
   demo.system.spawn_dataset(
       on_machine=machine,
-      node_config=messages.io.data_node_config(
-          root_input_node_id, parent=None, height=2, leaf_config=messages.io.sum_leaf_config(0), variant='input'))
+      node_config=messages.data.data_node_config(
+          root_input_node_id, parent=None, height=2,
+          dataset_program_config=messages.data.demo_dataset_program_config()))
   await demo.run_for(ms=2000)
 
   leaf_ids = []

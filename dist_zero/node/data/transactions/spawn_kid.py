@@ -25,11 +25,10 @@ class SpawnKid(transaction.OriginatorRole):
     controller.logger.info("Starting a SpawnKid transaction.")
 
     node_id = ids.new_id("DataNode_kid")
-    node_config = messages.io.data_node_config(
+    node_config = messages.data.data_node_config(
         node_id=node_id,
         parent=None,
-        variant=controller.node._variant,
-        leaf_config=controller.node._leaf_config,
+        dataset_program_config=controller.node._dataset_program_config,
         height=controller.node._height - 1)
 
     controller.spawn_enlist(node_config, helpers.StartDataNode,
@@ -39,7 +38,7 @@ class SpawnKid(transaction.OriginatorRole):
     if hello_parent['kid_summary']:
       summary = hello_parent['kid_summary']
     else:
-      summary = messages.io.kid_summary(
+      summary = messages.data.kid_summary(
           size=0, n_kids=0, availability=controller.node._leaf_availability * controller.node._kid_capacity_limit)
     controller.node._kids.add_kid(
         kid=controller.role_handle_to_node_handle(hello_parent['kid']),

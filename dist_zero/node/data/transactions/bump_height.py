@@ -1,7 +1,6 @@
 import blist
 
 from dist_zero import transaction, messages, ids, errors
-from dist_zero.network_graph import NetworkGraph
 
 from . import helpers
 
@@ -15,11 +14,10 @@ class BumpHeight(transaction.OriginatorRole):
 
     self.proxy_id = ids.new_id('DataNode_proxy')
 
-    proxy_config = messages.io.data_node_config(
+    proxy_config = messages.data.data_node_config(
         node_id=self.proxy_id,
         parent=controller.node.new_handle(self.proxy_id),
-        variant=controller.node._variant,
-        leaf_config=controller.node._leaf_config,
+        dataset_program_config=controller.node._dataset_program_config,
         height=controller.node._height)
 
     controller.spawn_enlist(
@@ -30,7 +28,8 @@ class BumpHeight(transaction.OriginatorRole):
 
     kids_to_absorb = list(controller.node._kids)
     controller.send(
-        proxy, messages.io.absorb_these_kids(kid_ids=kids_to_absorb, left_endpoint=controller.node._interval_json()[0]))
+        proxy, messages.data.absorb_these_kids(
+            kid_ids=kids_to_absorb, left_endpoint=controller.node._interval_json()[0]))
 
     kid_ids = set(kids_to_absorb)
     for kid_id in kids_to_absorb:
@@ -52,16 +51,6 @@ class BumpHeight(transaction.OriginatorRole):
     interval = controller.node._interval()
     controller.node._kids.clear()
     controller.node._kids.add_kid(kid=proxy_node, interval=interval, summary=finished_absorbing['summary'])
-
-    controller.node._graph = NetworkGraph()
-    controller.node._graph.add_node(proxy['id'])
-    if controller.node._adjacent is not None:
-      controller.node.send(
-          controller.node._adjacent,
-          messages.io.bumped_height(
-              proxy=controller.node.transfer_handle(proxy_node, controller.node._adjacent['id']),
-              kid_ids=kids_to_absorb,
-              variant=controller.node._variant))
 
     # After bumping the height, we will certainly need a new kid
     from .split_kid import SplitKid

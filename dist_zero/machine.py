@@ -9,9 +9,8 @@ from random import Random
 
 from dist_zero import errors, messages, dns, settings
 
-from .node import io
+from .node import data
 from .node.link.link import LinkNode
-from .migration.migration_node import MigrationNode
 
 logger = logging.getLogger(__name__)
 
@@ -58,17 +57,6 @@ class MachineController(object):
     :type on_machine: :ref:`handle`
     :return: The id of the newly created node.
     :rtype: str
-    '''
-    raise RuntimeError("Abstract Superclass")
-
-  def change_node(self, node_id, node):
-    '''
-    Stop sending messages to the node currently identified node_id, and send them instead to a new node.
-    Do not try to initialize the node.
-
-    :param str node_id: The id of a running node.
-    :param node: A `Node` instance with the same id.
-    :type node: `Node`
     '''
     raise RuntimeError("Abstract Superclass")
 
@@ -316,16 +304,6 @@ class NodeManager(MachineController):
 
     return node_config['id']
 
-  def change_node(self, node_id, node):
-    if node_id not in self._node_by_id:
-      raise errors.InternalError(f"Can't change_node for {node_id}, as no node by that id is currently running.")
-
-    if node_id != node.id:
-      raise errors.InternalError(f"Can't change_node for {node_id}, as the new node has a different id {node.id}")
-
-    node.set_fernet(self._node_by_id[node_id])
-    self._node_by_id[node_id] = node
-
   def terminate_node(self, node_id):
     self._node_by_id.pop(node_id)
 
@@ -351,11 +329,7 @@ class NodeManager(MachineController):
 
   def _parse_node_config_without_role(self, node_config):
     if node_config['type'] == 'DataNode':
-      return io.DataNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'AdopterNode':
-      return io.AdopterNode.from_config(node_config, controller=self)
-    elif node_config['type'] == 'MigrationNode':
-      return MigrationNode.from_config(node_config, controller=self)
+      return data.DataNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'LinkNode':
       return LinkNode.from_config(node_config, controller=self)
     else:
@@ -372,7 +346,6 @@ class NodeManager(MachineController):
     node = self.parse_node(node_config)
 
     self._node_by_id[node.id] = node
-    node.initialize()
     return node
 
   def handle_api_message(self, message):
@@ -399,9 +372,6 @@ class NodeManager(MachineController):
           'status': 'failure',
           'reason': 'Unrecognized message type {}'.format(message['type']),
       }
-
-  def get_output_state(self, node_id):
-    return self._node_by_id[node_id].current_state
 
   def _format_node_id_for_logs(self, node_id):
     if node_id is None:

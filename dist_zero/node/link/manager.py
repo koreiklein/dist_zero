@@ -41,11 +41,6 @@ class LinkGraphManager(object):
         x_stop=intervals.Max,
         y_start=intervals.Min,
         y_stop=intervals.Max,
-        # FIXME(KK): Double check whether it's proper to use infinities or the extreme provided srcs and tgts
-        #x_start=self._source_object_to_block[source_object_intervals[0][0]],
-        #x_stop=self._source_object_to_block[source_object_intervals[-1][0]],
-        #y_start=self._target_object_to_block[target_object_intervals[0][0]],
-        #y_stop=self._target_object_to_block[target_object_intervals[-1][0]],
     )
 
     for src in self._source_block_to_updaters:
@@ -55,6 +50,18 @@ class LinkGraphManager(object):
 
     self._queue.append(center)
     self._flush_queue() # Generates all the other blocks
+
+  def source_block(self, value):
+    return self._source_object_to_block[value]
+
+  def source_objects(self):
+    return self._source_object_to_block.keys()
+
+  def target_block(self, value):
+    return self._target_object_to_block[value]
+
+  def target_objects(self):
+    return self._target_object_to_block.keys()
 
   def _remove_block(self, block):
     '''
@@ -75,6 +82,16 @@ class LinkGraphManager(object):
     self._source_block_to_updaters.get(block.x_stop, empty).pop(block, None)
     self._target_block_to_updaters.get(block.y_start, empty).pop(block, None)
     self._target_block_to_updaters.get(block.y_stop, empty).pop(block, None)
+
+  @staticmethod
+  def block_rectangle(block, limits=(intervals.Min, intervals.Max, intervals.Min, intervals.Max)):
+    x_min, x_max, y_min, y_max = limits
+    if block.is_source:
+      return (block.start, block.stop), (y_min, y_max)
+    elif block.is_target:
+      return (x_min, x_max), (block.start, block.stop)
+    else:
+      return (block.x_start.start, block.x_stop.start), (block.y_start.start, block.y_stop.start)
 
   def split_src(self, source_value, new_source_value, new_width):
     '''
@@ -162,12 +179,31 @@ class LinkGraphManager(object):
     for updater in self._target_block_to_updaters.pop(left).values():
       updater(right)
 
+  def internal_blocks(self):
+    '''
+    :return: the set of blocks internal to this `LinkGraphManager`
+      (i.e. blocks that are neither source not target blocks).
+    :rtype: set[`InternalBlock`]
+    '''
+    result = set()
+    queue = list(self._source_object_to_block.values())
+    while queue:
+      block = queue.pop()
+      if not block.is_target and block not in result:
+        if not block.is_source:
+          result.add(block)
+        queue.extend(block.above)
+
+    return result
+
   def layers(self):
     '''
     Return a list of sets of blocks.  Each block between the source and target blocks will occur
     exactly once in the result.
     The `LinkGraphManager` class does not have a formal semantics for what it means to be in a layer,
     so the allocation of blocks between layers should follow some heuristic.
+
+    If you're looking to iterate over the blocks computed by `LinkGraphManager`, `internal_blocks` is a better method.
     '''
     # Current algorithm: Each block is given the layer corresponding to the minimum path length between
     # it and any source node.
@@ -393,7 +429,10 @@ class SourceOrTargetBlock(Block):
 
   @property
   def stop(self):
-    return self.start + self.width
+    if self.width == intervals.Max:
+      return intervals.Max
+    else:
+      return self.start + self.width
 
   def __le__(self, other):
     if other.__class__ == self.__class__:

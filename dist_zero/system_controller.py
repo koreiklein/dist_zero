@@ -47,18 +47,28 @@ class SystemController(object):
     :param str node_id: The id of a root input `DataNode` instance.
     :param str domain_name: The domain name to map.
     '''
-    self.send_api_message(node_id, messages.io.route_dns(domain_name=domain_name))
-
-  def get_adjacent(self, node_id):
-    adjacent_handle = self.send_api_message(node_id, messages.machine.get_adjacent_handle())
-    if adjacent_handle is None:
-      return None
-    else:
-      self._add_node_machine_mapping(adjacent_handle)
-      return adjacent_handle['id']
+    self.send_api_message(node_id, messages.data.route_dns(domain_name=domain_name))
 
   def get_interval(self, node_id):
     return intervals.parse_interval(self.send_api_message(node_id, messages.machine.get_interval()))
+
+  def get_leftmost_kids(self, node_id):
+    result = self.send_api_message(node_id, messages.machine.get_leftmost_kids())
+    for handle in result.values():
+      self._add_node_machine_mapping(handle)
+
+    return list(result.keys())
+
+  def get_output_link(self, node_id, link_key):
+    return self.get_link(node_id, link_key, key_type='output')
+
+  def get_input_link(self, node_id, link_key):
+    return self.get_link(node_id, link_key, key_type='input')
+
+  def get_link(self, node_id, link_key, key_type):
+    node = self.send_api_message(node_id, messages.machine.get_data_link(link_key=link_key, key_type=key_type))
+    self._add_node_machine_mapping(node)
+    return node['id'] if node is not None else node
 
   def get_kids(self, node_id):
     result = self.send_api_message(node_id, messages.machine.get_kids())
@@ -91,7 +101,7 @@ class SystemController(object):
     return result
 
   def _add_node_machine_mapping(self, handle):
-    if handle['id'] not in self._node_id_to_machine_id:
+    if handle is not None and handle['id'] not in self._node_id_to_machine_id:
       self._node_id_to_machine_id[handle['id']] = handle['controller_id']
 
   def create_kid_config(self, data_node_id, new_node_name, machine_id):
@@ -232,16 +242,6 @@ class SystemController(object):
     '''
     return await self._spawner.create_machines(machine_configs)
 
-  def get_output_state(self, output_node_id):
-    '''
-    Get the state associated with an output node.
-
-    :param str output_node: The id of a output node.
-
-    :return: The state of that node at about the current time.
-    '''
-    return self.send_api_message(output_node_id, messages.machine.get_output_state())
-
   def get_stats(self, node_id):
     '''
     Get the stats associated with a node that collects stats.
@@ -251,6 +251,9 @@ class SystemController(object):
     :return: The stats of that node at about the current time.
     '''
     return self.send_api_message(node_id, messages.machine.get_stats())
+
+  def get_height(self, node_id):
+    return self.get_stats(node_id)['height']
 
   def send_api_message(self, node_id, message):
     return self._send_to_machine(

@@ -25,9 +25,6 @@ def std_system_config():
 
   When an `DataNode` has this many kids, it will trigger a split.
 
-  **LINK_NODE_KIDS_WIDTH_LIMIT**
-  A limit on the number of kids a link node may put in a single layer.
-
   **KID_SUMMARY_INTERVAL**
 
   Every time this many milliseconds pass on a data node, it should send a kid_summary message
@@ -41,7 +38,7 @@ def std_system_config():
   **SUM_NODE_SENDER_LIMIT, SUM_NODE_RECEIVER_LIMIT**
 
   If a sum node has more than this many senders/receivers, it will trigger a
-  "sum node split migration" to create a middle layer of senders/receivers.
+  transaction that should create a middle layer of senders/receivers.
 
   **SUM_NODE_SPLIT_N_NEW_NODES**
 
@@ -51,12 +48,13 @@ def std_system_config():
 
   If a sum node has fewer than ``SUM_NODE_RECEIVER_LOWER_LIMIT`` receivers and ``SUM_NODE_SENDER_LOWER_LIMIT`` senders
   for more than ``SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS`` milliseconds,
-  it will trigger a migration to excise the sum node.
+  it will trigger a transaction to excise the sum node.
   '''
   return {
       # When an `DataNode` has this many kids, it will trigger a split.
       'DATA_NODE_KIDS_LIMIT': 200,
-      'LINK_NODE_KIDS_WIDTH_LIMIT': 200,
+
+      # Limits on the number of senders and receivers to a `LinkNode`
       'LINK_NODE_MAX_SENDERS': 200,
       'LINK_NODE_MAX_RECEIVERS': 200,
 
@@ -69,7 +67,7 @@ def std_system_config():
       'TOTAL_KID_CAPACITY_TRIGGER': 5,
 
       # If a sum node has more than this many senders/receivers, it will trigger a
-      # "sum node split migration" to create a middle layer of senders/receivers.
+      # transaction to create a middle layer of senders/receivers.
       'SUM_NODE_SENDER_LIMIT': 15,
       'SUM_NODE_RECEIVER_LIMIT': 15,
 
@@ -78,7 +76,7 @@ def std_system_config():
 
       # If a sum node has fewer than SUM_NODE_RECEIVER_LOWER_LIMIT receivers and SUM_NODE_SENDER_LOWER_LIMIT senders
       # for more than SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS milliseconds,
-      # it will trigger a migration to excise the sum node.
+      # it will trigger a transaction to excise the sum node.
       'SUM_NODE_RECEIVER_LOWER_LIMIT': 3,
       'SUM_NODE_SENDER_LOWER_LIMIT': 3,
       'SUM_NODE_TOO_FEW_RECEIVERS_TIME_MS': 3 * 1000,
@@ -206,15 +204,6 @@ def new_handle(new_node_id):
   return {'type': 'new_handle', 'new_node_id': new_node_id}
 
 
-def get_output_state():
-  '''
-  Get and return the current output state for an output node.
-  :return: The current output state of that node.
-  :rtype: object
-  '''
-  return {'type': 'get_output_state'}
-
-
 def get_stats():
   '''
   Get and return the stats for a `Node` in the network.
@@ -224,9 +213,24 @@ def get_stats():
   return {'type': 'get_stats'}
 
 
+def get_data_link(link_key, key_type):
+  '''
+  API message to a data node to get the handle of the node subscribed to a particular ``link_key``
+
+  :param str link_key: The link key
+  :param str key_type: 'input' or 'output'
+  '''
+  return {'type': 'get_data_link', 'link_key': link_key, 'key_type': key_type}
+
+
 def get_kids():
   '''API message to a node to get its dictionary of kids.'''
   return {'type': 'get_kids'}
+
+
+def get_leftmost_kids():
+  '''API message to a link node to get its dictionary of leftmost kids.'''
+  return {'type': 'get_leftmost_kids'}
 
 
 def get_interval():
@@ -249,14 +253,9 @@ def get_capacity():
   return {'type': 'get_capacity'}
 
 
-def get_adjacent_handle():
-  '''API message to a node to get the handle of its adjacent (for data and leaf nodes).'''
-  return {'type': 'get_adjacent_handle'}
-
-
 def create_kid_config(new_node_name, machine_id):
   '''
-  Create a node_config for a new kid node of a data io node.
+  Create a node_config for a new kid node of a data node.
 
   :param str new_node_name: The name to use for the new node.
   :param str machine_id: The id of the machine on which the new node will run.
