@@ -10,9 +10,9 @@ class BumpHeight(transaction.OriginatorRole):
     if controller.node._parent is not None:
       raise errors.InternalError("Only the root node may bump its height.")
 
-    controller.logger.info("Starting a BumpHeight transaction on the root node.")
-
     self.proxy_id = ids.new_id('DataNode_proxy')
+
+    controller.logger.debug("Spawning proxy {proxy_id}.", extra={'proxy_id': self.proxy_id})
 
     proxy_config = messages.data.data_node_config(
         node_id=self.proxy_id,
@@ -26,12 +26,15 @@ class BumpHeight(transaction.OriginatorRole):
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     proxy = hello_parent['kid']
 
+    controller.logger.debug("Received hello from proxy", extra={'proxy_id': self.proxy_id})
+
     kids_to_absorb = list(controller.node._kids)
     controller.send(
         proxy, messages.data.absorb_these_kids(
             kid_ids=kids_to_absorb, left_endpoint=controller.node._interval_json()[0]))
 
     kid_ids = set(kids_to_absorb)
+    controller.logger.debug("Sending children to leave for the proxy", extra={'n_kids': len(kid_ids)})
     for kid_id in kids_to_absorb:
       controller.enlist(
           controller.node._kids[kid_id], helpers.FosterChild,
@@ -40,6 +43,8 @@ class BumpHeight(transaction.OriginatorRole):
     while kid_ids:
       _goodbye_parent, kid_id = await controller.listen(type='goodbye_parent')
       kid_ids.remove(kid_id)
+
+    controller.logger.debug("All kids have left")
 
     finished_absorbing, _sender_id = await controller.listen(type='finished_absorbing')
 

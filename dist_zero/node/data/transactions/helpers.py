@@ -40,6 +40,7 @@ class NewAbsorber(transaction.ParticipantRole):
   async def run(self, controller: 'TransactionRoleController'):
     controller.node._kids = DataNodeKids(
         *intervals.parse_interval(self.interval), controller=controller.node._controller)
+    controller.logger.info("Dispatching to GrowAbsorber")
     await GrowAbsorber(parent=self.parent).run(controller)
 
 
@@ -59,6 +60,8 @@ class GrowAbsorber(transaction.ParticipantRole):
     controller.node._kids.grow_left(intervals.json_to_key(absorb_these_kids['left_endpoint']))
     kid_ids = set(absorb_these_kids['kid_ids'])
 
+    controller.logger.debug("waiting for hellos from kids")
+
     while kid_ids:
       hello_parent, kid_id = await controller.listen(type='hello_parent')
       kid_ids.remove(kid_id)
@@ -66,6 +69,8 @@ class GrowAbsorber(transaction.ParticipantRole):
           kid=controller.role_handle_to_node_handle(hello_parent['kid']),
           interval=intervals.parse_interval(hello_parent['interval']),
           summary=hello_parent['kid_summary'])
+
+    controller.logger.debug("got hellos from kids")
 
     controller.send(
         self.parent,
@@ -85,6 +90,8 @@ class Absorbee(transaction.ParticipantRole):
     self.absorber = absorber
 
   async def run(self, controller: 'TransactionRoleController'):
+    controller.logger.info("Being absorbed by {absorber_id}", extra={'absorber_id': self.absorber['id']})
+
     kid_ids = set()
     controller.send(
         self.absorber,
@@ -96,9 +103,12 @@ class Absorbee(transaction.ParticipantRole):
           controller.node._kids[kid_id], FosterChild,
           dict(old_parent=controller.new_handle(kid_id), new_parent=controller.transfer_handle(self.absorber, kid_id)))
 
+    controller.logger.debug("Waiting for goodbyes from kids")
     while kid_ids:
       _goodbye_parent, kid_id = await controller.listen(type='goodbye_parent')
       kid_ids.remove(kid_id)
+
+    controller.logger.debug("Got goodbyes from kids")
 
     controller.send(self.parent, messages.data.goodbye_parent())
     controller.node._terminate()
@@ -112,6 +122,12 @@ class FosterChild(transaction.ParticipantRole):
     self.new_parent = new_parent
 
   async def run(self, controller: 'TransactionRoleController'):
+    controller.logger.info(
+        "Leaving old parent {old_parent_id} for new parent {new_parent_id}",
+        extra={
+            'old_parent_id': self.old_parent['id'],
+            'new_parent_id': self.new_parent['id'],
+        })
     controller.send(self.old_parent, messages.data.goodbye_parent())
     controller.send(
         self.new_parent,

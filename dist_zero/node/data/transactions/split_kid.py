@@ -22,6 +22,7 @@ class SplitKid(transaction.OriginatorRole):
     old_kid_stop = controller.node._kids.right_endpoint(self._kid_id)
 
     new_id = ids.new_id('DataNode')
+    controller.logger.info("Splitting node {new_id} from {cur_node_id}", extra={'new_id': new_id})
     node_config = messages.data.data_node_config(
         node_id=new_id,
         parent=controller.node.new_handle(new_id),
@@ -36,6 +37,7 @@ class SplitKid(transaction.OriginatorRole):
             interval=intervals.interval_json([old_kid_stop, old_kid_stop])))
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     new = hello_parent['kid']
+    controller.logger.debug("Got hello from new kid")
 
     controller.enlist(
         self._kid, SplitNode,
@@ -45,10 +47,12 @@ class SplitKid(transaction.OriginatorRole):
         ))
 
     finished_absorbing, sender_id = await controller.listen(type='finished_absorbing')
+    controller.logger.debug("Got finished_absorbing")
     start, stop = intervals.parse_interval(finished_absorbing['new_interval'])
     controller.node._kids.set_summary(sender_id, finished_absorbing['summary'])
 
     finished_splitting, sender_id = await controller.listen(type='finished_splitting')
+    controller.logger.debug("Got finished_splitting")
     controller.node._kids.split(
         kid_id=self._kid_id,
         mid=start,
@@ -65,6 +69,7 @@ class SplitNode(transaction.ParticipantRole):
     if controller.node._height == 0 and controller.node._dataset_program_config['interval_type'] != 'interval':
       raise errors.InternalError(f"Unable to split a height 0 Node with interval_type \"{interval_type}\" != interval")
     mid, leaving_kids = controller.node._kids.shrink_right()
+    controller.logger.info("Splitting at midpoint {midpoint}", extra={'midpoint': mid})
     leaving_kid_ids = [kid['id'] for kid in leaving_kids]
 
     controller.send(self._absorber,
@@ -77,9 +82,11 @@ class SplitNode(transaction.ParticipantRole):
               old_parent=controller.new_handle(kid['id']),
               new_parent=controller.transfer_handle(self._absorber, kid['id'])))
 
+    controller.logger.debug("Waiting for goodbyes from kids")
     kid_ids = set(leaving_kid_ids)
     while kid_ids:
       _goodbye_parent, kid_id = await controller.listen(type='goodbye_parent')
       kid_ids.remove(kid_id)
+    controller.logger.debug("Got goodbyes from kids")
 
     controller.send(self._parent, messages.data.finished_splitting(summary=controller.node._kid_summary_message()))

@@ -14,4 +14,9 @@ class NewDataset(transaction.ParticipantRole):
     controller.node._kids = DataNodeKids(intervals.Min, intervals.Max, controller=controller.node._controller)
 
     if controller.node._height > 1:
+      controller.logger.info("NewDataset is dispatching to SpawnKid")
       await spawn_kid.SpawnKid().run(controller)
+    else:
+      controller.logger.info(
+          "NewDataset is not spawning any kids, as the height is too low. {height}",
+          extra={'height': controller.node._height})

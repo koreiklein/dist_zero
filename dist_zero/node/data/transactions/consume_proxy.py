@@ -13,10 +13,7 @@ class ConsumeProxy(transaction.OriginatorRole):
       controller.logger.info("Aborting a scheduled ConsumeProxy transaction as the root does not current have a proxy.")
       return
 
-    controller.logger.info(
-        "Starting ConsumeProxy transaction to consume '{proxy_id}'.", extra={
-            'proxy_id': proxy['id'],
-        })
+    controller.logger.info("consuming '{proxy_id}'.", extra={'proxy_id': proxy['id']})
 
     my_handle = controller.new_handle(proxy['id'])
     controller.enlist(proxy, helpers.Absorbee, dict(parent=my_handle, absorber=my_handle))
@@ -26,6 +23,8 @@ class ConsumeProxy(transaction.OriginatorRole):
 
     controller.node._kids.clear()
 
+    controller.logger.debug("waiting for hellos from proxy's children")
+
     while kid_ids:
       hello_parent, kid_id = await controller.listen(type='hello_parent')
       controller.node._kids.add_kid(
@@ -34,10 +33,8 @@ class ConsumeProxy(transaction.OriginatorRole):
           summary=hello_parent['kid_summary'])
       kid_ids.remove(kid_id)
 
+    controller.logger.debug("received all hellos from proxy's children")
+
     await controller.listen(type='goodbye_parent')
 
     controller.node._height -= 1
-    controller.logger.info(
-        "Finished ConsumeProxy transaction.", extra={
-            'proxy_id': proxy['id'],
-        })

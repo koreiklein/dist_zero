@@ -22,9 +22,8 @@ class SpawnKid(transaction.OriginatorRole):
       controller.logger.info("Canceling SpawnKid transaction because the spawning node is not out of capacity.")
       return
 
-    controller.logger.info("Starting a SpawnKid transaction.")
-
     node_id = ids.new_id("DataNode_kid")
+    controller.logger.info("Spawing kid {kid_id}", extra={'kid_id': node_id})
     node_config = messages.data.data_node_config(
         node_id=node_id,
         parent=None,
@@ -36,8 +35,10 @@ class SpawnKid(transaction.OriginatorRole):
 
     hello_parent, _sender_id = await controller.listen(type='hello_parent')
     if hello_parent['kid_summary']:
+      controller.logger.debug("Using kid summary from hello_parent message")
       summary = hello_parent['kid_summary']
     else:
+      controller.logger.debug("Using default kid summary")
       summary = messages.data.kid_summary(
           size=0, n_kids=0, availability=controller.node._leaf_availability * controller.node._kid_capacity_limit)
     controller.node._kids.add_kid(
@@ -45,6 +46,5 @@ class SpawnKid(transaction.OriginatorRole):
         interval=controller.node._interval(),
         summary=summary)
     if self._send_summary:
+      controller.logger.debug("Sending kid summary")
       controller.node._send_kid_summary()
-
-    controller.logger.info("Finishing a SpawnKid transaction.")
