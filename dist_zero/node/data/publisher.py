@@ -5,15 +5,20 @@ from dist_zero import errors, messages
 
 class Publisher(object):
   '''
-  Each `DataNode` instance of height > 0 will have a single `Publisher` instance variable.
+  Each `DataNode` instance will have a single `Publisher` instance variable.
   That `Publisher` will be responsible for
 
     - keeping track of which nodes are subscribed to which input/output link keys.
-    - publishing changes to the structure of the kids of the `DataNode` to all the subscribed nodes.
+    - When the height is > 0,
+      publishing changes to the structure of the kids of the `DataNode` to all the subscribed nodes.
+    - When the height is == 0,
+      running the reactive Net object in inputs from senders, and sending outputs to receivers
+
   '''
 
   def __init__(self, is_leaf, dataset_program_config):
     '''
+    :param bool is_leaf: True iff the node is of height 0.
     :param dataset_program_config: A configuration object describing what kind of program
       the associated dataset is running.  It can be used to determine which link keys may be subscribed to.
     '''
