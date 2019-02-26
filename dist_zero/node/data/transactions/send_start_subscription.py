@@ -34,6 +34,12 @@ class SendStartSubscription(transaction.ParticipantRole):
     self._targets = [subscribe_to['target']]
     self._target_height = subscribe_to['height']
     while self._target_height > self._node._height:
+      self._controller.logger.info(
+          "Target height was larger than the current height. {target_height} > {node_height}",
+          extra={
+              'target_height': self._target_height,
+              'node_height': self._node._height
+          })
       await self._subscribe_to_greater_height_target()
 
     await self._subscribe_to_same_height_target()
@@ -80,6 +86,7 @@ class SendStartSubscription(transaction.ParticipantRole):
     that form a bijection between the kids of this node and the kids in ``subscription_started``.
     Kids should be matched by the start point.
     '''
+    self._controller.logger.debug("Matching kids by source interval")
     other_source_interval = subscription_started['source_intervals']
     my_kid_id_by_start = {self._node._kids.left_endpoint(kid_id): kid_id for kid_id in self._node._kids}
     for other_kid in subscription_started['leftmost_kids']:
@@ -95,6 +102,7 @@ class SendStartSubscription(transaction.ParticipantRole):
                                  "Extra kids remained unmatched in my_kid_id_by_start")
 
   async def _enlist_kids_and_await_hellos(self):
+    self._controller.logger.debug("Enlisting kids")
     for kid_id in self._node._kids:
       self._controller.enlist(self._node._kids[kid_id], SendStartSubscription,
                               dict(parent=self._controller.new_handle(kid_id), link_key=self._link_key))
@@ -103,6 +111,8 @@ class SendStartSubscription(transaction.ParticipantRole):
     while len(self._kid_roles) < len(self._node._kids):
       hello_parent, kid_id = await self._controller.listen(type='hello_parent')
       self._kid_roles[kid_id] = hello_parent['kid']
+
+    self._controller.logger.debug("Got hellos from kids")
 
   @property
   def _node(self):
@@ -137,7 +147,9 @@ class SendStartSubscription(transaction.ParticipantRole):
             source_interval=self._node._interval_json(),
             kid_intervals=kid_intervals))
 
+    self._controller.logger.debug("Awaiting subscription_started message")
     subscription_started, _sender_id = await self._controller.listen(type='subscription_started')
+    self._controller.logger.debug("Got subscription_started message")
     self._validate_subscription_started(subscription_started)
 
     edges = defaultdict(list)

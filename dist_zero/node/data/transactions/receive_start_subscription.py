@@ -49,10 +49,18 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
     start_subscription, _sender_id = await self._controller.listen(type='start_subscription')
     self._validate_start_subscription(start_subscription)
     while start_subscription['height'] > self._node._height:
+      self._controller.logger.info(
+          "Source height was larger than the current height. {source_height} > {node_height}",
+          extra={
+              'source_height': start_subscription['height'],
+              'node_height': self._node._height
+          })
       start_subscription = await self._receive_from_greater_height_source(start_subscription['subscriber'])
       self._validate_start_subscription(start_subscription)
 
     subscriber = start_subscription['subscriber']
+    self._controller.logger.info(
+        "receiving start_subscription from {subscriber_id}", extra={'subscriber_id': subscriber['id']})
     leftmost_kids = await self._enlist_kids_and_await_hellos()
     self._controller.send(
         subscriber,
@@ -65,6 +73,7 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
 
   async def _enlist_kids_and_await_hellos(self):
     kid_ids = set(self._node._kids)
+    self._controller.logger.debug("enlisting kids")
     for kid_id in kid_ids:
       kid = self._node._kids[kid_id]
       self._controller.enlist(kid, ReceiveStartSubscription,
@@ -75,5 +84,7 @@ class ReceiveStartSubscription(transaction.ParticipantRole):
       hello_parent, kid_id = await self._controller.listen(type='hello_parent')
       kid_ids.remove(kid_id)
       leftmost_kids.append(hello_parent['kid'])
+
+    self._controller.logger.debug("got hellos from kids")
 
     return leftmost_kids

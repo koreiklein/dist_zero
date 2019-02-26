@@ -184,11 +184,13 @@ class Node(object):
     :param role: The originator role instance defining the behavior of the overall transaction.
     :type role: `OriginatorRole`
     '''
-    controller = transaction.TransactionRoleController(self, ids.new_id(f'Transaction__{role.__class__.__name__}'))
+    controller = transaction.TransactionRoleController(
+        node=self, transaction_id=ids.new_id(f'Transaction__{role.__class__.__name__}'), role_class=role.__class__)
     self._start_role_eventually(role, controller)
 
   def _start_role_eventually(self, role, controller):
-    self.logger.info("Equeueing role {role_name}", extra={'role_name': role.__class__.__name__})
+    if role.log_starts_and_stops:
+      self.logger.debug("Enqueueing role {role_name}", extra={'role_name': role.__class__.__name__})
     self._transaction_role_queue.append((role, controller))
     if len(self._transaction_role_queue) == 1:
       # No coroutine is running transactions (the queue used to be empty), we need to create one
@@ -199,7 +201,8 @@ class Node(object):
 
   def _start_transaction_participant_eventually(self, transaction_id: str,
                                                 role: 'dist_zero.transaction.ParticipantRole'):
-    controller = transaction.TransactionRoleController(self, transaction_id)
+    controller = transaction.TransactionRoleController(
+        node=self, transaction_id=transaction_id, role_class=role.__class__)
     self._start_role_eventually(role, controller)
 
   async def _run_transaction_roles_till_empty(self):
@@ -216,4 +219,8 @@ class Node(object):
     if controller.transaction_id in self._postponed_transaction_messages:
       msgs = self._postponed_transaction_messages.pop(controller.transaction_id)
       self._controller.create_task(self._deliver_postponed_transaction_messages(controller, msgs))
+    if role.log_starts_and_stops:
+      controller.logger.info("Starting Transaction Role: {role}")
     await role.run(controller)
+    if role.log_starts_and_stops:
+      controller.logger.info("Finished Transaction Role: {role}")

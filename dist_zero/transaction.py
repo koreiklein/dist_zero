@@ -10,14 +10,16 @@ class TransactionRoleController(object):
   Controller object to allow `TransactionRole` instances to interact with the overall transaction.
   '''
 
-  def __init__(self, node: 'dist_zero.node.node.Node', transaction_id: str):
+  def __init__(self, node: 'dist_zero.node.node.Node', transaction_id: str, role_class):
     self.node = node
     self.transaction_id = transaction_id
 
     self.logger = dist_zero.logging.LoggerAdapter(
-        self.node.logger, extra={
+        self.node.logger,
+        extra={
             'cur_node_id': self.node.id,
             'transaction_id': self.transaction_id,
+            'role': role_class.__name__,
         })
 
     self._matcher = _Matcher()
@@ -162,6 +164,11 @@ class TransactionRole(object):
     :type controller: TransactionRoleController
     '''
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
+  @property
+  def log_starts_and_stops(self):
+    '''Subclasses can override to False if they would not like all their starts and stops to be logged.'''
+    return True
 
 
 class OriginatorRole(TransactionRole):

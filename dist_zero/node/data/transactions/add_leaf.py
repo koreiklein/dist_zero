@@ -12,10 +12,9 @@ class AddLeaf(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     controller.logger.info(
-        'Starting AddLeaf transaction adding {kid_id} to {parent_id}',
-        extra={
+        'Adding {kid_id} to {parent_id}', extra={
             'kid_id': controller.node.id,
-            'parent_id': self._parent['id'],
+            'parent_id': self._parent['id']
         })
 
     controller.enlist(
@@ -39,10 +38,9 @@ class AddLeafParent(transaction.ParticipantRole):
 
   async def run(self, controller: 'TransactionRoleController'):
     controller.logger.info(
-        'Starting AddLeafParent transaction adding {kid_id} to {parent_id}',
-        extra={
+        'Adding {kid_id} to {parent_id}', extra={
             'kid_id': self._kid['id'],
-            'parent_id': controller.node.id,
+            'parent_id': controller.node.id
         })
 
     kid = controller.role_handle_to_node_handle(self._kid)
@@ -53,4 +51,5 @@ class AddLeafParent(transaction.ParticipantRole):
     controller.send(self._kid, messages.data.set_leaf_key(key=key))
 
     if controller.node._monitor.out_of_capacity():
+      controller.logger.info("Node is out of capacity.  Sending kid summary.")
       controller.node._send_kid_summary()

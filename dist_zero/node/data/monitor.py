@@ -126,5 +126,9 @@ class CheckLimitsTransaction(transaction.OriginatorRole):
     self._monitor = monitor
     self._ms = ms
 
+  @property
+  def log_starts_and_stops(self):
+    return False
+
   async def run(self, controller: 'TransactionRoleController'):
     self._monitor._check_limits_inside_transaction(self._ms)
