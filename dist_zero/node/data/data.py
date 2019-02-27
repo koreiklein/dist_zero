@@ -189,7 +189,7 @@ class DataNode(Node):
   def elapse(self, ms):
     self.linker.elapse(ms)
     self._monitor_ms += ms
-    if self._monitor.is_watching:
+    if self._monitor.is_watching or (self._kids and self._best_mergeable_kids(list(self._kids))):
       self.check_limits()
 
   def _interval_json(self):

@@ -6,7 +6,6 @@ class Monitor(object):
   def __init__(self, node: 'DataNode'):
     self._node = node
 
-    self._time_since_no_mergable_kids_ms = 0
     self._time_since_no_consumable_proxy = 0
 
     # To limit excessive warnings regarding being at low capacity.

@@ -101,5 +101,4 @@ class TestLinkTrees(object):
     link_id = self.demo.link_datasets(
         root_input_id=root_input_id, root_output_id=root_output_id, machine=machine, name='LinkRoot', link_key=link_key)
     await self.demo.run_for(ms=1000)
-    demo.render_network(link_id) # FIXME(KK): Remove
     self._assert_unique_paths(link_id, link_key)
