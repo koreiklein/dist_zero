@@ -18,6 +18,7 @@ services:
     build:
       context: ./elk/logstash
     volumes:
+      - .tmp/system.json.log:/system.json.log:ro
       - ./elk/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
       - ./elk/logstash/pipeline:/usr/share/logstash/pipeline:ro
     ports:

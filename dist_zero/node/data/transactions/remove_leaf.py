@@ -16,3 +16,4 @@ class RemoveLeaf(transaction.OriginatorRole):
       controller.logger.info("Kid to remove was not found")
 
     controller.node._send_kid_summary()
+    controller.node.check_limits()

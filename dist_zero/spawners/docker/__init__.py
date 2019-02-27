@@ -1,8 +1,8 @@
 import asyncio
+import datetime
 import json
 import logging
 import os
-import time
 
 import docker
 import docker.errors
@@ -71,7 +71,7 @@ class DockerSpawner(spawner.Spawner):
 
   @property
   def dz_time(self):
-    return time.time()
+    return datetime.datetime.now(datetime.timezone.utc)
 
   def _remote_spawner_json(self):
     '''Generate a `DockerSpawner` config for a new container.'''

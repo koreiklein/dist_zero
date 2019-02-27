@@ -13,6 +13,9 @@ class StartDataNode(transaction.ParticipantRole):
     controller.node._parent = controller.role_handle_to_node_handle(self._parent)
     controller.node._kids = DataNodeKids(
         *intervals.parse_interval(self._interval_json), controller=controller.node._controller)
+    if controller.node._kids.left == controller.node._kids.right:
+      import ipdb
+      ipdb.set_trace()
 
     if controller.node._height > 1:
       # In this case, this node should start with at least one kid.
@@ -28,6 +31,7 @@ class StartDataNode(transaction.ParticipantRole):
             controller.new_handle(self._parent['id']),
             kid_summary=controller.node._kid_summary_message(),
             interval=self._interval_json))
+    controller.node.check_limits()
 
 
 class NewAbsorber(transaction.ParticipantRole):
@@ -42,6 +46,9 @@ class NewAbsorber(transaction.ParticipantRole):
         *intervals.parse_interval(self.interval), controller=controller.node._controller)
     controller.logger.info("Dispatching to GrowAbsorber")
     await GrowAbsorber(parent=self.parent).run(controller)
+    if controller.node._kids.left == controller.node._kids.right:
+      import ipdb
+      ipdb.set_trace()
 
 
 class GrowAbsorber(transaction.ParticipantRole):
@@ -80,6 +87,7 @@ class GrowAbsorber(transaction.ParticipantRole):
         ))
 
     controller.node._send_kid_summary()
+    controller.node.check_limits()
 
 
 class Absorbee(transaction.ParticipantRole):
@@ -112,6 +120,7 @@ class Absorbee(transaction.ParticipantRole):
 
     controller.send(self.parent, messages.data.goodbye_parent())
     controller.node._terminate()
+    controller.node.check_limits()
 
 
 class FosterChild(transaction.ParticipantRole):
@@ -138,3 +147,4 @@ class FosterChild(transaction.ParticipantRole):
         ))
     controller.node._parent = controller.role_handle_to_node_handle(self.new_parent)
     controller.node._send_kid_summary()
+    controller.node.check_limits()

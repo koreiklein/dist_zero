@@ -355,7 +355,7 @@ class NodeManager(MachineController):
     :rtype: object
     '''
     if message['type'] == 'api_node_message':
-      logger.info("API Message of type {message_type}", extra={'message_type': message['message']['type']})
+      logger.info("API Message received of type {message_type}", extra={'message_type': message['message']['type']})
       if message['node_id'] not in self._node_by_id:
         raise errors.NoNodeForId("Can't find {} for api message of type {}".format(
             message['node_id'],
@@ -441,7 +441,7 @@ class NodeManager(MachineController):
     '''receive a message to the proper node without any network error simulations'''
     node = self._node_by_id[node_id]
     logger.debug(
-        "Node is receiving message of type {message_type} from {sender_id}",
+        "Node is now receiving message of type {message_type} from {sender_id}",
         extra={
             'message_type': message['type'],
             'sender_id': sender_id,

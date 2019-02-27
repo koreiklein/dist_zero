@@ -1,3 +1,16 @@
+import os
+
+
+def fresh_logger_database():
+  return None
+  result = './.tmp/logstash.db'
+  try:
+    os.remove(result)
+  except FileNotFoundError:
+    pass
+  return result
+
+
 def partition(items, n_buckets):
   '''
   Partition a list of items into buckets.

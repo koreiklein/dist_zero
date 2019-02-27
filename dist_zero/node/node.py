@@ -221,6 +221,12 @@ class Node(object):
       self._controller.create_task(self._deliver_postponed_transaction_messages(controller, msgs))
     if role.log_starts_and_stops:
       controller.logger.info("Starting Transaction Role: {role}")
-    await role.run(controller)
+    try:
+      await role.run(controller)
+    except errors.InternalError as err:
+      controller.logger.error(
+          "Transaction aborted with InternalError: {internal_error}", extra={'internal_error': str(err)})
+      return
+
     if role.log_starts_and_stops:
       controller.logger.info("Finished Transaction Role: {role}")

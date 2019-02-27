@@ -43,7 +43,8 @@ class MergeKids(transaction.OriginatorRole):
     controller.logger.debug("Got goodbye from the absorbee")
     finished_absorbing, _sender_id = await controller.listen(type='finished_absorbing')
     controller.logger.debug("Got finished_absorbing from the absorber")
-    controller.node._kids.set_summary(self._absorbee_id, finished_absorbing['summary'])
+    controller.node._kids.set_summary(self._absorber_id, finished_absorbing['summary'])
     controller.node._kids.merge_right(self._absorbee_id)
 
+    controller.node.check_limits()
     controller.node._send_kid_summary()
