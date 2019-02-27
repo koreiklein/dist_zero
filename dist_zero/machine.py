@@ -148,17 +148,6 @@ class MachineController(object):
     '''
     raise RuntimeError("Abstract Superclass")
 
-  def periodically(self, interval_ms, f):
-    '''
-    Run a function periodically until it is cancelled.
-
-    :param int interval_ms: The number of milliseconds between calls to f().
-    :param f: Any function taking no arguments.
-
-    :return: A function to cancel the periodic calls.
-    '''
-    raise RuntimeError("Abstract Superclass")
-
   def create_task(self, awaitable):
     '''
     Ensure the await is run.
@@ -526,26 +515,6 @@ class NodeManager(MachineController):
   def new_load_balancer_frontend(self, domain_name, height):
     self._ensure_machine_runner()
     return self._machine_runner.new_load_balancer_frontend(domain_name, height)
-
-  def periodically(self, interval_ms, f):
-    over, cancel = self._future_that_resolves_on_cleanup()
-
-    async def _loop():
-      while True:
-        f()
-        done, pending = await asyncio.wait([self.sleep_ms(interval_ms), over], return_when=asyncio.FIRST_COMPLETED)
-        if over in done:
-          return
-        else:
-          runloop = asyncio.get_event_loop()
-          if runloop.is_running():
-            continue
-          else:
-            return
-
-    task = asyncio.get_event_loop().create_task(_loop())
-
-    return cancel
 
   def _future_that_resolves_on_cleanup(self):
     over = asyncio.get_event_loop().create_future()
