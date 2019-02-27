@@ -14,7 +14,7 @@ import dist_zero.logging
 
 import dist_zero.spawners.parse
 import dist_zero.load_balancer
-from dist_zero import settings, machine, messages, web_servers, errors
+from dist_zero import settings, machine, messages, web_servers, errors, misc
 from dist_zero.spawners import docker
 
 logger = logging.getLogger(__name__)
@@ -196,7 +196,7 @@ class MachineRunner(object):
 
     # Formatters
     human_formatter = dist_zero.logging.HUMAN_FORMATTER
-    json_formatter = dist_zero.logging.JsonFormatter('(asctime) (levelname) (name) (message)')
+    json_formatter = dist_zero.logging.JsonFormatter('(dz_time) (levelname) (name) (message)')
 
     # Handlers
     stderr_handler = logging.StreamHandler(sys.stderr)
@@ -205,7 +205,7 @@ class MachineRunner(object):
     logstash_handler = AsynchronousLogstashHandler(
         settings.LOGSTASH_HOST,
         settings.LOGSTASH_PORT,
-        database_path='/logs/.logstash.db',
+        database_path=fresh_logger_database(),
     )
 
     stderr_handler.setLevel(logging.ERROR)

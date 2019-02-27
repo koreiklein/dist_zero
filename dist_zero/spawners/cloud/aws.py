@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import os
@@ -68,7 +69,7 @@ class Ec2Spawner(spawner.Spawner):
 
   @property
   def dz_time(self):
-    return time.time()
+    return datetime.datetime.now(datetime.timezone.utc)
 
   def sleep_ms(self, ms):
     return asyncio.sleep(ms / 1000)

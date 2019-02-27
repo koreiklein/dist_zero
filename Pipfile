@@ -23,6 +23,7 @@ graphviz = "==0.9"
 pytest-asyncio = "*"
 matplotlib = "*"
 pytest-profiling = "*"
+pytest-repeat = "*"
 
 [requires]
 python_version = "3.6"

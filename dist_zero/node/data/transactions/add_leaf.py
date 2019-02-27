@@ -27,6 +27,7 @@ class AddLeaf(transaction.ParticipantRole):
     leaf_key, _sender_id = await controller.listen(type='set_leaf_key')
     # Leaves have None as their interval's stop coordinate
     controller.node._kids = DataNodeKids(leaf_key['key'], None, controller=controller.node._controller)
+    controller.node.check_limits()
 
 
 class AddLeafParent(transaction.ParticipantRole):
@@ -53,3 +54,5 @@ class AddLeafParent(transaction.ParticipantRole):
     if controller.node._monitor.out_of_capacity():
       controller.logger.info("Node is out of capacity.  Sending kid summary.")
       controller.node._send_kid_summary()
+
+    controller.node.check_limits()

@@ -48,3 +48,4 @@ class SpawnKid(transaction.OriginatorRole):
     if self._send_summary:
       controller.logger.debug("Sending kid summary")
       controller.node._send_kid_summary()
+    controller.node.check_limits()

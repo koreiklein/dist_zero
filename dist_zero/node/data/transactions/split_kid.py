@@ -4,6 +4,8 @@ from . import helpers
 
 
 class SplitKid(transaction.OriginatorRole):
+  '''Split a specific kid of this node.'''
+
   def __init__(self, kid_id):
     self._kid_id = kid_id
 
@@ -49,7 +51,6 @@ class SplitKid(transaction.OriginatorRole):
     finished_absorbing, sender_id = await controller.listen(type='finished_absorbing')
     controller.logger.debug("Got finished_absorbing")
     start, stop = intervals.parse_interval(finished_absorbing['new_interval'])
-    controller.node._kids.set_summary(sender_id, finished_absorbing['summary'])
 
     finished_splitting, sender_id = await controller.listen(type='finished_splitting')
     controller.logger.debug("Got finished_splitting")
@@ -57,10 +58,17 @@ class SplitKid(transaction.OriginatorRole):
         kid_id=self._kid_id,
         mid=start,
         new_kid=controller.role_handle_to_node_handle(new),
-        new_summary=finished_splitting['summary'])
+        kid_summary=finished_splitting['summary'],
+        new_kid_summary=finished_absorbing['summary'])
+    controller.node.check_limits()
 
 
 class SplitNode(transaction.ParticipantRole):
+  '''
+  As part of a `SplitKid` transaction originated by the parent,
+  split ``controller.node._kids`` into two pieces, and send the right half to ``self._absorber``
+  '''
+
   def __init__(self, parent, absorber):
     self._parent = parent
     self._absorber = absorber
@@ -69,7 +77,13 @@ class SplitNode(transaction.ParticipantRole):
     if controller.node._height == 0 and controller.node._dataset_program_config['interval_type'] != 'interval':
       raise errors.InternalError(f"Unable to split a height 0 Node with interval_type \"{interval_type}\" != interval")
     mid, leaving_kids = controller.node._kids.shrink_right()
-    controller.logger.info("Splitting at midpoint {midpoint}", extra={'midpoint': mid})
+    controller.logger.info(
+        "Splitting at midpoint {midpoint} [{kids_before_midpoint}]-midpoint-[{kids_after_midpoint}]",
+        extra={
+            'midpoint': mid,
+            'kids_after_midpoint': len(leaving_kids),
+            'kids_before_midpoint': len(controller.node._kids),
+        })
     leaving_kid_ids = [kid['id'] for kid in leaving_kids]
 
     controller.send(self._absorber,
@@ -90,3 +104,4 @@ class SplitNode(transaction.ParticipantRole):
     controller.logger.debug("Got goodbyes from kids")
 
     controller.send(self._parent, messages.data.finished_splitting(summary=controller.node._kid_summary_message()))
+    controller.node.check_limits()

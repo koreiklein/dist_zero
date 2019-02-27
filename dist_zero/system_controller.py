@@ -6,7 +6,7 @@ from logstash_async.handler import AsynchronousLogstashHandler
 
 import dist_zero.logging
 
-from dist_zero import machine, settings, errors, messages, spawners, transport, transaction, ids, intervals
+from dist_zero import machine, settings, errors, messages, spawners, transport, transaction, ids, intervals, misc
 
 
 class SystemController(object):
@@ -309,7 +309,7 @@ class SystemController(object):
 
     # Formatters
     human_formatter = dist_zero.logging.HUMAN_FORMATTER
-    json_formatter = dist_zero.logging.JsonFormatter('(asctime) (levelname) (name) (message)')
+    json_formatter = dist_zero.logging.JsonFormatter('(dz_time) (levelname) (name) (message)')
 
     # Handlers
     stdout_handler = logging.StreamHandler(sys.stdout)
@@ -318,7 +318,7 @@ class SystemController(object):
     logstash_handler = AsynchronousLogstashHandler(
         settings.LOGSTASH_HOST,
         settings.LOGSTASH_PORT,
-        database_path='./.tmp/logstash.db',
+        database_path=misc.fresh_logger_database(),
     )
 
     stdout_handler.setLevel(logging.ERROR)

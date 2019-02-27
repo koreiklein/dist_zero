@@ -94,9 +94,13 @@ class DataNode(Node):
       self._recorded_user.simulate(self._controller, self._receive_input_action)
 
     self._monitor = Monitor(self)
+    self._monitor_ms = 0
+    self._will_check_limits = False
 
-    self._stop_checking_limits = self._controller.periodically(CHECK_INTERVAL,
-                                                               lambda: self._monitor.check_limits(CHECK_INTERVAL))
+  def check_limits(self):
+    if not self._will_check_limits:
+      self._monitor.check_limits(self._monitor_ms)
+      self._monitor_ms = 0
 
   def _receive_input_action(self, message):
     self.logger.warning(
@@ -149,7 +153,6 @@ class DataNode(Node):
         self._kids.summaries[right_id]['n_kids'] <= self.MERGEABLE_N_KIDS_SECOND
 
   def _terminate(self):
-    self._stop_checking_limits()
     self._controller.terminate_node(self.id)
 
   def receive(self, message, sender_id):
@@ -169,7 +172,7 @@ class DataNode(Node):
             self._send_kid_summary()
           else:
             self._updated_summary = True
-          self._monitor.check_limits(0)
+          self.check_limits()
     else:
       super(DataNode, self).receive(message=message, sender_id=sender_id)
 
@@ -185,6 +188,9 @@ class DataNode(Node):
 
   def elapse(self, ms):
     self.linker.elapse(ms)
+    self._monitor_ms += ms
+    if self._monitor.is_watching or (self._kids and self._best_mergeable_kids(list(self._kids))):
+      self.check_limits()
 
   def _interval_json(self):
     return self._kids.interval_json()

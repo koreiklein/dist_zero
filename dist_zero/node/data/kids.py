@@ -117,6 +117,11 @@ class DataNodeKids(object):
     return self._summaries
 
   def merge_right(self, kid_id):
+    '''
+    Remove a kid, and add its interval to that of the kid to its immediate right.
+
+    :param str kid_id: The id of the kid to remove.
+    '''
     self._handles.pop(kid_id)
     self._summaries.pop(kid_id, None)
     start, mid = self._kid_to_interval.pop(kid_id)
@@ -131,7 +136,16 @@ class DataNodeKids(object):
 
     self._kid_to_interval[right_kid_id] = [start, stop]
 
-  def split(self, kid_id, mid, new_kid, new_summary):
+  def split(self, kid_id, mid, new_kid, kid_summary, new_kid_summary):
+    '''
+    Split a kid in two, giving the right side of its interval to the newly created kid.
+
+    :param str kid_id: The id of the kid to split
+    :param mid: The midpoint. It should lie inside the interval for ``kid_id``
+    :param new_kid: The handle of the new kid to create.
+    :param object kid_summary: A kid_summary message for the old kid.
+    :param object new_kid_summary: A kid_summary message for the new kid.
+    '''
     new_id = new_kid['id']
     start, stop = self._kid_to_interval[kid_id]
     index = self._kid_intervals.index([start, stop, kid_id])
@@ -144,7 +158,9 @@ class DataNodeKids(object):
     self._kid_intervals.add([mid, stop, new_id])
     self._kid_to_interval[new_id] = [mid, stop]
     self._handles[new_id] = new_kid
-    self._summaries[new_id] = new_summary
+
+    self._summaries[kid_id] = kid_summary
+    self._summaries[new_id] = new_kid_summary
 
   def remove_kid(self, kid_id):
     self._handles.pop(kid_id)
@@ -161,6 +177,8 @@ class DataNodeKids(object):
     return self._right
 
   def _random_key(self):
+    if self._left == self._right:
+      raise errors.InternalError("Can't generate new keys for kids when the left and right endpoints are equal")
     left = 0.0 if self._left == intervals.Min else self._left
     right = 1.0 if self._right == intervals.Max else self._right
     return self._controller.random.uniform(left, right)

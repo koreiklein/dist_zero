@@ -6,7 +6,6 @@ class Monitor(object):
   def __init__(self, node: 'DataNode'):
     self._node = node
 
-    self._time_since_no_mergable_kids_ms = 0
     self._time_since_no_consumable_proxy = 0
 
     # To limit excessive warnings regarding being at low capacity.
@@ -17,6 +16,7 @@ class Monitor(object):
     self._mergeable_node_ids = set() # All the ids used as keys in self._mergeable_pair_to_time_since_mergeable
 
   def check_limits(self, ms):
+    self._will_check_limits = True
     self._node.start_transaction_eventually(CheckLimitsTransaction(self, ms))
 
   def _check_limits_inside_transaction(self, ms):
@@ -26,6 +26,7 @@ class Monitor(object):
     self._check_for_low_capacity()
     self._check_for_mergeable_kids(ms)
     self._check_for_consumable_proxy(ms)
+    self._will_check_limits = False
 
   def out_of_capacity(self):
     total_kid_capacity = sum(
@@ -51,6 +52,7 @@ class Monitor(object):
         if self._node._parent is None:
           self._node.start_transaction_eventually(bump_height.BumpHeight())
         else:
+          self._node._send_kid_summary()
           if not self._warned_low_capacity:
             self._warned_low_capacity = True
             self._node.logger.warning(
@@ -87,6 +89,10 @@ class Monitor(object):
           self._node.start_transaction_eventually(consume_proxy.ConsumeProxy())
       else:
         self._time_since_no_consumable_proxy = 0
+
+  @property
+  def is_watching(self):
+    return bool(self._mergeable_pair_to_time_since_mergeable) or self._time_since_no_consumable_proxy > 0
 
   def _watch_pair_for_merge(self, pair):
     self._mergeable_pair_to_time_since_mergeable[pair] = 0

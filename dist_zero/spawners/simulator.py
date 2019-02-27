@@ -5,6 +5,7 @@ import json
 import logging
 import random
 import sys
+import time
 
 import dist_zero.logging
 import dist_zero.ids
@@ -38,7 +39,7 @@ class SimulatedSpawner(spawner.Spawner):
     '''
 
     self._system_id = system_id
-    self._start_datetime = datetime.datetime.now()
+    self._start_datetime = datetime.datetime.now(datetime.timezone.utc)
     self._controller_by_id = {}
     self._elapsed_time_ms = None # None if unstarted, otherwise the number of ms simulated so far
 
@@ -55,7 +56,7 @@ class SimulatedSpawner(spawner.Spawner):
 
   @property
   def dz_time(self):
-    return float(self._elapsed_time_ms) / 1000
+    return self._start_datetime + datetime.timedelta(milliseconds=self._elapsed_time_ms)
 
   async def clean_all(self):
     for controller in self._controller_by_id.values():

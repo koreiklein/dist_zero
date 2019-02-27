@@ -2,8 +2,8 @@
 Custom logging setup for DistZero
 '''
 
-import logging
 import json
+import logging
 
 from collections import OrderedDict
 
@@ -34,7 +34,7 @@ class ContextFilter(logging.Filter):
     self.spawner = spawner
 
   def filter(self, record):
-    record.dz_time = self.spawner.dz_time
+    record.dz_time = self.spawner.dz_time.isoformat()
     for key, value in self.context.items():
       setattr(record, key, value)
 
@@ -65,8 +65,7 @@ class StrFormatFilter(logging.Filter):
     return True
 
 
-HUMAN_FORMATTER = logging.Formatter(
-    fmt='%(asctime)s.%(msecs)03d %(levelname)s %(name)-22s| %(message)s', datefmt='%M:%S')
+HUMAN_FORMATTER = logging.Formatter(fmt='%(dz_time)s %(levelname)s %(name)-22s| %(message)s', datefmt='%M:%S')
 '''
 A formatter for human readable output.
 '''
