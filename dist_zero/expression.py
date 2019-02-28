@@ -5,7 +5,9 @@ class Expression(object):
   '''
   Abstract base class for the core expression objects.  These form the starting point for the DistZero compiler.
   '''
-  pass
+
+  def __call__(self, other):
+    return Apply(f=self, arg=other)
 
 
 class Apply(Expression):
@@ -27,7 +29,7 @@ class Lambda(Expression):
   Create a DistZero function expression from a python function.
   '''
 
-  def __init__(self, srcType: Type, tgtType: Type, f: Expression):
+  def __init__(self, srcType: Type, tgtType: Type, f):
     '''
     :param Type srcType: The source type of the function
     :param Type tgtType: The target type of the function
@@ -65,6 +67,13 @@ class Case(Expression):
     :type items: list[tuple[str, `Expression`]]
     '''
     self.items = items
+
+
+class Constant(Expression):
+  '''A constant value expression.'''
+
+  def __init__(self, value):
+    self.value = value
 
 
 class ListOp(Expression):

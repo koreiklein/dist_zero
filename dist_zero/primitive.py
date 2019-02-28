@@ -19,6 +19,17 @@ class PrimitiveOp(object):
   def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     raise errors.AbstractSuperclass(self.__class__)
 
+  def __eq__(self, other):
+    raise RuntimeError("Abstract Superclass")
+
+
+class Project(PrimitiveOp):
+  def __init__(self, key):
+    self.key = key
+
+  def __eq__(self, other):
+    return other.__class__ == Project and self.key == other.key
+
 
 class BinOp(PrimitiveOp):
   '''A binary operation'''
@@ -32,6 +43,9 @@ class BinOp(PrimitiveOp):
     ])
     self.type = types.FunctionType(src=self.input_type, tgt=self.output_type)
     self.c_operation = c_operation
+
+  def __eq__(self, other):
+    return other.__class__ == BinOp and self.s == other.s
 
   def __str__(self):
     return self.s
@@ -56,6 +70,9 @@ class BinOp(PrimitiveOp):
 
 
 class PlusBinOp(BinOp):
+  def __eq__(self, other):
+    return other.__class__ == PlusBinOp
+
   def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     outputTransitions = compiler.transitions_rvalue(vGraph, expr)
     output_transition_ctype = compiler.get_concrete_type(expr.type).c_transitions_type
