@@ -171,6 +171,9 @@ class Applied(Expression):
 
 class Product(Expression):
   def __init__(self, items):
+    '''
+    :param list[tuple[str,`Expression`]] items: List of pairs (key, expr).
+    '''
     self.items = items
     self._type = types.Product(items=[(k, v.type) for k, v in self.items])
     super(Product, self).__init__()
