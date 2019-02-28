@@ -1,4 +1,4 @@
-from dist_zero import capnpgen, errors, cgen
+from dist_zero import capnpgen, errors, cgen, types
 
 
 class ConcreteType(object):

@@ -3,12 +3,12 @@ import logging
 
 from dist_zero import errors, cgen
 
-from . import expression
+from dist_zero.reactive import expression
 
 logger = logging.getLogger(__name__)
 
 
-class RecordedUser(expression.Expression):
+class RecordedUser(expression.ConcreteExpression):
   '''
   In tests, it can be helpful to generate recordings of user interactions
   and play them back against nodes in order to generate input for a distributed
