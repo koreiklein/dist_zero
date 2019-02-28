@@ -8,7 +8,6 @@ from dist_zero import errors, types, cgen
 class PrimitiveOp(object):
   '''
   A reactive function that can not be decomposed into simpler functions.
-  They are used as the ``func`` argument to `dist_zero.expression.Applied`
   '''
 
   def get_type(self):

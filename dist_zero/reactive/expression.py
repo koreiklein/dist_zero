@@ -148,7 +148,7 @@ class Applied(ConcreteExpression):
     :param func: The operation to apply to the argument.
     :type func: `PrimitiveOp`
     :param arg: The input to this function.  Multi-argument functions will take a Product expression as input.
-    :type arg: `Expression`
+    :type arg: `ConcreteExpression`
     '''
     self.func = func
     self.arg = arg
