@@ -348,7 +348,7 @@ class ReactiveCompiler(object):
   def state_lvalue(self, vGraph, expr):
     '''
     :param vGraph: The c variable for the relevant graph structure.
-    :type vGraph: `dist_zero.cgen.expression.Expression`
+    :type vGraph: `CExpression`
     :param expr: Any expression in the input program. 
     :type expr: `ConcreteExpression`
     :return: The c lvalue that holds the current state of ``expr``.
@@ -360,11 +360,11 @@ class ReactiveCompiler(object):
   def state_rvalue(self, vGraph, expr):
     '''
     :param vGraph: The c variable for the relevant graph structure.
-    :type vGraph: `dist_zero.cgen.expression.Expression`
+    :type vGraph: `CExpression`
     :param expr: Any expression in the input program. 
     :type expr: `ConcreteExpression`
     :return: A c expression that holds the current state of ``expr``.
-    :rtype: `dist_zero.cgen.expression.Expression`
+    :rtype: `CExpression`
     '''
     index = self.expr_index[expr]
     return vGraph.Arrow(self._state_key_in_graph(index))
@@ -372,11 +372,11 @@ class ReactiveCompiler(object):
   def transitions_rvalue(self, vGraph, expr):
     '''
     :param vGraph: The c variable for the relevant graph structure.
-    :type vGraph: `dist_zero.cgen.expression.Expression`
+    :type vGraph: `CExpression`
     :param expr: Any expression in the input program. 
     :type expr: `ConcreteExpression`
     :return: A c expression that holds the current transitions kvec for ``expr``.
-    :rtype: `dist_zero.cgen.expression.Expression`
+    :rtype: `CExpression`
     '''
     index = self.expr_index[expr]
     return vGraph.Arrow('turn').Dot(self._transition_key_in_turn(index))

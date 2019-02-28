@@ -52,7 +52,7 @@ class ConcreteType(object):
     :param block: The block in which to generate the code.
     :type block: `Block`
     :param stateRvalue: A C expression for the state to free.
-    :type stateRvalue: `cgen.expression.Expression`
+    :type stateRvalue: `CExpression`
     '''
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
@@ -69,7 +69,7 @@ class ConcreteType(object):
     :param object python_state: A python object identifying a state of ``self.type``.
 
     :return: a c literal for value.
-    :rtype: `cgen.expression.Expression`
+    :rtype: `CExpression`
     '''
     raise RuntimeError(f"Abstract Superclass {self.__class__}")
 
@@ -120,7 +120,7 @@ class ConcreteType(object):
     Write the state associated with ``stateRvalue`` into the capnp pointer vPtr.
 
     :param stateRvalue: An expression for the rvalue giving a c state of the type of self.
-    :type stateRvalue: `dist_zero.cgen.expression.Expression`
+    :type stateRvalue: `CExpression`
     :param write_ctx: The capnproto context for writing this structure.
     :type write_ctx: `CapnpWriteContext`
     '''
@@ -131,7 +131,7 @@ class ConcreteType(object):
     Write the transitions associated with ``transitionsRvalue`` into the capnp pointer vPtr.
 
     :param transitionsRvalue: An expression for the rvalue giving the kvec of c transitions of the c transition type of self.
-    :type transitionsRvalue: `dist_zero.cgen.expression.Expression`
+    :type transitionsRvalue: `CExpression`
     :param write_ctx: The capnproto context for writing this structure.
     :type write_ctx: `CapnpWriteContext`
     '''

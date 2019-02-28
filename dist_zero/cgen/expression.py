@@ -5,7 +5,7 @@ from . import lvalue
 from .type import CType
 
 
-class Expression(object):
+class CExpression(object):
   '''A C expression'''
 
   def add_includes(self, program):
@@ -42,7 +42,7 @@ class Expression(object):
   def Sub(self, i):
     if isinstance(i, int):
       i = Constant(i)
-    if not isinstance(i, Expression):
+    if not isinstance(i, CExpression):
       raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
     return self.to_component_rvalue().Sub(i)
 
@@ -104,7 +104,7 @@ class Expression(object):
     return BinOp(Div, self, other)
 
 
-class UnionLiteral(Expression):
+class UnionLiteral(CExpression):
   '''A C union literal expression'''
 
   def __init__(self, union, key, value):
@@ -119,7 +119,7 @@ class UnionLiteral(Expression):
     return f"(({self.union.to_c_string()}) {{ .{self.key}={self.value.to_c_string()} }})"
 
 
-class StructureLiteral(Expression):
+class StructureLiteral(CExpression):
   '''A C structure literal expression'''
 
   def __init__(self, struct, key_to_expr):
@@ -135,7 +135,7 @@ class StructureLiteral(Expression):
     return f"(({self.struct.to_c_string()}) {{ {assignments} }})"
 
 
-class Sizeof(Expression):
+class Sizeof(CExpression):
   '''The C sizeof operator'''
 
   def __init__(self, base_type):
@@ -148,7 +148,7 @@ class Sizeof(Expression):
     return f"sizeof({self.base_type.to_c_string()})"
 
 
-class ComponentRvalue(Expression):
+class ComponentRvalue(CExpression):
   '''A C expression with syntactic accessors (e.g. ".", "->", "[3]", "*") applied to it'''
 
   def __init__(self, base, accessors):
@@ -175,8 +175,8 @@ class ComponentRvalue(Expression):
   def Sub(self, i):
     if isinstance(i, int):
       i = Constant(i)
-    if not isinstance(i, Expression):
-      raise errors.InternalError(f"Sub: Expected an Expression, got {i}")
+    if not isinstance(i, CExpression):
+      raise errors.InternalError(f"Sub: Expected a CExpression, got {i}")
     return self._extend(lvalue.Sub(i))
 
   def add_includes(self, program):
@@ -190,12 +190,12 @@ class ComponentRvalue(Expression):
     return result
 
 
-class UnOp(Expression):
+class UnOp(CExpression):
   '''A unary C operator applied to a C expression'''
 
   def __init__(self, base_expression, op):
-    if not isinstance(base_expression, Expression):
-      raise RuntimeError(f"Unary operation \"{op.s}\" must be applied to an Expression.  Got {base_expression}.")
+    if not isinstance(base_expression, CExpression):
+      raise RuntimeError(f"Unary operation \"{op.s}\" must be applied to a CExpression.  Got {base_expression}.")
     self.base_expression = base_expression
     self.op = op
 
@@ -209,7 +209,7 @@ class UnOp(Expression):
       return f"({self.op}{self.base_expression.to_c_string()})"
 
 
-class Constant(Expression):
+class Constant(CExpression):
   '''A predefined C constant'''
 
   def __init__(self, s):
@@ -229,7 +229,7 @@ Zero, One, Two, Three, Four, Five = [Constant(i) for i in range(6)]
 MinusOne = Constant(-1)
 
 
-class StrConstant(Expression):
+class StrConstant(CExpression):
   '''A predefined C string constant'''
 
   def __init__(self, s):
@@ -242,14 +242,14 @@ class StrConstant(Expression):
     return escape_c_string(self.s)
 
 
-class Call(Expression):
+class Call(CExpression):
   '''A C function call expression'''
 
   def __init__(self, func, args):
-    if not isinstance(func, Expression):
+    if not isinstance(func, CExpression):
       raise RuntimeError(f"Function argument in call was not an expression. Got {func}")
     for i, arg in enumerate(args):
-      if not isinstance(arg, Expression) and not isinstance(arg, CType):
+      if not isinstance(arg, CExpression) and not isinstance(arg, CType):
         raise RuntimeError(f"Argument {i} in call was not an expression or Type. Got {arg}")
     self.func = func
     self.args = args
@@ -264,15 +264,15 @@ class Call(Expression):
     return f"{self.func.to_c_string()}({', '.join(args)})"
 
 
-class BinOp(Expression):
+class BinOp(CExpression):
   '''A C binary operator applied to two argument expressions'''
 
   def __init__(self, op, left, right):
     self.op = op
-    if not isinstance(left, Expression):
-      raise RuntimeError(f"Left argument in binary operation \"{op.s}\" was not an expression. Got {left}")
-    if not isinstance(right, Expression):
-      raise RuntimeError(f"Right argument in binary operation \"{op.s}\" was not an expression. Got {right}")
+    if not isinstance(left, CExpression):
+      raise RuntimeError(f"Left argument in binary operation \"{op.s}\" was not a c expression. Got {left}")
+    if not isinstance(right, CExpression):
+      raise RuntimeError(f"Right argument in binary operation \"{op.s}\" was not a c expression. Got {right}")
     self.left = left
     self.right = right
 
@@ -313,7 +313,7 @@ Equal = Operation("==")
 NotEqual = Operation("!=")
 
 
-class _NULL(Expression):
+class _NULL(CExpression):
   '''The special C NULL expression'''
 
   def add_includes(self, program):
@@ -326,8 +326,8 @@ class _NULL(Expression):
 NULL = _NULL()
 
 
-class Cast(Expression):
-  '''A C typecast expression'''
+class Cast(CExpression):
+  '''A C typecast c expression'''
 
   def __init__(self, base, type):
     self.base = base
@@ -344,7 +344,7 @@ class Cast(Expression):
     return f"(({self.type.to_c_string()}) {self.base.to_c_string(root=False)})"
 
 
-class Var(Expression):
+class Var(CExpression):
   '''A C variable'''
 
   def __init__(self, name, type=None, includes=None):
