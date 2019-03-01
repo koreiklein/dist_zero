@@ -38,6 +38,14 @@ class Normalizer(object):
     else:
       return Applied(arg=arg_norm_expr, p=p)
 
+  def _apply_case(self, arg_norm_expr, f_expr):
+    if arg_norm_expr.__class__ == Applied and arg_norm_expr.p.__class__ == primitive.Inject:
+      key = arg_norm_expr.p.key
+      return self._apply(f_expr.dict()[key], self._eval(arg_norm_expr.arg))
+    else:
+      return NormCase(
+          base=arg_norm_expr, items=[(key, self._apply(f, arg_norm_expr.case_of(key))) for key, f in f_expr.items])
+
   def _apply(self, f_expr, arg_expr):
     # This _eval call should not fully normalize f_expr, as it must be of a function type.
     # We expect to get an unnormalized result and apply it to arg_expr
@@ -48,13 +56,12 @@ class Normalizer(object):
     if f_expr.__class__ == expression.Lambda:
       return self._eval(f_expr.f(arg_norm_expr))
     elif f_expr.__class__ == expression.PrimitiveExpression:
-      return self._apply_primitive(f_expr.primitive, arg_norm_expr)
+      return self._apply_primitive(arg_norm_expr=arg_norm_expr, p=f_expr.primitive)
     elif f_expr.__class__ == expression.ListOp:
       return NormListOp(
           base=arg_norm_expr, opVariant=f_expr.opVariant, element_expr=self._apply(f_expr.f, arg_norm_expr.element_of))
     elif f_expr.__class__ == expression.Case:
-      return NormCase(
-          base=arg_norm_expr, items=[(key, self._apply(f, arg_norm_expr.case_of(key))) for key, f in f_expr.items])
+      return self._apply_case(arg_norm_expr=arg_norm_expr, f_expr=f_expr)
     else:
       # f_expr was not a function
       raise errors.InternalError(f"Normalizer should never be asked to apply an expr of class \"{f_expr.__class__}\"")

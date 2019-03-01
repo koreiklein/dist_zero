@@ -31,6 +31,14 @@ class Project(PrimitiveOp):
     return other.__class__ == Project and self.key == other.key
 
 
+class Inject(PrimitiveOp):
+  def __init__(self, key):
+    self.key = key
+
+  def __eq__(self, other):
+    return other.__class__ == Inject and self.key == other.key
+
+
 class BinOp(PrimitiveOp):
   '''A binary operation'''
 

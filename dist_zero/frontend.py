@@ -1,4 +1,4 @@
-from dist_zero import expression
+from dist_zero import expression, primitive
 
 
 class DistZero(object):
@@ -11,6 +11,15 @@ class DistZero(object):
 
   def Record(self, **kwargs):
     return expression.Record(items=list(kwargs.items()))
+
+  def Case(self, base, **kwargs):
+    return expression.Case(items=list(kwargs.items()))(base)
+
+  def Project(self, key):
+    return expression.PrimitiveExpression(primitive.Project(key))
+
+  def Inject(self, key):
+    return expression.PrimitiveExpression(primitive.Inject(key))
 
   def Constant(self, value):
     return expression.Constant(value)

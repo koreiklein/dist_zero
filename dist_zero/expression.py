@@ -1,4 +1,5 @@
 from dist_zero.types import Type
+from dist_zero import errors, primitive
 
 
 class Expression(object):
@@ -8,6 +9,15 @@ class Expression(object):
 
   def __call__(self, other):
     return Apply(f=self, arg=other)
+
+  def __getitem__(self, key):
+    return self.Project(key)
+
+  def Project(self, key):
+    return PrimitiveExpression(primitive.Project(key))(self)
+
+  def Inject(self, key):
+    return PrimitiveExpression(primitive.Inject(key))(self)
 
 
 class Apply(Expression):
@@ -67,6 +77,13 @@ class Case(Expression):
     :type items: list[tuple[str, `Expression`]]
     '''
     self.items = items
+    self._d = None
+
+  def dict(self):
+    if self._d is None:
+      self._d = dict(self.items)
+
+    return self._d
 
 
 class Constant(Expression):
