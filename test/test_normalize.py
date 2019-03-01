@@ -10,14 +10,14 @@ def normalizer():
   return normalize.Normalizer()
 
 
-def test_normalize_simple(dz, normalizer):
+def test_normalize_simple_record(dz, normalizer):
   norm = normalizer.normalize(dz.Record(left=dz.Constant(2), right=dz.Constant(3)))
   assert norm.equal(normalize.NormRecord([('left', normalize.NormConstant(2)), ('right', normalize.NormConstant(3))]))
   assert not norm.equal(
       normalize.NormRecord([('loft', normalize.NormConstant(2)), ('right', normalize.NormConstant(3))]))
 
 
-def test_normalize_function(dz, normalizer):
+def test_normalize_function_application(dz, normalizer):
   norm = normalizer.normalize(dz.Lambda(lambda value: dz.Record(left=dz.Constant(2), right=value))(dz.Constant(3)))
   assert norm.equal(normalize.NormRecord([('left', normalize.NormConstant(2)), ('right', normalize.NormConstant(3))]))
 
@@ -32,7 +32,7 @@ def test_normalize_applications(dz, normalizer):
   assert norm.equal(normalize.NormConstant(3))
 
 
-def test_normalize_case(dz, normalizer):
+def test_normalize_case_inject(dz, normalizer):
   onLeft = dz.Constant(4).Inject('left')
   onRight = dz.Constant(2).Inject('right')
 
@@ -42,14 +42,12 @@ def test_normalize_case(dz, normalizer):
     assert normalizer.normalize(expr).equal(normalize.NormConstant(expected))
 
 
-def test_normalize_complex(dz, normalizer):
+def test_normalize_mixed_project_and_inject(dz, normalizer):
   t = dz.Project('middle')
   f = dz.Lambda(lambda value: dz.Record(left=value['a'], middle=value['a'], right=value['b']))
   g = dz.Lambda(lambda value: dz.Case(value, x=f, y=dz.Lambda(lambda value: value['c'])))
 
   abc = dz.Record(a=dz.Constant(3), b=dz.Constant(4), c=dz.Constant(5))
-  expr = t(g(abc.Inject('x')))
-  assert normalizer.normalize(expr).equal(normalize.NormConstant(3))
-
-  expr = g(abc.Inject('y'))
-  assert normalizer.normalize(expr).equal(normalize.NormConstant(5))
+  expr = dz.Record(first=t(g(abc.Inject('x'))), second=g(abc.Inject('y')))
+  assert normalizer.normalize(expr).equal(
+      normalize.NormRecord(items=[('first', normalize.NormConstant(3)), ('second', normalize.NormConstant(5))]))
