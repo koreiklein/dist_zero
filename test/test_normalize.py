@@ -53,14 +53,22 @@ def test_normalize_mixed_project_and_inject(dz, normalizer):
       normalize.NormRecord(items=[('first', normalize.NormConstant(3)), ('second', normalize.NormConstant(5))]))
 
 
-def test_normalize_list_op(dz, normalizer):
+def test_normalize_list_op_with_case(dz, normalizer):
   web_in = dz.WebInput(domain_name='www.example.com')
-  counters = dz.Map(web_in, dz.Project('counter'))
+  counters = dz.Map(web_in, dz.Lambda(lambda value: dz.Case(value['counter'],
+    zero=dz.Lambda(lambda x: dz.Constant(0)),
+    nonzero=dz.Lambda(lambda x: dz.Constant(1)),
+    )))
   norm = normalizer.normalize(counters)
   assert norm.__class__ == normalize.NormListOp
-  assert norm.base.equal(normalize.NormWebInput(domain_name='www.example.com'))
+  norm_web_input = normalize.NormWebInput(domain_name='www.example.com')
+  assert norm.base.equal(norm_web_input)
   assert norm.opVariant == 'map'
   element = norm.element_expr
-  assert element.__class__ == normalize.Applied
-  assert element.p == primitive.Project('counter')
-  assert element.arg.__class__ == normalize.ElementOf
+  expected = normalize.NormCase(
+      base=normalize.Applied(arg=norm_web_input.element_of, p=primitive.Project('counter')),
+      items=[
+          ('zero', normalize.NormConstant(0)),
+          ('nonzero', normalize.NormConstant(1)),
+      ])
+  assert element.equal(expected)

@@ -22,10 +22,19 @@ class PrimitiveOp(object):
   def __eq__(self, other):
     raise RuntimeError("Abstract Superclass")
 
+  def __str__(self):
+    raise RuntimeError("Abstract Superclass")
+
+  def __repr__(self):
+    return str(self)
+
 
 class Project(PrimitiveOp):
   def __init__(self, key):
     self.key = key
+
+  def __str__(self):
+    return f'."{self.key}"'
 
   def __eq__(self, other):
     return other.__class__ == Project and self.key == other.key
@@ -37,6 +46,9 @@ class Inject(PrimitiveOp):
 
   def __eq__(self, other):
     return other.__class__ == Inject and self.key == other.key
+
+  def __str__(self):
+    return f'<"{self.key}"'
 
 
 class BinOp(PrimitiveOp):
@@ -52,11 +64,11 @@ class BinOp(PrimitiveOp):
     self.type = types.FunctionType(src=self.input_type, tgt=self.output_type)
     self.c_operation = c_operation
 
-  def __eq__(self, other):
-    return other.__class__ == BinOp and self.s == other.s
-
   def __str__(self):
     return self.s
+
+  def __eq__(self, other):
+    return other.__class__ == BinOp and self.s == other.s
 
   def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     raise RuntimeError(f'BinOp of type "{self.s}" have not (yet) been programmed to react to transitions.')

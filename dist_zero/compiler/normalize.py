@@ -85,7 +85,7 @@ class Normalizer(object):
         return expr
 
 
-class NormExpr(object):
+class NormExpr(expression.Expression):
   '''
   Abstract base class for the normalized expression objects.
   These are created by `dist_zero.compiler.normalize` and are consumed by the code
@@ -136,7 +136,7 @@ class ElementOf(NormExpr):
     return other.__class__ == ElementOf and self.base.equal(other.base)
 
   def __str__(self):
-    return f"{self.base}.element_of()"
+    return f"element_of({self.base})"
 
 
 class CaseOf(NormExpr):
@@ -216,7 +216,8 @@ class NormCase(NormExpr):
     return self._d
 
   def equal(self, other):
-    return other.__class__ == NormCase and self.base.equal(other.base) and _equal_expr_dict(self._dict(), other._dict())
+    return other.__class__ == NormCase and self.base.equal(other.base) and _equal_expr_dicts(
+        self._dict(), other._dict())
 
 
 class NormListOp(NormExpr):
