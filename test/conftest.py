@@ -7,3 +7,4 @@ from dist_zero.spawners.cloud.aws import Ec2Spawner
 from dist_zero.system_controller import SystemController
 
 from .demo import demo, cloud_demo
+from .common import dz

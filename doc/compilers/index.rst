@@ -9,6 +9,7 @@ translate `dist_zero.expression.Expression` instances into running distributed p
    :maxdepth: 2
    :caption: Compilers:
 
+   main
    reactive
    cgen
    capnpgen

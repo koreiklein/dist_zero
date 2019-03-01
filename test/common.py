@@ -1,6 +1,13 @@
+import pytest
+
 import dist_zero.ids
 
-from dist_zero import messages, spawners
+from dist_zero import messages, spawners, frontend
+
+
+@pytest.fixture
+def dz(request):
+  yield frontend.DistZero()
 
 
 class Utils(object):

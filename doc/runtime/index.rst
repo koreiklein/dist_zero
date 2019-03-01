@@ -1,9 +1,8 @@
 Distributed Runtime
 ====================
 
-DistZero includes a number of distinct compilers that rely on each other to ultimately
-translate `dist_zero.expression.Expression` instances into running distributed programs.
-
+The DistZero runtime includes all the code to actually run a user's input program after
+it has been compiled.
 
 .. toctree::
    :maxdepth: 2

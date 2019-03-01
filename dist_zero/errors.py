@@ -8,14 +8,22 @@ class DistZeroError(Exception):
   pass
 
 
+class NotNormalizableError(DistZeroError):
+  '''raised when an `Expression` can't be fully normalized'''
+
+  def __init__(self, expr):
+    self._expr = expr
+    super(NotNormalizableError, self).__init__(f'Unable to normalize expression: "{self._expr}"')
+
+
 class CapnpError(DistZeroError):
-  '''For errors relating to capnproto.'''
+  '''raised for errors relating to capnproto.'''
   pass
 
 
 class CapnpFormatError(CapnpError):
   '''
-  For errors involving a badly structured capnproto file.
+  raise for errors involving a badly structured capnproto file.
   '''
   pass
 

@@ -346,7 +346,7 @@ class PythonException(object):
     self.var = expression.Var(self.name, None)
 
 
-class Function(expression.Expression):
+class Function(expression.CExpression):
   '''Represents a C function.'''
 
   def __init__(self, program, name, retType, args, export=False, docstring='', predeclare=False):

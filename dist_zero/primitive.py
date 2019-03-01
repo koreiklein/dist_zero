@@ -8,7 +8,6 @@ from dist_zero import errors, types, cgen
 class PrimitiveOp(object):
   '''
   A reactive function that can not be decomposed into simpler functions.
-  They are used as the ``func`` argument to `dist_zero.expression.Applied`
   '''
 
   def get_type(self):
@@ -19,6 +18,37 @@ class PrimitiveOp(object):
 
   def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     raise errors.AbstractSuperclass(self.__class__)
+
+  def __eq__(self, other):
+    raise RuntimeError("Abstract Superclass")
+
+  def __str__(self):
+    raise RuntimeError("Abstract Superclass")
+
+  def __repr__(self):
+    return str(self)
+
+
+class Project(PrimitiveOp):
+  def __init__(self, key):
+    self.key = key
+
+  def __str__(self):
+    return f'."{self.key}"'
+
+  def __eq__(self, other):
+    return other.__class__ == Project and self.key == other.key
+
+
+class Inject(PrimitiveOp):
+  def __init__(self, key):
+    self.key = key
+
+  def __eq__(self, other):
+    return other.__class__ == Inject and self.key == other.key
+
+  def __str__(self):
+    return f'<"{self.key}"'
 
 
 class BinOp(PrimitiveOp):
@@ -36,6 +66,9 @@ class BinOp(PrimitiveOp):
 
   def __str__(self):
     return self.s
+
+  def __eq__(self, other):
+    return other.__class__ == BinOp and self.s == other.s
 
   def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     raise RuntimeError(f'BinOp of type "{self.s}" have not (yet) been programmed to react to transitions.')
@@ -57,6 +90,9 @@ class BinOp(PrimitiveOp):
 
 
 class PlusBinOp(BinOp):
+  def __eq__(self, other):
+    return other.__class__ == PlusBinOp
+
   def generate_react_to_transitions(self, compiler, block, vGraph, arg, expr):
     outputTransitions = compiler.transitions_rvalue(vGraph, expr)
     output_transition_ctype = compiler.get_concrete_type(expr.type).c_transitions_type

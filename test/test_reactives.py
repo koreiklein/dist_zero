@@ -1,6 +1,8 @@
 import pytest
 
-from dist_zero import recorded, types, expression, reactive, primitive
+from dist_zero import recorded, types, reactive, primitive
+from dist_zero import concrete_types
+from dist_zero.reactive import expression
 
 
 class TestMultiplicativeReactive(object):
