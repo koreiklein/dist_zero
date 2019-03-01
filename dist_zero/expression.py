@@ -131,4 +131,4 @@ class WebInput(Expression):
     '''
     :param str domain_name: A domain name identifying the web endpoint.
     '''
-    self.domain_name
+    self.domain_name = domain_name

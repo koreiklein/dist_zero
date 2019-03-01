@@ -1,6 +1,6 @@
 import pytest
 
-from dist_zero import types
+from dist_zero import types, primitive
 from dist_zero.compiler import normalize
 import test.common
 
@@ -51,3 +51,16 @@ def test_normalize_mixed_project_and_inject(dz, normalizer):
   expr = dz.Record(first=t(g(abc.Inject('x'))), second=g(abc.Inject('y')))
   assert normalizer.normalize(expr).equal(
       normalize.NormRecord(items=[('first', normalize.NormConstant(3)), ('second', normalize.NormConstant(5))]))
+
+
+def test_normalize_list_op(dz, normalizer):
+  web_in = dz.WebInput(domain_name='www.example.com')
+  counters = dz.Map(web_in, dz.Project('counter'))
+  norm = normalizer.normalize(counters)
+  assert norm.__class__ == normalize.NormListOp
+  assert norm.base.equal(normalize.NormWebInput(domain_name='www.example.com'))
+  assert norm.opVariant == 'map'
+  element = norm.element_expr
+  assert element.__class__ == normalize.Applied
+  assert element.p == primitive.Project('counter')
+  assert element.arg.__class__ == normalize.ElementOf

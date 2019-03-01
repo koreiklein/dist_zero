@@ -26,3 +26,9 @@ class DistZero(object):
 
   def Lambda(self, f, srcType=None, tgtType=None):
     return expression.Lambda(srcType=srcType, tgtType=tgtType, f=f)
+
+  def WebInput(self, *args, **kwargs):
+    return expression.WebInput(*args, **kwargs)
+
+  def Map(self, base, f):
+    return expression.ListOp(opVariant='map', f=f)(base)

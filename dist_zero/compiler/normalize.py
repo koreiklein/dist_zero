@@ -275,7 +275,7 @@ class NormWebInput(NormExpr):
     '''
     :param str domain_name: A domain name identifying the web endpoint.
     '''
-    self.domain_name
+    self.domain_name = domain_name
     super(NormWebInput, self).__init__()
 
   def __str__(self):
