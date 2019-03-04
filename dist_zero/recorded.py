@@ -27,6 +27,9 @@ class RecordedUser(expression.ConcreteExpression):
         raise errors.InternalError('Times are not in order.')
     super(RecordedUser, self).__init__()
 
+  def __str__(self):
+    return f"Recorded(name={self.name},...)"
+
   @property
   def type(self):
     return self._type

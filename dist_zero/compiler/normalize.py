@@ -77,6 +77,8 @@ class Normalizer(object):
       return NormConstant(value=expr.value)
     elif expr.__class__ == expression.WebInput:
       return NormWebInput(domain_name=expr.domain_name)
+    elif expr.__class__ == expression.RecordedUser:
+      return NormRecordedUser(expr.concrete_recorded_user)
     else:
       # It can't be normalized any more
       if full:
@@ -265,6 +267,18 @@ class Applied(NormExpr):
 
   def equal(self, other):
     return other.__class__ == Applied and self.arg.equal(other.arg) and self.p == other.p
+
+
+class NormRecordedUser(NormExpr):
+  def __init__(self, concrete_recorded_user):
+    self.concrete_recorded_user = concrete_recorded_user
+    super(NormRecordedUser, self).__init__()
+
+  def __str__(self):
+    return str(self.concrete_recorded_user)
+
+  def equal(self, other):
+    return other.__class__ == NormRecordedUser and self.concrete_recorded_user == other.concrete_recorded_user
 
 
 class NormWebInput(NormExpr):

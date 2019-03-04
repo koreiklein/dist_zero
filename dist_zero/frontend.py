@@ -1,4 +1,5 @@
-from dist_zero import expression, primitive
+import dist_zero.compiler.main
+from dist_zero import expression, primitive, recorded
 
 
 class DistZero(object):
@@ -8,6 +9,9 @@ class DistZero(object):
   It can be used to create `Expression` objects, and compile them into distributed programs to be
   run by the DistZero runtime.
   '''
+
+  def RecordedUser(self, *args, **kwargs):
+    return expression.RecordedUser(concrete_recorded_user=recorded.RecordedUser(*args, **kwargs))
 
   def Record(self, **kwargs):
     return expression.Record(items=list(kwargs.items()))
@@ -39,3 +43,6 @@ class DistZero(object):
     if not isinstance(f, expression.Expression):
       f = expression.Lambda(f=f, srcType=None, tgtType=None)
     return expression.ListOp(opVariant='map', f=f)(base)
+
+  def compiler(self):
+    return dist_zero.compiler.main.MainCompiler()
