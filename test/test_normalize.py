@@ -37,7 +37,7 @@ def test_normalize_case_inject(dz, normalizer):
   onRight = dz.Constant(2).Inject('right')
 
   for value, expected in [(onLeft, 0), (onRight, 1)]:
-    expr = dz.Case(value, left=dz.Lambda(lambda value: dz.Constant(0)), right=dz.Lambda(lambda value: dz.Constant(1)))
+    expr = dz.Case(value, left=lambda value: dz.Constant(0), right=lambda value: dz.Constant(1))
 
     assert normalizer.normalize(expr).equal(normalize.NormConstant(expected))
 
@@ -45,7 +45,7 @@ def test_normalize_case_inject(dz, normalizer):
 def test_normalize_mixed_project_and_inject(dz, normalizer):
   t = dz.Project('middle')
   f = dz.Lambda(lambda value: dz.Record(left=value['a'], middle=value['a'], right=value['b']))
-  g = dz.Lambda(lambda value: dz.Case(value, x=f, y=dz.Lambda(lambda value: value['c'])))
+  g = dz.Lambda(lambda value: dz.Case(value, x=f, y=lambda value: value['c']))
 
   abc = dz.Record(a=dz.Constant(3), b=dz.Constant(4), c=dz.Constant(5))
   expr = dz.Record(first=t(g(abc.Inject('x'))), second=g(abc.Inject('y')))
@@ -55,10 +55,10 @@ def test_normalize_mixed_project_and_inject(dz, normalizer):
 
 def test_normalize_list_op_with_case(dz, normalizer):
   web_in = dz.WebInput(domain_name='www.example.com')
-  counters = dz.Map(web_in, dz.Lambda(lambda value: dz.Case(value['counter'],
-    zero=dz.Lambda(lambda x: dz.Constant(0)),
-    nonzero=dz.Lambda(lambda x: dz.Constant(1)),
-    )))
+  counters = dz.Map(web_in, lambda value: dz.Case(value['counter'],
+    zero=lambda x: dz.Constant(0),
+    nonzero=lambda x: dz.Constant(1),
+    ))
   norm = normalizer.normalize(counters)
   assert norm.__class__ == normalize.NormListOp
   norm_web_input = normalize.NormWebInput(domain_name='www.example.com')

@@ -13,7 +13,12 @@ class DistZero(object):
     return expression.Record(items=list(kwargs.items()))
 
   def Case(self, base, **kwargs):
-    return expression.Case(items=list(kwargs.items()))(base)
+    items = []
+    for key, value in kwargs.items():
+      if not isinstance(value, expression.Expression):
+        value = expression.Lambda(f=value, srcType=None, tgtType=None)
+      items.append((key, value))
+    return expression.Case(items=items)(base)
 
   def Project(self, key):
     return expression.PrimitiveExpression(primitive.Project(key))
@@ -31,4 +36,6 @@ class DistZero(object):
     return expression.WebInput(*args, **kwargs)
 
   def Map(self, base, f):
+    if not isinstance(f, expression.Expression):
+      f = expression.Lambda(f=f, srcType=None, tgtType=None)
     return expression.ListOp(opVariant='map', f=f)(base)
