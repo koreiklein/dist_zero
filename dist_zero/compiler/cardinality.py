@@ -1,3 +1,5 @@
+import itertools
+
 from collections import defaultdict
 
 from dist_zero import errors
@@ -35,9 +37,10 @@ class Cardinalizer(object):
     elif expr.__class__ == normalize.CaseOf:
       return self.cardinalize(expr.base)
     elif expr.__class__ == normalize.NormRecord:
-      return max((self.cardinalize(value) for key, value in expr.items), default=Global)
+      return max(itertools.chain((Global, ), (self.cardinalize(value) for key, value in expr.items)))
     elif expr.__class__ == normalize.NormCase:
-      return max((self.cardinalize(value) for key, value in expr.items), default=self.cardinalize(value.base))
+      return max(
+          itertools.chain((self.cardinalize(expr.base), ), (self.cardinalize(value) for key, value in expr.items)))
     elif expr.__class__ == normalize.NormListOp:
       # Despite the fact that the result does not depend on the cardinality of expr.element_expr, we should
       # still compute it to ensure all subexpressions are assigned a cardinality
@@ -50,7 +53,7 @@ class Cardinalizer(object):
     elif expr.__class__ in [normalize.NormConstant, normalize.NormRecordedUser, normalize.NormWebInput]:
       return Global
     else:
-      raise errors.InternalError("Unrecognized type of NormExpr: \"{expr.__class__}\"")
+      raise errors.InternalError(f"Unrecognized type of NormExpr: \"{expr.__class__}\"")
 
 
 class Cardinality(object):
@@ -80,12 +83,12 @@ class Cardinality(object):
   def equal(self, other):
     return self._list_exprs == other._list_exprs
 
-  def __le__(self, other):
+  def __lt__(self, other):
     return len(self._list_exprs) <= len(other._list_exprs) and \
         all(a == b for a, b in zip(self._list_exprs, other._list_exprs))
 
-  def __ge__(self, other):
-    return other <= self
+  def __gt__(self, other):
+    return other < self
 
   def __len__(self):
     return len(self._list_exprs)

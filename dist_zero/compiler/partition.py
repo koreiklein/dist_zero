@@ -1,12 +1,12 @@
-from dist_zero import program
+from dist_zero import program, errors
 from . import cardinality
 
 
 class Partitioner(object):
-  def __init__(self):
+  def __init__(self, compiler):
     self._cardinality_to_ds = {} # map each Cardinality in the input program to its Dataset instance
 
-    self._compiler = None
+    self._compiler = compiler
 
   def _new_dataset(self, name=None):
     return self._compiler._program.new_dataset(name=name)
@@ -36,14 +36,18 @@ class Partitioner(object):
     # NOTE(KK): It may at some point be possible to assign nicer and more informative names to dataset.
     return "DataNode"
 
-  def partition(self, compiler):
-    self._compiler = compiler
-
+  def partition(self, trie):
+    '''
+    :return: A map from each `NormExpr` to the `Dataset` on which its values should live.
+    :rtype: map[`NormExpr`, `Dataset`]
+    '''
     global_dataset = self._new_dataset(name='Globals')
-    self._partition_subtrie(compiler._cardinality_trie, global_dataset)
+    self._partition_subtrie(trie, global_dataset)
 
     result = {}
     for expr, cardinality in self._compiler._cardinality.items():
+      if cardinality not in self._cardinality_to_ds:
+        raise errors.InternalError("Found a cardinality in main compiler that did not exist in the trie.")
       result[expr] = self._cardinality_to_ds[cardinality]
 
     return result

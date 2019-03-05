@@ -25,10 +25,12 @@ class Normalizer(object):
     return self._eval(expr, full=True)
 
   def _eval(self, expr, full=False):
-    if expr not in self._norm_expr:
-      self._norm_expr[expr] = self._compute_eval(expr, full=full)
-
-    return self._norm_expr[expr]
+    result = self._norm_expr.get(expr, None)
+    if result is None:
+      result = self._compute_eval(expr, full=full)
+      result.spy_keys = expr.spy_keys
+      self._norm_expr[expr] = result
+    return result
 
   def _apply_primitive(self, arg_norm_expr, p):
     # Sometimes, it's actually possible to calculate the result of applying p in advance.

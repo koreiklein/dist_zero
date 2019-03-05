@@ -1,4 +1,4 @@
-from . import normalize, cardinality, partition
+from . import normalize, cardinality, partition, localizer
 
 from dist_zero import program, errors, expression
 
@@ -11,12 +11,13 @@ class MainCompiler(object):
     self._normMainExpr = None # The input program after being normalized
     self._cardinality = None # Map from NormExpr to Cardinality
     self._cardinality_trie = None # A CardinalityTrie formed from all cardinalities in the program
-    self._partition = None # Map from NormExpr to Dataset
+    self._expr_to_ds = None # Map from NormExpr to Dataset
 
     # Embedded helper classes responsible for the distinct functions/phases of the compiler
     self._normalizer = normalize.Normalizer()
     self._cardinalizer = cardinality.Cardinalizer()
-    self._partitioner = partition.Partitioner()
+    self._partitioner = partition.Partitioner(self)
+    self._localizer = localizer.Localizer(self)
 
     # The final result program
     self._program = program.DistributedProgram()
@@ -43,6 +44,7 @@ class MainCompiler(object):
 
     self._cardinality_trie = cardinality.CardinalityTrie.build_trie(set(self._cardinality.values()))
 
-    self._partition = self._partitioner.partition(self)
+    self._expr_to_ds = self._partitioner.partition(self._cardinality_trie)
+    self._localizer.localize(self._normMainExpr)
 
     return self._program

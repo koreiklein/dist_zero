@@ -1,4 +1,4 @@
-from dist_zero import ids
+from dist_zero import ids, errors
 
 
 class DistributedProgram(object):
@@ -12,6 +12,11 @@ class DistributedProgram(object):
     self._links = []
 
     self._spy_key_to_dataset = {} # Maps each spy key to the dataset responsible for it.
+
+  def localize_spy_key(self, spy_key, ds):
+    if spy_key in self._spy_key_to_dataset:
+      raise errors.InternalError(f"Spy key \"{spy_key}\" was already assigned to a separate dataset.")
+    self._spy_key_to_dataset[spy_key] = ds
 
   def GetDatasetId(self, spy_key):
     return self._spy_key_to_dataset[spy_key]._id
