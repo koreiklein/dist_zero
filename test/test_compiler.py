@@ -1,8 +1,8 @@
 import pytest
 
-from dist_zero import types, primitive
+from dist_zero import types, primitive, program
 
-from dist_zero.compiler import cardinality, normalize
+from dist_zero.compiler import cardinality, normalize, partition
 
 
 class TestCardinality(object):
@@ -86,6 +86,46 @@ class TestCardinality(object):
     assert [g] == keys
     assert 0 == len(list(final_trie.items()))
     assert card([a, b, d, e, f, g]).equal(final_trie.cardinality)
+
+
+class TestPartitioner(object):
+  def test_partitioner(self):
+    a, b, c, d, e, f, g = [normalize.NormWebInput(f"www{i}.example.com") for i in range(7)]
+    card = lambda elts: cardinality.Cardinality(elts)
+
+    glob = card([])
+    a = card([a])
+    abc = card([a, b, c])
+    abdef = card([a, b, d, e, f])
+    abdefg = card([a, b, d, e, f, g])
+    ab = card([a, b])
+
+    trie = cardinality.CardinalityTrie.build_trie([glob, a, abc, abdef, abdefg, ab])
+
+    prog = program.DistributedProgram()
+
+    class _MockCompiler(object):
+      def list_is_large(self, expr):
+        return expr in [b, e, g]
+
+      def new_dataset(self, name):
+        return prog.new_dataset(name)
+
+    compiler = _MockCompiler()
+
+    part = partition.Partitioner(compiler)
+
+    # Calling the main partition method makes things harder to mock.
+    # This "white box" test is willing to invade into the internal variables of Partition.
+    global_ds = prog.new_dataset(name='global')
+    part._partition_subtrie(trie, ds=global_ds)
+    ds = part._cardinality_to_ds
+    assert global_ds == ds[glob]
+    assert global_ds == ds[a]
+    assert global_ds != ds[ab]
+    assert ds[ab] == ds[abc]
+    assert ds[abc] != ds[abdef]
+    assert ds[abdef] != ds[abdefg]
 
 
 @pytest.mark.asyncio

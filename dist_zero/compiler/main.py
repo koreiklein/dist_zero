@@ -22,6 +22,9 @@ class MainCompiler(object):
     # The final result program
     self._program = program.DistributedProgram()
 
+  def new_dataset(self, name):
+    return self._program(name=name)
+
   def list_is_large(self, list_expr):
     # FIXME(KK): Look into whether there are cases where lists could genuinely be small.
     return True

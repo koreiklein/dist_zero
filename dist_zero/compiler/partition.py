@@ -9,7 +9,7 @@ class Partitioner(object):
     self._compiler = compiler
 
   def _new_dataset(self, name=None):
-    return self._compiler._program.new_dataset(name=name)
+    return self._compiler.new_dataset(name=name)
 
   def _partition_subtrie(self, subtrie: cardinality.CardinalityTrie, ds: program.Dataset):
     '''
@@ -21,7 +21,7 @@ class Partitioner(object):
     if subtrie.cardinality is not None:
       self._cardinality_to_ds[subtrie.cardinality] = ds
 
-    for list_exprs, kid_trie in subtrie.items():
+    for key, (list_exprs, kid_trie) in subtrie.items():
       if self._is_large(list_exprs):
         kid_ds = self._new_dataset(name=self._name_cardinality_dataset(kid_trie.cardinality))
       else:
