@@ -69,6 +69,12 @@ class Cardinality(object):
     self._list_exprs = list_exprs
     self._exprs = []
 
+  def __repr__(self):
+    return str(self)
+
+  def __str__(self):
+    return f"Cardinality({self._list_exprs})"
+
   def append_expr(self, expr):
     self._exprs.append(expr)
 
@@ -115,7 +121,7 @@ class CardinalityTrie(object):
 
   def cardinalities(self):
     yield self._cardinality
-    for trie in self._d.values():
+    for keys, trie in self._d.values():
       yield from trie.cardinalities()
 
   @staticmethod
@@ -144,14 +150,16 @@ class CardinalityTrie(object):
         else:
           first[c[i]].append(c)
 
-      if cardinality is None:
-        raise errors.InternalError("Cardinalities were not join closed.")
-
-      d = {key: loop(values, i + 1) for key, values in first.items()}
+      d = {}
+      for key, values in first.items():
+        other_keys, next_trie = loop(values, i + 1)
+        d[key] = ([key] + other_keys, next_trie)
 
       if cardinality is None and len(d) == 1:
         key, (rest_keys, rest_trie) = d.popitem()
-        return [key] + rest_keys, rest_trie
+        return rest_keys, rest_trie
+      elif cardinality is None:
+        raise errors.InternalError("Cardinalities were not join closed.")
       else:
         return [], CardinalityTrie(cardinality, d)
 
