@@ -37,8 +37,36 @@ class DistributedCompiler(object):
     return self._program.new_dataset(name=name)
 
   def list_is_large(self, list_expr):
-    # FIXME(KK): Look into whether there are cases where lists could genuinely be small.
-    return True
+    '''
+    For ``list_expr`` a key in a `Cardinality`, determine whether it should be treated as a large
+    list, requiring multiple leaves in a `dataset <dist_zero.program.Dataset>` to reprerent it.
+    .'''
+    if list_expr.__class__ == normalize.NormWebInput:
+      return True
+    elif list_expr.__class__ == normalize.NormCase:
+      return any(self.list_is_large(v) for k, v in list_expr.items)
+    elif list_expr.__class__ in [normalize.ElementOf, normalize.CaseOf]:
+      if not self.list_is_large(list_expr.base):
+        return False
+
+      if list_expr.base.__class__ == normalize.NormWebInput:
+        return False # Each element of a NormWebInput is assumed to be not a large list
+
+      # Note that there may be other cases in which the expression really shouldn't be large here.
+      # We can deal with those as they come up
+      return True
+    elif list_expr.__class__ in [normalize.NormConstant, normalize.NormRecordedUser]:
+      return False
+    elif list_expr.__class__ == normalize.Applied:
+      return self.list_is_large(list_expr.arg)
+    elif list_expr.__class__ == normalize.NormListOp:
+      return self.list_is_large(list_expr.base)
+    elif list_expr.__class__ == normalize.NormRecord:
+      return any(self.list_is_large(v) for k, v in list_expr.items)
+    else:
+      # note that if we add any other kinds of lists, we should
+      raise errors.InternalError(
+          f'We should not be determining the largeness of a list expression of class "{list_expr.__class__}"')
 
   def compile(self, expr: expression.Expression):
     '''
