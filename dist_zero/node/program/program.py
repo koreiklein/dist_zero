@@ -2,6 +2,7 @@ import logging
 
 from dist_zero import messages, errors
 from dist_zero.node.node import Node
+from .transactions import start_program
 
 logger = logging.getLogger(__name__)
 
@@ -44,5 +45,17 @@ class ProgramNode(Node):
   def handle_api_message(self, message):
     if message['type'] == 'get_spy_roots':
       return {key: self._datasets[ds_id] for key, ds_id in self._spy_key_to_ds_id.items()}
+    elif message['type'] == 'get_datasets':
+      return self._datasets
+    elif message['type'] == 'get_links':
+      return self._links
+    elif message['type'] == 'link_datasets':
+      link_config = message['link_config']
+      self.start_transaction_eventually(
+          start_program.StartLink(
+              link_config=link_config,
+              src=self._datasets[link_config['src_dataset_id']],
+              tgt=self._datasets[link_config['tgt_dataset_id']],
+          ))
     else:
       return super(ProgramNode, self).handle_api_message(message)

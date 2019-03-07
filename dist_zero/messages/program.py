@@ -12,16 +12,18 @@ def program_node_config(node_id):
   }
 
 
-def dataset_config(node_id, dataset_program_config):
+def dataset_config(node_id, singleton, dataset_program_config):
   '''
   Configuration information for a distributed dataset.
 
   :param str node_id: The id to use for the root `DataNode` for the dataset.
+  :param bool singleton: True if there should only ever be one node in the dataset
   :param dataset_program_config: A config defining the dataset program this dataset will run.
   '''
   return {
       'type': 'dataset_program_config',
       'id': node_id,
+      'singleton': singleton,
       'dataset_program_config': dataset_program_config,
   }
 

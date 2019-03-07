@@ -19,9 +19,6 @@ class StartProgram(transaction.ParticipantRole):
     self._dataset_configs = dataset_configs
     self._link_configs = link_configs
 
-    self._ds_id_to_handle = None # Map from dataset root id to its role handle
-    self._link_id_to_handle = None # Map from link root id to its role handle
-
     self._controller = None
 
   async def run(self, controller: 'TransactionRoleController'):
@@ -32,30 +29,23 @@ class StartProgram(transaction.ParticipantRole):
       self._spawn_dataset(dataset_config)
 
     # Wait for all the datasets to be up and running
-    self._ds_id_to_handle = {}
-    while len(self._ds_id_to_handle) < len(self._dataset_configs):
+    self._controller.node._datasets = {}
+    while len(self._controller.node._datasets) < len(self._dataset_configs):
       started_dataset, ds_id = await self._controller.listen(type='started_dataset')
-      self._ds_id_to_handle[ds_id] = started_dataset['root']
-
-    self._link_id_to_handle = {}
-    # Spawn the links one at a time to prevent deadlocks
-    for link_config in self._link_configs:
-      await self._spawn_link(link_config)
+      self._controller.node._datasets[ds_id] = self._controller.role_handle_to_node_handle(started_dataset['root'])
 
     self._controller.node._spy_key_to_ds_id = {}
     for ds_config in self._dataset_configs:
       for spy_key in self._get_spy_keys(ds_config):
         self._controller.node._spy_key_to_ds_id[spy_key] = ds_config['id']
 
-    self._controller.node._datasets = {
-        key: self._controller.role_handle_to_node_handle(dataset)
-        for key, dataset in self._ds_id_to_handle.items()
-    }
-
-    self._controller.node._links = {
-        key: self._controller.role_handle_to_node_handle(link)
-        for key, link in self._link_id_to_handle
-    }
+    self._controller.node._links = {}
+    # Spawn the links one at a time to prevent deadlocks
+    for link_config in self._link_configs:
+      await StartLink(
+          link_config=link_config,
+          src=self._controller.node._datasets[link_config['src_dataset_id']],
+          tgt=self._controller.node._datasets[link_config['tgt_dataset_id']]).run(self._controller)
 
   def _get_spy_keys(self, dataset_config):
     program_config = dataset_config['dataset_program_config']
@@ -70,20 +60,28 @@ class StartProgram(transaction.ParticipantRole):
         node_config=messages.data.data_node_config(
             node_id=dataset_config['id'],
             parent=None,
-            # FIXME(KK): Some datasets should be spawned at a height != 0.  Determine that here.
-            height=0,
+            height=0 if dataset_config['singleton'] else 2,
             dataset_program_config=dataset_config['dataset_program_config']),
         participant=new_dataset.NewDataset,
         args=dict(requester=self._controller.new_handle(dataset_config['id'])))
 
-  async def _spawn_link_and_wait(self, link_config):
-    '''Spawn a link and wait for it to start.'''
-    src_id = link_config['src_dataset_id']
-    tgt_id = link_config['tgt_dataset_id']
 
-    self._controller.enlist(self._ds_id_to_handle[src_id], SendStartSubscription,
+class StartLink(transaction.ParticipantRole):
+  def __init__(self, link_config, src, tgt):
+    self._link_config = link_config
+    self._src = src
+    self._tgt = tgt
+    self._controller = None
+
+  async def run(self, controller: 'TransactionRoleController'):
+    '''Spawn a link and wait for it to start.'''
+    self._controller = controller
+
+    link_key = self._link_config['link_key']
+
+    self._controller.enlist(self._src, SendStartSubscription,
                             dict(parent=self._controller.new_handle(self._src['id']), link_key=link_key))
-    self._controller.enlist(self._ds_id_to_handle[tgt_id], ReceiveStartSubscription,
+    self._controller.enlist(self._tgt, ReceiveStartSubscription,
                             dict(requester=self._controller.new_handle(self._tgt['id']), link_key=link_key))
 
     ds_hello_parent = {}
@@ -93,17 +91,17 @@ class StartProgram(transaction.ParticipantRole):
 
     self._controller.spawn_enlist(
         node_config=messages.link.link_node_config(
-            node_id=link_config['id'],
+            node_id=self._link_config['id'],
             left_is_data=True,
             right_is_data=True,
             height=max(hello_parent['kid_summary']['height'] for hello_parent in ds_hello_parent.values()),
-            link_key=link_config['link_key']),
+            link_key=self._link_config['link_key']),
         participant=create_link.CreateLink,
         args=dict(
-            requester=self._controller.new_handle(link_config['id']),
-            src=self._controller.transfer_handle(ds_hello_parent[src_id]['kid'], link_config['id']),
-            tgt=self._controller.transfer_handle(ds_hello_parent[tgt_id]['kid'], link_config['id']),
+            requester=self._controller.new_handle(self._link_config['id']),
+            src=self._controller.transfer_handle(ds_hello_parent[self._src['id']]['kid'], self._link_config['id']),
+            tgt=self._controller.transfer_handle(ds_hello_parent[self._tgt['id']]['kid'], self._link_config['id']),
         ))
 
     link_started, link_id = await self._controller.listen(type='link_started')
-    self._link_id_to_handle[link_id] = link_started['link']
+    self._controller.node._links[link_id] = self._controller.role_handle_to_node_handle(link_started['link'])

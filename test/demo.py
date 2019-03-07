@@ -8,7 +8,7 @@ from collections import defaultdict
 
 import dist_zero.ids
 
-from dist_zero import spawners, messages, types, transaction, concrete_types
+from dist_zero import spawners, messages, types, transaction, concrete_types, ids
 from dist_zero.recorded import RecordedUser
 from dist_zero.system_controller import SystemController
 from dist_zero.spawners.simulator import SimulatedSpawner
@@ -183,14 +183,6 @@ class Demo(object):
     controllers = await self.new_machine_controllers(1, *args, **kwargs)
     return controllers[0]
 
-  def link_datasets(self, root_input_id, root_output_id, machine, link_key, name=None):
-    return self._connect_trees_with_link_network(
-        node_id=dist_zero.ids.new_id(name if name is not None else 'LinkRoot'),
-        root_input_id=root_input_id,
-        root_output_id=root_output_id,
-        machine=machine,
-        link_key=link_key)
-
   def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, link_key):
     node_config = transaction.add_participant_role_to_node_config(
         node_config=messages.link.link_node_config(
@@ -225,6 +217,15 @@ class Demo(object):
           yield from _loop(kid_id)
 
     return list(_loop(link_root_id))
+
+  def link_datasets(self, program_node_id, root_input_id, root_output_id, link_key, name=None):
+    link_id = ids.new_id(f'LinkNode_for_{link_key}' if name is None else name)
+    self.system.send_api_message(
+        program_node_id,
+        messages.machine.link_datasets(
+            messages.program.link_config(
+                node_id=link_id, link_key=link_key, src_dataset_id=root_input_id, tgt_dataset_id=root_output_id)))
+    return link_id
 
   def get_leaves(self, root_id):
     return self.system.get_leaves(root_id)

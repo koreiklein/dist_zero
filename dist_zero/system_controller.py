@@ -80,6 +80,18 @@ class SystemController(object):
   def spy_leaf(self, leaf_id, spy_key):
     return self.send_api_message(leaf_id, messages.machine.spy(spy_key))
 
+  def get_datasets(self, node_id):
+    datasets = self.send_api_message(node_id, messages.machine.get_datasets())
+    for v in datasets.values():
+      self._add_node_machine_mapping(v)
+    return list(datasets.keys())
+
+  def get_links(self, node_id):
+    links = self.send_api_message(node_id, messages.machine.get_links())
+    for v in links.values():
+      self._add_node_machine_mapping(v)
+    return list(links.keys())
+
   def get_spy_roots(self, node_id):
     spy_key_to_id = {}
     spy_key_to_handle = self.send_api_message(node_id, messages.machine.get_spy_roots())

@@ -15,8 +15,8 @@ class Partitioner(object):
 
     self._compiler = compiler
 
-  def _new_dataset(self, name=None):
-    return self._compiler.new_dataset(name=name)
+  def _new_dataset(self, singleton, name=None):
+    return self._compiler.new_dataset(name=name, singleton=singleton)
 
   def _partition_subtrie(self, subtrie: cardinality.CardinalityTrie, ds: program.Dataset):
     '''
@@ -30,7 +30,7 @@ class Partitioner(object):
 
     for key, (list_exprs, kid_trie) in subtrie.items():
       if self._is_large(list_exprs):
-        kid_ds = self._new_dataset(name=self._name_cardinality_dataset(kid_trie.cardinality))
+        kid_ds = self._new_dataset(singleton=False, name=self._name_cardinality_dataset(kid_trie.cardinality))
       else:
         kid_ds = ds
 
@@ -52,7 +52,7 @@ class Partitioner(object):
     :return: A map from each `NormExpr` to the `Dataset <dist_zero.program.Dataset>` on which its values should live.
     :rtype: map[`NormExpr`, `Dataset <dist_zero.program.Dataset>`]
     '''
-    global_dataset = self._new_dataset(name='Globals')
+    global_dataset = self._new_dataset(name='Globals', singleton=True)
     self._partition_subtrie(trie, global_dataset)
 
     result = {}

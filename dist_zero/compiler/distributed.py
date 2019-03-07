@@ -33,8 +33,8 @@ class DistributedCompiler(object):
     # The final result program
     self._program = program.DistributedProgram(self._program_name)
 
-  def new_dataset(self, name):
-    return self._program.new_dataset(name=name)
+  def new_dataset(self, name, singleton):
+    return self._program.new_dataset(name=name, singleton=singleton)
 
   def list_is_large(self, list_expr):
     '''

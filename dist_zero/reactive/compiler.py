@@ -642,7 +642,7 @@ class ReactiveCompiler(object):
       index = self.expr_index[expr]
       exprType = self._concrete_types[index]
       vGraph = self._graph_struct.Star().Var('graph')
-      block = self.program.AddFunction(f'write_output_transitions_{index}', cgen.UInt8, args=[vGraph])
+      block = self.program.AddFunction(f'write_output_transitions_{index}', cgen.UInt8, args=[vGraph], predeclare=True)
       self._write_output_transitions[expr] = block
 
       vBytes = block.AddDeclaration(cgen.PyObject.Star().Var('resulting_python_bytes'))
@@ -666,7 +666,7 @@ class ReactiveCompiler(object):
       exprType = self._concrete_types[index]
       vGraph = self._graph_struct.Star().Var('graph')
       write_output_state = self.program.AddFunction(
-          name=f"write_output_state_{index}", retType=cgen.PyObject.Star(), args=[vGraph])
+          name=f"write_output_state_{index}", retType=cgen.PyObject.Star(), args=[vGraph], predeclare=True)
       self._write_output_state[expr] = write_output_state
 
       vPythonBytes = write_output_state.AddDeclaration(cgen.PyObject.Star().Var('resulting_python_bytes'))

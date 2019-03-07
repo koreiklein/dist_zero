@@ -32,12 +32,18 @@ class DistributedProgram(object):
   def GetDatasetId(self, spy_key):
     return self._spy_key_to_dataset[spy_key]._id
 
-  def new_dataset(self, name=None):
+  def new_dataset(self, singleton, name=None):
     result = Dataset(
         root_node_id=ids.new_id(name if name is not None else 'DataNode'),
+        singleton=singleton,
         program_name=self._name,
     )
     self._datasets.append(result)
+    return result
+
+  def new_link(self, link_key, src, tgt, name=None):
+    result = Link(node_id=ids.new_id(name if name is not None else 'LinkNode'), link_key=link_key, src=src, tgt=tgt)
+    self._links.append(result)
     return result
 
   def to_program_node_config(self):
@@ -55,12 +61,13 @@ class DistributedProgram(object):
 class Dataset(object):
   '''A static, in memory description of a single dataset in a distributed program.'''
 
-  def __init__(self, root_node_id, program_name):
+  def __init__(self, root_node_id, program_name, singleton):
     '''
     :param str root_node_id: The id to use for the root `DataNode`
     '''
     self._id = root_node_id
     self._program_name = program_name
+    self.singleton = singleton
     self.concrete_exprs = set()
     self.output_key_map = {}
 
@@ -76,6 +83,7 @@ class Dataset(object):
     # Now that the serializer is populated with all the json it needs, generate the config message.
     return messages.program.dataset_config(
         node_id=self._id,
+        singleton=self.singleton,
         dataset_program_config=messages.data.reactive_dataset_program_config(
             program_name=self._program_name,
             concrete_exprs=concrete_exprs,
