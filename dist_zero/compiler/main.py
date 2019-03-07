@@ -6,7 +6,13 @@ from dist_zero import program, errors, expression
 class MainCompiler(object):
   '''The main distributed compiler for DistZero programs.'''
 
-  def __init__(self):
+  def __init__(self, program_name):
+    '''
+    :param str program_name: A name for the overall program.  It should be safe to use in
+      c variables and filenames.
+    '''
+    self._program_name = program_name
+
     self._mainExpr = None # The input program
     self._normMainExpr = None # The input program after being normalized
     self._cardinality = None # Map from NormExpr to Cardinality
@@ -20,10 +26,10 @@ class MainCompiler(object):
     self._localizer = localizer.Localizer(self)
 
     # The final result program
-    self._program = program.DistributedProgram()
+    self._program = program.DistributedProgram(self._program_name)
 
   def new_dataset(self, name):
-    return self._program(name=name)
+    return self._program.new_dataset(name=name)
 
   def list_is_large(self, list_expr):
     # FIXME(KK): Look into whether there are cases where lists could genuinely be small.
@@ -48,6 +54,7 @@ class MainCompiler(object):
     self._cardinality_trie = cardinality.CardinalityTrie.build_trie(set(self._cardinality.values()))
 
     self._expr_to_ds = self._partitioner.partition(self._cardinality_trie)
+
     self._localizer.localize(self._normMainExpr)
 
     return self._program

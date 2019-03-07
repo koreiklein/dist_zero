@@ -1,5 +1,5 @@
 import dist_zero.compiler.main
-from dist_zero import expression, primitive, recorded
+from dist_zero import expression, primitive, recorded, concrete_types
 
 
 class DistZero(object):
@@ -10,8 +10,10 @@ class DistZero(object):
   run by the DistZero runtime.
   '''
 
-  def RecordedUser(self, *args, **kwargs):
-    return expression.RecordedUser(concrete_recorded_user=recorded.RecordedUser(*args, **kwargs))
+  def RecordedUser(self, name, start, type, time_action_pairs):
+    return expression.RecordedUser(
+        concrete_recorded_user=recorded.RecordedUser(
+            name=name, start=start, type=concrete_types.ConcreteBasicType(type), time_action_pairs=time_action_pairs))
 
   def Record(self, **kwargs):
     return expression.Record(items=list(kwargs.items()))
@@ -44,5 +46,5 @@ class DistZero(object):
       f = expression.Lambda(f=f, srcType=None, tgtType=None)
     return expression.ListOp(opVariant='map', f=f)(base)
 
-  def compiler(self):
-    return dist_zero.compiler.main.MainCompiler()
+  def compiler(self, name):
+    return dist_zero.compiler.main.MainCompiler(name)

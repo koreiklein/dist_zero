@@ -194,6 +194,19 @@ def api_node_message(node_id, message):
   return {'type': 'api_node_message', 'node_id': node_id, 'message': message}
 
 
+def spy(spy_key):
+  '''API message to retrieve the value of a spied expression on a leaf.'''
+  return {'type': 'spy', 'spy_key': spy_key}
+
+
+def get_spy_roots():
+  '''
+  An API request to a `ProgramNode` to get the dictionary mapping each spy_key to the handle of the root `DataNode`
+  of the dataset responsible for that spy key.
+  '''
+  return {'type': 'get_spy_roots'}
+
+
 def new_handle(new_node_id):
   '''
   Get a new handle that can be used to send messages to a local node.  The handle will be used

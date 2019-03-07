@@ -3,6 +3,15 @@ Messages to be received by input and output nodes.
 '''
 
 
+def started_dataset(root):
+  '''
+  Sent by a `NewDataset` transaction once it finishes starting.
+
+  :param object root: The role handle of the root of the dataset.
+  '''
+  return {'type': 'started_dataset', 'root': root}
+
+
 def route_dns(domain_name):
   '''
   Indicates to a root data node that it should set up DNS to resolve domain_name
@@ -46,6 +55,26 @@ def output_action(number):
   :param int number: A number
   '''
   return {'type': 'output_action', 'number': number}
+
+
+def reactive_dataset_program_config(program_name, concrete_exprs, output_key_to_expr_id, type_jsons):
+  '''
+  Configuration information for running a reactive graph.
+
+  :param str program_name: A name for the program.  It should be safe to use inside c variables and filenames.
+  :param list concrete_exprs: A list of jsonable python objects representing each of the `ConcreteExpression`
+    instances in the program.
+  :param dict[str,str] output_key_to_expr_id: Map from output key to the id of the `ConcreteExpression` that provides
+    that output.
+  :param list type_jsons: A list of jsonable python objects representing each of the types.
+  '''
+  return {
+      'type': 'reactive_dataset_program_config',
+      'program_name': program_name,
+      'concrete_exprs': concrete_exprs,
+      'output_key_to_expr_id': output_key_to_expr_id,
+      'type_jsons': type_jsons,
+  }
 
 
 # FIXME(KK): Use actual program configs, containing reactive graphs.

@@ -8,7 +8,7 @@ from collections import defaultdict
 
 import dist_zero.ids
 
-from dist_zero import spawners, messages, types, transaction
+from dist_zero import spawners, messages, types, transaction, concrete_types
 from dist_zero.recorded import RecordedUser
 from dist_zero.system_controller import SystemController
 from dist_zero.spawners.simulator import SimulatedSpawner
@@ -227,14 +227,7 @@ class Demo(object):
     return list(_loop(link_root_id))
 
   def get_leaves(self, root_id):
-    def _loop(node_id):
-      if 0 == self.system.get_height(node_id):
-        yield node_id
-      else:
-        for kid_id in self.system.get_kids(node_id):
-          yield from _loop(kid_id)
-
-    return list(_loop(root_id))
+    return self.system.get_leaves(root_id)
 
   def new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms, send_after=0):
     time_message_pairs = []
@@ -246,7 +239,7 @@ class Demo(object):
       self.total_simulated_amount += amount_to_send
       time_message_pairs.append((t, messages.data.input_action(amount_to_send)))
 
-    result = RecordedUser(name, 0, types.Int32, time_message_pairs)
+    result = RecordedUser(name, 0, concrete_types.ConcreteBasicType(types.Int32), time_message_pairs)
     self._recorded_users.append(result)
     return result
 

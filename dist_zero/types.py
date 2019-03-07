@@ -1,5 +1,6 @@
 import math
 import random
+import sys
 
 from dist_zero import errors, cgen
 
@@ -21,6 +22,15 @@ class Type(object):
   Abstract base class for DistZero input types.
   Instances of `Type` represent the types employed by the user constructing his input program.
   '''
+
+  def serialize_json(self, serializer):
+    '''Serialize this type to json'''
+    raise RuntimeError(f"Abstract Superclass {self.__class__}")
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    '''Deserialize this type from json'''
+    raise RuntimeError(f"Abstract Superclass")
 
   def _write_c_state_definition(self, compiler):
     '''Add a definition for the c states of this type.'''
@@ -48,6 +58,13 @@ class FunctionType(Type):
     self.src = src
     self.tgt = tgt
 
+  def serialize_json(self, serializer):
+    return {'src': serializer.get_type_id(self.src), 'tgt': serializer.get_type_id(self.tgt)}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return FunctionType(src=deserializer.get_type_by_id(j['src']), tgt=deserializer.get_type_by_id(j['tgt']))
+
   def equivalent(self, other):
     return other.__class__ == FunctionType and self.src.equivalent(other.src) and self.tgt.equivalent(other.tgt)
 
@@ -65,6 +82,13 @@ class BasicType(Type):
     self._apply_transition = apply_transition
 
     super(BasicType, self).__init__()
+
+  def serialize_json(self, serializer):
+    return {'capnp_state': self.capnp_state}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return sys.modules[__name__].__dict__[j['capnp_state']]
 
   def equivalent(self, other):
     return other.__class__ == BasicType and \
@@ -143,6 +167,13 @@ class Product(Type):
 
     super(Product, self).__init__()
 
+  def serialize_json(self, serializer):
+    return {'name': self.name, 'items': [(k, serializer.get_type_id(v)) for k, v in self.items]}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return ProductType(name=j['name'], items=[(k, deserializer.get_type_by_id(k)) for k, v in j['items']])
+
   def equivalent(self, other):
     if other.__class__ != Product or len(self.items) != len(other.items):
       return False
@@ -170,12 +201,26 @@ class Sum(Type):
   def __abs__(self):
     return sum(abs(x) for k, x in self.items)
 
+  def serialize_json(self, serializer):
+    return {'name': self.name, 'items': [(k, serializer.get_type_id(v)) for k, v in self.items]}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return Sum(name=j['name'], items=[(k, deserializer.get_type_by_id(k)) for k, v in j['items']])
+
 
 class List(Type):
   def __init__(self, base, name=None):
     self.name = name if name is not None else f"List{_gen_name()}"
     self.base = base
     super(List, self).__init__()
+
+  def serialize_json(self, serializer):
+    return {'name': self.name, 'base': serializer.get_type_id(self.base)}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return List(name=j['name'], base=deserializer.get_type_by_id(j['base']))
 
   def __abs__(self):
     if abs(self.base) == 0:

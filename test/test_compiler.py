@@ -102,7 +102,7 @@ class TestPartitioner(object):
 
     trie = cardinality.CardinalityTrie.build_trie([glob, a, abc, abdef, abdefg, ab])
 
-    prog = program.DistributedProgram()
+    prog = program.DistributedProgram('partitioner_test_program')
 
     class _MockCompiler(object):
       def list_is_large(self, expr):
@@ -130,21 +130,24 @@ class TestPartitioner(object):
 
 @pytest.mark.asyncio
 async def test_single_node(dz, demo):
+  machine = await demo.new_machine_controller()
+  await demo.run_for(ms=200)
+
   mainExpr = dz.RecordedUser(
-      'recording',
-      start=3,
-      type=types.Int32,
-      time_action_pairs=[
-          (1400, [('inc', -2)]),
-          (1700, [('inc', 1)]),
-          (1950, [('inc', 4)]),
+      'recording', start=3, type=types.Int32, time_action_pairs=[
+          (4400, [('inc', -2)]),
       ]).Spy('out')
 
-  program = dz.compiler().compile(mainExpr)
-  out_dataset = program.GetDatasetId(spy_key='out')
-  # FIXME(KK): Rethink how to start a program and get the below to pass.
-  demo.start_program(program)
-  demo.run_for(ms=1000)
+  program = dz.compiler('test_single_node').compile(mainExpr)
+  demo.system.spawn_node(on_machine=machine, node_config=program.to_program_node_config())
+
+  await demo.run_for(ms=1000)
+
+  out_dataset = demo.system.get_spy_roots(program.id)['out']
   assert 0 == demo.system.get_height(out_dataset)
   spy_result = demo.system.spy(out_dataset, 'out')
-  ipdb.set_trace()
+  assert 1 == len(spy_result)
+  assert 3 == spy_result.pop(out_dataset)['basicState']
+
+  await demo.run_for(ms=5000)
+  assert 1 == demo.system.spy(out_dataset, 'out').pop(out_dataset)['basicState']

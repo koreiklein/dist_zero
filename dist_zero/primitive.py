@@ -13,6 +13,9 @@ class PrimitiveOp(object):
   def get_type(self):
     raise errors.AbstractSuperclass(self.__class__)
 
+  def to_json(self):
+    raise errors.AbstractSuperclass(self.__class__)
+
   def generate_primitive_initialize_state(self, cFunction, arg, lvalue):
     raise errors.AbstractSuperclass(self.__class__)
 
@@ -33,6 +36,9 @@ class Project(PrimitiveOp):
   def __init__(self, key):
     self.key = key
 
+  def to_json(self, serializer):
+    return {'key': self.key}
+
   def __str__(self):
     return f'."{self.key}"'
 
@@ -43,6 +49,9 @@ class Project(PrimitiveOp):
 class Inject(PrimitiveOp):
   def __init__(self, key):
     self.key = key
+
+  def to_json(self, serializer):
+    return {'key': self.key}
 
   def __eq__(self, other):
     return other.__class__ == Inject and self.key == other.key
@@ -63,6 +72,9 @@ class BinOp(PrimitiveOp):
     ])
     self.type = types.FunctionType(src=self.input_type, tgt=self.output_type)
     self.c_operation = c_operation
+
+  def to_json(self, serializer):
+    return {'s': self.s, 'type': serializer.get_type_id(self.output_type), 'c_operation': self.c_operation}
 
   def __str__(self):
     return self.s

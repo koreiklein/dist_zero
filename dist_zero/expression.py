@@ -71,7 +71,7 @@ class Record(Expression):
     :type items: list[tuple[str, `Expression`]]
     '''
     self.items = items
-    super(Lambda, self).__init__()
+    super(Record, self).__init__()
 
 
 class Case(Expression):

@@ -77,6 +77,17 @@ class SystemController(object):
 
     return list(result.keys())
 
+  def spy_leaf(self, leaf_id, spy_key):
+    return self.send_api_message(leaf_id, messages.machine.spy(spy_key))
+
+  def get_spy_roots(self, node_id):
+    spy_key_to_id = {}
+    spy_key_to_handle = self.send_api_message(node_id, messages.machine.get_spy_roots())
+    for spy_key, handle in spy_key_to_handle.items():
+      self._add_node_machine_mapping(handle)
+      spy_key_to_id[spy_key] = handle['id']
+    return spy_key_to_id
+
   def get_senders(self, node_id):
     result = self.send_api_message(node_id, messages.machine.get_senders())
     for handle in result.values():
@@ -288,6 +299,28 @@ class SystemController(object):
 
   def _node_handle_to_machine_id(self, node_handle):
     return self._node_id_to_machine_id[node_handle['id']]
+
+  def spy(self, root_id, spy_key):
+    '''
+    For a spy_key running on a dataset, get a map that for each leaf node in the dataset,
+    assigns to that node's id, the value of the spy in its reactive graph.
+
+    :param str root_id: The id of the root of the dataset.
+    :param str spy_key: The spy_key to spy on.
+    :return: A map from leaf_node_id to the spy key's value on that leaf_node.
+    :rtype: dict
+    '''
+    return {leaf_id: self.spy_leaf(leaf_id, spy_key) for leaf_id in self.get_leaves(root_id)}
+
+  def get_leaves(self, root_id):
+    def _loop(node_id):
+      if 0 == self.get_height(node_id):
+        yield node_id
+      else:
+        for kid_id in self.get_kids(node_id):
+          yield from _loop(kid_id)
+
+    return list(_loop(root_id))
 
   def get_simulated_spawner(self):
     if self._spawner.mode() != spawners.MODE_SIMULATED:

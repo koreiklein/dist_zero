@@ -192,6 +192,8 @@ class DataNode(Node):
     if self._monitor.is_watching or (self._kids and self._best_mergeable_kids(list(self._kids))):
       self.check_limits()
 
+    self._publisher.elapse(ms)
+
   def _interval_json(self):
     return self._kids.interval_json()
 
@@ -334,6 +336,8 @@ class DataNode(Node):
       if self._parent:
         self.send(self._parent, messages.data.goodbye_parent())
       self._terminate()
+    elif message['type'] == 'spy':
+      return self._publisher.spy(message['spy_key'])
     elif message['type'] == 'route_dns':
       self._route_dns(message)
     elif message['type'] == 'get_capacity':

@@ -7,6 +7,15 @@ class ConcreteType(object):
   how the states and transitions will be represented internally in C and externally in capnproto structures.
   '''
 
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    '''Serialize this type to a json representation.'''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    '''Deserialize this type from a json representation'''
+    raise RuntimeError(f'Abstract Superclass')
+
   @property
   def dz_type(self):
     '''The underlying abstract `dist_zero.types.Type`.'''
@@ -280,6 +289,13 @@ class ConcreteBasicType(ConcreteType):
     self._capnp_transitions_type = None
     self._capnp_transitions_basicTransition_field = None
 
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    return {'basic_type': serializer.get_type_id(self._basic_type)}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return ConcreteBasicType(basic_type=deserializer.get_type_by_id(j['basic_type']))
+
   def generate_set_state(self, compiler, block, stateLvalue, python_state):
     block.AddAssignment(stateLvalue, cgen.Constant(python_state))
 
@@ -394,6 +410,13 @@ class ConcreteProductType(ConcreteType):
 
     self._c_transition_union = None
     self._c_transition_enum = None
+
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    return {'product_type': serializer.get_type_id(self._product_type)}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return ConcreteProductType(product_type=deserializer.get_type_by_id(j['product_type']))
 
   def generate_apply_transition(self, block, stateLvalue, stateRvalue, transition):
     # NOTE(KK): When we need to maintain the product state, then the components' states
@@ -709,6 +732,13 @@ class ConcreteSumType(ConcreteType):
 
     self._capnp_state_type
 
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    return {'sum_type': serializer.get_type_id(self._sum_type)}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return ConcreteSumType(sum_type=deserializer.get_type_by_id(j['sum_type']))
+
   def generate_free_state(self, compiler, block, stateRvalue):
     # FIXME(KK): Actually implement this
     pass
@@ -798,6 +828,13 @@ class ConcreteList(ConcreteType):
     self._c_state_type = None
     self._c_transitions_type = None
     self._initialized_capnp = False
+
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    return {'base_list_type': serializer.get_type_id(self.base_list_type)}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return ConcreteList(base_list_type=deserializer.get_type_by_id(j['base_list_type']))
 
   def generate_free_state(self, compiler, block, stateRvalue):
     # FIXME(KK): Actually implement this

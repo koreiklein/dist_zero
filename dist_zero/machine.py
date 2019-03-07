@@ -9,7 +9,7 @@ from random import Random
 
 from dist_zero import errors, messages, dns, settings
 
-from .node import data
+from .node import data, program
 from .node.link.link import LinkNode
 
 logger = logging.getLogger(__name__)
@@ -332,6 +332,8 @@ class NodeManager(MachineController):
       return data.DataNode.from_config(node_config, controller=self)
     elif node_config['type'] == 'LinkNode':
       return LinkNode.from_config(node_config, controller=self)
+    elif node_config['type'] == 'ProgramNode':
+      return program.ProgramNode.from_config(node_config, controller=self)
     else:
       raise RuntimeError("Unrecognized type {}".format(node_config['type']))
 

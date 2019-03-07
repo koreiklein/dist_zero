@@ -27,6 +27,11 @@ IO Tree messages
 .. automodule:: dist_zero.messages.data
    :members:
 
+Program messages
+-----------------
+.. automodule:: dist_zero.messages.program
+   :members:
+
 Sum node messages
 ------------------
 .. automodule:: dist_zero.messages.sum

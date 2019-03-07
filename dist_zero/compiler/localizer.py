@@ -1,4 +1,6 @@
-from dist_zero import errors
+from collections import defaultdict
+
+from dist_zero import errors, messages
 
 from . import normalize
 
@@ -14,6 +16,8 @@ class Localizer(object):
     # Map the pair (dataset, normExpr) to the ConcreteExpression instance that represents
     # normExpr on dataset.
     self._concrete_expression = {}
+    # Map each dataset to a the dict d giving the ConcreteExpression to use for each output key.
+    self._ds_to_output_key_map = {}
 
   def _expr_to_ds(self, normExpr):
     return self._compiler._expr_to_ds[normExpr]
@@ -44,8 +48,7 @@ class Localizer(object):
 
   def localize(self, normExpr):
     '''
-    :param MainCompiler compiler: The main compiler object.
-    :param NormExpr normExpr: An expression to normalize.
+    :param NormExpr normExpr: An expression to localize.
     '''
     ds = self._expr_to_ds(normExpr)
     key = (ds, normExpr)
@@ -53,10 +56,12 @@ class Localizer(object):
     result = self._concrete_expression.get(key, None)
     if result is None:
       result = self._compute_concrete_expression(ds, normExpr)
+
       for spy_key in normExpr.spy_keys:
         self._compiler._program.localize_spy_key(spy_key, ds)
+        result.spy(spy_key)
+
+      ds.concrete_exprs.add(result)
       self._concrete_expression[key] = result
 
     return result
-
-    self._localize(self._expr_to_ds(normExpr))
