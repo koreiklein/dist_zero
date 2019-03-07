@@ -97,7 +97,7 @@ class ReactiveCompiler(object):
     self._built_capnp = False
     self._pycapnp_module = None
 
-  def compile(self, output_key_to_norm_expr):
+  def compile(self, output_key_to_norm_expr, other_concrete_exprs=None):
     '''
     Compile normalized expressions into a reactive program.
 
@@ -150,12 +150,18 @@ class ReactiveCompiler(object):
 
     :param output_key_to_norm_expr: A map from strings to normalized expressions.
     :type output_key_to_norm_expr: dict[str, ConcreteExpression]
+    :param set other_exprs: If provided, a set of `ConcreteExpression` instances that should also be compiled in,
+      whether or not they're accessible from an output key.
 
     :return: The compiled c extension module, loaded into the current interpret as a python module.
     '''
+    all_exprs = set(other_concrete_exprs) if other_concrete_exprs is not None else set()
+    all_exprs.update(output_key_to_norm_expr.values())
     self._output_key_to_norm_expr = output_key_to_norm_expr
-    topsorter = _Topsorter(list(output_key_to_norm_expr.values()))
+
+    topsorter = _Topsorter(list(all_exprs))
     self._top_exprs = topsorter.topsort()
+
     self.expr_to_inputs = topsorter.expr_to_inputs
     self.expr_to_outputs = topsorter.expr_to_outputs
     self.expr_index = {}
@@ -177,6 +183,8 @@ class ReactiveCompiler(object):
     for expr in self._top_exprs:
       if expr.__class__ == expression.Input:
         self._input_exprs.append(expr)
+        self.get_concrete_type(expr.type).initialize_capnp(self)
+      elif expr.spy_keys:
         self.get_concrete_type(expr.type).initialize_capnp(self)
 
     self._build_capnp()
@@ -383,7 +391,9 @@ class ReactiveCompiler(object):
 
   def _compute_concrete_type(self, t):
     '''Determine which `ConcreteType` to use for ``t``'''
-    if t.__class__ == types.Product:
+    if isinstance(t, concrete_types.ConcreteType):
+      return t.initialize(self)
+    elif t.__class__ == types.Product:
       return concrete_types.ConcreteProductType(t).initialize(self)
     elif t.__class__ == types.Sum:
       return concrete_types.ConcreteSumType(t).initialize(self)
@@ -484,7 +494,10 @@ class ReactiveCompiler(object):
         else:
           n_outputs += 1
 
-      init.AddAssignment(vGraph.Arrow('n_missing_subscriptions').Sub(i), cgen.Constant(n_outputs))
+      total_subscriptions = n_outputs
+      if expr.spy_keys:
+        total_subscriptions += 1 # 1 extra subscription for the spy key
+      init.AddAssignment(vGraph.Arrow('n_missing_subscriptions').Sub(i), cgen.Constant(total_subscriptions))
 
     for expr in self._top_exprs:
       init.AddAssignment(None, cgen.kv_init(self.transitions_rvalue(vGraph, expr)))
@@ -493,6 +506,11 @@ class ReactiveCompiler(object):
       if self._expr_can_react(expr):
         react = cgen.Var(self._react_to_transitions_function_name(i))
         init.AddAssignment(vGraph.Arrow('react_to_transitions').Sub(i), react.Address())
+
+    for i, expr in enumerate(self._top_exprs):
+      if expr.spy_keys:
+        subscribeFunction = cgen.Var(self._subscribe_function_name(i))
+        init.AddAssignment(None, subscribeFunction(vGraph))
 
     init.AddReturn(cgen.Constant(0))
 
@@ -624,7 +642,7 @@ class ReactiveCompiler(object):
       index = self.expr_index[expr]
       exprType = self._concrete_types[index]
       vGraph = self._graph_struct.Star().Var('graph')
-      block = self.program.AddFunction(f'write_output_transitions_{index}', cgen.UInt8, args=[vGraph])
+      block = self.program.AddFunction(f'write_output_transitions_{index}', cgen.UInt8, args=[vGraph], predeclare=True)
       self._write_output_transitions[expr] = block
 
       vBytes = block.AddDeclaration(cgen.PyObject.Star().Var('resulting_python_bytes'))
@@ -648,7 +666,7 @@ class ReactiveCompiler(object):
       exprType = self._concrete_types[index]
       vGraph = self._graph_struct.Star().Var('graph')
       write_output_state = self.program.AddFunction(
-          name=f"write_output_state_{index}", retType=cgen.PyObject.Star(), args=[vGraph])
+          name=f"write_output_state_{index}", retType=cgen.PyObject.Star(), args=[vGraph], predeclare=True)
       self._write_output_state[expr] = write_output_state
 
       vPythonBytes = write_output_state.AddDeclaration(cgen.PyObject.Star().Var('resulting_python_bytes'))

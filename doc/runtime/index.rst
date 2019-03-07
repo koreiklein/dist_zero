@@ -11,6 +11,7 @@ it has been compiled.
    abstracting_hardware/index
 
    transactions
+   programs/index
    datasets/index
    links/index
 

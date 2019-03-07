@@ -2,9 +2,6 @@ from collections import defaultdict
 
 from dist_zero import transaction, messages, errors, ids, intervals
 
-from dist_zero.node.data.transactions.send_start_subscription import SendStartSubscription
-from dist_zero.node.data.transactions.receive_start_subscription import ReceiveStartSubscription
-
 from dist_zero.node.link import manager
 
 
@@ -14,55 +11,32 @@ class CreateLink(transaction.ParticipantRole):
   Connects that link to source and target root nodes.
   '''
 
-  def __init__(self, src, tgt):
+  def __init__(self, src, tgt, requester=None):
     '''
-    :param src: The :ref:`handle` of the root `DataNode` of the source data tree.
-    :type src: :ref:`handle`
-    :param tgt: The :ref:`handle` of the root `DataNode` of the target data tree.
-    :type tgt: :ref:`handle`
+    :param object src: A role handle for the root `DataNode` of the source data tree.
+    :param object tgt: The role handle of the root `DataNode` of the target data tree.
     '''
     self._src = src
     self._tgt = tgt
+    self._requester = requester
 
     # A dict mapping the ids of the sources and targets of self to their hello_parent messages.
     self._hello_parent = None
 
   async def run(self, controller: 'TransactionRoleController'):
-    link_key = controller.node._link_key
-    # FIXME(KK): Technically, self._src and self._tgt are not owned by self, and therefore
-    #   these calls to enlist could potentially allow for deadlocks, for example when there is
-    #   a cycle of links all started at the same time.
-    #   We should probably find a way to give these nodes a common owner that technically meets
-    #   the proper ownership criteria for enlisting nodes in this transaction.
-    controller.enlist(self._src, SendStartSubscription,
-                      dict(parent=controller.new_handle(self._src['id']), link_key=link_key))
-    controller.enlist(self._tgt, ReceiveStartSubscription,
-                      dict(requester=controller.new_handle(self._tgt['id']), link_key=link_key))
-
-    self._hello_parent = {}
-    for i in range(2):
-      hello_parent, kid_id = await controller.listen(type='hello_parent')
-      self._hello_parent[kid_id] = hello_parent
-
-    if set(self._hello_parent.keys()) != set([self._src['id'], self._tgt['id']]):
-      raise errors.InternalError("Should have received hello_parent messages from exactly the src and tgt nodes.")
-
-    controller.node._height = max(hello_parent['kid_summary']['height'] for hello_parent in self._hello_parent.values())
-
-    src_role = self._hello_parent[self._src['id']]['kid']
-    tgt_role = self._hello_parent[self._tgt['id']]['kid']
     controller.send(
-        src_role,
-        messages.link.subscribe_to(target=controller.new_handle(src_role['id']), height=controller.node._height))
+        self._src,
+        messages.link.subscribe_to(target=controller.new_handle(self._src['id']), height=controller.node._height))
 
-    left_neighbors = [src_role]
-    right_neighbors = [tgt_role]
     await StartLinkNode(
         parent=None,
         source_interval=intervals.interval_json([intervals.Min, intervals.Max]),
         target_interval=intervals.interval_json([intervals.Min, intervals.Max]),
-        neighbors=(left_neighbors, right_neighbors),
+        neighbors=([self._src], [self._tgt]),
     ).run(controller)
+
+    if self._requester is not None:
+      controller.send(self._requester, messages.link.link_started(controller.new_handle(self._requester['id'])))
 
 
 class StartLinkNode(transaction.ParticipantRole):
@@ -132,8 +106,8 @@ class StartLinkNode(transaction.ParticipantRole):
     await self._receive_subscription_edges()
     await self._spawn_and_connect_graph()
     await self._send_subscription_edges()
-    await self._receive_link_started_from_all_kids()
-    await self._send_link_started_to_parent()
+    await self._receive_link_node_started_from_all_kids()
+    await self._send_link_node_started_to_parent()
     self._finish_setting_up_node_state()
 
   async def _send_hello_to_parent(self):
@@ -234,15 +208,15 @@ class StartLinkNode(transaction.ParticipantRole):
                   for right_kid in subscription_started['leftmost_kids']
               }))
 
-  async def _receive_link_started_from_all_kids(self):
-    missing_link_started_ids = set(self._kids.keys())
-    while missing_link_started_ids:
-      _msg, kid_id = await self._controller.listen(type='link_started')
-      missing_link_started_ids.remove(kid_id)
+  async def _receive_link_node_started_from_all_kids(self):
+    missing_link_node_started_ids = set(self._kids.keys())
+    while missing_link_node_started_ids:
+      _msg, kid_id = await self._controller.listen(type='link_node_started')
+      missing_link_node_started_ids.remove(kid_id)
 
-  async def _send_link_started_to_parent(self):
+  async def _send_link_node_started_to_parent(self):
     if self._parent is not None:
-      self._controller.send(self._parent, messages.link.link_started())
+      self._controller.send(self._parent, messages.link.link_node_started())
 
   def _finish_setting_up_node_state(self):
     self._node._senders = {

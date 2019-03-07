@@ -7,6 +7,13 @@ class Expression(object):
   Abstract base class for the core expression objects.  These form the starting point for the DistZero compiler.
   '''
 
+  def __init__(self):
+    self.spy_keys = set()
+
+  def Spy(self, key):
+    self.spy_keys.add(key)
+    return self
+
   def __call__(self, other):
     return Apply(f=self, arg=other)
 
@@ -32,6 +39,7 @@ class Apply(Expression):
     '''
     self.arg = arg
     self.f = f
+    super(Apply, self).__init__()
 
 
 class Lambda(Expression):
@@ -49,6 +57,7 @@ class Lambda(Expression):
     self.srcType = srcType
     self.tgtType = tgtType
     self.f = f
+    super(Lambda, self).__init__()
 
 
 class Record(Expression):
@@ -62,6 +71,7 @@ class Record(Expression):
     :type items: list[tuple[str, `Expression`]]
     '''
     self.items = items
+    super(Record, self).__init__()
 
 
 class Case(Expression):
@@ -78,6 +88,7 @@ class Case(Expression):
     '''
     self.items = items
     self._d = None
+    super(Case, self).__init__()
 
   def dict(self):
     if self._d is None:
@@ -91,6 +102,7 @@ class Constant(Expression):
 
   def __init__(self, value):
     self.value = value
+    super(Constant, self).__init__()
 
 
 class ListOp(Expression):
@@ -107,6 +119,7 @@ class ListOp(Expression):
     '''
     self.opVariant = opVariant
     self.f = f
+    super(ListOp, self).__init__()
 
 
 class PrimitiveExpression(Expression):
@@ -117,6 +130,13 @@ class PrimitiveExpression(Expression):
     :param PrimitiveOp primitive: A primitive operation
     '''
     self.primitive = primitive
+    super(PrimitiveExpression, self).__init__()
+
+
+class RecordedUser(Expression):
+  def __init__(self, concrete_recorded_user):
+    self.concrete_recorded_user = concrete_recorded_user
+    super(RecordedUser, self).__init__()
 
 
 # Fundamental input types
@@ -132,3 +152,4 @@ class WebInput(Expression):
     :param str domain_name: A domain name identifying the web endpoint.
     '''
     self.domain_name = domain_name
+    super(WebInput, self).__init__()

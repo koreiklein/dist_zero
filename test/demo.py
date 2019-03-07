@@ -8,7 +8,7 @@ from collections import defaultdict
 
 import dist_zero.ids
 
-from dist_zero import spawners, messages, types, transaction
+from dist_zero import spawners, messages, types, transaction, concrete_types, ids
 from dist_zero.recorded import RecordedUser
 from dist_zero.system_controller import SystemController
 from dist_zero.spawners.simulator import SimulatedSpawner
@@ -183,14 +183,6 @@ class Demo(object):
     controllers = await self.new_machine_controllers(1, *args, **kwargs)
     return controllers[0]
 
-  def link_datasets(self, root_input_id, root_output_id, machine, link_key, name=None):
-    return self._connect_trees_with_link_network(
-        node_id=dist_zero.ids.new_id(name if name is not None else 'LinkRoot'),
-        root_input_id=root_input_id,
-        root_output_id=root_output_id,
-        machine=machine,
-        link_key=link_key)
-
   def _connect_trees_with_link_network(self, node_id, root_input_id, root_output_id, machine, link_key):
     node_config = transaction.add_participant_role_to_node_config(
         node_config=messages.link.link_node_config(
@@ -226,15 +218,17 @@ class Demo(object):
 
     return list(_loop(link_root_id))
 
-  def get_leaves(self, root_id):
-    def _loop(node_id):
-      if 0 == self.system.get_height(node_id):
-        yield node_id
-      else:
-        for kid_id in self.system.get_kids(node_id):
-          yield from _loop(kid_id)
+  def link_datasets(self, program_node_id, root_input_id, root_output_id, link_key, name=None):
+    link_id = ids.new_id(f'LinkNode_for_{link_key}' if name is None else name)
+    self.system.send_api_message(
+        program_node_id,
+        messages.machine.link_datasets(
+            messages.program.link_config(
+                node_id=link_id, link_key=link_key, src_dataset_id=root_input_id, tgt_dataset_id=root_output_id)))
+    return link_id
 
-    return list(_loop(root_id))
+  def get_leaves(self, root_id):
+    return self.system.get_leaves(root_id)
 
   def new_recorded_user(self, name, ave_inter_message_time_ms, send_messages_for_ms, send_after=0):
     time_message_pairs = []
@@ -246,7 +240,7 @@ class Demo(object):
       self.total_simulated_amount += amount_to_send
       time_message_pairs.append((t, messages.data.input_action(amount_to_send)))
 
-    result = RecordedUser(name, 0, types.Int32, time_message_pairs)
+    result = RecordedUser(name, 0, concrete_types.ConcreteBasicType(types.Int32), time_message_pairs)
     self._recorded_users.append(result)
     return result
 

@@ -5,3 +5,4 @@ from dist_zero.node.data.transactions.new_dataset import *
 from dist_zero.node.data.transactions.send_start_subscription import *
 from dist_zero.node.data.transactions.receive_start_subscription import *
 from dist_zero.node.link.transactions.create_link import *
+from dist_zero.node.program.transactions.start_program import *

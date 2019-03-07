@@ -27,6 +27,9 @@ class RecordedUser(expression.ConcreteExpression):
         raise errors.InternalError('Times are not in order.')
     super(RecordedUser, self).__init__()
 
+  def __str__(self):
+    return f"Recorded(name={self.name},...)"
+
   @property
   def type(self):
     return self._type
@@ -108,12 +111,28 @@ class RecordedUser(expression.ConcreteExpression):
         'time_action_pairs': self._time_action_pairs,
     }
 
+  def serialize_json(self, serializer):
+    return {
+        'name': self.name,
+        'start': self.start,
+        'type': serializer.get_type_id(self._type),
+        'time_action_pairs': self._time_action_pairs,
+    }
+
+  @staticmethod
+  def deserialize_json(j, deserializer: 'ConcreteExpressionDeserializer'):
+    return RecordedUser(
+        name=j['name'],
+        start=j['start'],
+        type=deserializer.get_type_by_id(j['type']),
+        time_action_pairs=j['time_action_pairs'])
+
   @staticmethod
   def from_json(recorded_user_json):
     return RecordedUser(
         name=recorded_user_json['name'],
         start=recorded_user_json['start'],
-        type=None, # Serialized Recorded instances should not ever need a type parameter
+        type=None, # Recorded instances serialized this way should not ever need a type parameter
         time_action_pairs=recorded_user_json['time_action_pairs'],
     )
 

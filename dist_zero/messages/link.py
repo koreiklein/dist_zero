@@ -104,9 +104,18 @@ def hello_link_parent(kid):
   return {'type': 'hello_link_parent', 'kid': kid}
 
 
-def link_started():
+def link_started(link):
+  '''
+  Sent by `CreateLink` to its requester to indicate that the link has started.
+
+  :param object link: The role handle of the root `LinkNode`.
+  '''
+  return {'type': 'link_started', 'link': link}
+
+
+def link_node_started():
   '''
   Sent by a link to its parent once it's finished spawning and connecting its entire graph.
   This message marks the end of a child's role in a `CreateLink` transaction.
   '''
-  return {'type': 'link_started'}
+  return {'type': 'link_node_started'}

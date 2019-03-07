@@ -194,6 +194,41 @@ def api_node_message(node_id, message):
   return {'type': 'api_node_message', 'node_id': node_id, 'message': message}
 
 
+def link_datasets(link_config):
+  '''
+  Instructs a `ProgramNode` to create a new link.
+  :param link_config: A config from `link_config`
+  '''
+  return {'type': 'link_datasets', 'link_config': link_config}
+
+
+def spy(spy_key):
+  '''API message to retrieve the value of a spied expression on a leaf.'''
+  return {'type': 'spy', 'spy_key': spy_key}
+
+
+def get_datasets():
+  '''
+  An API request to a `ProgramNode` to get the dictionary mapping each dataset id to its handle.
+  '''
+  return {'type': 'get_datasets'}
+
+
+def get_links():
+  '''
+  An API request to a `ProgramNode` to get the dictionary mapping each link id to its handle.
+  '''
+  return {'type': 'get_links'}
+
+
+def get_spy_roots():
+  '''
+  An API request to a `ProgramNode` to get the dictionary mapping each spy_key to the handle of the root `DataNode`
+  of the dataset responsible for that spy key.
+  '''
+  return {'type': 'get_spy_roots'}
+
+
 def new_handle(new_node_id):
   '''
   Get a new handle that can be used to send messages to a local node.  The handle will be used

@@ -1,6 +1,9 @@
 import pytest
 
-from dist_zero import ids, messages
+from dist_zero import ids, messages, transaction, program, types, concrete_types, recorded
+from dist_zero.reactive import expression
+
+indiscrete_int = concrete_types.ConcreteBasicType(types.Int32)
 
 
 class TestLinkTrees(object):
@@ -84,21 +87,32 @@ class TestLinkTrees(object):
     self.demo = demo
     machine = await self.demo.new_machine_controller(base_config=self._base_config())
     link_key = 'my_link'
-    root_input_id = self.demo.create_dataset(
-        machine=machine, name='DataInputRoot', height=0 if n == 1 else 2, output_link_keys=[link_key])
-    root_output_id = self.demo.create_dataset(
-        machine=machine, name='DataOutputRoot', height=0 if m == 1 else 2, input_link_keys=[link_key])
+
+    prog = program.DistributedProgram(f"link_{n}_{m}")
+    src = prog.new_dataset(name='DataInputRoot', singleton=n == 1)
+    tgt = prog.new_dataset(name='DataOutputRoot', singleton=m == 1)
+
+    src_expr = recorded.RecordedUser(name='user_a', start=0, type=indiscrete_int, time_action_pairs=[])
+    tgt_expr = expression.Input(name=link_key, type=indiscrete_int)
+    tgt.concrete_exprs.add(tgt_expr)
+    src.concrete_exprs.add(src_expr)
+    src.output_key_map[link_key] = src_expr
+
+    self.demo.system.spawn_node(prog.to_program_node_config(), on_machine=machine)
+
     await self.demo.run_for(ms=500)
+    self.demo.system.get_datasets(prog.id)
 
     if n > 1:
       for i in range(n):
-        await self._create_new_leaf(name=f"InputLeaf_{i}", root_id=root_input_id, machine=machine)
+        await self._create_new_leaf(name=f"InputLeaf_{i}", root_id=src.id, machine=machine)
 
     if m > 1:
       for i in range(m):
-        await self._create_new_leaf(name=f"OutputLeaf_{i}", root_id=root_output_id, machine=machine)
+        await self._create_new_leaf(name=f"OutputLeaf_{i}", root_id=tgt.id, machine=machine)
 
     link_id = self.demo.link_datasets(
-        root_input_id=root_input_id, root_output_id=root_output_id, machine=machine, name='LinkRoot', link_key=link_key)
+        program_node_id=prog.id, root_input_id=src.id, root_output_id=tgt.id, name='LinkRoot', link_key=link_key)
     await self.demo.run_for(ms=1000)
+    self.demo.system.get_links(prog.id)
     self._assert_unique_paths(link_id, link_key)

@@ -1,4 +1,4 @@
-from dist_zero import cgen, errors, types, concrete_types
+from dist_zero import cgen, errors, types, concrete_types, primitive
 
 
 class ConcreteExpression(object):
@@ -21,6 +21,15 @@ class ConcreteExpression(object):
     :rtype: `dist_zero.types.Type`
     '''
     raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    '''Serialize this expression to a json representation.'''
+    raise RuntimeError(f'Abstract Superclass {self.__class__}')
+
+  @staticmethod
+  def deserialize_json(j, deserializer: 'ConcreteExpressionDeserializer'):
+    '''Deerialize this expression from a json representation.'''
+    raise RuntimeError(f'Abstract Superclass')
 
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
     '''
@@ -76,6 +85,13 @@ class Constant(ConcreteExpression):
   def type(self):
     return self._type
 
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    return {'value': self._value, 'constant_type': self._type}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return Constant(value=j['value'], type=deserializer.get_type_by_id(j['type']))
+
   def generate_initialize_state(self, compiler, stateInitFunction, vGraph):
     type = compiler.get_concrete_type(self.type)
     stateLvalue = compiler.state_lvalue(vGraph, self)
@@ -96,6 +112,13 @@ class Project(ConcreteExpression):
     self.key = key
     self.base = base
     super(Project, self).__init__()
+
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    return {'key': self.key, 'base': serializer.get_id(self.base)}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return Project(key=j['key'], base=deserializer.get_by_id(j['base']))
 
   @property
   def type(self):
@@ -155,6 +178,13 @@ class Applied(ConcreteExpression):
     self._type = func.get_output_type()
     super(Applied, self).__init__()
 
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    return {'func': self.func.to_json(serializer), 'arg': serializer.get_id(self.arg)}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return Applied(func=primitive.PrimitiveOp.from_json(j['func']), arg=deserializer.get_by_id(j['arg']))
+
   @property
   def type(self):
     return self._type
@@ -183,6 +213,13 @@ class Product(ConcreteExpression):
     self.items = items
     self._type = types.Product(items=[(k, v.type) for k, v in self.items])
     super(Product, self).__init__()
+
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    return {'items': [(key, serializer.get_id(value)) for key, value in self.items]}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return Product(items=[(key, deserializer.get_by_id(expr_id)) for key, expr_id in j['items']])
 
   @property
   def type(self):
@@ -237,6 +274,13 @@ class Input(ConcreteExpression):
     self.name = name
     self._type = type
     super(Input, self).__init__()
+
+  def serialize_json(self, serializer: 'ConcreteExpressionSerializer'):
+    return {'name': self.name, 'type': serializer.get_type_id(self._type)}
+
+  @staticmethod
+  def deserialize_json(j, deserializer):
+    return Input(name=j['name'], type=deserializer.get_type_by_id(j['type']))
 
   @property
   def type(self):

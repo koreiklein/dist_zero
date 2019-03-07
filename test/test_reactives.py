@@ -4,6 +4,8 @@ from dist_zero import recorded, types, reactive, primitive
 from dist_zero import concrete_types
 from dist_zero.reactive import expression
 
+indiscrete_int = concrete_types.ConcreteBasicType(types.Int32)
+
 
 class TestMultiplicativeReactive(object):
   def test_spy(self):
@@ -39,8 +41,6 @@ class TestMultiplicativeReactive(object):
     assert 38 == compiler.capnp_state_builder(spy).from_bytes(net.Spy_bc()).basicState
 
   def test_interleave_recorded(self):
-    indiscrete_int = types.Int32
-
     a = recorded.RecordedUser(
         'user',
         start=3,
@@ -75,8 +75,6 @@ class TestMultiplicativeReactive(object):
     assert 13 == capnpForT.from_bytes(net.Elapse(100)['thesum']).basicTransition
 
   def test_recorded_ints(self):
-    indiscrete_int = types.Int32
-
     changing_number = recorded.RecordedUser(
         'user',
         start=3,

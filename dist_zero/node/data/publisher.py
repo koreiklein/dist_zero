@@ -2,6 +2,9 @@ import itertools
 
 from dist_zero import errors, messages
 
+from dist_zero.reactive.compiler import ReactiveCompiler
+from dist_zero.reactive.serialization import ConcreteExpressionDeserializer
+
 
 class Publisher(object):
   '''
@@ -23,17 +26,58 @@ class Publisher(object):
       the associated dataset is running.  It can be used to determine which link keys may be subscribed to.
     '''
     self._is_leaf = is_leaf
-    # FIXME(KK): We should make sure to actually run the reactive graph in the event that this is a leaf node
+    self._spy_key_to_capnp_state_builder = {} # Map each spy key to the pycapnp builder for its state
+    # When this is a leaf node, self._net should be set to a running network (see `ReactiveCompiler.compile`)
+    self._net = None
 
-    if dataset_program_config['type'] == 'demo_dataset_program_config':
-      self._init_from_demo_dataset_program_config(dataset_program_config)
+    if dataset_program_config['type'] == 'reactive_dataset_program_config':
+      self._init_from_reactive_dataset_program_config(dataset_program_config)
     else:
       raise errors.InternalError(f"Unrecognized leaf type '{dataset_program_config['type']}'.")
 
-  def _init_from_demo_dataset_program_config(self, demo_dataset_program_config):
-    # Map each link_key to either None, or the handle of the linked node
-    self._inputs = {key: None for key in demo_dataset_program_config['input_link_keys']}
-    self._outputs = {key: None for key in demo_dataset_program_config['output_link_keys']}
+  def _init_from_reactive_dataset_program_config(self, dataset_program_config):
+    self._outputs = {key: None for key in dataset_program_config['output_key_to_expr_id'].keys()}
+    self._inputs = {}
+    for expr_json in dataset_program_config['concrete_exprs']:
+      if expr_json['type'] == 'Input':
+        key = expr_json['value']['name']
+        self._inputs[key] = None
+
+    if self._is_leaf:
+      self._start_reactive_graph(dataset_program_config)
+
+  def _start_reactive_graph(self, dataset_program_config):
+    deserializer = ConcreteExpressionDeserializer()
+    deserializer.deserialize_types(dataset_program_config['type_jsons'])
+    exprs = deserializer.deserialize(dataset_program_config['concrete_exprs'])
+
+    compiler = ReactiveCompiler(name=dataset_program_config['program_name'])
+    # FIXME(KK): Re-use compiled programs modules when they already exist on the same physical machine.
+    mod = compiler.compile(
+        output_key_to_norm_expr={
+            output_key: deserializer.get_by_id(expr_id)
+            for output_key, expr_id in dataset_program_config['output_key_to_expr_id'].items()
+        },
+        other_concrete_exprs=exprs)
+    self._net = mod.Net()
+    self._spy_key_to_capnp_state_builder = {
+        spy_key: compiler.capnp_state_builder(expr)
+        for expr in exprs for spy_key in expr.spy_keys
+    }
+
+  def spy(self, spy_key):
+    if not self._is_leaf:
+      raise errors.InternalError("Only leaf nodes can be spied on.")
+    method = getattr(self._net, f"Spy_{spy_key}")
+    result_buffer = method()
+    capnp_builder = self._spy_key_to_capnp_state_builder[spy_key]
+    parsed_state = capnp_builder.from_bytes(result_buffer)
+    result = parsed_state.to_dict()
+    return result
+
+  def elapse(self, ms):
+    if self._is_leaf and self._net is not None:
+      self._net.Elapse(ms)
 
   def get_linked_handle(self, link_key, key_type):
     if key_type == 'input':
