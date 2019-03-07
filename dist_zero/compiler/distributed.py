@@ -3,8 +3,13 @@ from . import normalize, cardinality, partition, localizer
 from dist_zero import program, errors, expression
 
 
-class MainCompiler(object):
-  '''The main distributed compiler for DistZero programs.'''
+class DistributedCompiler(object):
+  '''
+  The main distributed compiler for DistZero distributed programs.
+  This compiler pulls together all the different compilation phases to produce
+  a `DistributedProgram` from a high-level semantic description of how the program
+  should behave.
+  '''
 
   def __init__(self, program_name):
     '''
@@ -36,9 +41,16 @@ class MainCompiler(object):
     return True
 
   def compile(self, expr: expression.Expression):
+    '''
+    Compile a single `Expression` into a `DistributedProgram`
+
+    :param Expression expr: The main expression, describing the behavior of a distributed program.
+    :return: The distributed program that implements the behavior described by ``expr``
+    :rtype: `DistributedProgram`
+    '''
     if self._mainExpr is not None:
-      # Users of MainCompiler should create a new instance of the compiler for each Expression they'd like to compile
-      raise errors.InternalError("MainCompiler has already been used to compile a separate expression.")
+      # Users of DistributedCompiler should create a new instance of the compiler for each Expression they'd like to compile
+      raise errors.InternalError("DistributedCompiler has already been used to compile a separate expression.")
 
     self._mainExpr = expr
     self._normMainExpr = self._normalizer.normalize(expr)

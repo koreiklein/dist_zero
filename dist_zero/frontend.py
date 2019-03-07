@@ -1,4 +1,4 @@
-import dist_zero.compiler.main
+import dist_zero.compiler.distributed
 from dist_zero import expression, primitive, recorded, concrete_types
 
 
@@ -47,4 +47,4 @@ class DistZero(object):
     return expression.ListOp(opVariant='map', f=f)(base)
 
   def compiler(self, name):
-    return dist_zero.compiler.main.MainCompiler(name)
+    return dist_zero.compiler.distributed.DistributedCompiler(name)

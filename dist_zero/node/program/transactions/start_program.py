@@ -12,6 +12,10 @@ class StartProgram(transaction.ParticipantRole):
   '''
 
   def __init__(self, dataset_configs, link_configs):
+    '''
+    :param list dataset_configs: The list of `dataset_config` messages.
+    :param list link_configs: The list of `link_config` messages.
+    '''
     self._dataset_configs = dataset_configs
     self._link_configs = link_configs
 

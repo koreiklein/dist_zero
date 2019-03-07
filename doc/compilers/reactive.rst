@@ -18,15 +18,3 @@ with these ``net`` objects.
 .. automodule:: dist_zero.reactive.compiler
    :members:
 
-Reactive Expressions
-----------------------
-
-.. automodule:: dist_zero.reactive.expression
-   :members:
-
-Reactive Types
-----------------------
-
-.. automodule:: dist_zero.concrete_types
-   :members:
-

@@ -3,6 +3,13 @@ from . import cardinality
 
 
 class Partitioner(object):
+  '''
+  The partitioner creates `datasets <dist_zero.program.Dataset>` for all `normalized expressions <NormExpr>`
+  in a distributed program.
+
+  Generally, expressions with the same or very similar cardinality can coexist in the same dataset.
+  '''
+
   def __init__(self, compiler):
     self._cardinality_to_ds = {} # map each Cardinality in the input program to its Dataset instance
 
@@ -38,8 +45,12 @@ class Partitioner(object):
 
   def partition(self, trie):
     '''
-    :return: A map from each `NormExpr` to the `Dataset` on which its values should live.
-    :rtype: map[`NormExpr`, `Dataset`]
+    Partition the trie of cardinalities into separate datasets, and assign each `expression <NormExpr>` a unique
+    `Dataset <dist_zero.program.Dataset>` to live on, based on its `Cardinality`.
+
+    :param CardinalityTrie trie: The trie of all cardinalities in the program.
+    :return: A map from each `NormExpr` to the `Dataset <dist_zero.program.Dataset>` on which its values should live.
+    :rtype: map[`NormExpr`, `Dataset <dist_zero.program.Dataset>`]
     '''
     global_dataset = self._new_dataset(name='Globals')
     self._partition_subtrie(trie, global_dataset)
