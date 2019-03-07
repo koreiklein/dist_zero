@@ -30,17 +30,10 @@ class Publisher(object):
     # When this is a leaf node, self._net should be set to a running network (see `ReactiveCompiler.compile`)
     self._net = None
 
-    if dataset_program_config['type'] == 'demo_dataset_program_config':
-      self._init_from_demo_dataset_program_config(dataset_program_config)
-    elif dataset_program_config['type'] == 'reactive_dataset_program_config':
+    if dataset_program_config['type'] == 'reactive_dataset_program_config':
       self._init_from_reactive_dataset_program_config(dataset_program_config)
     else:
       raise errors.InternalError(f"Unrecognized leaf type '{dataset_program_config['type']}'.")
-
-  def _init_from_demo_dataset_program_config(self, demo_dataset_program_config):
-    # Map each link_key to either None, or the handle of the linked node
-    self._inputs = {key: None for key in demo_dataset_program_config['input_link_keys']}
-    self._outputs = {key: None for key in demo_dataset_program_config['output_link_keys']}
 
   def _init_from_reactive_dataset_program_config(self, dataset_program_config):
     self._outputs = {key: None for key in dataset_program_config['output_key_to_expr_id'].keys()}

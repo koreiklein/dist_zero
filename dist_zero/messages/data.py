@@ -2,6 +2,8 @@
 Messages to be received by input and output nodes.
 '''
 
+from dist_zero import ids
+
 
 def started_dataset(root):
   '''
@@ -77,12 +79,13 @@ def reactive_dataset_program_config(program_name, concrete_exprs, output_key_to_
   }
 
 
-# FIXME(KK): Use actual program configs, containing reactive graphs.
 def demo_dataset_program_config(input_link_keys=None, output_link_keys=None):
   return {
-      'type': 'demo_dataset_program_config',
-      'input_link_keys': input_link_keys if input_link_keys is not None else [],
-      'output_link_keys': output_link_keys if output_link_keys is not None else []
+      'type': 'reactive_dataset_program_config',
+      'program_name': ids.new_id('DummyName'),
+      'concrete_exprs': [],
+      'output_key_to_expr_id': {},
+      'type_jsons': [],
   }
 
 
