@@ -12,7 +12,7 @@ install:
   - pipenv sync --dev
 
 script:
-  - pipenv run pytest -k simulated
+  - pipenv run pytest -k "test_link_manager"
 
 after_success:
   - pipenv run make html
